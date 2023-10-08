@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const zsdl = @import("libs/zig-gamedev/libs/zsdl/build.zig");
+const zopengl = @import("libs/zig-gamedev/libs/zopengl/build.zig");
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
@@ -28,9 +29,11 @@ pub fn build(b: *std.Build) void {
 
     // Build it
     const zsdl_pkg = zsdl.package(b, target, optimize, .{});
+    const zopengl_pkg = zopengl.package(b, target, optimize, .{});
 
     // Link with your app
     zsdl_pkg.link(exe);
+    zopengl_pkg.link(exe);
 
     // ** Wait for package management to be a bit more mature.
     // // using duck as a dependency

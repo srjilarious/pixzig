@@ -1,26 +1,25 @@
 const std = @import("std");
 const sdl = @import("zsdl");
+const gl = @import("zopengl");
 
 pub fn main() !void {
     // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
     std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
 
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
-
-    try stdout.print("Run `zig build test` to run the tests.\n", .{});
-
-    try bw.flush(); // don't forget to flush!
+    _ = sdl.setHint(sdl.hint_windows_dpi_awareness, "system");
 
     try sdl.init(.{ .audio = true, .video = true });
     defer sdl.quit();
 
+    const gl_major = 3;
+    const gl_minor = 3;
+    try sdl.gl.setAttribute(.context_profile_mask, @intFromEnum(sdl.gl.Profile.core));
+    try sdl.gl.setAttribute(.context_major_version, gl_major);
+    try sdl.gl.setAttribute(.context_minor_version, gl_minor);
+    try sdl.gl.setAttribute(.context_flags, @as(i32, @bitCast(sdl.gl.ContextFlags{ .forward_compatible = true })));
+
     const window = try sdl.Window.create(
-        "zig-gamedev-window",
+        "zig-gamedev: minimal_sdl_gl",
         sdl.Window.pos_undefined,
         sdl.Window.pos_undefined,
         600,
@@ -28,6 +27,25 @@ pub fn main() !void {
         .{ .opengl = true, .allow_highdpi = true },
     );
     defer window.destroy();
+
+    const gl_context = try sdl.gl.createContext(window);
+    defer sdl.gl.deleteContext(gl_context);
+
+    try sdl.gl.makeCurrent(window, gl_context);
+    try sdl.gl.setSwapInterval(0);
+
+    try gl.loadCoreProfile(sdl.gl.getProcAddress, gl_major, gl_minor);
+
+    {
+        var w: i32 = undefined;
+        var h: i32 = undefined;
+
+        try window.getSize(&w, &h);
+        std.debug.print("Window size is {d}x{d}\n", .{ w, h });
+
+        sdl.gl.getDrawableSize(window, &w, &h);
+        std.debug.print("Drawable size is {d}x{d}\n", .{ w, h });
+    }
 
     main_loop: while (true) {
         var event: sdl.Event = undefined;
@@ -38,14 +56,7 @@ pub fn main() !void {
                 if (event.key.keysym.sym == .escape) break :main_loop;
             }
         }
-        // gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.2, 0.4, 0.8, 1.0 });
-        // sdl.gl.swapWindow(window);
+        gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.2, 0.4, 0.8, 1.0 });
+        sdl.gl.swapWindow(window);
     }
-}
-
-test "simple test" {
-    var list = std.ArrayList(i32).init(std.testing.allocator);
-    defer list.deinit(); // try commenting this out and see if zig detects the memory leak!
-    try list.append(42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
 }
