@@ -2,6 +2,9 @@ const std = @import("std");
 
 const zsdl = @import("libs/zig-gamedev/libs/zsdl/build.zig");
 const zopengl = @import("libs/zig-gamedev/libs/zopengl/build.zig");
+const zstbi = @import("libs/zig-gamedev/libs/zstbi/build.zig");
+
+const assets_dir = "assets/";
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
@@ -30,10 +33,19 @@ pub fn build(b: *std.Build) void {
     // Build it
     const zsdl_pkg = zsdl.package(b, target, optimize, .{});
     const zopengl_pkg = zopengl.package(b, target, optimize, .{});
+    const zstbi_pkg = zstbi.package(b, target, optimize, .{});
 
     // Link with your app
     zsdl_pkg.link(exe);
     zopengl_pkg.link(exe);
+    zstbi_pkg.link(exe);
+
+    const install_content_step = b.addInstallDirectory(.{
+        .source_dir = .{ .path = thisDir() ++ "/" ++ assets_dir },
+        .install_dir = .{ .custom = "" },
+        .install_subdir = "bin/" ++ assets_dir,
+    });
+    exe.step.dependOn(&install_content_step.step);
 
     // ** Wait for package management to be a bit more mature.
     // // using duck as a dependency
@@ -95,4 +107,8 @@ pub fn build(b: *std.Build) void {
     // running the unit tests.
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_unit_tests.step);
+}
+
+inline fn thisDir() []const u8 {
+    return comptime std.fs.path.dirname(@src().file) orelse ".";
 }

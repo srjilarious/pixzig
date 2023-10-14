@@ -1,6 +1,7 @@
 const std = @import("std");
 const sdl = @import("zsdl");
 const gl = @import("zopengl");
+const stbi = @import("zstbi");
 
 pub fn main() !void {
     // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
@@ -10,6 +11,9 @@ pub fn main() !void {
 
     try sdl.init(.{ .audio = true, .video = true });
     defer sdl.quit();
+
+    stbi.init(std.heap.page_allocator);
+    defer stbi.deinit();
 
     const gl_major = 3;
     const gl_minor = 3;
@@ -46,6 +50,12 @@ pub fn main() !void {
         sdl.gl.getDrawableSize(window, &w, &h);
         std.debug.print("Drawable size is {d}x{d}\n", .{ w, h });
     }
+
+    // Try to load an image
+    var image = try stbi.Image.loadFromFile("assets/pac-tiles.png", 0);
+    defer image.deinit();
+
+    std.debug.print("Loaded image, width={}, height={}", .{ image.width, image.height });
 
     main_loop: while (true) {
         var event: sdl.Event = undefined;
