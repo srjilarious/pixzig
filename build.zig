@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const exe = b.addExecutable(.{
-        .name = "pixzig",
+        .name = "pixzig_test",
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
         .root_source_file = .{ .path = "src/main.zig" },
@@ -40,6 +40,17 @@ pub fn build(b: *std.Build) void {
     zopengl_pkg.link(exe);
     zstbi_pkg.link(exe);
 
+    const pixeng = b.addModule("pixzig", .{ .source_file = .{ .path = "src/pixzig/pixzig.zig" }, .dependencies = &.{
+        .{ .name = "zsdl", .module = zsdl_pkg.zsdl },
+        .{ .name = "zstbi", .module = zstbi_pkg.zstbi },
+    } });
+    exe.addModule("pixzig", pixeng);
+    // zsdl_pkg.link(pixzig);
+    // zopengl_pkg.link(pixzig);
+    // zstbi_pkg.link(pixzig);
+
+    // exe.linkLibrary(pixzig);
+
     const install_content_step = b.addInstallDirectory(.{
         .source_dir = .{ .path = thisDir() ++ "/" ++ assets_dir },
         .install_dir = .{ .custom = "" },
@@ -48,7 +59,6 @@ pub fn build(b: *std.Build) void {
     exe.step.dependOn(&install_content_step.step);
 
     // ** Wait for package management to be a bit more mature.
-    // // using duck as a dependency
     // const zig_gamedev = b.dependency("zig_gamedev", .{
     //     .target = target,
     //     .optimize = optimize,
