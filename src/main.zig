@@ -12,20 +12,25 @@ pub fn main() !void {
 
     var renderer = eng.renderer;
 
-    // Try to load an image
-    var image = try stbi.Image.loadFromFile("assets/pac-tiles.png", 0);
-    defer image.deinit();
+    var texMgr = pixzig.TextureManager.init(renderer, std.heap.page_allocator);
+    defer texMgr.destroy();
 
-    std.debug.print("Loaded image, width={}, height={}", .{ image.width, image.height });
+    var tex = try texMgr.loadTexture("pacman_sprites", "assets/pac-tiles.png");
 
-    var surf = try sdl.Surface.createRGBSurfaceFrom(image.data, image.width, image.height, 32, image.width * 4, 0x000000FF, // red mask
-        0x0000FF00, // green mask
-        0x00FF0000, // blue mask
-        0xFF000000 // alpha mask
-    );
-
-    var tex = try renderer.createTextureFromSurface(surf);
-    surf.free();
+    // // Try to load an image
+    // var image = try stbi.Image.loadFromFile("assets/pac-tiles.png", 0);
+    // defer image.deinit();
+    //
+    // std.debug.print("Loaded image, width={}, height={}", .{ image.width, image.height });
+    //
+    // var surf = try sdl.Surface.createRGBSurfaceFrom(image.data, image.width, image.height, 32, image.width * 4, 0x000000FF, // red mask
+    //     0x0000FF00, // green mask
+    //     0x00FF0000, // blue mask
+    //     0xFF000000 // alpha mask
+    // );
+    //
+    // var tex = try renderer.createTextureFromSurface(surf);
+    // surf.free();
 
     main_loop: while (true) {
         var event: sdl.Event = undefined;
@@ -44,7 +49,7 @@ pub fn main() !void {
         try renderer.fillRect(.{ .x = 50, .y = 50, .w = 300, .h = 300 });
 
         var dest = sdl.Rect{ .x = 120, .y = 80, .w = 128, .h = 128 };
-        try renderer.copy(tex, null, &dest);
+        try renderer.copy(tex.texture, null, &dest);
 
         renderer.present();
     }
