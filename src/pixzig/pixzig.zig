@@ -61,7 +61,7 @@ pub const TextureManager = struct {
     }
 };
 
-pub fn create(title: [:0]const u8) !PixzigEngine {
+pub fn create(title: [:0]const u8, allocator: std.mem.Allocator) !PixzigEngine {
     _ = sdl.setHint(sdl.hint_windows_dpi_awareness, "system");
     try sdl.init(.{ .audio = true, .video = true });
     stbi.init(std.heap.page_allocator);
@@ -80,21 +80,20 @@ pub fn create(title: [:0]const u8) !PixzigEngine {
 
     var render = try sdl.Renderer.create(win, -1, .{ .accelerated = true });
 
-    return .{ .window = win, .renderer = render };
+    var texMgr = TextureManager.init(render, allocator);
+    return .{ .window = win, .renderer = render, .textures = texMgr };
 }
 
 pub const PixzigEngine = struct {
     window: *sdl.Window,
     renderer: *sdl.Renderer,
+    textures: TextureManager,
 
     pub fn destroy(self: *PixzigEngine) void {
+        self.textures.destroy();
         self.renderer.destroy();
         self.window.destroy();
         stbi.deinit();
         sdl.quit();
     }
 };
-
-pub fn hi() void {
-    std.debug.print("Hi!", .{});
-}

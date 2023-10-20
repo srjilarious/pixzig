@@ -7,15 +7,12 @@ const pixzig = @import("pixzig");
 
 pub fn main() !void {
     std.log.info("Pixzig Engine test!", .{});
-    var eng = try pixzig.create("Pixzig Test!");
+    var eng = try pixzig.create("Pixzig Test!", std.heap.page_allocator);
     defer eng.destroy();
 
     var renderer = eng.renderer;
 
-    var texMgr = pixzig.TextureManager.init(renderer, std.heap.page_allocator);
-    defer texMgr.destroy();
-
-    var tex = try texMgr.loadTexture("pacman_sprites", "assets/pac-tiles.png");
+    var tex = try eng.textures.loadTexture("pacman_sprites", "assets/pac-tiles.png");
 
     // // Try to load an image
     // var image = try stbi.Image.loadFromFile("assets/pac-tiles.png", 0);
