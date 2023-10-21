@@ -2,6 +2,8 @@ const std = @import("std");
 const sdl = @import("zsdl");
 const stbi = @import("zstbi");
 
+pub const sprites = @import("./sprites.zig");
+
 pub const Texture = struct {
     texture: *sdl.Texture,
     name: ?[]u8,

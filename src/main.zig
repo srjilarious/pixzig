@@ -11,9 +11,12 @@ pub fn main() !void {
     defer eng.destroy();
 
     var renderer = eng.renderer;
+    try renderer.setScale(4.0, 4.0);
 
     var tex = try eng.textures.loadTexture("pacman_sprites", "assets/pac-tiles.png");
 
+    var spr = pixzig.sprites.Sprite.create(tex.texture, sdl.Rect{ .x = 32, .y = 32, .w = 16, .h = 16 });
+    spr.setPos(32, 32);
     // // Try to load an image
     // var image = try stbi.Image.loadFromFile("assets/pac-tiles.png", 0);
     // defer image.deinit();
@@ -42,12 +45,13 @@ pub fn main() !void {
         try renderer.setDrawColorRGB(32, 32, 100);
         try renderer.clear();
 
-        try renderer.setDrawColorRGB(255, 10, 50);
+        try renderer.setDrawColorRGB(128, 10, 10);
         try renderer.fillRect(.{ .x = 50, .y = 50, .w = 300, .h = 300 });
 
-        var dest = sdl.Rect{ .x = 120, .y = 80, .w = 128, .h = 128 };
-        try renderer.copy(tex.texture, null, &dest);
+        // var dest = sdl.Rect{ .x = 120, .y = 80, .w = 128, .h = 128 };
+        // try renderer.copy(tex.texture, null, &dest);
 
+        try spr.draw(renderer);
         renderer.present();
     }
 }
