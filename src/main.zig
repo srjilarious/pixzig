@@ -4,6 +4,7 @@ const sdl = @import("zsdl");
 const stbi = @import("zstbi");
 
 const pixzig = @import("pixzig");
+const Flip = pixzig.sprites.Flip;
 
 pub fn main() !void {
     std.log.info("Pixzig Engine test!", .{});
@@ -15,8 +16,15 @@ pub fn main() !void {
 
     var tex = try eng.textures.loadTexture("pacman_sprites", "assets/pac-tiles.png");
 
-    var spr = pixzig.sprites.Sprite.create(tex.texture, sdl.Rect{ .x = 32, .y = 32, .w = 16, .h = 16 });
+    var fr1: pixzig.sprites.Frame = .{ .coords = .{ .x = 96, .y = 48, .w = 16, .h = 16 }, .frameTimeUs = 4000, .flip = Flip.None };
+    var fr2: pixzig.sprites.Frame = .{ .coords = .{ .x = 112, .y = 48, .w = 16, .h = 16 }, .frameTimeUs = 4000, .flip = Flip.None };
+    var fr3: pixzig.sprites.Frame = .{ .coords = .{ .x = 96, .y = 64, .w = 16, .h = 16 }, .frameTimeUs = 4000, .flip = Flip.None };
+
+    var spr = pixzig.sprites.Sprite.create(tex.texture, sdl.Rect{ .x = 0, .y = 0, .w = 16, .h = 16 });
     spr.setPos(32, 32);
+    fr1.apply(&spr);
+    fr2.apply(&spr);
+    fr3.apply(&spr);
     // // Try to load an image
     // var image = try stbi.Image.loadFromFile("assets/pac-tiles.png", 0);
     // defer image.deinit();
@@ -39,6 +47,9 @@ pub fn main() !void {
                 break :main_loop;
             } else if (event.type == .keydown) {
                 if (event.key.keysym.sym == .escape) break :main_loop;
+                if (event.key.keysym.sym == .@"1") fr1.apply(&spr);
+                if (event.key.keysym.sym == .@"2") fr2.apply(&spr);
+                if (event.key.keysym.sym == .@"3") fr3.apply(&spr);
             }
         }
 
