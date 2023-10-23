@@ -1,8 +1,10 @@
+// zig fmt: off
 const std = @import("std");
 const sdl = @import("zsdl");
 const stbi = @import("zstbi");
 
 pub const sprites = @import("./sprites.zig");
+pub const input = @import("./input.zig");
 
 pub const Texture = struct {
     texture: *sdl.Texture,
@@ -41,9 +43,15 @@ pub const TextureManager = struct {
         var image = try stbi.Image.loadFromFile(nt_file_path, 0);
         defer image.deinit();
 
-        std.debug.print("Loaded image '{s}', width={}, height={}", .{ name, image.width, image.height });
+        std.debug.print("Loaded image '{s}', width={}, height={}\n", .{ name, image.width, image.height });
 
-        var surf = try sdl.Surface.createRGBSurfaceFrom(image.data, image.width, image.height, 32, image.width * 4, 0x000000FF, // red mask
+        var surf = try sdl.Surface.createRGBSurfaceFrom(
+            image.data, 
+            image.width, 
+            image.height, 
+            32, 
+            image.width * 4, 
+            0x000000FF, // red mask
             0x0000FF00, // green mask
             0x00FF0000, // blue mask
             0xFF000000 // alpha mask
@@ -63,33 +71,40 @@ pub const TextureManager = struct {
     }
 };
 
-pub fn create(title: [:0]const u8, allocator: std.mem.Allocator) !PixzigEngine {
-    _ = sdl.setHint(sdl.hint_windows_dpi_awareness, "system");
-    try sdl.init(.{ .audio = true, .video = true });
-    stbi.init(std.heap.page_allocator);
-
-    var win = try sdl.Window.create(
-        title,
-        sdl.Window.pos_undefined,
-        sdl.Window.pos_undefined,
-        600,
-        600,
-        .{
-            .opengl = true,
-            .allow_highdpi = true,
-        },
-    );
-
-    var render = try sdl.Renderer.create(win, -1, .{ .accelerated = true });
-
-    var texMgr = TextureManager.init(render, allocator);
-    return .{ .window = win, .renderer = render, .textures = texMgr };
-}
 
 pub const PixzigEngine = struct {
     window: *sdl.Window,
     renderer: *sdl.Renderer,
     textures: TextureManager,
+    keyboard: input.Keyboard,
+
+    pub fn create(title: [:0]const u8, allocator: std.mem.Allocator) !PixzigEngine {
+        _ = sdl.setHint(sdl.hint_windows_dpi_awareness, "system");
+        try sdl.init(.{ .audio = true, .video = true });
+        stbi.init(std.heap.page_allocator);
+
+        var win = try sdl.Window.create(
+            title,
+            sdl.Window.pos_undefined,
+            sdl.Window.pos_undefined,
+            600,
+            600,
+            .{
+                .opengl = true,
+                .allow_highdpi = true,
+            },
+        );
+
+        var render = try sdl.Renderer.create(win, -1, .{ .accelerated = true });
+
+        var texMgr = TextureManager.init(render, allocator);
+        return .{ 
+            .window = win, 
+            .renderer = render, 
+            .textures = texMgr,
+            .keyboard = input.Keyboard.init(allocator),
+        };
+    }
 
     pub fn destroy(self: *PixzigEngine) void {
         self.textures.destroy();
