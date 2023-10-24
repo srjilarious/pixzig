@@ -5,6 +5,7 @@ const stbi = @import("zstbi");
 
 const pixzig = @import("pixzig");
 const Flip = pixzig.sprites.Flip;
+const Frame = pixzig.sprites.Frame;
 
 pub fn main() !void {
     std.log.info("Pixzig Engine test!", .{});
@@ -16,9 +17,15 @@ pub fn main() !void {
 
     var tex = try eng.textures.loadTexture("pacman_sprites", "assets/pac-tiles.png");
 
-    var fr1: pixzig.sprites.Frame = .{ .coords = .{ .x = 96, .y = 48, .w = 16, .h = 16 }, .frameTimeUs = 4000, .flip = Flip.None };
-    var fr2: pixzig.sprites.Frame = .{ .coords = .{ .x = 112, .y = 48, .w = 16, .h = 16 }, .frameTimeUs = 4000, .flip = Flip.None };
-    var fr3: pixzig.sprites.Frame = .{ .coords = .{ .x = 96, .y = 64, .w = 16, .h = 16 }, .frameTimeUs = 4000, .flip = Flip.None };
+    var fr1: Frame = .{ .coords = .{ .x = 96, .y = 48, .w = 16, .h = 16 }, .frameTimeUs = 20000, .flip = Flip.None };
+    var fr2: Frame = .{ .coords = .{ .x = 112, .y = 48, .w = 16, .h = 16 }, .frameTimeUs = 20000, .flip = Flip.None };
+    var fr3: Frame = .{ .coords = .{ .x = 96, .y = 64, .w = 16, .h = 16 }, .frameTimeUs = 20000, .flip = Flip.None };
+
+    var frseq = try pixzig.sprites.FrameSequence.init("test", std.heap.page_allocator, &[_]Frame{ fr1, fr2, fr3 });
+
+    var actor = try pixzig.sprites.Actor.init(std.heap.page_allocator);
+    _ = try actor.addState(frseq, "test");
+    // actor.setState("test");
 
     var spr = pixzig.sprites.Sprite.create(tex.texture, sdl.Rect{ .x = 0, .y = 0, .w = 16, .h = 16 });
     spr.setPos(32, 32);
@@ -41,6 +48,7 @@ pub fn main() !void {
         if (eng.keyboard.pressed(.@"1")) fr1.apply(&spr);
         if (eng.keyboard.pressed(.@"2")) fr2.apply(&spr);
         if (eng.keyboard.pressed(.@"3")) fr3.apply(&spr);
+        if (eng.keyboard.pressed(.s)) actor.update(10000, &spr);
 
         try renderer.setDrawColorRGB(32, 32, 100);
         try renderer.clear();
@@ -48,6 +56,7 @@ pub fn main() !void {
         try renderer.setDrawColorRGB(128, 10, 10);
         try renderer.fillRect(.{ .x = 50, .y = 50, .w = 300, .h = 300 });
 
+        actor.update(30, &spr);
         try spr.draw(renderer);
         renderer.present();
     }
