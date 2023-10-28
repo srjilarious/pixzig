@@ -9,12 +9,14 @@ pub const Sprite = struct {
     texture: *sdl.Texture,
     src_coords: sdl.Rect,
     dest: sdl.Rect,
+    flip: Flip,
 
     pub fn create(tex: *sdl.Texture, scoords: sdl.Rect) Sprite {
         return Sprite{ 
             .texture = tex, 
             .src_coords = scoords, 
-            .dest = .{ .x = 0, .y = 0, .w = scoords.w, .h = scoords.h } 
+            .dest = .{ .x = 0, .y = 0, .w = scoords.w, .h = scoords.h },
+            .flip = Flip.None
         };
     }
 
@@ -24,7 +26,13 @@ pub const Sprite = struct {
     }
 
     pub fn draw(self: *Sprite, renderer: *sdl.Renderer) !void {
-        try renderer.copy(self.texture, &self.src_coords, &self.dest);
+        if(self.flip == Flip.None) {
+            try renderer.copy(self.texture, &self.src_coords, &self.dest);
+        }
+        else {
+            var rflip : sdl.RendererFlip = @enumFromInt(@intFromEnum(self.flip));
+            try renderer.copyEx(self.texture, &self.src_coords, &self.dest, 0.0, null, rflip);
+        }
     }
 };
 
@@ -41,33 +49,35 @@ pub const Frame = struct {
     flip: Flip,
 
     pub fn apply(self: *Frame, spr: *Sprite) void {
-        switch(self.flip) {
-            Flip.None => spr.src_coords = self.coords,
-            Flip.Horz => {
-                spr.src_coords = .{
-                    .x = self.coords.x + self.coords.w,
-                    .y = self.coords.y,
-                    .w = -self.coords.w,
-                    .h = self.coords.h
-                };
-            },
-            Flip.Vert => {
-                spr.src_coords = .{
-                    .x = self.coords.x,
-                    .y = self.coords.y + self.coords.h,
-                    .w = self.coords.w,
-                    .h = -self.coords.h
-                };
-            },
-            Flip.Both => {
-                spr.src_coords = .{
-                    .x = self.coords.x + self.coords.w,
-                    .y = self.coords.y + self.coords.h,
-                    .w = -self.coords.w,
-                    .h = -self.coords.h
-                };
-            }
-        }
+        spr.src_coords = self.coords;
+        spr.flip = self.flip;
+        // switch(self.flip) {
+        //     Flip.None => spr.src_coords = self.coords,
+        //     Flip.Horz => {
+        //         spr.src_coords = .{
+        //             .x = self.coords.x + self.coords.w,
+        //             .y = self.coords.y,
+        //             .w = -self.coords.w,
+        //             .h = self.coords.h
+        //         };
+        //     },
+        //     Flip.Vert => {
+        //         spr.src_coords = .{
+        //             .x = self.coords.x,
+        //             .y = self.coords.y + self.coords.h,
+        //             .w = self.coords.w,
+        //             .h = -self.coords.h
+        //         };
+        //     },
+        //     Flip.Both => {
+        //         spr.src_coords = .{
+        //             .x = self.coords.x + self.coords.w,
+        //             .y = self.coords.y + self.coords.h,
+        //             .w = -self.coords.w,
+        //             .h = -self.coords.h
+        //         };
+        //     }
+        // }
     }
 };
 

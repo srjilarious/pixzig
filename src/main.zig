@@ -23,8 +23,15 @@ pub fn main() !void {
 
     var frseq = try pixzig.sprites.FrameSequence.init("test", std.heap.page_allocator, &[_]Frame{ fr1, fr2, fr3 });
 
+    var fr1_2: Frame = .{ .coords = .{ .x = 96, .y = 48, .w = 16, .h = 16 }, .frameTimeUs = 20000, .flip = Flip.Horz };
+    var fr2_2: Frame = .{ .coords = .{ .x = 112, .y = 48, .w = 16, .h = 16 }, .frameTimeUs = 20000, .flip = Flip.Horz };
+    var fr3_2: Frame = .{ .coords = .{ .x = 96, .y = 64, .w = 16, .h = 16 }, .frameTimeUs = 20000, .flip = Flip.Horz };
+
+    var frseq_2 = try pixzig.sprites.FrameSequence.init("test", std.heap.page_allocator, &[_]Frame{ fr1_2, fr2_2, fr3_2 });
+
     var actor = try pixzig.sprites.Actor.init(std.heap.page_allocator);
-    _ = try actor.addState(frseq, "test");
+    _ = try actor.addState(frseq, "right");
+    _ = try actor.addState(frseq_2, "left");
     // actor.setState("test");
 
     var spr = pixzig.sprites.Sprite.create(tex.texture, sdl.Rect{ .x = 0, .y = 0, .w = 16, .h = 16 });
@@ -40,7 +47,7 @@ pub fn main() !void {
             if (event.type == .quit) {
                 break :main_loop;
             } else if (event.type == .keydown or event.type == .keyup) {
-                eng.keyboard.keyEvent(event.key.keysym.sym, event.type == .keydown);
+                eng.keyboard.keyEvent(event.key.keysym.scancode, event.type == .keydown);
             }
         }
 
@@ -48,7 +55,14 @@ pub fn main() !void {
         if (eng.keyboard.pressed(.@"1")) fr1.apply(&spr);
         if (eng.keyboard.pressed(.@"2")) fr2.apply(&spr);
         if (eng.keyboard.pressed(.@"3")) fr3.apply(&spr);
-        if (eng.keyboard.pressed(.s)) actor.update(10000, &spr);
+        if (eng.keyboard.pressed(.left)) {
+            std.debug.print("Left!\n", .{});
+            actor.setState("left");
+        }
+        if (eng.keyboard.pressed(.right)) {
+            std.debug.print("Right!\n", .{});
+            actor.setState("right");
+        }
 
         try renderer.setDrawColorRGB(32, 32, 100);
         try renderer.clear();
