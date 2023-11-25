@@ -5,6 +5,7 @@ const stbi = @import("zstbi");
 
 pub const sprites = @import("./sprites.zig");
 pub const input = @import("./input.zig");
+pub const tile = @import("./tile.zig");
 
 pub const Texture = struct {
     texture: *sdl.Texture,

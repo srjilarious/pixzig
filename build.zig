@@ -1,3 +1,5 @@
+// zig fmt: off
+
 const std = @import("std");
 
 const zsdl = @import("libs/zig-gamedev/libs/zsdl/build.zig");
@@ -6,18 +8,12 @@ const zstbi = @import("libs/zig-gamedev/libs/zstbi/build.zig");
 
 const assets_dir = "assets/";
 
-pub fn example(b: *std.Build, name: []const u8, root_src_path: []const u8) *std.Build.CompileStep {
-    // Standard target options allows the person running `zig build` to choose
-    // what target to build for. Here we do not override the defaults, which
-    // means any target is allowed, and the default is native. Other options
-    // for restricting supported target set are available.
-    const target = b.standardTargetOptions(.{});
-
-    // Standard optimization options allow the person running `zig build` to select
-    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
-    // set a preferred release mode, allowing the user to decide how to optimize.
-    const optimize = b.standardOptimizeOption(.{});
-
+pub fn example(b: *std.Build, 
+    target: std.zig.CrossTarget, 
+    optimize: std.builtin.OptimizeMode, 
+    name: []const u8, 
+    root_src_path: []const u8) *std.Build.CompileStep 
+{
     const exe = b.addExecutable(.{
         .name = name, //"pixzig_test",
         // In this case the main source file is merely a path, however, in more
@@ -37,10 +33,21 @@ pub fn example(b: *std.Build, name: []const u8, root_src_path: []const u8) *std.
     zopengl_pkg.link(exe);
     zstbi_pkg.link(exe);
 
-    const pixeng = b.addModule("pixzig", .{ .source_file = .{ .path = "src/pixzig/pixzig.zig" }, .dependencies = &.{
-        .{ .name = "zsdl", .module = zsdl_pkg.zsdl },
-        .{ .name = "zstbi", .module = zstbi_pkg.zstbi },
-    } });
+    const xml = b.addModule("xml", .{ .source_file = .{ .path = "libs/xml.zig" } });
+
+    const pixeng = b.addModule("pixzig", .{
+        // Package root
+        .source_file = .{ .path = "src/pixzig/pixzig.zig" },
+        .dependencies = &.{
+            // Uses SDL for graphics/audio/input
+            .{ .name = "zsdl", .module = zsdl_pkg.zsdl },
+            // STBI for image loading.
+            .{ .name = "zstbi", .module = zstbi_pkg.zstbi },
+            // XML for tilemap loading.
+            .{ .name = "xml", .module = xml },
+        },
+    });
+
     exe.addModule("pixzig", pixeng);
     // zsdl_pkg.link(pixzig);
     // zopengl_pkg.link(pixzig);
@@ -76,18 +83,10 @@ pub fn example(b: *std.Build, name: []const u8, root_src_path: []const u8) *std.
     // step when running `zig build`).
     b.installArtifact(exe);
 
-    return exe;
-}
-
-// Although this function looks imperative, note that its job is to
-// declaratively construct a build graph that will be executed by an external
-// runner.
-pub fn build(b: *std.Build) void {
-    const actor_test = example(b, "pixzig_test", "src/main.zig");
     // This *creates* a Run step in the build graph, to be executed when another
     // step is evaluated that depends on it. The next line below will establish
     // such a dependency.
-    const run_cmd = b.addRunArtifact(actor_test);
+    const run_cmd = b.addRunArtifact(exe);
 
     // By making the run step depend on the install step, it will be run from the
     // installation directory rather than directly from within the cache directory.
@@ -104,8 +103,28 @@ pub fn build(b: *std.Build) void {
     // This creates a build step. It will be visible in the `zig build --help` menu,
     // and can be selected like this: `zig build run`
     // This will evaluate the `run` step rather than the default, which is "install".
-    const run_step = b.step("run", "Run the app");
+    const run_step = b.step(name, "Run example");
     run_step.dependOn(&run_cmd.step);
+    return exe;
+}
+
+// Although this function looks imperative, note that its job is to
+// declaratively construct a build graph that will be executed by an external
+// runner.
+pub fn build(b: *std.Build) void {
+    // Standard target options allows the person running `zig build` to choose
+    // what target to build for. Here we do not override the defaults, which
+    // means any target is allowed, and the default is native. Other options
+    // for restricting supported target set are available.
+    const target = b.standardTargetOptions(.{});
+
+    // Standard optimization options allow the person running `zig build` to select
+    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
+    // set a preferred release mode, allowing the user to decide how to optimize.
+    const optimize = b.standardOptimizeOption(.{});
+
+    _ = example(b, target, optimize, "sprite_test", "src/main.zig");
+    _ = example(b, target, optimize, "tile_load_test", "examples/tile_load_test.zig");
 
     // // Creates a step for unit testing. This only builds the test executable
     // // but does not run it.
