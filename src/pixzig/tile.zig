@@ -152,8 +152,103 @@ pub const TileSet = struct {
 
 };
 
+
+pub const TileLayer = struct {
+    tiles: std.ArrayList(i32),
+    properties: PropertyList,
+    size: Vec2I,
+    name: ?[]const u8,
+    tileset: ?TileSet,
+    tileSize: Vec2I,
+    isDirty: bool,
+    alloc: std.mem.Allocator,
+
+    pub fn init(alloc: std.mem.Allocator) !TileLayer {
+        return .{
+            .tiles = std.ArrayList(i32).init(alloc),
+            .properties = PropertyList.init(alloc),
+            .size = .{ .x = 0, .y = 0 },
+            .name = null,
+            .tileset = null,
+            .tileSize = .{ .x = 0, .y = 0 },
+            .isDirty = false,
+            .alloc = alloc
+        };
+    }
+
+    pub fn initFromElement(alloc: std.mem.Allocator, node: *xml.Element) !TileLayer {
+        var layer = try init(alloc);
+
+        const nameAttr = node.getAttribute("name");
+        if (nameAttr != null) {
+            layer.name = try alloc.dupe(u8, nameAttr.?);
+        }
+
+        layer.size = .{ 
+            .x = try std.fmt.parseInt(i32, node.getAttribute("width").?, 0),
+            .y = try std.fmt.parseInt(i32, node.getAttribute("height").?, 0)
+        };
+
+        const dataNode = node.findChildByTag("data").?;
+        const encoding = dataNode.getAttribute("encoding").?;
+        if(!std.mem.eql(u8, encoding, "csv")) return error.UnsupportedLayerEncoding;
+
+        // Resize the layer to have space for all of our tile indices.
+        try layer.tiles.resize(@intCast(layer.size.x*layer.size.y));
+
+        const tileData = node.getCharData("data").?;
+        var it = std.mem.tokenizeAny(u8, tileData, ",\n");
+        var buffIdx: usize = 0;
+        while (it.next()) |curr| {
+            const idx = std.fmt.parseInt(i32, curr, 0) catch |err| {
+                std.debug.print("Unable to parse index: {s}: {}", .{curr, err});
+                continue;
+            };
+
+            layer.tiles.items[buffIdx] = idx;
+            buffIdx += 1;
+        }
+        
+        // const propsNode = node.findChildByTag("properties").?;
+        
+        return layer;
+    }
+
+    pub fn deinit(self: TileLayer) void {
+        if(self.name != null) {
+            self.alloc.free(self.name);
+            self.name = null;
+        }
+
+        self.tiles.deinit();
+
+        for (self.properties) |prop| {
+            self.alloc.free(prop.name);
+            self.alloc.free(prop.value);
+        }
+
+        self.properties.deinit();
+
+        self.tileset = null;
+    }
+};
+
 pub const TileMap = struct {
-    pub fn initFromFile(filename: []const u8, alloc: std.mem.Allocator) !void {
+    tilesets: std.ArrayList(TileSet),
+    layers: std.ArrayList(TileLayer),
+    alloc: std.mem.Allocator,
+
+    pub fn init(alloc: std.mem.Allocator) !TileMap {
+        return .{
+            .tilesets = std.ArrayList(TileSet).init(alloc),
+            .layers = std.ArrayList(TileLayer).init(alloc),
+            .alloc = alloc
+        };
+    }
+
+    pub fn initFromFile(filename: []const u8, alloc: std.mem.Allocator) !TileMap {
+        var map = try init(alloc);
+
         const fileContents = try std.fs.cwd().readFileAlloc(alloc, filename, MaxFilesize);
         defer alloc.free(fileContents);
 
@@ -172,10 +267,25 @@ pub const TileMap = struct {
                     newTileset.tileSize.y, 
                     newTileset.columns
                 });
-                // for (newTileset.tiles.items) |tile| {
-                //     std.debug.print(" Tile: {}\n", .{tile});
-                // }
+                
+                try map.tilesets.append(newTileset);
+            }
+            else if(std.mem.eql(u8, elem.tag, "layer")) {
+                const newLayer = try TileLayer.initFromElement(alloc, elem);
+                std.debug.print("Loaded a tile layer: '{?s}'", .{newLayer.name});
+                try map.layers.append(newLayer);
+
+                for(0..@intCast(newLayer.size.y)) |y| {
+                    const lineOffs = y*@as(usize, @intCast(newLayer.size.x));
+                    for(0..@intCast(newLayer.size.x)) |x| {
+                        const ti = newLayer.tiles.items[lineOffs + x];
+                        std.debug.print("{: >3} ", .{@as(u32, @intCast(ti))});
+                    }
+                    std.debug.print("\n", .{});
+                }
             }
         }
+
+        return map;
     }
 };
