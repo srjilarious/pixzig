@@ -1,9 +1,13 @@
+// zig fmt: off
+
 const std = @import("std");
 const xml = @import("xml");
 const sdl = @import("sdl");
 const sprites = @import("sprites.zig");
 
 const MaxFilesize = 1024 * 1024 * 1024;
+
+const Vec2I = sprites.Vec2I;
 
 const CoreTileProperty = u32;
 pub const Clear: u32 = 0x0;
@@ -89,11 +93,17 @@ pub const TileSet = struct {
     //tileTexture: *Texture,
 
     tiles: std.ArrayList(Tile),
+    tileSize: Vec2I,
+    columns: i32,
+    name: ?[]const u8,
     alloc: std.mem.Allocator,
 
     pub fn init(alloc: std.mem.Allocator) !TileSet {
         return .{
             .tiles = std.ArrayList(Tile).init(alloc),
+            .tileSize = .{ .x = 0, .y = 0 },
+            .columns = 0,
+            .name = null,
             .alloc = alloc,
         };
     }
@@ -102,6 +112,18 @@ pub const TileSet = struct {
         var tileset = try TileSet.init(alloc);
 
         if (!std.mem.eql(u8, node.tag, "tileset")) return error.BadNodeTag;
+
+        const nameAttr = node.getAttribute("name");
+        if (nameAttr != null) {
+            tileset.name = try alloc.dupe(u8, nameAttr.?);
+        }
+
+        tileset.tileSize = .{ 
+            .x = try std.fmt.parseInt(i32, node.getAttribute("tilewidth").?, 0),
+            .y = try std.fmt.parseInt(i32, node.getAttribute("tileheight").?, 0)
+        };
+
+        tileset.columns = try std.fmt.parseInt(i32, node.getAttribute("columns").?, 0);
 
         var children = node.elements();
         while (children.next()) |child| {
@@ -115,6 +137,19 @@ pub const TileSet = struct {
 
         return tileset;
     }
+
+    pub fn deinit(self: *TileSet) void {
+        if(self.name != null) {
+            self.alloc.free(self.name);
+        }
+
+        for (self.tiles) |tile| {
+            tile.deinit();
+        }
+
+        self.tiles.deinit();
+    }
+
 };
 
 pub const TileMap = struct {
@@ -130,10 +165,16 @@ pub const TileMap = struct {
             std.debug.print("Element: {s}\n", .{elem.tag});
             if (std.mem.eql(u8, elem.tag, "tileset")) {
                 const newTileset = try TileSet.initFromElement(alloc, elem);
-                std.debug.print("Loaded a tileset, with {} tiles\n", .{newTileset.tiles.items.len});
-                for (newTileset.tiles.items) |tile| {
-                    std.debug.print(" Tile: {}\n", .{tile});
-                }
+                std.debug.print("Loaded a tileset '{s}', with {} tiles, {}x{} tile size, {} columns\n", .{
+                    newTileset.name.?, 
+                    newTileset.tiles.items.len, 
+                    newTileset.tileSize.x, 
+                    newTileset.tileSize.y, 
+                    newTileset.columns
+                });
+                // for (newTileset.tiles.items) |tile| {
+                //     std.debug.print(" Tile: {}\n", .{tile});
+                // }
             }
         }
     }
