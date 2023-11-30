@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const xml = @import("xml");
-const sdl = @import("sdl");
+const sdl = @import("zsdl");
 const sprites = @import("sprites.zig");
 
 const MaxFilesize = 1024 * 1024 * 1024;
@@ -94,6 +94,7 @@ pub const TileSet = struct {
 
     tiles: std.ArrayList(Tile),
     tileSize: Vec2I,
+    textureSize: Vec2I,
     columns: i32,
     name: ?[]const u8,
     alloc: std.mem.Allocator,
@@ -102,6 +103,7 @@ pub const TileSet = struct {
         return .{
             .tiles = std.ArrayList(Tile).init(alloc),
             .tileSize = .{ .x = 0, .y = 0 },
+            .textureSize = .{ .x = 0, .y = 0 },
             .columns = 0,
             .name = null,
             .alloc = alloc,
@@ -130,7 +132,13 @@ pub const TileSet = struct {
             if (std.mem.eql(u8, child.tag, "tile")) {
                 var newTile = try Tile.initFromElement(alloc, child);
                 try tileset.tiles.append(newTile);
-            } else {
+            } else if(std.mem.eql(u8, child.tag, "image")) {
+                tileset.textureSize = .{ 
+                    .x = try std.fmt.parseInt(i32, child.getAttribute("width").?, 0),
+                    .y = try std.fmt.parseInt(i32, child.getAttribute("height").?, 0)
+                };
+            }
+            else {
                 std.debug.print("Unhandled tileset child: {s}\n", .{child.tag});
             }
         }
@@ -196,8 +204,8 @@ pub const TileLayer = struct {
         // Resize the layer to have space for all of our tile indices.
         try layer.tiles.resize(@intCast(layer.size.x*layer.size.y));
 
-        const tileData = node.getCharData("data").?;
-        var it = std.mem.tokenizeAny(u8, tileData, ",\n");
+        const tileDataVal = node.getCharData("data").?;
+        var it = std.mem.tokenizeAny(u8, tileDataVal, ",\n");
         var buffIdx: usize = 0;
         while (it.next()) |curr| {
             const idx = std.fmt.parseInt(i32, curr, 0) catch |err| {
@@ -205,7 +213,7 @@ pub const TileLayer = struct {
                 continue;
             };
 
-            layer.tiles.items[buffIdx] = idx;
+            layer.tiles.items[buffIdx] = idx - 1;
             buffIdx += 1;
         }
         
@@ -230,6 +238,21 @@ pub const TileLayer = struct {
         self.properties.deinit();
 
         self.tileset = null;
+    }
+
+    pub fn tileData(self: *TileLayer, x: i32, y: i32) i32 {
+        if(x < 0 or x >= self.size.x) return 0;
+        if(y < 0 or y >= self.size.y) return 0;
+
+        return self.tileDataUnchecked(x, y);
+    }
+
+    pub fn tileDataUnchecked(self: *TileLayer, x: i32, y: i32) i32 {
+        return self.tiles.items[self.tileIndex(x, y)];
+    }
+
+    pub fn tileIndex(self: *TileLayer, x: i32, y: i32) usize {
+        return @intCast(y*self.size.x + x);
     }
 };
 
@@ -279,7 +302,7 @@ pub const TileMap = struct {
                     const lineOffs = y*@as(usize, @intCast(newLayer.size.x));
                     for(0..@intCast(newLayer.size.x)) |x| {
                         const ti = newLayer.tiles.items[lineOffs + x];
-                        std.debug.print("{: >3} ", .{@as(u32, @intCast(ti))});
+                        std.debug.print("{: >3} ", .{ti});
                     }
                     std.debug.print("\n", .{});
                 }
@@ -287,5 +310,150 @@ pub const TileMap = struct {
         }
 
         return map;
+    }
+};
+
+pub const TileMapRenderer = struct {
+    vertices: std.ArrayList(sdl.Vertex),
+    indices: std.ArrayList(u32),
+    alloc: std.mem.Allocator,
+
+    pub fn init(alloc: std.mem.Allocator) !TileMapRenderer {
+        return .{
+            .vertices = std.ArrayList(sdl.Vertex).init(alloc),
+            .indices = std.ArrayList(u32).init(alloc),
+            .alloc = alloc
+        };
+    }
+
+    pub fn deinit(self: *TileMapRenderer) void {
+        self.vertices.deinit();
+    }
+
+    fn tileCoords(idx: i32, tileset: *TileSet) sdl.FRect {
+        const i: i32 = @intCast(idx);
+        if(idx < 0) {
+            return .{
+                .x = 0.0,
+                .y = 0.0,
+                .w = 0.0,
+                .h = 0.0,
+            };
+        }
+
+        const tu: f32 = @as(f32, @floatFromInt(@rem(i,tileset.columns)));
+        const tv: f32 = @as(f32, @floatFromInt(@divTrunc(i,tileset.columns)));
+        const tsx: f32 = @floatFromInt(tileset.tileSize.x);
+        const tsy: f32 = @floatFromInt(tileset.tileSize.y);
+        const txw: f32 = @floatFromInt(tileset.textureSize.x);
+        const txh: f32 = @floatFromInt(tileset.textureSize.y);
+        return .{
+            .x = (tu * tsx) / txw,
+            .y = (tv * tsy) / txh,
+            .w = tsx / txw,
+            .h = tsy / txh,
+        };
+    }
+
+    pub fn recreateVertices(self: *TileMapRenderer, tileset: *TileSet, tiles: *TileLayer) !void {
+
+        const tw = tileset.tileSize.x;
+        const th = tileset.tileSize.y;
+        const layerWidth: usize = @intCast(tiles.size.x);
+        const layerHeight: usize = @intCast(tiles.size.y);
+        try self.vertices.resize(@intCast(4*layerWidth*layerHeight));
+        try self.indices.resize(@intCast(6*layerWidth*layerHeight));
+        
+        std.debug.print("Creating {} vertices\n", .{self.vertices.items.len});
+        var idx: usize = 0;
+        var indicesIdx: usize = 0;
+        for(0..layerHeight) |yy| {
+            for(0..layerWidth) |xx| {
+                const y: i32 = @intCast(yy);
+                const x: i32 = @intCast(xx);
+                const tile = tiles.tileData(x, y);
+                const uv = tileCoords(tile, tileset);
+                
+                self.vertices.items[idx] = .{
+                    .position = .{ 
+                        .x = @as(f32, @floatFromInt(x*tw)) - 0.01,
+                        .y = @as(f32, @floatFromInt(y*th)) - 0.01,
+                    },
+                    .color = .{
+                        .r = 255, .g = 255, .b = 255, .a = 255
+                    },
+                    .tex_coord = .{
+                        .x = uv.x,
+                        .y = uv.y,
+                    }
+                };
+                idx += 1;
+
+                self.vertices.items[idx] = .{
+                    .position = .{ 
+                        .x = @as(f32, @floatFromInt((x+1)*tw)) + 0.01,
+                        .y = @as(f32, @floatFromInt(y*th)) - 0.01,
+                    },
+                    .color =.{
+                        .r = 255, .g = 255, .b = 255, .a = 255
+                    },
+                    .tex_coord = .{
+                        .x = uv.x + uv.w,
+                        .y = uv.y,
+                    }
+                };
+                idx += 1;
+
+                self.vertices.items[idx] = .{
+                    .position = .{ 
+                        .x = @as(f32, @floatFromInt((x+1)*tw)) + 0.01,
+                        .y = @as(f32, @floatFromInt((y+1)*th)) + 0.01,
+                    },
+                    .color = .{
+                        .r = 255, .g = 255, .b = 255, .a = 255
+                    },
+                    .tex_coord = .{
+                        .x = uv.x + uv.w,
+                        .y = uv.y + uv.h,
+                    }
+                };
+                idx += 1;
+
+                self.vertices.items[idx] = .{
+                    .position = .{ 
+                        .x = @as(f32, @floatFromInt(x*tw)) - 0.01,
+                        .y = @as(f32, @floatFromInt((y+1)*th)) + 0.01,
+                    },
+                    .color = .{
+                        .r = 255, .g = 255, .b = 255, .a = 255
+                    },
+                    .tex_coord = .{
+                        .x = uv.x,
+                        .y = uv.y + uv.h,
+                    }
+                };
+                idx += 1;
+
+                const baseIdx: u32 = 4 * @as(u32, @intCast(y*@as(i32, @intCast(layerWidth)) + x));
+                self.indices.items[indicesIdx] = baseIdx;
+                self.indices.items[indicesIdx + 1] = baseIdx + 1;
+                self.indices.items[indicesIdx + 2] = baseIdx + 3;
+                self.indices.items[indicesIdx + 3] = baseIdx + 1;
+                self.indices.items[indicesIdx + 4] = baseIdx + 2;
+                self.indices.items[indicesIdx + 5] = baseIdx + 3;
+                indicesIdx += 6;
+            }
+        }
+
+        std.debug.print("{}\n", .{self.vertices.items[0]});
+        // for (self.vertices.items) |vert| {
+        //     std.debug.print("{}\n", .{vert});
+        // }
+    }
+
+    pub fn draw(self: *TileMapRenderer, renderer: *sdl.Renderer, texture: *sdl.Texture, tiles: *TileLayer) !void {
+        _ = tiles;
+
+        renderer.drawGeometry(texture, self.vertices.items, self.indices.items) catch {};
     }
 };
