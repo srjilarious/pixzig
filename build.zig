@@ -123,7 +123,7 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    _ = example(b, target, optimize, "sprite_test", "src/main.zig");
+    _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig");
     _ = example(b, target, optimize, "tile_load_test", "examples/tile_load_test.zig");
 
     // // Creates a step for unit testing. This only builds the test executable
