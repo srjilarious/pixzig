@@ -16,13 +16,13 @@ pub const KeyboardState = struct {
 
     pub fn down(self: *KeyboardState, key: sdl.Scancode) bool {
         const idx : usize = @intCast(@intFromEnum(key));
-        var res = self.keys.isSet(idx);
+        const res = self.keys.isSet(idx);
         // std.debug.print("Index: {} - val = {}\n", .{ idx, res});
         return res;
     }
 
     pub fn set(self: *KeyboardState, key: sdl.Scancode, val: bool) void {
-        var idx : usize = @intCast(@intFromEnum(key));
+        const idx : usize = @intCast(@intFromEnum(key));
         if(val) {
             std.debug.print("Setting {}\n", .{idx });
             self.keys.set(idx);
@@ -40,7 +40,7 @@ pub const Keyboard = struct {
 
     pub fn init(_alloc: std.mem.Allocator) Keyboard {
         _ = _alloc;
-        var res: Keyboard = .{
+        const res: Keyboard = .{
             .currIdx = 0, 
             .prevIdx = 1,
             .keyBuffers = .{
@@ -60,12 +60,12 @@ pub const Keyboard = struct {
     }
 
     pub fn update(self: *Keyboard) void { //deltaUs: i64) void {
-        var temp = self.currIdx;
+        const temp = self.currIdx;
         self.currIdx = self.prevIdx;
         self.prevIdx = temp;
 
         var curr = self.currKeys();
-        var prev = self.prevKeys();
+        const prev = self.prevKeys();
         curr.keys.setRangeValue(.{.start=0, .end=NumKeys}, false);
         curr.keys.setUnion(prev.keys);
     }

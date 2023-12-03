@@ -130,7 +130,7 @@ pub const TileSet = struct {
         var children = node.elements();
         while (children.next()) |child| {
             if (std.mem.eql(u8, child.tag, "tile")) {
-                var newTile = try Tile.initFromElement(alloc, child);
+                const newTile = try Tile.initFromElement(alloc, child);
                 try tileset.tiles.append(newTile);
             } else if(std.mem.eql(u8, child.tag, "image")) {
                 tileset.textureSize = .{ 

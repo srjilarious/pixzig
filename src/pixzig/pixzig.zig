@@ -18,7 +18,7 @@ pub const TextureManager = struct {
     allocator: std.mem.Allocator,
 
     pub fn init(renderer: *sdl.Renderer, alloc: std.mem.Allocator) TextureManager {
-        var textures = std.ArrayList(Texture).init(alloc);
+        const textures = std.ArrayList(Texture).init(alloc);
         return .{ .textures = textures, .renderer = renderer, .allocator = alloc };
     }
 
@@ -36,9 +36,9 @@ pub const TextureManager = struct {
         // Convert our string slice to a null terminated string
         var nt_str = try self.allocator.alloc(u8, file_path.len + 1);
         defer self.allocator.free(nt_str);
-        std.mem.copy(u8, nt_str, file_path);
+        @memcpy(nt_str, file_path);
         nt_str[file_path.len] = 0;
-        var nt_file_path = nt_str[0..file_path.len :0];
+        const nt_file_path = nt_str[0..file_path.len :0];
 
         // Try to load an image
         var image = try stbi.Image.loadFromFile(nt_file_path, 0);
@@ -58,11 +58,11 @@ pub const TextureManager = struct {
             0xFF000000 // alpha mask
         );
 
-        var tex = try self.renderer.createTextureFromSurface(surf);
+        const tex = try self.renderer.createTextureFromSurface(surf);
         surf.free();
 
-        var copied_name = try self.allocator.alloc(u8, name.len);
-        std.mem.copy(u8, copied_name, name);
+        const copied_name = try self.allocator.alloc(u8, name.len);
+        @memcpy(copied_name, name);
         try self.textures.append(.{
             .texture = tex,
             .name = copied_name,
@@ -84,7 +84,7 @@ pub const PixzigEngine = struct {
         try sdl.init(.{ .audio = true, .video = true });
         stbi.init(std.heap.page_allocator);
 
-        var win = try sdl.Window.create(
+        const win = try sdl.Window.create(
             title,
             sdl.Window.pos_undefined,
             sdl.Window.pos_undefined,
@@ -96,9 +96,9 @@ pub const PixzigEngine = struct {
             },
         );
 
-        var render = try sdl.Renderer.create(win, -1, .{ .accelerated = true });
+        const render = try sdl.Renderer.create(win, -1, .{ .accelerated = true });
 
-        var texMgr = TextureManager.init(render, allocator);
+        const texMgr = TextureManager.init(render, allocator);
         return .{ 
             .window = win, 
             .renderer = render, 

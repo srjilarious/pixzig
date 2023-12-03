@@ -3,8 +3,10 @@
 const std = @import("std");
 
 const zsdl = @import("libs/zig-gamedev/libs/zsdl/build.zig");
+const zglfw = @import("libs/zig-gamedev/libs/zglfw/build.zig");
 const zopengl = @import("libs/zig-gamedev/libs/zopengl/build.zig");
 const zstbi = @import("libs/zig-gamedev/libs/zstbi/build.zig");
+const zgui = @import("libs/zig-gamedev/libs/zgui/build.zig");
 
 const assets_dir = "assets/";
 
@@ -25,13 +27,17 @@ pub fn example(b: *std.Build,
 
     // Build it
     const zsdl_pkg = zsdl.package(b, target, optimize, .{});
+    const zglfw_pkg = zglfw.package(b, target, optimize, .{});
     const zopengl_pkg = zopengl.package(b, target, optimize, .{});
     const zstbi_pkg = zstbi.package(b, target, optimize, .{});
+    const zgui_pkg = zgui.package(b, target, optimize, .{ .options = .{ .backend = . glfw_opengl3}});
 
     // Link with your app
     zsdl_pkg.link(exe);
+    zglfw_pkg.link(exe);
     zopengl_pkg.link(exe);
     zstbi_pkg.link(exe);
+    zgui_pkg.link(exe);
 
     const xml = b.addModule("xml", .{ .source_file = .{ .path = "libs/xml.zig" } });
 
@@ -41,6 +47,10 @@ pub fn example(b: *std.Build,
         .dependencies = &.{
             // Uses SDL for graphics/audio/input
             .{ .name = "zsdl", .module = zsdl_pkg.zsdl },
+            // Transitioning to GLFW for more graphics control.
+            .{ .name = "zglfw", .module = zglfw_pkg.zglfw },
+            // GUI support
+            .{ .name = "zgui", .module = zgui_pkg.zgui },
             // STBI for image loading.
             .{ .name = "zstbi", .module = zstbi_pkg.zstbi },
             // XML for tilemap loading.
@@ -125,6 +135,7 @@ pub fn build(b: *std.Build) void {
 
     _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig");
     _ = example(b, target, optimize, "tile_load_test", "examples/tile_load_test.zig");
+    _ = example(b, target, optimize, "glfw_test", "examples/glfw_test.zig");
 
     // // Creates a step for unit testing. This only builds the test executable
     // // but does not run it.

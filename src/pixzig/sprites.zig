@@ -30,7 +30,7 @@ pub const Sprite = struct {
             try renderer.copy(self.texture, &self.src_coords, &self.dest);
         }
         else {
-            var rflip : sdl.RendererFlip = @enumFromInt(@intFromEnum(self.flip));
+            const rflip : sdl.RendererFlip = @enumFromInt(@intFromEnum(self.flip));
             try renderer.copyEx(self.texture, &self.src_coords, &self.dest, 0.0, null, rflip);
         }
     }

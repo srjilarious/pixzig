@@ -15,19 +15,19 @@ pub fn main() !void {
     var renderer = eng.renderer;
     try renderer.setScale(4.0, 4.0);
 
-    var tex = try eng.textures.loadTexture("pacman_sprites", "assets/pac-tiles.png");
+    const tex = try eng.textures.loadTexture("pacman_sprites", "assets/pac-tiles.png");
 
     var fr1: Frame = .{ .coords = .{ .x = 96, .y = 48, .w = 16, .h = 16 }, .frameTimeUs = 20000, .flip = Flip.None };
     var fr2: Frame = .{ .coords = .{ .x = 112, .y = 48, .w = 16, .h = 16 }, .frameTimeUs = 20000, .flip = Flip.None };
     var fr3: Frame = .{ .coords = .{ .x = 96, .y = 64, .w = 16, .h = 16 }, .frameTimeUs = 20000, .flip = Flip.None };
 
-    var frseq = try pixzig.sprites.FrameSequence.init("test", std.heap.page_allocator, &[_]Frame{ fr1, fr2, fr3 });
+    const frseq = try pixzig.sprites.FrameSequence.init("test", std.heap.page_allocator, &[_]Frame{ fr1, fr2, fr3 });
 
-    var fr1_2: Frame = .{ .coords = .{ .x = 96, .y = 48, .w = 16, .h = 16 }, .frameTimeUs = 20000, .flip = Flip.Horz };
-    var fr2_2: Frame = .{ .coords = .{ .x = 112, .y = 48, .w = 16, .h = 16 }, .frameTimeUs = 20000, .flip = Flip.Horz };
-    var fr3_2: Frame = .{ .coords = .{ .x = 96, .y = 64, .w = 16, .h = 16 }, .frameTimeUs = 20000, .flip = Flip.Horz };
+    const fr1_2: Frame = .{ .coords = .{ .x = 96, .y = 48, .w = 16, .h = 16 }, .frameTimeUs = 20000, .flip = Flip.Horz };
+    const fr2_2: Frame = .{ .coords = .{ .x = 112, .y = 48, .w = 16, .h = 16 }, .frameTimeUs = 20000, .flip = Flip.Horz };
+    const fr3_2: Frame = .{ .coords = .{ .x = 96, .y = 64, .w = 16, .h = 16 }, .frameTimeUs = 20000, .flip = Flip.Horz };
 
-    var frseq_2 = try pixzig.sprites.FrameSequence.init("test", std.heap.page_allocator, &[_]Frame{ fr1_2, fr2_2, fr3_2 });
+    const frseq_2 = try pixzig.sprites.FrameSequence.init("test", std.heap.page_allocator, &[_]Frame{ fr1_2, fr2_2, fr3_2 });
 
     var actor = try pixzig.sprites.Actor.init(std.heap.page_allocator);
     _ = try actor.addState(frseq, "right");

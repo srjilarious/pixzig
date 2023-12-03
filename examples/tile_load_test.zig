@@ -7,6 +7,7 @@ const pixzig = @import("pixzig");
 const tile = pixzig.tile;
 const Flip = pixzig.sprites.Flip;
 const Frame = pixzig.sprites.Frame;
+const Vec2I = pixzig.sprites.Vec2I;
 
 pub fn main() !void {
     std.log.info("Pixzig Engine test!", .{});
@@ -16,7 +17,7 @@ pub fn main() !void {
     var renderer = eng.renderer;
     try renderer.setScale(2.0, 2.0);
 
-    var tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
+    const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
     const map = try tile.TileMap.initFromFile("assets/level1a.tmx", std.heap.page_allocator);
     // defer map.deinit();
 
@@ -24,6 +25,8 @@ pub fn main() !void {
     defer mapRender.deinit();
 
     try mapRender.recreateVertices(&map.tilesets.items[0], &map.layers.items[1]);
+
+    var scroll_offset = Vec2I{ .x = 0, .y = 0 };
 
     main_loop: while (true) {
         var event: sdl.Event = undefined;
@@ -36,18 +39,22 @@ pub fn main() !void {
             }
         }
 
-        // if (eng.keyboard.down(.escape)) break :main_loop;
+        if (eng.keyboard.down(.escape)) break :main_loop;
         // if (eng.keyboard.pressed(.@"1")) fr1.apply(&spr);
         // if (eng.keyboard.pressed(.@"2")) fr2.apply(&spr);
         // if (eng.keyboard.pressed(.@"3")) fr3.apply(&spr);
-        // if (eng.keyboard.pressed(.left)) {
-        //     std.debug.print("Left!\n", .{});
-        //     actor.setState("left");
-        // }
-        // if (eng.keyboard.pressed(.right)) {
-        //     std.debug.print("Right!\n", .{});
-        //     actor.setState("right");
-        // }
+        if (eng.keyboard.down(.left)) {
+            scroll_offset.x -= 1;
+        }
+        if (eng.keyboard.down(.right)) {
+            scroll_offset.x += 1;
+        }
+        if (eng.keyboard.down(.up)) {
+            scroll_offset.y -= 1;
+        }
+        if (eng.keyboard.pressed(.down)) {
+            scroll_offset.y += 1;
+        }
 
         try renderer.setDrawColorRGB(32, 32, 100);
         try renderer.clear();
