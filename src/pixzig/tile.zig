@@ -4,10 +4,11 @@ const std = @import("std");
 const xml = @import("xml");
 const sdl = @import("zsdl");
 const sprites = @import("sprites.zig");
+const common = @import("common.zig");
 
 const MaxFilesize = 1024 * 1024 * 1024;
 
-const Vec2I = sprites.Vec2I;
+const Vec2I = common.Vec2I;
 
 const CoreTileProperty = u32;
 pub const Clear: u32 = 0x0;

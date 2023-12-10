@@ -49,6 +49,8 @@ pub fn example(b: *std.Build,
             .{ .name = "zsdl", .module = zsdl_pkg.zsdl },
             // Transitioning to GLFW for more graphics control.
             .{ .name = "zglfw", .module = zglfw_pkg.zglfw },
+            // OpenGL
+            .{ .name = "zopengl", .module = zopengl_pkg.zopengl },
             // GUI support
             .{ .name = "zgui", .module = zgui_pkg.zgui },
             // STBI for image loading.

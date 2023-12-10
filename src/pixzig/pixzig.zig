@@ -1,11 +1,19 @@
 // zig fmt: off
 const std = @import("std");
 const sdl = @import("zsdl");
+const glfw = @import("zglfw");
 const stbi = @import("zstbi");
 
+const gl = @import("zopengl");
+
+const zgui = @import("zgui");
+
+pub const common = @import("./common.zig");
 pub const sprites = @import("./sprites.zig");
 pub const input = @import("./input.zig");
 pub const tile = @import("./tile.zig");
+
+pub const Vec2I = common.Vec2I;
 
 pub const Texture = struct {
     texture: *sdl.Texture,
@@ -113,5 +121,83 @@ pub const PixzigEngine = struct {
         self.window.destroy();
         stbi.deinit();
         sdl.quit();
+    }
+};
+
+pub const PixzigEngineGlfwOptions = struct {
+    withGui: bool = true,
+    windowSize: Vec2I = .{ .x = 800, .y = 600 },
+};
+
+pub const PixzigEngineGlfw = struct {
+    window: *glfw.Window,
+    options: PixzigEngineGlfwOptions,
+    scaleFactor: f32,
+    allocator: std.mem.Allocator,
+    // textures: TextureManager,
+    // keyboard: input.Keyboard,
+
+    pub fn init(title: [:0]const u8, 
+                allocator: std.mem.Allocator,
+                options: PixzigEngineGlfwOptions) !PixzigEngineGlfw {
+        try glfw.init();
+
+        // // Change current working directory to where the executable is located.
+        // {
+        //     var buffer: [1024]u8 = undefined;
+        //     const path = std.fs.selfExeDirPath(buffer[0..]) catch ".";
+        //     std.os.chdir(path) catch {};
+        // }
+
+        const gl_major = 4;
+        const gl_minor = 0;
+        glfw.windowHintTyped(.context_version_major, gl_major);
+        glfw.windowHintTyped(.context_version_minor, gl_minor);
+        glfw.windowHintTyped(.opengl_profile, .opengl_core_profile);
+        glfw.windowHintTyped(.opengl_forward_compat, true);
+        glfw.windowHintTyped(.client_api, .opengl_api);
+        glfw.windowHintTyped(.doublebuffer, true);
+
+        const window = try glfw.Window.create(
+                options.windowSize.x, 
+                options.windowSize.y, 
+                title, 
+                null
+            );
+        window.setSizeLimits(400, 400, -1, -1);
+
+        glfw.makeContextCurrent(window);
+        glfw.swapInterval(1);
+
+        try gl.loadCoreProfile(glfw.getProcAddress, gl_major, gl_minor);
+        
+        const scale_factor = scale_factor: {
+            const scale = window.getContentScale();
+            break :scale_factor @max(scale[0], scale[1]);
+        };
+
+        if(options.withGui) {
+            zgui.init(allocator);
+            zgui.getStyle().scaleAllSizes(scale_factor);
+            zgui.backend.init(window);
+        }
+
+        return .{
+            .window = window,
+            .options = options,
+            .scaleFactor = scale_factor,
+            .allocator = allocator
+        };
+    }
+
+    pub fn deinit(self: *PixzigEngineGlfw) void {
+        if(self.options.withGui) {
+            zgui.backend.deinit();
+            zgui.deinit();
+        }
+
+        self.window.destroy();
+        glfw.terminate();
+        
     }
 };

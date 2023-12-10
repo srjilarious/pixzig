@@ -7,7 +7,7 @@ const pixzig = @import("pixzig");
 const tile = pixzig.tile;
 const Flip = pixzig.sprites.Flip;
 const Frame = pixzig.sprites.Frame;
-const Vec2I = pixzig.sprites.Vec2I;
+const Vec2I = pixzig.common.Vec2I;
 
 pub fn main() !void {
     std.log.info("Pixzig Engine test!", .{});

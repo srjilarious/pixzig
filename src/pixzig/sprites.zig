@@ -2,8 +2,9 @@
 
 const std = @import("std");
 const sdl = @import("zsdl");
+const common = @import("./common.zig");
 
-pub const Vec2I = struct { x: i32, y: i32 };
+const Vec2I = common.Vec2I;
 
 pub const Sprite = struct {
     texture: *sdl.Texture,
