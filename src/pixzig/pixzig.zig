@@ -182,6 +182,7 @@ pub const PixzigEngineGlfw = struct {
             zgui.backend.init(window);
         }
 
+        stbi.init(allocator);
         return .{
             .window = window,
             .options = options,
@@ -191,6 +192,7 @@ pub const PixzigEngineGlfw = struct {
     }
 
     pub fn deinit(self: *PixzigEngineGlfw) void {
+        stbi.deinit();
         if(self.options.withGui) {
             zgui.backend.deinit();
             zgui.deinit();
