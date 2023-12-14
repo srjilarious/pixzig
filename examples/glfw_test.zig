@@ -7,7 +7,7 @@ const glfw = @import("zglfw");
 const gl = @import("zopengl");
 
 const pixzig = @import("pixzig");
-const EngOptions = pixzig.PixzigEngineGlfwOptions;
+const EngOptions = pixzig.PixzigEngineOptions;
 
 const content_dir = "assets/"; //@import("build_options").content_dir;
 const window_title = "zig-gamedev: minimal zgpu glfw opengl3";
@@ -25,7 +25,7 @@ pub fn main() !void {
     defer _ = gpa_state.deinit();
     const gpa = gpa_state.allocator();
 
-    var eng = try pixzig.PixzigEngineGlfw.init("Glfw Eng Test.", gpa, EngOptions{});
+    var eng = try pixzig.PixzigEngine.init("Glfw Eng Test.", gpa, EngOptions{});
     defer eng.deinit();
 
     std.debug.print("Engine initialize.\n", .{});

@@ -9,7 +9,7 @@ const Frame = pixzig.sprites.Frame;
 
 pub fn main() !void {
     std.log.info("Pixzig Engine test!", .{});
-    var eng = try pixzig.PixzigEngine.create("Pixzig Test!", std.heap.page_allocator);
+    var eng = try pixzig.PixzigEngineSdl.create("Pixzig Test!", std.heap.page_allocator);
     defer eng.destroy();
 
     var renderer = eng.renderer;

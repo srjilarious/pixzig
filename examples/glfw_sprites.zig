@@ -5,7 +5,7 @@ const glfw = @import("zglfw");
 const gl = @import("zopengl");
 const stbi = @import ("zstbi");
 const pixzig = @import("pixzig");
-const EngOptions = pixzig.PixzigEngineGlfwOptions;
+const EngOptions = pixzig.PixzigEngineOptions;
 
 // const VertexShader: [*c]const u8 =
 //     \\ attribute vec3 coord3d;
@@ -96,7 +96,7 @@ pub fn main() !void {
     defer _ = gpa_state.deinit();
     const gpa = gpa_state.allocator();
 
-    var eng = try pixzig.PixzigEngineGlfw.init("Glfw Eng Test.", gpa, EngOptions{});
+    var eng = try pixzig.PixzigEngine.init("Glfw Eng Test.", gpa, EngOptions{});
     defer eng.deinit();
 
     std.debug.print("Creating Shaders...\n", .{});
@@ -108,20 +108,11 @@ pub fn main() !void {
     };
     std.debug.print("Done creating Shaders!\n", .{});
 
-    var texture: c_uint = undefined;
-    gl.genTextures(1, &texture);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    
 
     // Try to load an image
-    var image = try stbi.Image.loadFromFile("assets/mario_grassish2.png", 0);
-    defer image.deinit();
+    const texture = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
 
-    const format = gl.RGBA;
-    gl.texImage2D(gl.TEXTURE_2D, 0, format, @intCast(image.width), @intCast(image.height), 0, format, gl.UNSIGNED_BYTE, @ptrCast(image.data));
 
     var vao: c_uint = undefined;
     gl.genVertexArrays(1, &vao);
@@ -234,7 +225,7 @@ pub fn main() !void {
         );
 
         gl.activeTexture(gl.TEXTURE0); // Activate texture unit 0
-        gl.bindTexture(gl.TEXTURE_2D, texture); // Bind your texture
+        gl.bindTexture(gl.TEXTURE_2D, texture.texture); // Bind your texture
         gl.uniform1i(gl.getUniformLocation(program, "tex"), 0); // Set 'tex' to use texture unit 0
         //
         gl.enableVertexAttribArray(attrTexCoord);

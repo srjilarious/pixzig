@@ -15,22 +15,22 @@ pub const tile = @import("./tile.zig");
 
 pub const Vec2I = common.Vec2I;
 
-pub const Texture = struct {
+pub const TextureSdl = struct {
     texture: *sdl.Texture,
     name: ?[]u8,
 };
 
-pub const TextureManager = struct {
-    textures: std.ArrayList(Texture),
+pub const TextureManagerSdl = struct {
+    textures: std.ArrayList(TextureSdl),
     renderer: *sdl.Renderer,
     allocator: std.mem.Allocator,
 
-    pub fn init(renderer: *sdl.Renderer, alloc: std.mem.Allocator) TextureManager {
-        const textures = std.ArrayList(Texture).init(alloc);
+    pub fn init(renderer: *sdl.Renderer, alloc: std.mem.Allocator) TextureManagerSdl {
+        const textures = std.ArrayList(TextureSdl).init(alloc);
         return .{ .textures = textures, .renderer = renderer, .allocator = alloc };
     }
 
-    pub fn destroy(self: *TextureManager) void {
+    pub fn destroy(self: *TextureManagerSdl) void {
         for (self.textures.items) |t| {
             t.texture.destroy();
             self.allocator.free(t.name.?);
@@ -39,7 +39,7 @@ pub const TextureManager = struct {
     }
 
     // TODO: Add error handler.
-    pub fn loadTexture(self: *TextureManager, name: []const u8, file_path: []const u8) !*Texture {
+    pub fn loadTexture(self: *TextureManagerSdl, name: []const u8, file_path: []const u8) !*TextureSdl {
 
         // Convert our string slice to a null terminated string
         var nt_str = try self.allocator.alloc(u8, file_path.len + 1);
@@ -81,13 +81,13 @@ pub const TextureManager = struct {
 };
 
 
-pub const PixzigEngine = struct {
+pub const PixzigEngineSdl = struct {
     window: *sdl.Window,
     renderer: *sdl.Renderer,
-    textures: TextureManager,
+    textures: TextureManagerSdl,
     keyboard: input.Keyboard,
 
-    pub fn create(title: [:0]const u8, allocator: std.mem.Allocator) !PixzigEngine {
+    pub fn create(title: [:0]const u8, allocator: std.mem.Allocator) !PixzigEngineSdl {
         _ = sdl.setHint(sdl.hint_windows_dpi_awareness, "system");
         try sdl.init(.{ .audio = true, .video = true });
         stbi.init(std.heap.page_allocator);
@@ -106,7 +106,7 @@ pub const PixzigEngine = struct {
 
         const render = try sdl.Renderer.create(win, -1, .{ .accelerated = true });
 
-        const texMgr = TextureManager.init(render, allocator);
+        const texMgr = TextureManagerSdl.init(render, allocator);
         return .{ 
             .window = win, 
             .renderer = render, 
@@ -115,7 +115,7 @@ pub const PixzigEngine = struct {
         };
     }
 
-    pub fn destroy(self: *PixzigEngine) void {
+    pub fn destroy(self: *PixzigEngineSdl) void {
         self.textures.destroy();
         self.renderer.destroy();
         self.window.destroy();
@@ -124,22 +124,85 @@ pub const PixzigEngine = struct {
     }
 };
 
-pub const PixzigEngineGlfwOptions = struct {
+
+
+pub const Texture = struct {
+    // GL Texture ID once loaded.
+    texture: c_uint,
+    name: ?[]u8,
+};
+
+pub const TextureManager = struct {
+    textures: std.ArrayList(Texture),
+    allocator: std.mem.Allocator,
+
+    pub fn init(alloc: std.mem.Allocator) TextureManager{
+        const textures = std.ArrayList(Texture).init(alloc);
+        return .{ .textures = textures, .allocator = alloc };
+    }
+
+    pub fn destroy(self: *TextureManager) void {
+        for (self.textures.items) |t| {
+            // TODO: destroy GL texture.
+            self.allocator.free(t.name.?);
+        }
+        self.textures.clearAndFree();
+    }
+
+    // TODO: Add error handler.
+    pub fn loadTexture(self: *TextureManager, name: []const u8, file_path: []const u8) !*Texture{
+
+        // Convert our string slice to a null terminated string
+        var nt_str = try self.allocator.alloc(u8, file_path.len + 1);
+        defer self.allocator.free(nt_str);
+        @memcpy(nt_str[0..file_path.len], file_path);
+        nt_str[file_path.len] = 0;
+        const nt_file_path = nt_str[0..file_path.len :0];
+
+        // Try to load an image
+        var image = try stbi.Image.loadFromFile(nt_file_path, 0);
+        defer image.deinit();
+
+        std.debug.print("Loaded image '{s}', width={}, height={}\n", .{ name, image.width, image.height });
+
+        var texture: c_uint = undefined;
+        gl.genTextures(1, &texture);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        const format = gl.RGBA;
+        gl.texImage2D(gl.TEXTURE_2D, 0, format, @intCast(image.width), @intCast(image.height), 0, format, gl.UNSIGNED_BYTE, @ptrCast(image.data));
+
+        const copied_name = try self.allocator.alloc(u8, name.len);
+        @memcpy(copied_name, name);
+        try self.textures.append(.{
+            .texture = texture,
+            .name = copied_name,
+        });
+
+        return &self.textures.items[self.textures.items.len - 1];
+    }
+};
+
+
+pub const PixzigEngineOptions = struct {
     withGui: bool = true,
     windowSize: Vec2I = .{ .x = 800, .y = 600 },
 };
 
-pub const PixzigEngineGlfw = struct {
+pub const PixzigEngine = struct {
     window: *glfw.Window,
-    options: PixzigEngineGlfwOptions,
+    options: PixzigEngineOptions,
     scaleFactor: f32,
     allocator: std.mem.Allocator,
-    // textures: TextureManager,
+    textures: TextureManager,
     // keyboard: input.Keyboard,
 
     pub fn init(title: [:0]const u8, 
                 allocator: std.mem.Allocator,
-                options: PixzigEngineGlfwOptions) !PixzigEngineGlfw {
+                options: PixzigEngineOptions) !PixzigEngine {
         try glfw.init();
 
         // // Change current working directory to where the executable is located.
@@ -187,12 +250,15 @@ pub const PixzigEngineGlfw = struct {
             .window = window,
             .options = options,
             .scaleFactor = scale_factor,
-            .allocator = allocator
+            .allocator = allocator,
+            .textures = TextureManager.init(allocator)
         };
     }
 
-    pub fn deinit(self: *PixzigEngineGlfw) void {
+    pub fn deinit(self: *PixzigEngine) void {
         stbi.deinit();
+        self.textures.destroy();
+
         if(self.options.withGui) {
             zgui.backend.deinit();
             zgui.deinit();
