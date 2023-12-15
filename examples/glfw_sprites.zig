@@ -5,6 +5,7 @@ const glfw = @import("zglfw");
 const gl = @import("zopengl");
 const stbi = @import ("zstbi");
 const pixzig = @import("pixzig");
+const math = @import("zmath");
 const EngOptions = pixzig.PixzigEngineOptions;
 
 // const VertexShader: [*c]const u8 =
@@ -40,8 +41,11 @@ const VertexShader: [*c]const u8 =
     \\ layout(location = 1) in vec2 texcoord;
     \\ // Pass texture coordinate to fragment shader
     \\ out vec2 Texcoord;
+    \\ 
+    \\ uniform mat4 projectionMatrix;
+    \\ 
     \\ void main() {
-    \\    gl_Position = vec4(coord3d, 0.0, 1.0);
+    \\    gl_Position = projectionMatrix * vec4(coord3d, 0.0, 1.0);
     \\    // Pass texture coordinate to fragment shader
     \\    Texcoord = texcoord;
     \\ }
@@ -108,7 +112,9 @@ pub fn main() !void {
     };
     std.debug.print("Done creating Shaders!\n", .{});
 
-    
+    // Orthographic projection matrix
+    const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
+    const projMatArr = math.matToArr(projMat);
 
     // Try to load an image
     const texture = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
@@ -158,22 +164,24 @@ pub fn main() !void {
 
     const attrCoord3d: c_uint = @intCast(gl.getAttribLocation(program, "coord3d"));
     const attrTexCoord: c_uint = @intCast(gl.getAttribLocation(program, "texcoord"));
-    std.debug.print("attrCoord3d = {}, attrTexCoord = {}\n", .{ attrCoord3d, attrTexCoord});
+    const uniformProjMat: c_int = @intCast(gl.getUniformLocation(program, "projectionMatrix"));
+
+    std.debug.print("attrCoord3d = {}, attrTexCoord = {}, uniformProjMat = {}\n", .{ attrCoord3d, attrTexCoord, uniformProjMat});
     // _ = attrTexCoord;
     // const uniformMvp = gl.getAttribLocation(program, "mvp");
     // _ = uniformMvp;
     // const uniformTexture = gl.getAttribLocation(program, "mytexture");
     // _ = uniformTexture;
 
-    const pos: f32 = 0.88;
-    buffers.vertices[0] = -pos;
+    const pos: f32 = 522;
+    buffers.vertices[0] = 10;
     buffers.vertices[1] = pos;
 
-    buffers.vertices[2] = -pos;
-    buffers.vertices[3] = -pos;
+    buffers.vertices[2] = 10;
+    buffers.vertices[3] = 10;
 
     buffers.vertices[4] = pos;
-    buffers.vertices[5] = -pos;
+    buffers.vertices[5] = 10;
 
     buffers.vertices[6] = pos;
     buffers.vertices[7] = pos;
@@ -207,6 +215,8 @@ pub fn main() !void {
         gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.1, 0.1, 0.5, 1.0 });
         
         gl.useProgram(program);
+
+        gl.uniformMatrix4fv(uniformProjMat, 1, gl.FALSE, @ptrCast(&projMatArr[0]));
 
         // gl.enableClientState(gl.VERTEX_ARRAY);
         gl.enableVertexAttribArray(attrCoord3d);

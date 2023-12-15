@@ -6,6 +6,7 @@ const zsdl = @import("libs/zig-gamedev/libs/zsdl/build.zig");
 const zglfw = @import("libs/zig-gamedev/libs/zglfw/build.zig");
 const zopengl = @import("libs/zig-gamedev/libs/zopengl/build.zig");
 const zstbi = @import("libs/zig-gamedev/libs/zstbi/build.zig");
+const zmath = @import("libs/zig-gamedev/libs/zmath/build.zig");
 const zgui = @import("libs/zig-gamedev/libs/zgui/build.zig");
 
 const assets_dir = "assets/";
@@ -30,6 +31,7 @@ pub fn example(b: *std.Build,
     const zglfw_pkg = zglfw.package(b, target, optimize, .{});
     const zopengl_pkg = zopengl.package(b, target, optimize, .{});
     const zstbi_pkg = zstbi.package(b, target, optimize, .{});
+    const zmath_pkg = zmath.package(b, target, optimize, .{});
     const zgui_pkg = zgui.package(b, target, optimize, .{ .options = .{ .backend = . glfw_opengl3}});
 
     // Link with your app
@@ -37,6 +39,7 @@ pub fn example(b: *std.Build,
     zglfw_pkg.link(exe);
     zopengl_pkg.link(exe);
     zstbi_pkg.link(exe);
+    zmath_pkg.link(exe);
     zgui_pkg.link(exe);
 
     const xml = b.addModule("xml", .{ .source_file = .{ .path = "libs/xml.zig" } });
@@ -55,6 +58,8 @@ pub fn example(b: *std.Build,
             .{ .name = "zgui", .module = zgui_pkg.zgui },
             // STBI for image loading.
             .{ .name = "zstbi", .module = zstbi_pkg.zstbi },
+            // Math library
+            .{ .name = "zmath", .module = zmath_pkg.zmath },
             // XML for tilemap loading.
             .{ .name = "xml", .module = xml },
         },
