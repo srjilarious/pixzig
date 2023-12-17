@@ -18,12 +18,12 @@ pub const RectF = struct {
     }
 
     pub fn fromCoords(x: i32, y: i32, w: i32, h: i32, szW:i32, szH:i32) RectF {
-        const xF = @as(f32, @floatCast(x));
-        const yF = @as(f32, @floatCast(y));
-        const wF = @as(f32, @floatCast(w));
-        const hF = @as(f32, @floatCast(h));
-        const szWF = @as(f32, @floatCast(szW));
-        const szHF = @as(f32, @floatCast(szH));
+        const xF = @as(f32, @floatFromInt(x));
+        const yF = @as(f32, @floatFromInt(y));
+        const wF = @as(f32, @floatFromInt(w));
+        const hF = @as(f32, @floatFromInt(h));
+        const szWF = @as(f32, @floatFromInt(szW));
+        const szHF = @as(f32, @floatFromInt(szH));
         return .{
             .l = xF/szWF,
             .r = (xF+wF)/szWF,
@@ -33,10 +33,10 @@ pub const RectF = struct {
     }
 
     pub fn fromPosSize(x: i32, y: i32, w: i32, h: i32) RectF {
-        const xF = @as(f32, @floatCast(x));
-        const yF = @as(f32, @floatCast(y));
-        const wF = @as(f32, @floatCast(w));
-        const hF = @as(f32, @floatCast(h));
+        const xF = @as(f32, @floatFromInt(x));
+        const yF = @as(f32, @floatFromInt(y));
+        const wF = @as(f32, @floatFromInt(w));
+        const hF = @as(f32, @floatFromInt(h));
         return .{
             .l = xF,
             .r = xF + wF,

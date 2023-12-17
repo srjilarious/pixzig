@@ -57,7 +57,7 @@ fn createShader(glsl: [*c]const [*c]const u8, shaderType: u32) !u32 {
     // gl.deleteShader(res);
 }
 
-const MaxSprites = 100;
+const MaxSprites = 1000;
 pub const SpriteBatchQueue = struct {
     shaderProgram: u32 = 0,
     vao: u32 = 0,
@@ -155,7 +155,7 @@ pub const SpriteBatchQueue = struct {
     }
 
     pub fn drawSprite(self: *SpriteBatchQueue, dest: RectF, srcCoords: RectF) void {
-        const verts = self.vertices[self.currVert..8];
+        const verts = self.vertices[self.currVert..self.currVert+8];
         verts[0] = dest.l;
         verts[1] = dest.b;
 
@@ -168,7 +168,7 @@ pub const SpriteBatchQueue = struct {
         verts[6] = dest.r;
         verts[7] = dest.b;
 
-        const texCoords = self.texCoords[self.currTexCoord..8];
+        const texCoords = self.texCoords[self.currTexCoord..self.currTexCoord+8];
         texCoords[0] = srcCoords.l;
         texCoords[1] = srcCoords.b;
 
@@ -181,7 +181,7 @@ pub const SpriteBatchQueue = struct {
         texCoords[6] = srcCoords.r;
         texCoords[7] = srcCoords.b;
 
-        const indices = self.indices[self.currIdx..6];
+        const indices = self.indices[self.currIdx..self.currIdx+6];
         const currVertIdx: u16 = @intCast(self.currVert / 2);
         indices[0] = currVertIdx+0;
         indices[1] = currVertIdx+1;
