@@ -31,4 +31,17 @@ pub const RectF = struct {
             .b = (yF+hF)/szHF
         };
     }
+
+    pub fn fromPosSize(x: i32, y: i32, w: i32, h: i32) RectF {
+        const xF = @as(f32, @floatCast(x));
+        const yF = @as(f32, @floatCast(y));
+        const wF = @as(f32, @floatCast(w));
+        const hF = @as(f32, @floatCast(h));
+        return .{
+            .l = xF,
+            .r = xF + wF,
+            .t = yF,
+            .b = yF + hF
+        };
+    }
 };

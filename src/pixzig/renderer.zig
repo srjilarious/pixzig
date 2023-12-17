@@ -57,7 +57,7 @@ fn createShader(glsl: [*c]const [*c]const u8, shaderType: u32) !u32 {
     // gl.deleteShader(res);
 }
 
-const MaxSprites = 1000;
+const MaxSprites = 100;
 pub const SpriteBatchQueue = struct {
     shaderProgram: u32 = 0,
     vao: u32 = 0,
@@ -127,11 +127,7 @@ pub const SpriteBatchQueue = struct {
         gl.enable(gl.TEXTURE_2D);
         gl.disable(gl.CULL_FACE);
         gl.cullFace(gl.CCW);
-        // var attrCoord3d: c_uint = undefined;
-        // var attrTexCoord: c_uint = undefined;
-        // var uniformMvp: c_uint = undefined;
-        // var uniformTexture: c_uint = undefined;
-
+        
         batch.attrCoord = @intCast(gl.getAttribLocation(batch.shaderProgram, "coord3d"));
         batch.attrTexCoord = @intCast(gl.getAttribLocation(batch.shaderProgram, "texcoord"));
         batch.uniformMVP = @intCast(gl.getUniformLocation(batch.shaderProgram, "projectionMatrix"));
@@ -149,8 +145,6 @@ pub const SpriteBatchQueue = struct {
     pub fn begin(self: *SpriteBatchQueue, mvp: zmath.Mat, texture: *Texture) void {
         gl.useProgram(self.shaderProgram);
 
-        gl.enableVertexAttribArray(self.attrCoord);
-
         const mvpArr = zmath.matToArr(mvp);
         gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&mvpArr[0]));
 
@@ -161,74 +155,40 @@ pub const SpriteBatchQueue = struct {
     }
 
     pub fn drawSprite(self: *SpriteBatchQueue, dest: RectF, srcCoords: RectF) void {
-        // const verts = self.vertices[self.currVert..8];
-        self.vertices[0] = dest.l;
-        self.vertices[1] = dest.b;
+        const verts = self.vertices[self.currVert..8];
+        verts[0] = dest.l;
+        verts[1] = dest.b;
 
-        self.vertices[2] = dest.l;
-        self.vertices[3] = dest.t;
+        verts[2] = dest.l;
+        verts[3] = dest.t;
 
-        self.vertices[4] = dest.r;
-        self.vertices[5] = dest.t;
+        verts[4] = dest.r;
+        verts[5] = dest.t;
 
-        self.vertices[6] = dest.r;
-        self.vertices[7] = dest.b;
+        verts[6] = dest.r;
+        verts[7] = dest.b;
 
-        // const texCoords = self.texCoords[self.currTexCoord..8];
-        self.texCoords[0] = srcCoords.l;
-        self.texCoords[1] = srcCoords.b;
+        const texCoords = self.texCoords[self.currTexCoord..8];
+        texCoords[0] = srcCoords.l;
+        texCoords[1] = srcCoords.b;
 
-        self.texCoords[2] = srcCoords.l;
-        self.texCoords[3] = srcCoords.t;
+        texCoords[2] = srcCoords.l;
+        texCoords[3] = srcCoords.t;
         
-        self.texCoords[4] = srcCoords.r;
-        self.texCoords[5] = srcCoords.t;
+        texCoords[4] = srcCoords.r;
+        texCoords[5] = srcCoords.t;
         
-        self.texCoords[6] = srcCoords.r;
-        self.texCoords[7] = srcCoords.b;
+        texCoords[6] = srcCoords.r;
+        texCoords[7] = srcCoords.b;
 
-        // const indices = self.indices[self.currIdx..6];
-        const currVertIdx:u16 = @intCast(self.currVert / 2);
-        self.indices[0] = currVertIdx+0;
-        self.indices[1] = currVertIdx+1;
-        self.indices[2] = currVertIdx+2;
-        self.indices[3] = currVertIdx+2;
-        self.indices[4] = currVertIdx+3;
-        self.indices[5] = currVertIdx+0;
-        // const verts = self.vertices[self.currVert..8];
-        // verts[0] = dest.l;
-        // verts[1] = dest.b;
-        //
-        // verts[2] = dest.l;
-        // verts[3] = dest.t;
-        //
-        // verts[4] = dest.r;
-        // verts[5] = dest.t;
-        //
-        // verts[6] = dest.r;
-        // verts[7] = dest.b;
-        //
-        // const texCoords = self.texCoords[self.currTexCoord..8];
-        // texCoords[0] = srcCoords.l;
-        // texCoords[1] = srcCoords.b;
-        //
-        // texCoords[2] = srcCoords.l;
-        // texCoords[3] = srcCoords.t;
-        // 
-        // texCoords[4] = srcCoords.r;
-        // texCoords[5] = srcCoords.t;
-        // 
-        // texCoords[6] = srcCoords.r;
-        // texCoords[7] = srcCoords.b;
-        //
-        // const indices = self.indices[self.currIdx..6];
-        // const currVertIdx:u16 = @intCast(self.currVert / 2);
-        // indices[0] = currVertIdx+0;
-        // indices[1] = currVertIdx+1;
-        // indices[2] = currVertIdx+2;
-        // indices[3] = currVertIdx+2;
-        // indices[4] = currVertIdx+3;
-        // indices[5] = currVertIdx+0;
+        const indices = self.indices[self.currIdx..6];
+        const currVertIdx: u16 = @intCast(self.currVert / 2);
+        indices[0] = currVertIdx+0;
+        indices[1] = currVertIdx+1;
+        indices[2] = currVertIdx+2;
+        indices[3] = currVertIdx+2;
+        indices[4] = currVertIdx+3;
+        indices[5] = currVertIdx+0;
 
         self.currVert += 8;
         self.currTexCoord += 8;
@@ -238,8 +198,12 @@ pub const SpriteBatchQueue = struct {
     }
 
     pub fn end(self: *SpriteBatchQueue) void {
+        gl.bindVertexArray(self.vao);
+        gl.enableVertexAttribArray(self.attrCoord);
+
         gl.bindBuffer(gl.ARRAY_BUFFER, self.vboVertices); 
-        gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * self.currNumSprites), &self.vertices, gl.STATIC_DRAW);
+        // gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * self.currNumSprites), &self.vertices, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * self.currNumSprites), &self.vertices, gl.STATIC_DRAW);
         gl.vertexAttribPointer(
             // attribute
             self.attrCoord,
@@ -254,7 +218,7 @@ pub const SpriteBatchQueue = struct {
 
         gl.enableVertexAttribArray(self.attrTexCoord);
         gl.bindBuffer(gl.ARRAY_BUFFER, self.vboTexCoords); 
-        gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * self.currNumSprites), &self.texCoords, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * self.currNumSprites), &self.texCoords, gl.STATIC_DRAW);
         gl.vertexAttribPointer(
             // attribute
             self.attrTexCoord,
@@ -270,9 +234,11 @@ pub const SpriteBatchQueue = struct {
         // gl.disableVertexAttribArray(buffers.vboTexCoords);
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.vboIndices);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * self.currNumSprites), &self.indices, gl.STATIC_DRAW);
+        // gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * self.currNumSprites), &self.indices, gl.STATIC_DRAW);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * @sizeOf(u16) * self.currNumSprites), &self.indices, gl.STATIC_DRAW);
 
-        gl.drawElements(gl.TRIANGLES, @intCast(6*self.currNumSprites), gl.UNSIGNED_SHORT, null);
+        // gl.drawElements(gl.LINES, @intCast(6*self.currNumSprites), gl.UNSIGNED_SHORT, null);
+        gl.drawElements(gl.TRIANGLES, @intCast(6 * self.currNumSprites), gl.UNSIGNED_SHORT, null);
         gl.disableVertexAttribArray(self.attrCoord);
         gl.disableVertexAttribArray(self.attrTexCoord);
 

@@ -216,30 +216,57 @@ pub fn main() !void {
 
     // glfw.swapInterval(1);
 
-    const dest = RectF{
-        .l = 50, 
-        .r = 750,
-        .t = 50,
-        .b = 550
+    // const dest = RectF{
+    //     .l = 50, 
+    //     .r = 750,
+    //     .t = 50,
+    //     .b = 550
+    // };
+    const dest = [_]RectF{
+        RectF.fromPosSize(10, 10, 16, 16),
+        RectF.fromPosSize(200, 50, 16, 16),
+        RectF.fromPosSize(566, 300, 16, 16),
     };
 
-    const srcCoords = RectF{
-        .l = 0,
-        .r = 1,
-        .t = 0,
-        .b = 1
+    const srcCoords = [_]RectF{
+        RectF.fromCoords(32, 0, 16, 16, 512, 512),
+        RectF.fromCoords(32, 0, 16, 16, 512, 512),
+        RectF.fromCoords(32, 0, 16, 16, 512, 512),
     };
 
     std.debug.print("Starting main loop...\n", .{});
+    // var once = false;
     // Main loop
     while (!eng.window.shouldClose() and eng.window.getKey(.escape) != .press) {
         glfw.pollEvents();
 
-        gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.1, 0.1, 0.5, 1.0 });
+        gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.0, 1.0 });
         
         spriteBatch.begin(projMat, texture);
-        spriteBatch.drawSprite(dest, srcCoords);
+        
+        for(std.range(0,30)) |idx| {
+            spriteBatch.drawSprite(dest[idx], srcCoords[idx]);
+        }
         spriteBatch.end();
+
+        // if(!once) {
+        //     once = true;
+        //     std.debug.print("\n\nVerts:\n", .{});
+        //     for(spriteBatch.vertices[0..8]) |v| {
+        //         std.debug.print("{}, ", .{v});
+        //     }
+        //
+        //     std.debug.print("\n\nTC:\n", .{});
+        //     for(spriteBatch.texCoords[0..8]) |v| {
+        //         std.debug.print("{}, ", .{v});
+        //     }
+        //
+        //     std.debug.print("\n\nIndices:\n", .{});
+        //     for(spriteBatch.indices[0..6]) |v| {
+        //         std.debug.print("{}, ", .{v});
+        //     }
+        //     std.debug.print("\n\n", .{});
+        // }
 
         // gl.useProgram(program);
         //
