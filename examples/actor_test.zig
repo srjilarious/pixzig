@@ -42,27 +42,27 @@ pub fn main() !void {
 
     main_loop: while (true) {
         var event: sdl.Event = undefined;
-        eng.keyboard.update();
+        // eng.keyboard.update();
         while (sdl.pollEvent(&event)) {
             if (event.type == .quit) {
                 break :main_loop;
             } else if (event.type == .keydown or event.type == .keyup) {
-                eng.keyboard.keyEvent(event.key.keysym.scancode, event.type == .keydown);
+                // eng.keyboard.keyEvent(event.key.keysym.scancode, event.type == .keydown);
             }
         }
 
-        if (eng.keyboard.down(.escape)) break :main_loop;
-        if (eng.keyboard.pressed(.@"1")) fr1.apply(&spr);
-        if (eng.keyboard.pressed(.@"2")) fr2.apply(&spr);
-        if (eng.keyboard.pressed(.@"3")) fr3.apply(&spr);
-        if (eng.keyboard.pressed(.left)) {
-            std.debug.print("Left!\n", .{});
-            actor.setState("left");
-        }
-        if (eng.keyboard.pressed(.right)) {
-            std.debug.print("Right!\n", .{});
-            actor.setState("right");
-        }
+        // if (eng.keyboard.down(.escape)) break :main_loop;
+        // if (eng.keyboard.pressed(.@"1")) fr1.apply(&spr);
+        // if (eng.keyboard.pressed(.@"2")) fr2.apply(&spr);
+        // if (eng.keyboard.pressed(.@"3")) fr3.apply(&spr);
+        // if (eng.keyboard.pressed(.left)) {
+        //     std.debug.print("Left!\n", .{});
+        //     actor.setState("left");
+        // }
+        // if (eng.keyboard.pressed(.right)) {
+        //     std.debug.print("Right!\n", .{});
+        //     actor.setState("right");
+        // }
 
         try renderer.setDrawColorRGB(32, 32, 100);
         try renderer.clear();

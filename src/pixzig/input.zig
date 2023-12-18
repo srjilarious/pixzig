@@ -1,9 +1,22 @@
 // zig fmt: off
 const std = @import("std");
-const sdl = @import("zsdl");
+const glfw = @import("zglfw");
 const comp = @import("./comp.zig");
 
-const NumKeys = comp.numEnumFields(sdl.Scancode);
+const NumKeys = comp.numEnumFields(glfw.Key);
+
+fn getIndexForKey(key: glfw.Key) usize {
+   const enumTypeInfo = @typeInfo(glfw.Key).Enum;
+    comptime var keyIdx: usize = 0;
+    inline for (enumTypeInfo.fields) |field| {
+        const fieldKey = @field(glfw.Key, field.name);
+        if (key == fieldKey) return keyIdx;
+        keyIdx += 1;
+    }
+
+    return 0;
+}
+
 pub const KeyboardState = struct {
     keys: std.StaticBitSet(NumKeys),
 
@@ -14,21 +27,17 @@ pub const KeyboardState = struct {
         };
     }
 
-    pub fn down(self: *KeyboardState, key: sdl.Scancode) bool {
-        const idx : usize = @intCast(@intFromEnum(key));
-        const res = self.keys.isSet(idx);
-        // std.debug.print("Index: {} - val = {}\n", .{ idx, res});
+    pub fn down(self: *KeyboardState, keyIdx: usize) bool {
+        const res = self.keys.isSet(keyIdx);
         return res;
     }
 
-    pub fn set(self: *KeyboardState, key: sdl.Scancode, val: bool) void {
-        const idx : usize = @intCast(@intFromEnum(key));
+    pub fn set(self: *KeyboardState, keyIdx: usize, val: bool) void {
         if(val) {
-            std.debug.print("Setting {}\n", .{idx });
-            self.keys.set(idx);
+            self.keys.set(keyIdx);
         }
         else {
-            self.keys.unset(idx);
+            self.keys.unset(keyIdx);
         }
     }
 };
@@ -37,16 +46,19 @@ pub const Keyboard = struct {
     currIdx: usize,
     prevIdx: usize,
     keyBuffers: [2]KeyboardState,
+    window: *glfw.Window,
+    allocator: std.mem.Allocator,
 
-    pub fn init(_alloc: std.mem.Allocator) Keyboard {
-        _ = _alloc;
+    pub fn init(win: *glfw.Window, alloc: std.mem.Allocator) Keyboard {
         const res: Keyboard = .{
             .currIdx = 0, 
             .prevIdx = 1,
             .keyBuffers = .{
                 KeyboardState.init(),
                 KeyboardState.init()
-            } 
+            },
+            .window = win,
+            .allocator = alloc
         };
 
         return res;
@@ -65,29 +77,39 @@ pub const Keyboard = struct {
         self.prevIdx = temp;
 
         var curr = self.currKeys();
-        const prev = self.prevKeys();
-        curr.keys.setRangeValue(.{.start=0, .end=NumKeys}, false);
-        curr.keys.setUnion(prev.keys);
+        //const prev = self.prevKeys();
+        // curr.keys.setRangeValue(.{.start=0, .end=NumKeys}, false);
+       
+        // Update the current keys
+        const enumTypeInfo = @typeInfo(glfw.Key).Enum;
+        comptime var keyIdx = 0;
+        inline for (enumTypeInfo.fields) |field| {
+            const enumValue = @field(glfw.Key, field.name);
+            curr.set(keyIdx, self.window.getKey(enumValue) == .press);
+            keyIdx += 1;
+        }
+
+        // curr.keys.setUnion(prev.keys);
     }
 
-    pub fn keyEvent(self: *Keyboard, key: sdl.Scancode, keyDown: bool) void {
-        self.currKeys().set(key, keyDown);
+    pub fn up(self: *Keyboard, key: glfw.Key) bool {
+        const keyIdx = getIndexForKey(key);
+        return self.currKeys().down(keyIdx) == false;
     }
 
-    pub fn up(self: *Keyboard, key:sdl.Scancode ) bool {
-        return self.currKeys().down(key) == false;
+    pub fn down(self: *Keyboard, key: glfw.Key) bool {
+        const keyIdx = getIndexForKey(key);
+        return self.currKeys().down(keyIdx);
     }
 
-    pub fn down(self: *Keyboard, key:sdl.Scancode ) bool {
-        return self.currKeys().down(key);
+    pub fn pressed(self: *Keyboard, key: glfw.Key) bool {
+        const keyIdx = getIndexForKey(key);
+        return (self.currKeys().down(keyIdx) and !self.prevKeys().down(keyIdx));
     }
 
-    pub fn pressed(self: *Keyboard, key: sdl.Scancode) bool {
-        return (self.currKeys().down(key) and !self.prevKeys().down(key));
-    }
-
-    pub fn released(self: *Keyboard, key: sdl.Scancode) bool {
-        return (!self.currKeys().down(key) and self.prevKeys().down(key));
+    pub fn released(self: *Keyboard, key: glfw.Key) bool {
+        const keyIdx = getIndexForKey(key);
+        return (!self.currKeys().down(keyIdx) and self.prevKeys().down(keyIdx));
     }
 };
 

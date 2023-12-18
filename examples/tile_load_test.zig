@@ -27,34 +27,35 @@ pub fn main() !void {
     try mapRender.recreateVertices(&map.tilesets.items[0], &map.layers.items[1]);
 
     var scroll_offset = Vec2I{ .x = 0, .y = 0 };
+    scroll_offset.x = 0;
 
     main_loop: while (true) {
         var event: sdl.Event = undefined;
-        eng.keyboard.update();
+        // eng.keyboard.update();
         while (sdl.pollEvent(&event)) {
             if (event.type == .quit) {
                 break :main_loop;
             } else if (event.type == .keydown or event.type == .keyup) {
-                eng.keyboard.keyEvent(event.key.keysym.scancode, event.type == .keydown);
+                // eng.keyboard.keyEvent(event.key.keysym.scancode, event.type == .keydown);
             }
         }
 
-        if (eng.keyboard.down(.escape)) break :main_loop;
-        // if (eng.keyboard.pressed(.@"1")) fr1.apply(&spr);
-        // if (eng.keyboard.pressed(.@"2")) fr2.apply(&spr);
-        // if (eng.keyboard.pressed(.@"3")) fr3.apply(&spr);
-        if (eng.keyboard.down(.left)) {
-            scroll_offset.x -= 1;
-        }
-        if (eng.keyboard.down(.right)) {
-            scroll_offset.x += 1;
-        }
-        if (eng.keyboard.down(.up)) {
-            scroll_offset.y -= 1;
-        }
-        if (eng.keyboard.pressed(.down)) {
-            scroll_offset.y += 1;
-        }
+        // if (eng.keyboard.down(.escape)) break :main_loop;
+        // // if (eng.keyboard.pressed(.@"1")) fr1.apply(&spr);
+        // // if (eng.keyboard.pressed(.@"2")) fr2.apply(&spr);
+        // // if (eng.keyboard.pressed(.@"3")) fr3.apply(&spr);
+        // if (eng.keyboard.down(.left)) {
+        //     scroll_offset.x -= 1;
+        // }
+        // if (eng.keyboard.down(.right)) {
+        //     scroll_offset.x += 1;
+        // }
+        // if (eng.keyboard.down(.up)) {
+        //     scroll_offset.y -= 1;
+        // }
+        // if (eng.keyboard.pressed(.down)) {
+        //     scroll_offset.y += 1;
+        // }
 
         try renderer.setDrawColorRGB(32, 32, 100);
         try renderer.clear();

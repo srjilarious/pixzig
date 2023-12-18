@@ -90,7 +90,7 @@ pub const PixzigEngineSdl = struct {
     window: *sdl.Window,
     renderer: *sdl.Renderer,
     textures: TextureManagerSdl,
-    keyboard: input.Keyboard,
+    // keyboard: input.Keyboard,
 
     pub fn create(title: [:0]const u8, allocator: std.mem.Allocator) !PixzigEngineSdl {
         _ = sdl.setHint(sdl.hint_windows_dpi_awareness, "system");
@@ -116,7 +116,7 @@ pub const PixzigEngineSdl = struct {
             .window = win, 
             .renderer = render, 
             .textures = texMgr,
-            .keyboard = input.Keyboard.init(allocator),
+            // .keyboard = input.Keyboard.init(allocator),
         };
     }
 
@@ -143,7 +143,7 @@ pub const PixzigEngine = struct {
     scaleFactor: f32,
     allocator: std.mem.Allocator,
     textures: TextureManager,
-    // keyboard: input.Keyboard,
+    keyboard: input.Keyboard,
 
     pub fn init(title: [:0]const u8, 
                 allocator: std.mem.Allocator,
@@ -196,7 +196,8 @@ pub const PixzigEngine = struct {
             .options = options,
             .scaleFactor = scale_factor,
             .allocator = allocator,
-            .textures = TextureManager.init(allocator)
+            .textures = TextureManager.init(allocator),
+            .keyboard = input.Keyboard.init(window, allocator),
         };
     }
 

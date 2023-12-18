@@ -56,6 +56,8 @@ pub fn main() !void {
     while (!eng.window.shouldClose() and eng.window.getKey(.escape) != .press) {
         glfw.pollEvents();
 
+        eng.keyboard.update();
+
         gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.0, 1.0 });
         
         spriteBatch.begin(projMat, texture);
@@ -64,6 +66,16 @@ pub fn main() !void {
             spriteBatch.drawSprite(dest[idx], srcCoords[idx]);
         }
         spriteBatch.end();
+
+        if (eng.keyboard.pressed(.one)) std.debug.print("one!\n", .{});
+        if (eng.keyboard.pressed(.two)) std.debug.print("two!\n", .{});
+        if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
+        if (eng.keyboard.pressed(.left)) {
+            std.debug.print("Left!\n", .{});
+        }
+        if (eng.keyboard.pressed(.right)) {
+            std.debug.print("Right!\n", .{});
+        }
 
        
         // const fb_size = eng.window.getFramebufferSize();
