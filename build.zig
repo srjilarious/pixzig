@@ -145,6 +145,10 @@ pub fn build(b: *std.Build) void {
     _ = example(b, target, optimize, "glfw_test", "examples/glfw_test.zig");
     _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig");
 
+    const tests = example(b, target, optimize, "unit_tests", "tests/main.zig");
+    const testzMod = b.dependency("testz", .{});
+    tests.addModule("testz", testzMod.module("testz"));
+
     // // Creates a step for unit testing. This only builds the test executable
     // // but does not run it.
     // const unit_tests = b.addTest(.{

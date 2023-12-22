@@ -1,0 +1,11 @@
+.{
+  .name = "pixzig",
+  .version = "0.1.0",
+  .paths = .{"src"},
+  .dependencies = .{
+    .testz = .{
+      //.url = "https://github.com/srjilarious/testz/archive/a6ded90.tar.gz",
+      .path = "../testz",
+    },
+  }  
+}
