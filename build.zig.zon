@@ -4,8 +4,9 @@
   .paths = .{"src"},
   .dependencies = .{
     .testz = .{
-      //.url = "https://github.com/srjilarious/testz/archive/a6ded90.tar.gz",
-      .path = "../testz",
+      .url = "https://github.com/srjilarious/testz/archive/13f5c29.tar.gz",
+      .hash = "1220f3596e5c9dca39a08ceffeba707bc0ace896d79d10337d6d534bc66e8102b9c0"
+      //.path = "../testz",
     },
   }  
 }

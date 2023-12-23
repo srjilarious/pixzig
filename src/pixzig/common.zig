@@ -45,3 +45,24 @@ pub const RectF = struct {
         };
     }
 };
+
+pub const Color = struct {
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+
+    pub fn from(_r: u8, _g: u8, _b: u8, _a: u8) Color {
+        const r = @as(f32, @floatFromInt(_r)) / 255;
+        const g = @as(f32, @floatFromInt(_g)) / 255;
+        const b = @as(f32, @floatFromInt(_b)) / 255;
+        const a = @as(f32, @floatFromInt(_a)) / 255;
+        return Color{
+            .r = r,
+            .g = g,
+            .b = b,
+            .a = a
+        };
+    }
+};
+

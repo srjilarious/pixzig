@@ -6,6 +6,7 @@ const gl = @import("zopengl");
 const stbi = @import ("zstbi");
 const pixzig = @import("pixzig");
 const RectF = pixzig.common.RectF;
+const Color = pixzig.common.Color;
 
 const math = @import("zmath");
 const EngOptions = pixzig.PixzigEngineOptions;
@@ -32,6 +33,13 @@ pub fn main() !void {
         );
     defer spriteBatch.deinit();
 
+    var shapeBatch = try pixzig.renderer.ShapeBatchQueue.init(
+            gpa,
+            pixzig.renderer.ColorVertexShader,
+            pixzig.renderer.ColorPixelShader
+        );
+    defer shapeBatch.deinit();
+
     gl.disable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -51,6 +59,18 @@ pub fn main() !void {
         RectF.fromCoords(128, 128, 32, 32, 512, 512),
     };
 
+    const destRects = [_]RectF{
+        RectF.fromPosSize(50, 40, 32, 64),
+        RectF.fromPosSize(220, 80, 64, 32),
+        RectF.fromPosSize(540, 316, 128, 128),
+    };
+
+    const colorRects = [_]Color{
+        Color.from(255, 100, 100, 255),
+        Color.from(100, 255, 200, 200),
+        Color.from(25, 100, 255, 128),
+    };
+
     std.debug.print("Starting main loop...\n", .{});
     // Main loop
     while (!eng.window.shouldClose() and eng.window.getKey(.escape) != .press) {
@@ -66,6 +86,13 @@ pub fn main() !void {
             spriteBatch.drawSprite(dest[idx], srcCoords[idx]);
         }
         spriteBatch.end();
+        
+        shapeBatch.begin(projMat);
+        
+        for(0..3) |idx| {
+            shapeBatch.drawFilledRect(destRects[idx], colorRects[idx]);
+        }
+        shapeBatch.end();
 
         if (eng.keyboard.pressed(.one)) std.debug.print("one!\n", .{});
         if (eng.keyboard.pressed(.two)) std.debug.print("two!\n", .{});
