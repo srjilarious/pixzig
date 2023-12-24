@@ -46,6 +46,30 @@ pub const RectF = struct {
     }
 };
 
+pub const RectI = struct {
+    l: i32,
+    t: i32,
+    r: i32,
+    b: i32,
+
+    pub fn init(l: i32, t: i32, w: i32, h:i32) RectI {
+        return RectI{
+            .l = l,
+            .t = t,
+            .r = l + w,
+            .b = t + h,
+        };
+    }
+
+    pub fn width(self: *RectI) i32 {
+        return self.r - self.l;
+    }
+
+    pub fn height(self: *RectI) i32 {
+        return self.b - self.t;
+    }
+};
+
 pub const Color = struct {
     r: f32,
     g: f32,

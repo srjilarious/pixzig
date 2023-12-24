@@ -6,6 +6,7 @@ const gl = @import("zopengl");
 const stbi = @import ("zstbi");
 const pixzig = @import("pixzig");
 const RectF = pixzig.common.RectF;
+const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
 
 const math = @import("zmath");
@@ -89,6 +90,13 @@ pub fn main() !void {
         
         shapeBatch.begin(projMat);
         
+        // Draw sprite outlines.
+        for(0..3) |idx| {
+            shapeBatch.drawRect(dest[idx], Color.from(255,255,0,200), 2);
+        }
+        for(0..3) |idx| {
+            shapeBatch.drawEnclosingRect(dest[idx], Color.from(255,0,255,200), 2);
+        }
         for(0..3) |idx| {
             shapeBatch.drawFilledRect(destRects[idx], colorRects[idx]);
         }

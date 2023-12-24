@@ -432,10 +432,76 @@ pub const ShapeBatchQueue = struct {
         self.currNumSprites += 1;
     }
 
-    // pub fn drawRect(self: *ShapeBatchQueue, dest: RectF, color: Color, lineWidth: u8) void {
-    //     // Draw 4 rects.
-    // }
-    //
+    // This draw a rect with the bounds being dest with it encroaching in by lineWidth
+    pub fn drawRect(self: *ShapeBatchQueue, dest: RectF, color: Color, lineWidth: u8) void {
+        const lF = @as(f32, @floatFromInt(lineWidth));
+        // Draw top rect
+        const topRect = RectF{
+            .l = dest.l,
+            .t = dest.t,
+            .r = dest.r,
+            .b = dest.t+lF,
+        };
+        const leftRect = RectF{
+            .l = dest.l,
+            .t = dest.t+lF,
+            .r = dest.l+lF,
+            .b = dest.b-lF,
+        };
+        const rightRect = RectF{
+            .l = dest.r-lF,
+            .t = dest.t+lF,
+            .r = dest.r,
+            .b = dest.b-lF,
+        };
+        const bottomRect = RectF{
+            .l = dest.l,
+            .t = dest.b-lF,
+            .r = dest.r,
+            .b = dest.b,
+        };
+
+        self.drawFilledRect(topRect, color);
+        self.drawFilledRect(leftRect, color);
+        self.drawFilledRect(rightRect, color);
+        self.drawFilledRect(bottomRect, color);
+    }
+
+    // This moves the outline of the rect to enclose the dest by lineWidth.
+    pub fn drawEnclosingRect(self: *ShapeBatchQueue, dest: RectF, color: Color, lineWidth: u8) void {
+        const lF = @as(f32, @floatFromInt(lineWidth));
+        // Draw top rect
+        const topRect = RectF{
+            .l = dest.l-lF,
+            .t = dest.t-lF,
+            .r = dest.r+lF,
+            .b = dest.t,
+        };
+        const leftRect = RectF{
+            .l = dest.l-lF,
+            .t = dest.t,
+            .r = dest.l,
+            .b = dest.b,
+        };
+        const rightRect = RectF{
+            .l = dest.r,
+            .t = dest.t,
+            .r = dest.r+lF,
+            .b = dest.b,
+        };
+        const bottomRect = RectF{
+            .l = dest.l-lF,
+            .t = dest.b,
+            .r = dest.r+lF,
+            .b = dest.b+lF,
+        };
+
+        self.drawFilledRect(topRect, color);
+        self.drawFilledRect(leftRect, color);
+        self.drawFilledRect(rightRect, color);
+        self.drawFilledRect(bottomRect, color);
+    }
+
     pub fn end(self: *ShapeBatchQueue) void {
         gl.disable(gl.TEXTURE_2D);
 
