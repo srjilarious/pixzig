@@ -106,6 +106,9 @@ pub const SpriteBatchQueue = struct {
     currIdx: usize = 0,
     currNumSprites: usize = 0,
 
+    mvpArr: [16]f32 = undefined,
+    texture: *Texture = undefined,
+
     pub fn init(alloc: std.mem.Allocator, vsCode: ShaderCode, psCode: ShaderCode) !SpriteBatchQueue {
     
         std.debug.print("Creating Shaders...\n", .{});
@@ -171,15 +174,8 @@ pub const SpriteBatchQueue = struct {
     }
 
     pub fn begin(self: *SpriteBatchQueue, mvp: zmath.Mat, texture: *Texture) void {
-        gl.useProgram(self.shaderProgram);
-
-        const mvpArr = zmath.matToArr(mvp);
-        gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&mvpArr[0]));
-
-        gl.activeTexture(gl.TEXTURE0); // Activate texture unit 0
-        gl.bindTexture(gl.TEXTURE_2D, texture.texture); // Bind your texture
-        gl.uniform1i(gl.getUniformLocation(self.shaderProgram, "tex"), 0); // Set 'tex' to use texture unit 0
-
+        self.mvpArr = zmath.matToArr(mvp);
+        self.texture = texture;
     }
 
     pub fn drawSprite(self: *SpriteBatchQueue, dest: RectF, srcCoords: RectF) void {
@@ -226,6 +222,17 @@ pub const SpriteBatchQueue = struct {
     }
 
     pub fn end(self: *SpriteBatchQueue) void {
+        self.flush();
+    }
+
+    fn flush(self: *SpriteBatchQueue) void {
+        gl.useProgram(self.shaderProgram);
+        gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&self.mvpArr[0]));
+
+        gl.activeTexture(gl.TEXTURE0); // Activate texture unit 0
+        gl.bindTexture(gl.TEXTURE_2D, self.texture.texture); // Bind your texture
+        gl.uniform1i(gl.getUniformLocation(self.shaderProgram, "tex"), 0); // Set 'tex' to use texture unit 0
+
         gl.bindVertexArray(self.vao);
         gl.enableVertexAttribArray(self.attrCoord);
 
@@ -298,6 +305,7 @@ pub const ShapeBatchQueue = struct {
     currColorCoord: usize = 0,
     currIdx: usize = 0,
     currNumSprites: usize = 0,
+    mvpArr: [16]f32 = undefined,
 
     pub fn init(alloc: std.mem.Allocator, vsCode: ShaderCode, psCode: ShaderCode) !ShapeBatchQueue {
     
@@ -364,12 +372,9 @@ pub const ShapeBatchQueue = struct {
     }
 
     pub fn begin(self: *ShapeBatchQueue, mvp: zmath.Mat) void {
-        gl.useProgram(self.shaderProgram);
 
-        const mvpArr = zmath.matToArr(mvp);
-        gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&mvpArr[0]));
-
-        // gl.activeTexture(gl.TEXTURE0); // Activate texture unit 0
+        self.mvpArr = zmath.matToArr(mvp);
+                // gl.activeTexture(gl.TEXTURE0); // Activate texture unit 0
         // gl.bindTexture(gl.TEXTURE_2D, texture.texture); // Bind your texture
         // gl.uniform1i(gl.getUniformLocation(self.shaderProgram, "tex"), 0); // Set 'tex' to use texture unit 0
 
@@ -503,6 +508,13 @@ pub const ShapeBatchQueue = struct {
     }
 
     pub fn end(self: *ShapeBatchQueue) void {
+        self.flush();
+    }
+
+    fn flush(self: *ShapeBatchQueue) void {
+        gl.useProgram(self.shaderProgram);
+        gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&self.mvpArr[0]));
+
         gl.disable(gl.TEXTURE_2D);
 
         gl.bindVertexArray(self.vao);
