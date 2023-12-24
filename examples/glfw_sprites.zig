@@ -27,18 +27,22 @@ pub fn main() !void {
     // Try to load an image
     const texture = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
 
-    var spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(
-            gpa,
-            pixzig.renderer.VertexShader,
-            pixzig.renderer.PixelShader
+    var texShader = try pixzig.shaders.Shader.init(
+            &pixzig.shaders.TexVertexShader,
+            &pixzig.shaders.TexPixelShader
         );
+    defer texShader.deinit();
+
+    var spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(gpa, &texShader);
     defer spriteBatch.deinit();
 
-    var shapeBatch = try pixzig.renderer.ShapeBatchQueue.init(
-            gpa,
-            pixzig.renderer.ColorVertexShader,
-            pixzig.renderer.ColorPixelShader
+    var colorShader = try pixzig.shaders.Shader.init(
+            &pixzig.shaders.ColorVertexShader,
+            &pixzig.shaders.ColorPixelShader
         );
+    defer colorShader.deinit();
+
+    var shapeBatch = try pixzig.renderer.ShapeBatchQueue.init(gpa, &colorShader);
     defer shapeBatch.deinit();
 
     gl.disable(gl.DEPTH_TEST);

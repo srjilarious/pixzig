@@ -5,89 +5,18 @@ const gl = @import("zopengl");
 const zmath = @import("zmath");
 const common = @import("./common.zig");
 const textures = @import("./textures.zig");
+const shaders = @import("./shaders.zig");
 
 const Vec2I = common.Vec2I;
 const RectF = common.RectF;
 const Color = common.Color;
 const Texture = textures.Texture;
-
-const ShaderCode = [*c]const u8;
-
-pub const VertexShader: ShaderCode =
-    \\ #version 330 core
-    \\ layout(location = 0) in vec2 coord3d;
-    \\ layout(location = 1) in vec2 texcoord;
-    \\ // Pass texture coordinate to fragment shader
-    \\ out vec2 Texcoord;
-    \\ 
-    \\ uniform mat4 projectionMatrix;
-    \\ 
-    \\ void main() {
-    \\    gl_Position = projectionMatrix * vec4(coord3d, 0.0, 1.0);
-    \\    // Pass texture coordinate to fragment shader
-    \\    Texcoord = texcoord;
-    \\ }
-;
-
-pub const PixelShader: ShaderCode =
-    \\ #version 330 core
-    \\ in vec2 Texcoord; // Received from vertex shader
-    \\ uniform sampler2D tex; // Texture sampler
-    \\ out vec4 fragColor;
-    \\ void main() {
-    \\   // Sample the texture at the given coordinates
-    \\   fragColor = texture(tex, Texcoord); 
-    \\ }
-;
-
-pub const ColorVertexShader: ShaderCode =
-    \\ #version 330 core
-    \\ layout(location = 0) in vec2 coord3d;
-    \\ layout(location = 1) in vec4 color;
-    \\ // Pass texture coordinate to fragment shader
-    \\ out vec4 Col;
-    \\ 
-    \\ uniform mat4 projectionMatrix;
-    \\ 
-    \\ void main() {
-    \\    gl_Position = projectionMatrix * vec4(coord3d, 0.0, 1.0);
-    \\    // Pass texture coordinate to fragment shader
-    \\    Col = color;
-    \\ }
-;
-
-pub const ColorPixelShader: ShaderCode =
-    \\ #version 330 core
-    \\ in vec4 Col; // Received from vertex shader
-    \\ out vec4 fragColor;
-    \\ void main() {
-    \\   // Sample the texture at the given coordinates
-    \\   fragColor = Col; 
-    \\ }
-;
-
-fn createShader(glsl: [*c]const [*c]const u8, shaderType: u32) !u32 {
-    const res = gl.createShader(shaderType);
-    gl.shaderSource(res, 1, glsl, 0);
-    gl.compileShader(res);
-    var compileOk: c_int = gl.FALSE;
-    gl.getShaderiv(res, gl.COMPILE_STATUS, &compileOk);
-    if (compileOk == gl.FALSE) {
-        std.debug.print("Error compiling shader!\n", .{});
-        return error.BadShader;
-    } else {
-        std.debug.print("Successfully compiled shader!\n", .{});
-    }
-
-    return res;
-    // TEST
-    // gl.deleteShader(res);
-}
-
+const Shader = shaders.Shader;
 
 const MaxSprites = 1000;
+
 pub const SpriteBatchQueue = struct {
-    shaderProgram: u32 = 0,
+    shader: *Shader = undefined,
     vao: u32 = 0,
     vboVertices: u32 = 0,
     vboTexCoords: u32 = 0,
@@ -109,19 +38,11 @@ pub const SpriteBatchQueue = struct {
     mvpArr: [16]f32 = undefined,
     texture: *Texture = undefined,
 
-    pub fn init(alloc: std.mem.Allocator, vsCode: ShaderCode, psCode: ShaderCode) !SpriteBatchQueue {
+    pub fn init(alloc: std.mem.Allocator, shader: *Shader) !SpriteBatchQueue {
     
-        std.debug.print("Creating Shaders...\n", .{});
-        const vs = createShader(&vsCode, gl.VERTEX_SHADER) catch |e| {
-            return e;
-        };
-        const ps = createShader(&psCode, gl.FRAGMENT_SHADER) catch |e| {
-            return e;
-        };
-        std.debug.print("Done creating Shaders!\n", .{});
-
         var batch = SpriteBatchQueue{
-            .allocator = alloc
+            .allocator = alloc,
+            .shader = shader
         };
 
         gl.genVertexArrays(1, &batch.vao);
@@ -139,35 +60,18 @@ pub const SpriteBatchQueue = struct {
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, batch.vboIndices);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, 6 * MaxSprites, &batch.indices, gl.DYNAMIC_DRAW);
 
-        batch.shaderProgram = gl.createProgram();
-        gl.attachShader(batch.shaderProgram, vs);
-        gl.attachShader(batch.shaderProgram, ps);
-        gl.linkProgram(batch.shaderProgram);
-        var linkOk: c_int = gl.FALSE;
-        gl.getProgramiv(batch.shaderProgram, gl.LINK_STATUS, &linkOk);
-        if (linkOk == gl.FALSE) {
-            std.debug.print("Error compiling shader program!", .{});
-            return error.ShaderCompileError;
-        }
-
-        std.debug.print("Created shader program!\n", .{});
-
-        gl.disable(gl.DEPTH_TEST);
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         gl.enable(gl.TEXTURE_2D);
-        gl.disable(gl.CULL_FACE);
-        gl.cullFace(gl.CCW);
         
-        batch.attrCoord = @intCast(gl.getAttribLocation(batch.shaderProgram, "coord3d"));
-        batch.attrTexCoord = @intCast(gl.getAttribLocation(batch.shaderProgram, "texcoord"));
-        batch.uniformMVP = @intCast(gl.getUniformLocation(batch.shaderProgram, "projectionMatrix"));
+        batch.attrCoord = @intCast(gl.getAttribLocation(batch.shader.program, "coord3d"));
+        batch.attrTexCoord = @intCast(gl.getAttribLocation(batch.shader.program, "texcoord"));
+        batch.uniformMVP = @intCast(gl.getUniformLocation(batch.shader.program, "projectionMatrix"));
 
         return batch;
     }
 
     pub fn deinit(self: *SpriteBatchQueue) void {
-        gl.deleteProgram(self.shaderProgram);
         gl.deleteBuffers(1, &self.vboVertices);
         gl.deleteBuffers(1, &self.vboTexCoords);
         gl.deleteBuffers(1, &self.vboIndices);
@@ -226,12 +130,12 @@ pub const SpriteBatchQueue = struct {
     }
 
     fn flush(self: *SpriteBatchQueue) void {
-        gl.useProgram(self.shaderProgram);
+        gl.useProgram(self.shader.program);
         gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&self.mvpArr[0]));
 
         gl.activeTexture(gl.TEXTURE0); // Activate texture unit 0
         gl.bindTexture(gl.TEXTURE_2D, self.texture.texture); // Bind your texture
-        gl.uniform1i(gl.getUniformLocation(self.shaderProgram, "tex"), 0); // Set 'tex' to use texture unit 0
+        gl.uniform1i(gl.getUniformLocation(self.shader.program, "tex"), 0); // Set 'tex' to use texture unit 0
 
         gl.bindVertexArray(self.vao);
         gl.enableVertexAttribArray(self.attrCoord);
@@ -287,7 +191,7 @@ pub const SpriteBatchQueue = struct {
 };
 
 pub const ShapeBatchQueue = struct {
-    shaderProgram: u32 = 0,
+    shader: *Shader = undefined,
     vao: u32 = 0,
     vboVertices: u32 = 0,
     vboColorCoords: u32 = 0,
@@ -307,19 +211,11 @@ pub const ShapeBatchQueue = struct {
     currNumSprites: usize = 0,
     mvpArr: [16]f32 = undefined,
 
-    pub fn init(alloc: std.mem.Allocator, vsCode: ShaderCode, psCode: ShaderCode) !ShapeBatchQueue {
+    pub fn init(alloc: std.mem.Allocator, shader: *Shader) !ShapeBatchQueue {
     
-        std.debug.print("Creating Shaders...\n", .{});
-        const vs = createShader(&vsCode, gl.VERTEX_SHADER) catch |e| {
-            return e;
-        };
-        const ps = createShader(&psCode, gl.FRAGMENT_SHADER) catch |e| {
-            return e;
-        };
-        std.debug.print("Done creating Shaders!\n", .{});
-
         var batch = ShapeBatchQueue{
-            .allocator = alloc
+            .allocator = alloc,
+            .shader = shader,
         };
 
         gl.genVertexArrays(1, &batch.vao);
@@ -337,47 +233,25 @@ pub const ShapeBatchQueue = struct {
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, batch.vboIndices);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, 6 * MaxSprites, &batch.indices, gl.DYNAMIC_DRAW);
 
-        batch.shaderProgram = gl.createProgram();
-        gl.attachShader(batch.shaderProgram, vs);
-        gl.attachShader(batch.shaderProgram, ps);
-        gl.linkProgram(batch.shaderProgram);
-        var linkOk: c_int = gl.FALSE;
-        gl.getProgramiv(batch.shaderProgram, gl.LINK_STATUS, &linkOk);
-        if (linkOk == gl.FALSE) {
-            std.debug.print("Error compiling shader program!", .{});
-            return error.ShaderCompileError;
-        }
-
-        std.debug.print("Created shader program!\n", .{});
-
-        gl.disable(gl.DEPTH_TEST);
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         gl.enable(gl.TEXTURE_2D);
-        gl.disable(gl.CULL_FACE);
-        gl.cullFace(gl.CCW);
         
-        batch.attrCoord = @intCast(gl.getAttribLocation(batch.shaderProgram, "coord3d"));
-        batch.attrColor = @intCast(gl.getAttribLocation(batch.shaderProgram, "color"));
-        batch.uniformMVP = @intCast(gl.getUniformLocation(batch.shaderProgram, "projectionMatrix"));
+        batch.attrCoord = @intCast(gl.getAttribLocation(batch.shader.program, "coord3d"));
+        batch.attrColor = @intCast(gl.getAttribLocation(batch.shader.program, "color"));
+        batch.uniformMVP = @intCast(gl.getUniformLocation(batch.shader.program, "projectionMatrix"));
 
         return batch;
     }
 
     pub fn deinit(self: *ShapeBatchQueue) void {
-        gl.deleteProgram(self.shaderProgram);
         gl.deleteBuffers(1, &self.vboVertices);
         gl.deleteBuffers(1, &self.vboColorCoords);
         gl.deleteBuffers(1, &self.vboIndices);
     }
 
     pub fn begin(self: *ShapeBatchQueue, mvp: zmath.Mat) void {
-
         self.mvpArr = zmath.matToArr(mvp);
-                // gl.activeTexture(gl.TEXTURE0); // Activate texture unit 0
-        // gl.bindTexture(gl.TEXTURE_2D, texture.texture); // Bind your texture
-        // gl.uniform1i(gl.getUniformLocation(self.shaderProgram, "tex"), 0); // Set 'tex' to use texture unit 0
-
     }
 
     pub fn drawFilledRect(self: *ShapeBatchQueue, dest: RectF, color: Color) void {
@@ -512,7 +386,7 @@ pub const ShapeBatchQueue = struct {
     }
 
     fn flush(self: *ShapeBatchQueue) void {
-        gl.useProgram(self.shaderProgram);
+        gl.useProgram(self.shader.program);
         gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&self.mvpArr[0]));
 
         gl.disable(gl.TEXTURE_2D);

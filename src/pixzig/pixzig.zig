@@ -12,6 +12,7 @@ pub const common = @import("./common.zig");
 pub const sprites = @import("./sprites.zig");
 pub const input = @import("./input.zig");
 pub const tile = @import("./tile.zig");
+pub const shaders = @import("./shaders.zig");
 pub const textures= @import("./textures.zig");
 pub const renderer = @import("./renderer.zig");
 
