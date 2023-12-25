@@ -145,25 +145,22 @@ pub const SpriteBatchQueue = struct {
         gl.useProgram(self.shader.program);
         gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&self.mvpArr[0]));
 
-        gl.activeTexture(gl.TEXTURE0); // Activate texture unit 0
-        gl.bindTexture(gl.TEXTURE_2D, self.texture.texture); // Bind your texture
-        gl.uniform1i(gl.getUniformLocation(self.shader.program, "tex"), 0); // Set 'tex' to use texture unit 0
+        // Set 'tex' to use texture unit 0
+        gl.activeTexture(gl.TEXTURE0); 
+        gl.bindTexture(gl.TEXTURE_2D, self.texture.texture); 
+        gl.uniform1i(gl.getUniformLocation(self.shader.program, "tex"), 0); 
 
         gl.bindVertexArray(self.vao);
         gl.enableVertexAttribArray(self.attrCoord);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, self.vboVertices); 
-        // gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * self.currNumSprites), &self.vertices, gl.STATIC_DRAW);
         gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * self.currNumSprites), &self.vertices, gl.STATIC_DRAW);
         gl.vertexAttribPointer(
-            // attribute
             self.attrCoord,
-            // Num elems per vertex
-            2, 
+            2, // Num elems per vertex
             gl.FLOAT, 
             gl.FALSE,
-            // stride
-            0, 
+            0, // stride
             null
         );
 
@@ -171,24 +168,17 @@ pub const SpriteBatchQueue = struct {
         gl.bindBuffer(gl.ARRAY_BUFFER, self.vboTexCoords); 
         gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * self.currNumSprites), &self.texCoords, gl.STATIC_DRAW);
         gl.vertexAttribPointer(
-            // attribute
             self.attrTexCoord,
-            // Num elems per vertex
-            2, 
+            2, // Num elems per vertex
             gl.FLOAT, 
             gl.FALSE,
-            // stride
-            0, 
+            0, // stride
             null
         );
 
-        // gl.disableVertexAttribArray(buffers.vboTexCoords);
-
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.vboIndices);
-        // gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * self.currNumSprites), &self.indices, gl.STATIC_DRAW);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * @sizeOf(u16) * self.currNumSprites), &self.indices, gl.STATIC_DRAW);
 
-        // gl.drawElements(gl.LINES, @intCast(6*self.currNumSprites), gl.UNSIGNED_SHORT, null);
         gl.drawElements(gl.TRIANGLES, @intCast(6 * self.currNumSprites), gl.UNSIGNED_SHORT, null);
         gl.disableVertexAttribArray(self.attrCoord);
         gl.disableVertexAttribArray(self.attrTexCoord);
@@ -308,12 +298,6 @@ pub const ShapeBatchQueue = struct {
         colorCoords[13] = color.g;
         colorCoords[14] = color.b;
         colorCoords[15] = color.a;
-        // 
-        // texCoords[4] = srcCoords.r;
-        // texCoords[5] = srcCoords.t;
-        // 
-        // texCoords[6] = srcCoords.r;
-        // texCoords[7] = srcCoords.b;
 
         const indices = self.indices[self.currIdx..self.currIdx+6];
         const currVertIdx: u16 = @intCast(self.currVert / 2);
@@ -343,28 +327,33 @@ pub const ShapeBatchQueue = struct {
             .r = dest.r,
             .b = dest.t+lF,
         };
+        self.drawFilledRect(topRect, color);
+        
+        // Draw the left rect
         const leftRect = RectF{
             .l = dest.l,
             .t = dest.t+lF,
             .r = dest.l+lF,
             .b = dest.b-lF,
         };
+        self.drawFilledRect(leftRect, color);
+
+        // Draw the right rect
         const rightRect = RectF{
             .l = dest.r-lF,
             .t = dest.t+lF,
             .r = dest.r,
             .b = dest.b-lF,
         };
+        self.drawFilledRect(rightRect, color);
+
+        // Draw the bottom rect
         const bottomRect = RectF{
             .l = dest.l,
             .t = dest.b-lF,
             .r = dest.r,
             .b = dest.b,
         };
-
-        self.drawFilledRect(topRect, color);
-        self.drawFilledRect(leftRect, color);
-        self.drawFilledRect(rightRect, color);
         self.drawFilledRect(bottomRect, color);
     }
 
@@ -380,28 +369,33 @@ pub const ShapeBatchQueue = struct {
             .r = dest.r+lF,
             .b = dest.t,
         };
+        self.drawFilledRect(topRect, color);
+
+        // Draw the left rect
         const leftRect = RectF{
             .l = dest.l-lF,
             .t = dest.t,
             .r = dest.l,
             .b = dest.b,
         };
+        self.drawFilledRect(leftRect, color);
+
+        // Draw the right rect.
         const rightRect = RectF{
             .l = dest.r,
             .t = dest.t,
             .r = dest.r+lF,
             .b = dest.b,
         };
+        self.drawFilledRect(rightRect, color);
+
+        // Draw the bottom rect.
         const bottomRect = RectF{
             .l = dest.l-lF,
             .t = dest.b,
             .r = dest.r+lF,
             .b = dest.b+lF,
         };
-
-        self.drawFilledRect(topRect, color);
-        self.drawFilledRect(leftRect, color);
-        self.drawFilledRect(rightRect, color);
         self.drawFilledRect(bottomRect, color);
     }
 
@@ -423,17 +417,13 @@ pub const ShapeBatchQueue = struct {
         gl.enableVertexAttribArray(self.attrCoord);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, self.vboVertices); 
-        // gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * self.currNumSprites), &self.vertices, gl.STATIC_DRAW);
         gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * self.currNumSprites), &self.vertices, gl.STATIC_DRAW);
         gl.vertexAttribPointer(
-            // attribute
             self.attrCoord,
-            // Num elems per vertex
-            2, 
+            2, // Num elems per vertex
             gl.FLOAT, 
             gl.FALSE,
-            // stride
-            0, 
+            0, // stride
             null
         );
 
@@ -441,24 +431,17 @@ pub const ShapeBatchQueue = struct {
         gl.bindBuffer(gl.ARRAY_BUFFER, self.vboColorCoords); 
         gl.bufferData(gl.ARRAY_BUFFER, @intCast(4 * 4 * @sizeOf(f32) * self.currNumSprites), &self.colorCoords, gl.STATIC_DRAW);
         gl.vertexAttribPointer(
-            // attribute
             self.attrColor,
-            // Num elems per vertex
-            4, 
+            4, // Num elems per vertex
             gl.FLOAT, 
             gl.FALSE,
-            // stride
-            0, 
+            0, // stride
             null
         );
 
-        // gl.disableVertexAttribArray(buffers.vboTexCoords);
-
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.vboIndices);
-        // gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * self.currNumSprites), &self.indices, gl.STATIC_DRAW);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * @sizeOf(u16) * self.currNumSprites), &self.indices, gl.STATIC_DRAW);
 
-        // gl.drawElements(gl.LINES, @intCast(6*self.currNumSprites), gl.UNSIGNED_SHORT, null);
         gl.drawElements(gl.TRIANGLES, @intCast(6 * self.currNumSprites), gl.UNSIGNED_SHORT, null);
         gl.disableVertexAttribArray(self.attrCoord);
         gl.disableVertexAttribArray(self.attrColor);
