@@ -37,6 +37,7 @@ pub const SpriteBatchQueue = struct {
 
     mvpArr: [16]f32 = undefined,
     texture: *Texture = undefined,
+    begun: bool = false,
 
     pub fn init(alloc: std.mem.Allocator, shader: *Shader) !SpriteBatchQueue {
     
@@ -78,11 +79,17 @@ pub const SpriteBatchQueue = struct {
     }
 
     pub fn begin(self: *SpriteBatchQueue, mvp: zmath.Mat, texture: *Texture) void {
+        if(self.begun) {
+            self.end();
+        }
+        self.begun = true;
         self.mvpArr = zmath.matToArr(mvp);
         self.texture = texture;
     }
 
     pub fn drawSprite(self: *SpriteBatchQueue, dest: RectF, srcCoords: RectF) void {
+        std.debug.assert(self.begun);
+
         const verts = self.vertices[self.currVert..self.currVert+8];
         verts[0] = dest.l;
         verts[1] = dest.b;
@@ -127,9 +134,14 @@ pub const SpriteBatchQueue = struct {
 
     pub fn end(self: *SpriteBatchQueue) void {
         self.flush();
+        self.begun = false;
     }
 
     fn flush(self: *SpriteBatchQueue) void {
+        std.debug.assert(self.begun);
+
+        if(self.currNumSprites == 0) return;
+
         gl.useProgram(self.shader.program);
         gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&self.mvpArr[0]));
 
@@ -210,6 +222,7 @@ pub const ShapeBatchQueue = struct {
     currIdx: usize = 0,
     currNumSprites: usize = 0,
     mvpArr: [16]f32 = undefined,
+    begun: bool = false,
 
     pub fn init(alloc: std.mem.Allocator, shader: *Shader) !ShapeBatchQueue {
     
@@ -251,10 +264,17 @@ pub const ShapeBatchQueue = struct {
     }
 
     pub fn begin(self: *ShapeBatchQueue, mvp: zmath.Mat) void {
+        if(self.begun) {
+            self.end();
+        }
+
+        self.begun = true;
         self.mvpArr = zmath.matToArr(mvp);
     }
 
     pub fn drawFilledRect(self: *ShapeBatchQueue, dest: RectF, color: Color) void {
+        std.debug.assert(self.begun);
+
         const verts = self.vertices[self.currVert..self.currVert+8];
         verts[0] = dest.l;
         verts[1] = dest.b;
@@ -313,6 +333,8 @@ pub const ShapeBatchQueue = struct {
 
     // This draw a rect with the bounds being dest with it encroaching in by lineWidth
     pub fn drawRect(self: *ShapeBatchQueue, dest: RectF, color: Color, lineWidth: u8) void {
+        std.debug.assert(self.begun);
+
         const lF = @as(f32, @floatFromInt(lineWidth));
         // Draw top rect
         const topRect = RectF{
@@ -348,6 +370,8 @@ pub const ShapeBatchQueue = struct {
 
     // This moves the outline of the rect to enclose the dest by lineWidth.
     pub fn drawEnclosingRect(self: *ShapeBatchQueue, dest: RectF, color: Color, lineWidth: u8) void {
+        std.debug.assert(self.begun);
+
         const lF = @as(f32, @floatFromInt(lineWidth));
         // Draw top rect
         const topRect = RectF{
@@ -383,9 +407,13 @@ pub const ShapeBatchQueue = struct {
 
     pub fn end(self: *ShapeBatchQueue) void {
         self.flush();
+        self.begun = false;
     }
 
     fn flush(self: *ShapeBatchQueue) void {
+        std.debug.assert(self.begun);
+        if(self.currNumSprites == 0) return;
+
         gl.useProgram(self.shader.program);
         gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&self.mvpArr[0]));
 
