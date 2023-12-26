@@ -1,39 +1,40 @@
 // zig fmt: off
 
 const std = @import("std");
-const sdl = @import("zsdl");
 const common = @import("./common.zig");
+const textures = @import("./textures.zig");
+const renderer = @import("./renderer.zig");
 
 const Vec2I = common.Vec2I;
+const Vec2F = common.Vec2F;
+const RectF = common.RectF;
+const Texture = textures.Texture;
+const SpriteBatchQueue = renderer.SpriteBatchQueue;
 
 pub const Sprite = struct {
-    texture: *sdl.Texture,
-    src_coords: sdl.Rect,
-    dest: sdl.Rect,
+    texture: *Texture,
+    src_coords: RectF,
+    dest: RectF,
+    size: Vec2F,
     flip: Flip,
 
-    pub fn create(tex: *sdl.Texture, scoords: sdl.Rect) Sprite {
+    pub fn create(tex: *Texture, size: Vec2F, scoords: RectF) Sprite {
         return Sprite{ 
             .texture = tex, 
             .src_coords = scoords, 
             .dest = .{ .x = 0, .y = 0, .w = scoords.w, .h = scoords.h },
+            .size = size,
             .flip = Flip.None
         };
     }
 
     pub fn setPos(self: *Sprite, x: i32, y: i32) void {
-        self.dest.x = x;
-        self.dest.y = y;
+        self.dest.l = x;
+        self.dest.t = y;
     }
 
-    pub fn draw(self: *Sprite, renderer: *sdl.Renderer) !void {
-        if(self.flip == Flip.None) {
-            try renderer.copy(self.texture, &self.src_coords, &self.dest);
-        }
-        else {
-            const rflip : sdl.RendererFlip = @enumFromInt(@intFromEnum(self.flip));
-            try renderer.copyEx(self.texture, &self.src_coords, &self.dest, 0.0, null, rflip);
-        }
+    pub fn draw(self: *Sprite, batch: *SpriteBatchQueue) !void {
+        try batch.drawSprite(self.texture, &self.dest, &self.src_coords);
     }
 };
 
@@ -45,7 +46,7 @@ pub const Flip = enum(u8) {
 };
 
 pub const Frame = struct { 
-    coords: sdl.Rect, 
+    coords: RectF, 
     frameTimeUs: i64, 
     flip: Flip,
 

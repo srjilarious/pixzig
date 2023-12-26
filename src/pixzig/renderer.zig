@@ -36,7 +36,7 @@ pub const SpriteBatchQueue = struct {
     currNumSprites: usize = 0,
 
     mvpArr: [16]f32 = undefined,
-    texture: *Texture = undefined,
+    texture: ?*Texture = null,
     begun: bool = false,
 
     pub fn init(alloc: std.mem.Allocator, shader: *Shader) !SpriteBatchQueue {
@@ -78,17 +78,25 @@ pub const SpriteBatchQueue = struct {
         gl.deleteBuffers(1, &self.vboIndices);
     }
 
-    pub fn begin(self: *SpriteBatchQueue, mvp: zmath.Mat, texture: *Texture) void {
+    pub fn begin(self: *SpriteBatchQueue, mvp: zmath.Mat) void {
         if(self.begun) {
             self.end();
         }
         self.begun = true;
         self.mvpArr = zmath.matToArr(mvp);
-        self.texture = texture;
     }
 
-    pub fn drawSprite(self: *SpriteBatchQueue, dest: RectF, srcCoords: RectF) void {
+    pub fn drawSprite(self: *SpriteBatchQueue, texture: *Texture, dest: RectF, srcCoords: RectF) void {
         std.debug.assert(self.begun);
+
+        if(self.texture == null) {
+            self.texture = texture;
+        } 
+
+        if(self.texture != texture) {
+            self.flush();
+            self.texture = texture;
+        }
 
         const verts = self.vertices[self.currVert..self.currVert+8];
         verts[0] = dest.l;
@@ -147,7 +155,7 @@ pub const SpriteBatchQueue = struct {
 
         // Set 'tex' to use texture unit 0
         gl.activeTexture(gl.TEXTURE0); 
-        gl.bindTexture(gl.TEXTURE_2D, self.texture.texture); 
+        gl.bindTexture(gl.TEXTURE_2D, self.texture.?.texture); 
         gl.uniform1i(gl.getUniformLocation(self.shader.program, "tex"), 0); 
 
         gl.bindVertexArray(self.vao);
@@ -189,6 +197,7 @@ pub const SpriteBatchQueue = struct {
         self.currTexCoord = 0;
         self.currIdx = 0;
         self.currNumSprites = 0;
+        self.texture = null;
     }
 };
 

@@ -85,10 +85,10 @@ pub fn main() !void {
 
         gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.0, 1.0 });
         
-        spriteBatch.begin(projMat, texture);
+        spriteBatch.begin(projMat);
         
         for(0..3) |idx| {
-            spriteBatch.drawSprite(dest[idx], srcCoords[idx]);
+            spriteBatch.drawSprite(texture, dest[idx], srcCoords[idx]);
         }
         spriteBatch.end();
         
