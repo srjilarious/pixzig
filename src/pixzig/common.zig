@@ -3,6 +3,7 @@ const std = @import("std");
 
 pub const Vec2I = struct { x: i32, y: i32 };
 pub const Vec2U = struct { x: u32, y: u32 };
+pub const Vec2F = struct { x: f32, y: f32 };
 pub const RectF = struct {
     l: f32,
     t: f32,

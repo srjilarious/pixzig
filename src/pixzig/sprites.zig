@@ -22,19 +22,21 @@ pub const Sprite = struct {
         return Sprite{ 
             .texture = tex, 
             .src_coords = scoords, 
-            .dest = .{ .x = 0, .y = 0, .w = scoords.w, .h = scoords.h },
+            .dest = RectF.fromPosSize(0, 0, 
+                @as(i32, @intFromFloat(size.x)), 
+                @as(i32, @intFromFloat(size.y))),
             .size = size,
             .flip = Flip.None
         };
     }
 
     pub fn setPos(self: *Sprite, x: i32, y: i32) void {
-        self.dest.l = x;
-        self.dest.t = y;
+        self.dest.l = @as(f32, @floatFromInt(x));
+        self.dest.t = @as(f32, @floatFromInt(y));
     }
 
     pub fn draw(self: *Sprite, batch: *SpriteBatchQueue) !void {
-        try batch.drawSprite(self.texture, &self.dest, &self.src_coords);
+        batch.drawSprite(self.texture, self.dest, self.src_coords);
     }
 };
 
