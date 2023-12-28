@@ -24,6 +24,9 @@ pub fn main() !void {
     var eng = try pixzig.PixzigEngine.init("Pixzig Actor Test!", gpa, EngOptions{});
     defer eng.deinit();
 
+    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
     // Orthographic projection matrix
     const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
 
@@ -35,19 +38,22 @@ pub fn main() !void {
     var spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(gpa, &texShader);
     defer spriteBatch.deinit();
 
-    var fr1: Frame = .{ .coords = RectF.fromCoords(96, 48, 16, 16, 128, 128), .frameTimeUs = 20000, .flip = Flip.None };
-    var fr2: Frame = .{ .coords = RectF.fromCoords(112, 48, 16, 16, 128, 128), .frameTimeUs = 20000, .flip = Flip.None };
-    var fr3: Frame = .{ .coords = RectF.fromCoords(96, 64, 16, 16, 128, 128), .frameTimeUs = 20000, .flip = Flip.None };
+    var fr1: Frame = .{ .coords = RectF.fromCoords(96, 48, 16, 16, 128, 128), .frameTimeUs = 300, .flip = Flip.None };
+    var fr2: Frame = .{ .coords = RectF.fromCoords(112, 48, 16, 16, 128, 128), .frameTimeUs = 300, .flip = Flip.None };
+    var fr3: Frame = .{ .coords = RectF.fromCoords(96, 64, 16, 16, 128, 128), .frameTimeUs = 300, .flip = Flip.None };
 
     const frseq = try pixzig.sprites.FrameSequence.init("test", gpa, &[_]Frame{ fr1, fr2, fr3 });
+    // defer frseq.deinit();
 
-    const fr1_2: Frame = .{ .coords = RectF.fromCoords(96, 48, 16, 16, 128, 128), .frameTimeUs = 20000, .flip = Flip.Horz };
-    const fr2_2: Frame = .{ .coords = RectF.fromCoords(112, 48, 16, 16, 128, 128), .frameTimeUs = 20000, .flip = Flip.Horz };
-    const fr3_2: Frame = .{ .coords = RectF.fromCoords(96, 64, 16, 16, 128, 128), .frameTimeUs = 20000, .flip = Flip.Horz };
+    const fr1_2: Frame = .{ .coords = RectF.fromCoords(96, 48, 16, 16, 128, 128), .frameTimeUs = 300, .flip = Flip.Horz };
+    const fr2_2: Frame = .{ .coords = RectF.fromCoords(112, 48, 16, 16, 128, 128), .frameTimeUs = 300, .flip = Flip.Horz };
+    const fr3_2: Frame = .{ .coords = RectF.fromCoords(96, 64, 16, 16, 128, 128), .frameTimeUs = 300, .flip = Flip.Horz };
 
     const frseq_2 = try pixzig.sprites.FrameSequence.init("test_left", gpa, &[_]Frame{ fr1_2, fr2_2, fr3_2 });
+    // defer frseq_2.deinit();
 
     var actor = try pixzig.sprites.Actor.init(gpa);
+    defer actor.deinit();
     _ = try actor.addState(frseq, "right");
     _ = try actor.addState(frseq_2, "left");
     // actor.setState("test");
@@ -72,9 +78,9 @@ pub fn main() !void {
         try spr.draw(&spriteBatch);
         spriteBatch.end();
 
-        if (eng.keyboard.pressed(.one)) std.debug.print("one!\n", .{});
-        if (eng.keyboard.pressed(.two)) std.debug.print("two!\n", .{});
-        if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
+        if (eng.keyboard.pressed(.one)) fr1.apply(&spr);
+        if (eng.keyboard.pressed(.two)) fr2.apply(&spr);
+        if (eng.keyboard.pressed(.three)) fr3.apply(&spr);
         if (eng.keyboard.pressed(.left)) {
             std.debug.print("Left!\n", .{});
         }

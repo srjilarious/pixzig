@@ -156,7 +156,12 @@ pub const Actor = struct {
 
     pub fn deinit(self: *Actor) void {
         self.currState = null;
-        
+        var iterator = self.states.iterator();
+        while(iterator.next()) |kv| {
+            self.alloc.free(kv.key_ptr.*);
+            kv.value_ptr.deinit();
+        }
+        self.states.deinit();
     }
 
     pub fn addState(self: *Actor, frameSequence: FrameSequence, otherName: ?[]const u8) !*Actor {
