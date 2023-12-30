@@ -45,12 +45,9 @@ pub fn main() !void {
     var shapeBatch = try pixzig.renderer.ShapeBatchQueue.init(gpa, &colorShader);
     defer shapeBatch.deinit();
 
-    gl.disable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.enable(gl.TEXTURE_2D);
-    gl.disable(gl.CULL_FACE);
-    gl.cullFace(gl.CCW);
 
     const dest = [_]RectF{
         RectF.fromPosSize(10, 10, 32, 32),

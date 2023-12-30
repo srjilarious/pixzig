@@ -1,14 +1,21 @@
 // zig fmt: off
-
 const std = @import("std");
+const stbi = @import("zstbi");
+const gl = @import("zopengl");
+const zmath = @import("zmath");
 const xml = @import("xml");
-const sdl = @import("zsdl");
-const sprites = @import("sprites.zig");
-const common = @import("common.zig");
 
-const MaxFilesize = 1024 * 1024 * 1024;
+const common = @import("./common.zig");
+const textures = @import("./textures.zig");
+const shaders = @import("./shaders.zig");
 
 const Vec2I = common.Vec2I;
+const RectF = common.RectF;
+const Color = common.Color;
+const Texture = textures.Texture;
+const Shader = shaders.Shader;
+
+const MaxFilesize = 1024 * 1024 * 1024;
 
 const CoreTileProperty = u32;
 pub const Clear: u32 = 0x0;
@@ -315,30 +322,57 @@ pub const TileMap = struct {
 };
 
 pub const TileMapRenderer = struct {
-    vertices: std.ArrayList(sdl.Vertex),
+    shader: *Shader = undefined,
+    vao: u32 = 0,
+    vboVertices: u32 = 0,
+    vboTexCoords: u32 = 0,
+    vboIndices: u32 = 0,
+    vertices: std.ArrayList(f32),
+    texCoords: std.ArrayList(f32),
     indices: std.ArrayList(u32),
     alloc: std.mem.Allocator,
-
-    pub fn init(alloc: std.mem.Allocator) !TileMapRenderer {
-        return .{
-            .vertices = std.ArrayList(sdl.Vertex).init(alloc),
+    attrCoord: c_uint = 0,
+    attrTexCoord: c_uint = 0,
+    uniformMVP: c_int = 0,
+    
+    pub fn init(alloc: std.mem.Allocator, shader: *Shader) !TileMapRenderer {
+        var tr = TileMapRenderer{
+            .shader = shader,
+            .vertices = std.ArrayList(f32).init(alloc),
+            .texCoords = std.ArrayList(f32).init(alloc),
             .indices = std.ArrayList(u32).init(alloc),
             .alloc = alloc
+
         };
+        gl.genVertexArrays(1, &tr.vao);
+
+        gl.genBuffers(1, &tr.vboVertices);
+        gl.genBuffers(1, &tr.vboTexCoords);
+        gl.genBuffers(1, &tr.vboIndices);
+
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.enable(gl.TEXTURE_2D);
+        
+        tr.attrCoord = @intCast(gl.getAttribLocation(tr.shader.program, "coord3d"));
+        tr.attrTexCoord = @intCast(gl.getAttribLocation(tr.shader.program, "texcoord"));
+        tr.uniformMVP = @intCast(gl.getUniformLocation(tr.shader.program, "projectionMatrix"));
+
+        return tr;
     }
 
     pub fn deinit(self: *TileMapRenderer) void {
         self.vertices.deinit();
     }
 
-    fn tileCoords(idx: i32, tileset: *TileSet) sdl.FRect {
+    fn tileCoords(idx: i32, tileset: *TileSet) RectF {
         const i: i32 = @intCast(idx);
         if(idx < 0) {
             return .{
-                .x = 0.0,
-                .y = 0.0,
-                .w = 0.0,
-                .h = 0.0,
+                .l = 0.0,
+                .t = 0.0,
+                .r = 0.0,
+                .b = 0.0,
             };
         }
 
@@ -348,11 +382,13 @@ pub const TileMapRenderer = struct {
         const tsy: f32 = @floatFromInt(tileset.tileSize.y);
         const txw: f32 = @floatFromInt(tileset.textureSize.x);
         const txh: f32 = @floatFromInt(tileset.textureSize.y);
+        const l = (tu * tsx) / txw;
+        const t = (tv * tsy) / txh;
         return .{
-            .x = (tu * tsx) / txw,
-            .y = (tv * tsy) / txh,
-            .w = tsx / txw,
-            .h = tsy / txh,
+            .l = l,
+            .t = t,
+            .r = l + tsx / txw,
+            .b = t + tsy / txh,
         };
     }
 
@@ -362,7 +398,9 @@ pub const TileMapRenderer = struct {
         const th = tileset.tileSize.y;
         const layerWidth: usize = @intCast(tiles.size.x);
         const layerHeight: usize = @intCast(tiles.size.y);
-        try self.vertices.resize(@intCast(4*layerWidth*layerHeight));
+        const mapSize: i32 = @intCast(layerWidth*layerHeight);
+        try self.vertices.resize(@intCast(2*4*layerWidth*layerHeight));
+        try self.texCoords.resize(@intCast(2*4*layerWidth*layerHeight));
         try self.indices.resize(@intCast(6*layerWidth*layerHeight));
         
         std.debug.print("Creating {} vertices\n", .{self.vertices.items.len});
@@ -374,66 +412,34 @@ pub const TileMapRenderer = struct {
                 const x: i32 = @intCast(xx);
                 const tile = tiles.tileData(x, y);
                 const uv = tileCoords(tile, tileset);
-                
-                self.vertices.items[idx] = .{
-                    .position = .{ 
-                        .x = @as(f32, @floatFromInt(x*tw)) - 0.01,
-                        .y = @as(f32, @floatFromInt(y*th)) - 0.01,
-                    },
-                    .color = .{
-                        .r = 255, .g = 255, .b = 255, .a = 255
-                    },
-                    .tex_coord = .{
-                        .x = uv.x,
-                        .y = uv.y,
-                    }
-                };
-                idx += 1;
+               
+                // Coord 1
+                self.vertices.items[idx] = @as(f32, @floatFromInt(x*tw)) - 0.01;
+                self.vertices.items[idx+1] = @as(f32, @floatFromInt(y*th)) - 0.01;
+                self.texCoords.items[idx] = uv.l;
+                self.texCoords.items[idx+1] = uv.t;
+                idx += 2;
 
-                self.vertices.items[idx] = .{
-                    .position = .{ 
-                        .x = @as(f32, @floatFromInt((x+1)*tw)) + 0.01,
-                        .y = @as(f32, @floatFromInt(y*th)) - 0.01,
-                    },
-                    .color =.{
-                        .r = 255, .g = 255, .b = 255, .a = 255
-                    },
-                    .tex_coord = .{
-                        .x = uv.x + uv.w,
-                        .y = uv.y,
-                    }
-                };
-                idx += 1;
+                // Coord 2
+                self.vertices.items[idx] = @as(f32, @floatFromInt((x+1)*tw)) + 0.01;
+                self.vertices.items[idx+1] = @as(f32, @floatFromInt(y*th)) - 0.01;
+                self.texCoords.items[idx] = uv.r;
+                self.texCoords.items[idx+1] = uv.t;
+                idx += 2;
 
-                self.vertices.items[idx] = .{
-                    .position = .{ 
-                        .x = @as(f32, @floatFromInt((x+1)*tw)) + 0.01,
-                        .y = @as(f32, @floatFromInt((y+1)*th)) + 0.01,
-                    },
-                    .color = .{
-                        .r = 255, .g = 255, .b = 255, .a = 255
-                    },
-                    .tex_coord = .{
-                        .x = uv.x + uv.w,
-                        .y = uv.y + uv.h,
-                    }
-                };
-                idx += 1;
+                // Coord 3
+                self.vertices.items[idx] = @as(f32, @floatFromInt((x+1)*tw)) + 0.01;
+                self.vertices.items[idx+1] = @as(f32, @floatFromInt((y+1)*th)) + 0.01;
+                self.texCoords.items[idx] = uv.r;
+                self.texCoords.items[idx+1] = uv.b;
+                idx += 2;
 
-                self.vertices.items[idx] = .{
-                    .position = .{ 
-                        .x = @as(f32, @floatFromInt(x*tw)) - 0.01,
-                        .y = @as(f32, @floatFromInt((y+1)*th)) + 0.01,
-                    },
-                    .color = .{
-                        .r = 255, .g = 255, .b = 255, .a = 255
-                    },
-                    .tex_coord = .{
-                        .x = uv.x,
-                        .y = uv.y + uv.h,
-                    }
-                };
-                idx += 1;
+                // Coord 4
+                self.vertices.items[idx] = @as(f32, @floatFromInt(x*tw)) - 0.01;
+                self.vertices.items[idx+1] = @as(f32, @floatFromInt((y+1)*th)) + 0.01;
+                self.texCoords.items[idx] = uv.l;
+                self.texCoords.items[idx+1] = uv.b;
+                idx += 2;
 
                 const baseIdx: u32 = 4 * @as(u32, @intCast(y*@as(i32, @intCast(layerWidth)) + x));
                 self.indices.items[indicesIdx] = baseIdx;
@@ -446,15 +452,74 @@ pub const TileMapRenderer = struct {
             }
         }
 
-        std.debug.print("{}\n", .{self.vertices.items[0]});
+        gl.bindVertexArray(self.vao);
+        gl.bindBuffer(gl.ARRAY_BUFFER, self.vboVertices);
+        gl.bufferData(gl.ARRAY_BUFFER, 2 * 4 * mapSize, &self.vertices, gl.STATIC_DRAW);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, self.vboTexCoords);
+        gl.bufferData(gl.ARRAY_BUFFER, 2 * 4 * mapSize, &self.texCoords, gl.STATIC_DRAW);
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.vboIndices);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, 6 * mapSize, &self.indices, gl.STATIC_DRAW);
+        // std.debug.print("{}\n", .{self.vertices[0]});
         // for (self.vertices.items) |vert| {
         //     std.debug.print("{}\n", .{vert});
         // }
     }
 
-    pub fn draw(self: *TileMapRenderer, renderer: *sdl.Renderer, texture: *sdl.Texture, tiles: *TileLayer) !void {
-        _ = tiles;
+    pub fn draw(self: *TileMapRenderer, 
+                texture: *Texture, 
+                tiles: *TileLayer, 
+                mvp: zmath.Mat) !void 
+    {
+        const mvpArr = zmath.matToArr(mvp);
+        const layerWidth: usize = @intCast(tiles.size.x);
+        const layerHeight: usize = @intCast(tiles.size.y);
+        const mapSize: i32 = @intCast(layerWidth*layerHeight);
+        gl.useProgram(self.shader.program);
+        gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&mvpArr[0]));
 
-        renderer.drawGeometry(texture, self.vertices.items, self.indices.items) catch {};
+        // Set 'tex' to use texture unit 0
+        gl.activeTexture(gl.TEXTURE0); 
+        gl.bindTexture(gl.TEXTURE_2D, texture.texture); 
+        gl.uniform1i(gl.getUniformLocation(self.shader.program, "tex"), 0); 
+
+        gl.bindVertexArray(self.vao);
+        gl.enableVertexAttribArray(self.attrCoord);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, self.vboVertices); 
+        gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * mapSize), &self.vertices, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(
+            self.attrCoord,
+            2, // Num elems per vertex
+            gl.FLOAT, 
+            gl.FALSE,
+            0, // stride
+            null
+        );
+
+        gl.enableVertexAttribArray(self.attrTexCoord);
+        gl.bindBuffer(gl.ARRAY_BUFFER, self.vboTexCoords); 
+        gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * mapSize), &self.texCoords, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(
+            self.attrTexCoord,
+            2, // Num elems per vertex
+            gl.FLOAT, 
+            gl.FALSE,
+            0, // stride
+            null
+        );
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.vboIndices);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * @sizeOf(u16) * mapSize), &self.indices, gl.STATIC_DRAW);
+
+        gl.drawElements(gl.TRIANGLES, @intCast(6 * mapSize), gl.UNSIGNED_SHORT, null);
+        gl.disableVertexAttribArray(self.attrCoord);
+        gl.disableVertexAttribArray(self.attrTexCoord);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, 0);
+
+        //
+        // renderer.drawGeometry(texture, self.vertices.items, self.indices.items) catch {};
     }
 };
