@@ -34,6 +34,11 @@ pub fn example(b: *std.Build,
     const zmath_pkg = zmath.package(b, target, optimize, .{});
     const zgui_pkg = zgui.package(b, target, optimize, .{ .options = .{ .backend = . glfw_opengl3}});
 
+    const ziglua = b.dependency("ziglua", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     // Link with your app
     zsdl_pkg.link(exe);
     zglfw_pkg.link(exe);
@@ -62,8 +67,12 @@ pub fn example(b: *std.Build,
             .{ .name = "zmath", .module = zmath_pkg.zmath },
             // XML for tilemap loading.
             .{ .name = "xml", .module = xml },
+            .{ .name = "ziglua", .module = ziglua.module("ziglua") },
         },
     });
+
+    // add the ziglua module and lua artifact
+    exe.linkLibrary(ziglua.artifact("lua"));
 
     exe.addModule("pixzig", pixeng);
     // zsdl_pkg.link(pixzig);

@@ -8,5 +8,10 @@
       .hash = "1220f3596e5c9dca39a08ceffeba707bc0ace896d79d10337d6d534bc66e8102b9c0"
       //.path = "../testz",
     },
+    .ziglua = .{
+          // Use a tagged release of Ziglua tracking a stable Zig release
+          .url = "https://github.com/natecraddock/ziglua/archive/refs/tags/0.2.0.tar.gz",
+          .hash = "1220d14df5c57d4c3fafe26191fcc3b32c23ffd319e7f5d839d2ace030372f1f85b4",
+      },
   }  
 }
