@@ -46,8 +46,11 @@ pub fn main() !void {
 
     var mapRender = try tile.TileMapRenderer.init(std.heap.page_allocator, &texShader);
     defer mapRender.deinit();
-
+    
+    std.debug.print("Creating tile renderering data.\n", .{});
     try mapRender.recreateVertices(&map.tilesets.items[0], &map.layers.items[1]);
+
+    std.debug.print("Done creating tile renderering data.\n", .{});
 
     var scroll_offset = Vec2I{ .x = 0, .y = 0 };
     scroll_offset.x = 0;

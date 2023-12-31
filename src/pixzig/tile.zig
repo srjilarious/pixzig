@@ -327,9 +327,9 @@ pub const TileMapRenderer = struct {
     vboVertices: u32 = 0,
     vboTexCoords: u32 = 0,
     vboIndices: u32 = 0,
-    vertices: std.ArrayList(f32),
-    texCoords: std.ArrayList(f32),
-    indices: std.ArrayList(u32),
+    vertices: []f32 = undefined,
+    texCoords: []f32 = undefined,
+    indices: []u16 = undefined,
     alloc: std.mem.Allocator,
     attrCoord: c_uint = 0,
     attrTexCoord: c_uint = 0,
@@ -338,9 +338,9 @@ pub const TileMapRenderer = struct {
     pub fn init(alloc: std.mem.Allocator, shader: *Shader) !TileMapRenderer {
         var tr = TileMapRenderer{
             .shader = shader,
-            .vertices = std.ArrayList(f32).init(alloc),
-            .texCoords = std.ArrayList(f32).init(alloc),
-            .indices = std.ArrayList(u32).init(alloc),
+            // .vertices = std.ArrayList(f32).init(alloc),
+            // .texCoords = std.ArrayList(f32).init(alloc),
+            // .indices = std.ArrayList(u32).init(alloc),
             .alloc = alloc
 
         };
@@ -362,7 +362,9 @@ pub const TileMapRenderer = struct {
     }
 
     pub fn deinit(self: *TileMapRenderer) void {
-        self.vertices.deinit();
+        self.alloc.free(self.vertices);
+        self.alloc.free(self.texCoords);
+        self.alloc.free(self.indices);
     }
 
     fn tileCoords(idx: i32, tileset: *TileSet) RectF {
@@ -399,11 +401,12 @@ pub const TileMapRenderer = struct {
         const layerWidth: usize = @intCast(tiles.size.x);
         const layerHeight: usize = @intCast(tiles.size.y);
         const mapSize: i32 = @intCast(layerWidth*layerHeight);
-        try self.vertices.resize(@intCast(2*4*layerWidth*layerHeight));
-        try self.texCoords.resize(@intCast(2*4*layerWidth*layerHeight));
-        try self.indices.resize(@intCast(6*layerWidth*layerHeight));
+        _ = mapSize;
+        self.vertices = try self.alloc.alloc(f32, @intCast(2*4*layerWidth*layerHeight));
+        self.texCoords = try self.alloc.alloc(f32, @intCast(2*4*layerWidth*layerHeight));
+        self.indices = try self.alloc.alloc(u16, @intCast(6*layerWidth*layerHeight));
         
-        std.debug.print("Creating {} vertices\n", .{self.vertices.items.len});
+        std.debug.print("Creating {} vertices\n", .{self.vertices.len});
         var idx: usize = 0;
         var indicesIdx: usize = 0;
         for(0..layerHeight) |yy| {
@@ -414,55 +417,59 @@ pub const TileMapRenderer = struct {
                 const uv = tileCoords(tile, tileset);
                
                 // Coord 1
-                self.vertices.items[idx] = @as(f32, @floatFromInt(x*tw)) - 0.01;
-                self.vertices.items[idx+1] = @as(f32, @floatFromInt(y*th)) - 0.01;
-                self.texCoords.items[idx] = uv.l;
-                self.texCoords.items[idx+1] = uv.t;
+                self.vertices[idx] = @as(f32, @floatFromInt(x*tw)) - 0.01;
+                self.vertices[idx+1] = @as(f32, @floatFromInt(y*th)) - 0.01;
+                self.texCoords[idx] = uv.l;
+                self.texCoords[idx+1] = uv.t;
                 idx += 2;
 
                 // Coord 2
-                self.vertices.items[idx] = @as(f32, @floatFromInt((x+1)*tw)) + 0.01;
-                self.vertices.items[idx+1] = @as(f32, @floatFromInt(y*th)) - 0.01;
-                self.texCoords.items[idx] = uv.r;
-                self.texCoords.items[idx+1] = uv.t;
+                self.vertices[idx] = @as(f32, @floatFromInt((x+1)*tw)) + 0.01;
+                self.vertices[idx+1] = @as(f32, @floatFromInt(y*th)) - 0.01;
+                self.texCoords[idx] = uv.r;
+                self.texCoords[idx+1] = uv.t;
                 idx += 2;
 
                 // Coord 3
-                self.vertices.items[idx] = @as(f32, @floatFromInt((x+1)*tw)) + 0.01;
-                self.vertices.items[idx+1] = @as(f32, @floatFromInt((y+1)*th)) + 0.01;
-                self.texCoords.items[idx] = uv.r;
-                self.texCoords.items[idx+1] = uv.b;
+                self.vertices[idx] = @as(f32, @floatFromInt((x+1)*tw)) + 0.01;
+                self.vertices[idx+1] = @as(f32, @floatFromInt((y+1)*th)) + 0.01;
+                self.texCoords[idx] = uv.r;
+                self.texCoords[idx+1] = uv.b;
                 idx += 2;
 
                 // Coord 4
-                self.vertices.items[idx] = @as(f32, @floatFromInt(x*tw)) - 0.01;
-                self.vertices.items[idx+1] = @as(f32, @floatFromInt((y+1)*th)) + 0.01;
-                self.texCoords.items[idx] = uv.l;
-                self.texCoords.items[idx+1] = uv.b;
+                self.vertices[idx] = @as(f32, @floatFromInt(x*tw)) - 0.01;
+                self.vertices[idx+1] = @as(f32, @floatFromInt((y+1)*th)) + 0.01;
+                self.texCoords[idx] = uv.l;
+                self.texCoords[idx+1] = uv.b;
                 idx += 2;
 
-                const baseIdx: u32 = 4 * @as(u32, @intCast(y*@as(i32, @intCast(layerWidth)) + x));
-                self.indices.items[indicesIdx] = baseIdx;
-                self.indices.items[indicesIdx + 1] = baseIdx + 1;
-                self.indices.items[indicesIdx + 2] = baseIdx + 3;
-                self.indices.items[indicesIdx + 3] = baseIdx + 1;
-                self.indices.items[indicesIdx + 4] = baseIdx + 2;
-                self.indices.items[indicesIdx + 5] = baseIdx + 3;
+                const baseIdx: u16 = 4 * @as(u16, @intCast(y*@as(i32, @intCast(layerWidth)) + x));
+                self.indices[indicesIdx] = baseIdx;
+                self.indices[indicesIdx + 1] = baseIdx + 1;
+                self.indices[indicesIdx + 2] = baseIdx + 3;
+                self.indices[indicesIdx + 3] = baseIdx + 1;
+                self.indices[indicesIdx + 4] = baseIdx + 2;
+                self.indices[indicesIdx + 5] = baseIdx + 3;
                 indicesIdx += 6;
             }
         }
 
-        gl.bindVertexArray(self.vao);
-        gl.bindBuffer(gl.ARRAY_BUFFER, self.vboVertices);
-        gl.bufferData(gl.ARRAY_BUFFER, 2 * 4 * mapSize, &self.vertices, gl.STATIC_DRAW);
+        // gl.useProgram(self.shader.program);
+        // gl.bindVertexArray(self.vao);
+        //
+        // gl.enableVertexAttribArray(self.attrCoord);
+        // gl.bindBuffer(gl.ARRAY_BUFFER, self.vboVertices);
+        // gl.bufferData(gl.ARRAY_BUFFER, 2 * 4 * mapSize * @sizeOf(f32), @ptrCast(&self.vertices), gl.STATIC_DRAW);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, self.vboTexCoords);
-        gl.bufferData(gl.ARRAY_BUFFER, 2 * 4 * mapSize, &self.texCoords, gl.STATIC_DRAW);
+        // gl.enableVertexAttribArray(self.attrTexCoord);
+        // gl.bindBuffer(gl.ARRAY_BUFFER, self.vboTexCoords);
+        // gl.bufferData(gl.ARRAY_BUFFER, 2 * 4 * mapSize * @sizeOf(f32), @ptrCast(&self.texCoords), gl.STATIC_DRAW);
 
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.vboIndices);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, 6 * mapSize, &self.indices, gl.STATIC_DRAW);
+        // gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.vboIndices);
+        // gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, 6 * mapSize * @sizeOf(u16), @ptrCast(&self.indices), gl.STATIC_DRAW);
         // std.debug.print("{}\n", .{self.vertices[0]});
-        // for (self.vertices.items) |vert| {
+        // for (self.vertices) |vert| {
         //     std.debug.print("{}\n", .{vert});
         // }
     }
@@ -488,7 +495,7 @@ pub const TileMapRenderer = struct {
         gl.enableVertexAttribArray(self.attrCoord);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, self.vboVertices); 
-        gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * mapSize), &self.vertices, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * mapSize), &self.vertices[0], gl.STATIC_DRAW);
         gl.vertexAttribPointer(
             self.attrCoord,
             2, // Num elems per vertex
@@ -500,7 +507,7 @@ pub const TileMapRenderer = struct {
 
         gl.enableVertexAttribArray(self.attrTexCoord);
         gl.bindBuffer(gl.ARRAY_BUFFER, self.vboTexCoords); 
-        gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * mapSize), &self.texCoords, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * mapSize), &self.texCoords[0], gl.STATIC_DRAW);
         gl.vertexAttribPointer(
             self.attrTexCoord,
             2, // Num elems per vertex
@@ -511,15 +518,12 @@ pub const TileMapRenderer = struct {
         );
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.vboIndices);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * @sizeOf(u16) * mapSize), &self.indices, gl.STATIC_DRAW);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * @sizeOf(u16) * mapSize), &self.indices[0], gl.STATIC_DRAW);
 
         gl.drawElements(gl.TRIANGLES, @intCast(6 * mapSize), gl.UNSIGNED_SHORT, null);
         gl.disableVertexAttribArray(self.attrCoord);
         gl.disableVertexAttribArray(self.attrTexCoord);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, 0);
-
-        //
-        // renderer.drawGeometry(texture, self.vertices.items, self.indices.items) catch {};
     }
 };
