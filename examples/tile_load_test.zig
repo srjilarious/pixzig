@@ -4,6 +4,7 @@ const zgui = @import("zgui");
 const glfw = @import("zglfw");
 const gl = @import("zopengl");
 const stbi = @import ("zstbi");
+const zmath = @import("zmath"); 
 const pixzig = @import("pixzig");
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
@@ -15,7 +16,7 @@ const EngOptions = pixzig.PixzigEngineOptions;
 const tile = pixzig.tile;
 const Flip = pixzig.sprites.Flip;
 const Frame = pixzig.sprites.Frame;
-const Vec2I = pixzig.common.Vec2I;
+const Vec2F = pixzig.common.Vec2F;
 
 pub fn main() !void {
     std.log.info("Pixzig Tilemap test!", .{});
@@ -52,7 +53,7 @@ pub fn main() !void {
 
     std.debug.print("Done creating tile renderering data.\n", .{});
 
-    var scroll_offset = Vec2I{ .x = 0, .y = 0 };
+    var scroll_offset = Vec2F{ .x = 0, .y = 0 };
     scroll_offset.x = 0;
 
     std.debug.print("Starting main loop...\n", .{});
@@ -67,14 +68,22 @@ pub fn main() !void {
         if (eng.keyboard.pressed(.one)) std.debug.print("one!\n", .{});
         if (eng.keyboard.pressed(.two)) std.debug.print("two!\n", .{});
         if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
-        if (eng.keyboard.pressed(.left)) {
-            std.debug.print("Left!\n", .{});
+        const ScrollAmount = 3;
+        if (eng.keyboard.down(.left)) {
+            scroll_offset.x += ScrollAmount;
         }
-        if (eng.keyboard.pressed(.right)) {
-            std.debug.print("Right!\n", .{});
+        if (eng.keyboard.down(.right)) {
+            scroll_offset.x -= ScrollAmount;
+        }
+        if (eng.keyboard.down(.up)) {
+            scroll_offset.y += ScrollAmount;
+        }
+        if (eng.keyboard.down(.down)) {
+            scroll_offset.y -= ScrollAmount;
         }
 
-        try mapRender.draw(tex, &map.layers.items[0], projMat);
+        const mvp = zmath.mul(zmath.translation(scroll_offset.x, scroll_offset.y, 0.0), projMat);
+        try mapRender.draw(tex, &map.layers.items[0], mvp);
        
         // const fb_size = eng.window.getFramebufferSize();
         //
