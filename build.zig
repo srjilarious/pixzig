@@ -72,6 +72,7 @@ pub fn example(b: *std.Build,
     });
 
     // add the ziglua module and lua artifact
+    exe.addModule("ziglua", ziglua.module("ziglua"));
     exe.linkLibrary(ziglua.artifact("lua"));
 
     exe.addModule("pixzig", pixeng);
@@ -153,26 +154,11 @@ pub fn build(b: *std.Build) void {
     _ = example(b, target, optimize, "tile_load_test", "examples/tile_load_test.zig");
     _ = example(b, target, optimize, "glfw_test", "examples/glfw_test.zig");
     _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig");
+    _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
 
     const tests = example(b, target, optimize, "unit_tests", "tests/main.zig");
     const testzMod = b.dependency("testz", .{});
     tests.addModule("testz", testzMod.module("testz"));
-
-    // // Creates a step for unit testing. This only builds the test executable
-    // // but does not run it.
-    // const unit_tests = b.addTest(.{
-    //     .root_source_file = .{ .path = "src/main.zig" },
-    //     .target = target,
-    //     .optimize = optimize,
-    // });
-    //
-    // const run_unit_tests = b.addRunArtifact(unit_tests);
-    //
-    // // Similar to creating the run step earlier, this exposes a `test` step to
-    // // the `zig build --help` menu, providing a way for the user to request
-    // // running the unit tests.
-    // const test_step = b.step("test", "Run unit tests");
-    // test_step.dependOn(&run_unit_tests.step);
 }
 
 inline fn thisDir() []const u8 {
