@@ -26,6 +26,26 @@ pub const PixzigEngineOptions = struct {
     windowSize: Vec2I = .{ .x = 800, .y = 600 },
 };
 
+
+pub fn PixzigApp(comptime T: type) type {
+    return struct {
+        const AppUpdateFunc = fn (*T, *PixzigEngine, f64) bool;
+        const AppRenderFunc = fn (*T, *PixzigEngine) void;
+        
+        pub fn gameLoop(self: *T, eng: *PixzigEngine) void {
+            // Main loop
+            while (!eng.window.shouldClose()) {
+                glfw.pollEvents();
+
+                _ = self.update(eng, 1);
+                self.render(eng);
+
+                eng.window.swapBuffers();
+            }
+        }
+    };
+}
+
 pub const PixzigEngine = struct {
     window: *glfw.Window,
     options: PixzigEngineOptions,

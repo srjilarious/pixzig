@@ -155,6 +155,7 @@ pub fn build(b: *std.Build) void {
     _ = example(b, target, optimize, "glfw_test", "examples/glfw_test.zig");
     _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig");
     _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
+    _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig");
 
     const tests = example(b, target, optimize, "unit_tests", "tests/main.zig");
     const testzMod = b.dependency("testz", .{});
