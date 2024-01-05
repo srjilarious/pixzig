@@ -37,7 +37,10 @@ pub const MyApp = struct {
         if( eng.keyboard.pressed(.space)) {
             std.debug.print("Context: {}\n", .{self.testVal});
         }
-        return false;
+        if(eng.keyboard.pressed(.escape)) {
+            return false;
+        }
+        return true;
     }
 
     pub fn render(self: *MyApp, eng: *pixzig.PixzigEngine) void {

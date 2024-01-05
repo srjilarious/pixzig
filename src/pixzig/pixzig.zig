@@ -33,13 +33,29 @@ pub fn PixzigApp(comptime T: type) type {
         const AppRenderFunc = fn (*T, *PixzigEngine) void;
         
         pub fn gameLoop(self: *T, eng: *PixzigEngine) void {
+            const UpdateStepUs: f64 = 1.0 / 120.0;
+
+            var lag: f64 = 0;
+            var currTime = glfw.getTime();
+
             // Main loop
             while (!eng.window.shouldClose()) {
+                const newCurrTime = glfw.getTime();
+                const delta = newCurrTime - currTime;
+                lag += delta;
+                currTime = newCurrTime;
+
                 glfw.pollEvents();
 
-                _ = self.update(eng, 1);
-                self.render(eng);
+                while(lag > UpdateStepUs) {
+                    lag -= UpdateStepUs;
 
+                    if(!self.update(eng, UpdateStepUs)) {
+                        return;
+                    }
+                }
+
+                self.render(eng);
                 eng.window.swapBuffers();
             }
         }
