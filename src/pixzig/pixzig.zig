@@ -15,6 +15,7 @@ pub const tile = @import("./tile.zig");
 pub const shaders = @import("./shaders.zig");
 pub const textures= @import("./textures.zig");
 pub const renderer = @import("./renderer.zig");
+pub const utils = @import("./utils.zig");
 
 pub const Texture = textures.Texture;
 const TextureManager = textures.TextureManager;

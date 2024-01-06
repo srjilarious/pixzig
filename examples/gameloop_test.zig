@@ -11,16 +11,24 @@ const Color = pixzig.common.Color;
 
 const math = @import("zmath");
 const EngOptions = pixzig.PixzigEngineOptions;
+const FpsCounter = pixzig.utils.FpsCounter;
 
 pub const MyApp = struct {
     testVal: i32,
+    fps: FpsCounter,
 
     pub fn init(val: i32) MyApp {
-        return .{ .testVal = val };
+        return .{ 
+            .testVal = val, 
+            .fps = FpsCounter.init() 
+        };
     }
 
     pub fn update(self: *MyApp, eng: *pixzig.PixzigEngine, delta: f64) bool {
-        _ = delta;
+        if(self.fps.update(delta)) {
+            std.debug.print("FPS: {}\n", .{self.fps.fps()});
+        }
+
         eng.keyboard.update();
 
         if (eng.keyboard.pressed(.one)) std.debug.print("one!\n", .{});
@@ -45,8 +53,8 @@ pub const MyApp = struct {
 
     pub fn render(self: *MyApp, eng: *pixzig.PixzigEngine) void {
         _ = eng;
-        _ = self;
         gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.0, 1.0 });
+        self.fps.renderTick();
     }
 };
 
@@ -61,6 +69,8 @@ pub fn main() !void {
 
     const AppRunner = pixzig.PixzigApp(MyApp);
     var app = MyApp.init(123);
+
+    glfw.swapInterval(0);
 
     std.debug.print("Starting main loop...\n", .{});
     AppRunner.gameLoop(&app, &eng);
