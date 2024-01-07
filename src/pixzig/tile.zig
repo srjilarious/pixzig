@@ -135,11 +135,20 @@ pub const TileSet = struct {
 
         tileset.columns = try std.fmt.parseInt(i32, node.getAttribute("columns").?, 0);
 
+        const tileCount = try std.fmt.parseInt(usize, node.getAttribute("tilecount").?, 0);
+        const baseTile = Tile{
+            .core = Clear,
+            .properties = null,
+            .alloc = alloc
+        };
+        try tileset.tiles.appendNTimes(baseTile, tileCount);
+
         var children = node.elements();
         while (children.next()) |child| {
             if (std.mem.eql(u8, child.tag, "tile")) {
                 const newTile = try Tile.initFromElement(alloc, child);
-                try tileset.tiles.append(newTile);
+                const tileId = try std.fmt.parseInt(usize, child.getAttribute("id").?, 0);
+                tileset.tiles.items[tileId] = newTile;
             } else if(std.mem.eql(u8, child.tag, "image")) {
                 tileset.textureSize = .{ 
                     .x = try std.fmt.parseInt(i32, child.getAttribute("width").?, 0),
@@ -159,13 +168,18 @@ pub const TileSet = struct {
             self.alloc.free(self.name);
         }
 
-        for (self.tiles) |tile| {
-            tile.deinit();
+        for (self.tiles) |t| {
+            t.deinit();
         }
 
         self.tiles.deinit();
     }
 
+    pub fn tile(self: *TileSet, idx: usize) ?*Tile {
+        if(idx > self.tiles.items.len) return null;
+
+        return &self.tiles.items[idx];
+    }
 };
 
 
@@ -174,7 +188,7 @@ pub const TileLayer = struct {
     properties: PropertyList,
     size: Vec2I,
     name: ?[]const u8,
-    tileset: ?TileSet,
+    tileset: ?*TileSet,
     tileSize: Vec2I,
     isDirty: bool,
     alloc: std.mem.Allocator,
@@ -262,6 +276,15 @@ pub const TileLayer = struct {
     pub fn tileIndex(self: *TileLayer, x: i32, y: i32) usize {
         return @intCast(y*self.size.x + x);
     }
+
+    pub fn tile(self: *TileLayer, x: i32, y:i32) ?*Tile {
+        if(self.tileset == null) return null;
+        if(x < 0 or x >= self.size.x) return null;
+        if(y < 0 or y >= self.size.y) return null;
+
+        const tsIdx:usize = @intCast(self.tileDataUnchecked(x, y));
+        return self.tileset.?.tile(tsIdx);
+    }
 };
 
 pub const TileMap = struct {
@@ -283,7 +306,7 @@ pub const TileMap = struct {
         const fileContents = try std.fs.cwd().readFileAlloc(alloc, filename, MaxFilesize);
         defer alloc.free(fileContents);
 
-        std.debug.print("\nContents:\n\n-------\n{s}\n--------\n\n", .{fileContents});
+        //std.debug.print("\nContents:\n\n-------\n{s}\n--------\n\n", .{fileContents});
 
         const doc = try xml.parse(std.heap.page_allocator, fileContents);
         var elems = doc.root.elements();
@@ -306,14 +329,26 @@ pub const TileMap = struct {
                 std.debug.print("Loaded a tile layer: '{?s}'", .{newLayer.name});
                 try map.layers.append(newLayer);
 
-                for(0..@intCast(newLayer.size.y)) |y| {
-                    const lineOffs = y*@as(usize, @intCast(newLayer.size.x));
-                    for(0..@intCast(newLayer.size.x)) |x| {
-                        const ti = newLayer.tiles.items[lineOffs + x];
-                        std.debug.print("{: >3} ", .{ti});
-                    }
-                    std.debug.print("\n", .{});
-                }
+                // for(0..@intCast(newLayer.size.y)) |y| {
+                //     const lineOffs = y*@as(usize, @intCast(newLayer.size.x));
+                //     for(0..@intCast(newLayer.size.x)) |x| {
+                //         const ti = newLayer.tiles.items[lineOffs + x];
+                //         std.debug.print("{: >3} ", .{ti});
+                //     }
+                //     std.debug.print("\n", .{});
+                // }
+            }
+        }
+
+        if(map.tilesets.items.len == 0) {
+            std.debug.print("WARNING: No tileset found in map!\n", .{});
+        }
+
+        for (0..map.layers.items.len) |idx| {
+            var layer = &map.layers.items[idx];
+
+            if(layer.tileset == null) {
+                layer.tileset = &map.tilesets.items[0];
             }
         }
 
@@ -322,7 +357,7 @@ pub const TileMap = struct {
 };
 
 pub const TileMapRenderer = struct {
-    shader: *Shader = undefined,
+    shader: Shader = undefined,
     vao: u32 = 0,
     vboVertices: u32 = 0,
     vboTexCoords: u32 = 0,
@@ -335,7 +370,7 @@ pub const TileMapRenderer = struct {
     attrTexCoord: c_uint = 0,
     uniformMVP: c_int = 0,
     
-    pub fn init(alloc: std.mem.Allocator, shader: *Shader) !TileMapRenderer {
+    pub fn init(alloc: std.mem.Allocator, shader: Shader) !TileMapRenderer {
         var tr = TileMapRenderer{
             .shader = shader,
             // .vertices = std.ArrayList(f32).init(alloc),

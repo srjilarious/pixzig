@@ -17,123 +17,116 @@ const tile = pixzig.tile;
 const Flip = pixzig.sprites.Flip;
 const Frame = pixzig.sprites.Frame;
 const Vec2F = pixzig.common.Vec2F;
+const FpsCounter = pixzig.utils.FpsCounter;
 
-pub fn main() !void {
-    std.log.info("Pixzig Tilemap test!", .{});
-    
-    var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa_state.deinit();
-    const gpa = gpa_state.allocator();
+pub const App = struct {
+    allocator: std.mem.Allocator,
+    projMat: zmath.Mat,
+    scrollOffset: Vec2F,
+    mapRenderer: tile.TileMapRenderer,
+    map: tile.TileMap,
+    tex: *pixzig.Texture,
+    texShader: pixzig.shaders.Shader,
+    fps: FpsCounter,
 
-    var eng = try pixzig.PixzigEngine.init("Glfw Eng Test.", gpa, EngOptions{});
-    defer eng.deinit();
+    pub fn init(eng: *pixzig.PixzigEngine, alloc: std.mem.Allocator) !App {
+        // Orthographic projection matrix
+        const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
 
-    // Orthographic projection matrix
-    const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
-
-    // Try to load an image
-    // const texture = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
-    // _ = texture;
-
-    var texShader = try pixzig.shaders.Shader.init(
+        const texShader = try pixzig.shaders.Shader.init(
             &pixzig.shaders.TexVertexShader,
             &pixzig.shaders.TexPixelShader
         );
-    defer texShader.deinit();
+
+        const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
+        const map = try tile.TileMap.initFromFile("assets/level1a.tmx", alloc);
+
+        const tData = map.layers.items[1].tile(0, 0);
+        std.debug.print("Tile 0,0 data: {any}\n", .{tData});
+
+        var mapRender = try tile.TileMapRenderer.init(std.heap.page_allocator, texShader);
     
-    const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
-    const map = try tile.TileMap.initFromFile("assets/level1a.tmx", std.heap.page_allocator);
-    // defer map.deinit();
+        std.debug.print("Creating tile renderering data.\n", .{});
+        try mapRender.recreateVertices(&map.tilesets.items[0], &map.layers.items[1]);
 
-    var mapRender = try tile.TileMapRenderer.init(std.heap.page_allocator, &texShader);
-    defer mapRender.deinit();
-    
-    std.debug.print("Creating tile renderering data.\n", .{});
-    try mapRender.recreateVertices(&map.tilesets.items[0], &map.layers.items[1]);
+        std.debug.print("Done creating tile renderering data.\n", .{});
 
-    std.debug.print("Done creating tile renderering data.\n", .{});
+        return .{
+            .allocator = alloc,
+            .projMat = projMat,
+            .scrollOffset = .{ .x = 0, .y = 0}, 
+            .mapRenderer = mapRender,
+            .map = map,
+            .tex = tex,
+            .texShader = texShader,
+            .fps = FpsCounter.init() 
+        };
+    }
 
-    var scroll_offset = Vec2F{ .x = 0, .y = 0 };
-    scroll_offset.x = 0;
+    pub fn deinit(self: *App) void {
+        self.mapRenderer.deinit();
+        // self.map.deinit();
+        self.texShader.deinit();
+    }
 
-    std.debug.print("Starting main loop...\n", .{});
-    // Main loop
-    while (!eng.window.shouldClose() and eng.window.getKey(.escape) != .press) {
-        glfw.pollEvents();
+    pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {
+        if(self.fps.update(delta)) {
+            std.debug.print("FPS: {}\n", .{self.fps.fps()});
+        }
 
         eng.keyboard.update();
 
-        gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.0, 1.0 });
-        
         if (eng.keyboard.pressed(.one)) std.debug.print("one!\n", .{});
         if (eng.keyboard.pressed(.two)) std.debug.print("two!\n", .{});
         if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
         const ScrollAmount = 3;
         if (eng.keyboard.down(.left)) {
-            scroll_offset.x += ScrollAmount;
+            self.scrollOffset.x += ScrollAmount;
         }
         if (eng.keyboard.down(.right)) {
-            scroll_offset.x -= ScrollAmount;
+            self.scrollOffset.x -= ScrollAmount;
         }
         if (eng.keyboard.down(.up)) {
-            scroll_offset.y += ScrollAmount;
+            self.scrollOffset.y += ScrollAmount;
         }
         if (eng.keyboard.down(.down)) {
-            scroll_offset.y -= ScrollAmount;
+            self.scrollOffset.y -= ScrollAmount;
         }
-
-        const mvp = zmath.mul(zmath.translation(scroll_offset.x, scroll_offset.y, 0.0), projMat);
-        try mapRender.draw(tex, &map.layers.items[0], mvp);
-       
-        // const fb_size = eng.window.getFramebufferSize();
-        //
-        // zgui.backend.newFrame(@intCast(fb_size[0]), @intCast(fb_size[1]));
-        //
-        // // Set the starting window position and size to custom values
-        // zgui.setNextWindowPos(.{ .x = 20.0, .y = 20.0, .cond = .first_use_ever });
-        // zgui.setNextWindowSize(.{ .w = -1.0, .h = -1.0, .cond = .first_use_ever });
-        //
-        // if (zgui.begin("My window", .{})) {
-        //     if (zgui.button("Press me!", .{ .w = 200.0 })) {
-        //         std.debug.print("Button pressed\n", .{});
-        //     }
-        // }
-        // zgui.end();
-        //
-        // zgui.backend.draw();
-
-        eng.window.swapBuffers();
+        if(eng.keyboard.pressed(.escape)) {
+            return false;
+        }
+        return true;
     }
 
+    pub fn render(self: *App, eng: *pixzig.PixzigEngine) void {
+        _ = eng;
+        gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
+        self.fps.renderTick();
+        const mvp = zmath.mul(zmath.translation(self.scrollOffset.x, self.scrollOffset.y, 0.0), self.projMat);
+        try self.mapRenderer.draw(self.tex, &self.map.layers.items[0], mvp);
+    }
+};
+
+pub fn main() !void {
+
+    std.log.info("Pixzig Tilemap test!", .{});
+
+    var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa_state.deinit();
+    const gpa = gpa_state.allocator();
+
+    var eng = try pixzig.PixzigEngine.init("Pixzig: Tile Render Test.", gpa, EngOptions{});
+    defer eng.deinit();
+
+    const AppRunner = pixzig.PixzigApp(App);
+    var app = try App.init(&eng, gpa);
+
+    glfw.swapInterval(0);
+
+    std.debug.print("Starting main loop...\n", .{});
+    AppRunner.gameLoop(&app, &eng);
+
     std.debug.print("Cleaning up...\n", .{});
-
-
-        // if (eng.keyboard.down(.escape)) break :main_loop;
-        // // if (eng.keyboard.pressed(.@"1")) fr1.apply(&spr);
-        // // if (eng.keyboard.pressed(.@"2")) fr2.apply(&spr);
-        // // if (eng.keyboard.pressed(.@"3")) fr3.apply(&spr);
-        // if (eng.keyboard.down(.left)) {
-        //     scroll_offset.x -= 1;
-        // }
-        // if (eng.keyboard.down(.right)) {
-        //     scroll_offset.x += 1;
-        // }
-        // if (eng.keyboard.down(.up)) {
-        //     scroll_offset.y -= 1;
-        // }
-        // if (eng.keyboard.pressed(.down)) {
-        //     scroll_offset.y += 1;
-        // }
-
-    //     try renderer.setDrawColorRGB(32, 32, 100);
-    //     try renderer.clear();
-    //
-    //     try renderer.setDrawColorRGB(128, 10, 10);
-    //     try renderer.fillRect(.{ .x = 50, .y = 50, .w = 300, .h = 300 });
-    //
-    //
-    //     // actor.update(30, &spr);
-    //     // try spr.draw(renderer);
-    //     renderer.present();
-    // }
+    app.deinit();
 }
+
