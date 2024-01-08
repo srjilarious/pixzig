@@ -65,7 +65,7 @@ pub const App = struct {
 
     pub fn deinit(self: *App) void {
         self.mapRenderer.deinit();
-        // self.map.deinit();
+        self.map.deinit();
         self.texShader.deinit();
     }
 

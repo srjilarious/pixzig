@@ -88,7 +88,8 @@ pub const Tile = struct {
 
     pub fn deinit(self: *Tile) void {
         if (self.properties != null) {
-            for (self.properties.?) |prop| {
+            for (0..self.properties.?.items.len) |idx| {
+                const prop = self.properties.?.items[idx];
                 self.alloc.free(prop.name);
                 self.alloc.free(prop.value);
             }
@@ -165,11 +166,11 @@ pub const TileSet = struct {
 
     pub fn deinit(self: *TileSet) void {
         if(self.name != null) {
-            self.alloc.free(self.name);
+            self.alloc.free(self.name.?);
         }
 
-        for (self.tiles) |t| {
-            t.deinit();
+        for (0..self.tiles.items.len) |idx| {
+            self.tiles.items[idx].deinit();
         }
 
         self.tiles.deinit();
@@ -244,15 +245,16 @@ pub const TileLayer = struct {
         return layer;
     }
 
-    pub fn deinit(self: TileLayer) void {
+    pub fn deinit(self: *TileLayer) void {
         if(self.name != null) {
-            self.alloc.free(self.name);
+            self.alloc.free(self.name.?);
             self.name = null;
         }
 
         self.tiles.deinit();
 
-        for (self.properties) |prop| {
+        for (0..self.properties.items.len) |idx| {
+            const prop = &self.properties.items[idx];
             self.alloc.free(prop.name);
             self.alloc.free(prop.value);
         }
@@ -354,6 +356,20 @@ pub const TileMap = struct {
 
         return map;
     }
+
+    pub fn deinit(self: *TileMap) void {
+        for(0..self.tilesets.items.len) |idx| {
+            self.tilesets.items[idx].deinit();
+        }
+
+        self.tilesets.deinit();
+
+        for(0..self.layers.items.len) |idx| {
+            self.layers.items[idx].deinit();
+        }
+
+        self.layers.deinit();
+    }
 };
 
 pub const TileMapRenderer = struct {
@@ -373,9 +389,6 @@ pub const TileMapRenderer = struct {
     pub fn init(alloc: std.mem.Allocator, shader: Shader) !TileMapRenderer {
         var tr = TileMapRenderer{
             .shader = shader,
-            // .vertices = std.ArrayList(f32).init(alloc),
-            // .texCoords = std.ArrayList(f32).init(alloc),
-            // .indices = std.ArrayList(u32).init(alloc),
             .alloc = alloc
 
         };
@@ -489,24 +502,6 @@ pub const TileMapRenderer = struct {
                 indicesIdx += 6;
             }
         }
-
-        // gl.useProgram(self.shader.program);
-        // gl.bindVertexArray(self.vao);
-        //
-        // gl.enableVertexAttribArray(self.attrCoord);
-        // gl.bindBuffer(gl.ARRAY_BUFFER, self.vboVertices);
-        // gl.bufferData(gl.ARRAY_BUFFER, 2 * 4 * mapSize * @sizeOf(f32), @ptrCast(&self.vertices), gl.STATIC_DRAW);
-
-        // gl.enableVertexAttribArray(self.attrTexCoord);
-        // gl.bindBuffer(gl.ARRAY_BUFFER, self.vboTexCoords);
-        // gl.bufferData(gl.ARRAY_BUFFER, 2 * 4 * mapSize * @sizeOf(f32), @ptrCast(&self.texCoords), gl.STATIC_DRAW);
-
-        // gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.vboIndices);
-        // gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, 6 * mapSize * @sizeOf(u16), @ptrCast(&self.indices), gl.STATIC_DRAW);
-        // std.debug.print("{}\n", .{self.vertices[0]});
-        // for (self.vertices) |vert| {
-        //     std.debug.print("{}\n", .{vert});
-        // }
     }
 
     pub fn draw(self: *TileMapRenderer, 
