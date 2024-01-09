@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "zig",
+      "request": "launch",
+      "name": "Debug unit_tests",
+      "program": "${workspaceFolder}/zig-out/bin/unit_tests",
+      "cwd": "${workspaceFolder}/zig-out/bin/",
+      "args": ["verbose"]
+    },
+    {
+      "type": "zig",
+      "request": "launch",
+      "name": "Debug tile_load_test",
+      "program": "${workspaceFolder}/zig-out/bin/tile_load_test",
+      "cwd": "${workspaceFolder}/zig-out/bin/",
+      "args": []
+    }
+  ]
+}
