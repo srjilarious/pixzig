@@ -2,7 +2,8 @@
 
 const std = @import("std");
 
-const zsdl = @import("libs/zig-gamedev/libs/zsdl/build.zig");
+// const zsdl = @import("libs/zig-gamedev/libs/zsdl/build.zig");
+const zflecs = @import("libs/zig-gamedev/libs/zflecs/build.zig");
 const zglfw = @import("libs/zig-gamedev/libs/zglfw/build.zig");
 const zopengl = @import("libs/zig-gamedev/libs/zopengl/build.zig");
 const zstbi = @import("libs/zig-gamedev/libs/zstbi/build.zig");
@@ -27,7 +28,8 @@ pub fn example(b: *std.Build,
     });
 
     // Build it
-    const zsdl_pkg = zsdl.package(b, target, optimize, .{});
+    // const zsdl_pkg = zsdl.package(b, target, optimize, .{});
+    const zflecs_pkg = zflecs.package(b, target, optimize, .{});
     const zglfw_pkg = zglfw.package(b, target, optimize, .{});
     const zopengl_pkg = zopengl.package(b, target, optimize, .{});
     const zstbi_pkg = zstbi.package(b, target, optimize, .{});
@@ -40,7 +42,8 @@ pub fn example(b: *std.Build,
     });
 
     // Link with your app
-    zsdl_pkg.link(exe);
+    // zsdl_pkg.link(exe);
+    zflecs_pkg.link(exe);
     zglfw_pkg.link(exe);
     zopengl_pkg.link(exe);
     zstbi_pkg.link(exe);
@@ -54,7 +57,7 @@ pub fn example(b: *std.Build,
         .source_file = .{ .path = "src/pixzig/pixzig.zig" },
         .dependencies = &.{
             // Uses SDL for graphics/audio/input
-            .{ .name = "zsdl", .module = zsdl_pkg.zsdl },
+            // .{ .name = "zsdl", .module = zsdl_pkg.zsdl },
             // Transitioning to GLFW for more graphics control.
             .{ .name = "zglfw", .module = zglfw_pkg.zglfw },
             // OpenGL
@@ -68,6 +71,7 @@ pub fn example(b: *std.Build,
             // XML for tilemap loading.
             .{ .name = "xml", .module = xml },
             .{ .name = "ziglua", .module = ziglua.module("ziglua") },
+            .{ .name = "zflecs", .module = zflecs_pkg.zflecs },
         },
     });
 
@@ -152,6 +156,7 @@ pub fn build(b: *std.Build) void {
 
     _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig");
     _ = example(b, target, optimize, "tile_load_test", "examples/tile_load_test.zig");
+    _ = example(b, target, optimize, "flecs_test", "examples/flecs_test.zig");
     _ = example(b, target, optimize, "glfw_test", "examples/glfw_test.zig");
     _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig");
     _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
