@@ -19,6 +19,16 @@ const Flip = pixzig.sprites.Flip;
 const Frame = pixzig.sprites.Frame;
 const Vec2F = pixzig.common.Vec2F;
 const FpsCounter = pixzig.utils.FpsCounter;
+const Sprite = pixzig.sprites.Sprite;
+
+pub const Player = struct{
+    alive: bool
+};
+pub const DebugOutline = struct{
+    color: Color
+};
+
+pub const Dot = struct{};
 
 pub const App = struct {
     allocator: std.mem.Allocator,
@@ -30,12 +40,9 @@ pub const App = struct {
     texShader: pixzig.shaders.Shader,
     colorShader: pixzig.shaders.Shader,
     fps: FpsCounter,
-
-    dest: [3]RectF,
-    srcCoords: [3]RectF,
-    destRects: [3]RectF,
-    colorRects: [3]Color,
-
+    world: *flecs.world_t,
+    draw_query: *flecs.query_t,
+    
     pub fn init(eng: *pixzig.PixzigEngine, alloc: std.mem.Allocator) !App {
         // Orthographic projection matrix
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
@@ -57,7 +64,23 @@ pub const App = struct {
         const shapeBatch = try pixzig.renderer.ShapeBatchQueue.init(alloc, &colorShader);
         std.debug.print("Done creating tile renderering data.\n", .{});
 
-        return .{
+        const world = flecs.init();
+
+        flecs.COMPONENT(world, Player);
+        flecs.COMPONENT(world, Sprite);
+        flecs.COMPONENT(world, DebugOutline);
+
+        const query = try flecs.query_init(world, &.{
+            .filter = .{
+                .terms = [_]flecs.term_t{
+                    .{ .id = flecs.id(Sprite) },
+                    .{ .id = flecs.id(DebugOutline) }
+                } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 2),
+            },
+        });
+
+
+        var app = App{
             .allocator = alloc,
             .projMat = projMat,
             .scrollOffset = .{ .x = 0, .y = 0}, 
@@ -67,31 +90,16 @@ pub const App = struct {
             .texShader = texShader,
             .colorShader = colorShader,
             .fps = FpsCounter.init(),
-            .dest = [_]RectF{
-                RectF.fromPosSize(10, 10, 32, 32),
-                RectF.fromPosSize(200, 50, 32, 32),
-                RectF.fromPosSize(566, 300, 32, 32),
-            },
-
-            .srcCoords = [_]RectF{
-                RectF.fromCoords(32, 32, 32, 32, 512, 512),
-                RectF.fromCoords(64, 64, 32, 32, 512, 512),
-                RectF.fromCoords(128, 128, 32, 32, 512, 512),
-            },
-
-            .destRects = [_]RectF{
-                RectF.fromPosSize(50, 40, 32, 64),
-                RectF.fromPosSize(220, 80, 64, 32),
-                RectF.fromPosSize(540, 316, 128, 128),
-            },
-
-            .colorRects = [_]Color{
-                Color.from(255, 100, 100, 255),
-                Color.from(100, 255, 200, 200),
-                Color.from(25, 100, 255, 128),
-            },
-
+            .world = world,
+            .draw_query = query,
         };
+
+        app.spawn(1, 10, 50, true);
+        app.spawn(6, 300, 210, true);
+        app.spawn(11, 15, 320, true);
+        app.spawn(23, 150, 480, true);
+
+        return app;
     }
 
     pub fn deinit(self: *App) void {
@@ -99,6 +107,28 @@ pub const App = struct {
         self.shapeBatch.deinit();
         self.colorShader.deinit();
         self.texShader.deinit();
+
+        flecs.query_fini(self.draw_query);
+        _ = flecs.fini(self.world);
+    }
+
+    pub fn spawn(self: *App, which: usize, x: i32, y: i32, val: bool) void
+    {
+        const ent = flecs.new_id(self.world);
+        const srcX: i32 = @intCast(32*@rem(which, 16));
+        const srcY:i32 = @intCast(32*@divTrunc(which, 16));
+        var spr = Sprite.create(
+                self.tex, 
+                .{ .x = 32, .y = 32}, 
+                RectF.fromCoords(srcX, srcY, 32, 32, 512, 512));
+
+        spr.setPos(x, y);
+        _ = flecs.set(self.world, ent, Sprite, spr);
+
+        
+        if(val) {
+            _ = flecs.set(self.world, ent, DebugOutline, .{ .color = Color.from(100, 255, 200, 220)});
+        }
     }
 
     pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {
@@ -136,26 +166,21 @@ pub const App = struct {
         self.fps.renderTick();
        
         self.spriteBatch.begin(self.projMat);
-        
-        for(0..3) |idx| {
-            self.spriteBatch.drawSprite(self.tex, self.dest[idx], self.srcCoords[idx]);
-        }
-        self.spriteBatch.end();
-        
         self.shapeBatch.begin(self.projMat);
-        
-        // Draw sprite outlines.
-        for(0..3) |idx| {
-            self.shapeBatch.drawRect(self.dest[idx], Color.from(255,255,0,200), 2);
+
+        var it = flecs.query_iter(self.world, self.draw_query);
+        while (flecs.query_next(&it)) {
+            const spr = flecs.field(&it, Sprite, 1).?;
+            const debug = flecs.field(&it, DebugOutline, 2).?;
+
+            for (0..it.count()) |idx| {
+                spr[idx].draw(&self.spriteBatch) catch {};
+                self.shapeBatch.drawEnclosingRect(spr[idx].dest, debug[idx].color, 2);
+            }
         }
-        for(0..3) |idx| {
-            self.shapeBatch.drawEnclosingRect(self.dest[idx], Color.from(255,0,255,200), 2);
-        }
-        for(0..3) |idx| {
-            self.shapeBatch.drawFilledRect(self.destRects[idx], self.colorRects[idx]);
-        }
+
+        self.spriteBatch.end();
         self.shapeBatch.end();
- 
     }
 };
 

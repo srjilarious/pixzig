@@ -31,8 +31,10 @@ pub const Sprite = struct {
     }
 
     pub fn setPos(self: *Sprite, x: i32, y: i32) void {
-        self.dest.l = @as(f32, @floatFromInt(x));
-        self.dest.t = @as(f32, @floatFromInt(y));
+        self.dest = RectF.fromPosSize(
+            x, y, 
+            @as(i32, @intFromFloat(self.size.x)), 
+            @as(i32, @intFromFloat(self.size.y)));
     }
 
     pub fn draw(self: *Sprite, batch: *SpriteBatchQueue) !void {
