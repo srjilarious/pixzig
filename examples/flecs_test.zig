@@ -74,8 +74,7 @@ pub const App = struct {
             .filter = .{
                 .terms = [_]flecs.term_t{
                     .{ .id = flecs.id(Sprite) },
-                    .{ .id = flecs.id(DebugOutline) }
-                } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 2),
+                } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 1),
             },
         });
 
@@ -95,8 +94,8 @@ pub const App = struct {
         };
 
         app.spawn(1, 10, 50, true);
-        app.spawn(6, 300, 210, true);
-        app.spawn(11, 15, 320, true);
+        app.spawn(6, 300, 210, false);
+        app.spawn(11, 15, 320, false);
         app.spawn(23, 150, 480, true);
 
         return app;
@@ -171,11 +170,17 @@ pub const App = struct {
         var it = flecs.query_iter(self.world, self.draw_query);
         while (flecs.query_next(&it)) {
             const spr = flecs.field(&it, Sprite, 1).?;
-            const debug = flecs.field(&it, DebugOutline, 2).?;
+            //const debug = flecs.field(&it, DebugOutline, 2).?;
 
+            const entities = it.entities();
             for (0..it.count()) |idx| {
                 spr[idx].draw(&self.spriteBatch) catch {};
-                self.shapeBatch.drawEnclosingRect(spr[idx].dest, debug[idx].color, 2);
+                const e = entities[idx];
+
+                const outline = flecs.get(self.world, e, DebugOutline);
+                if(outline != null) {
+                    self.shapeBatch.drawEnclosingRect(spr[idx].dest, outline.?.color, 2);
+                }
             }
         }
 
