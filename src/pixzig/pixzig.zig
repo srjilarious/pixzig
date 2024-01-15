@@ -16,6 +16,7 @@ pub const shaders = @import("./shaders.zig");
 pub const textures= @import("./textures.zig");
 pub const renderer = @import("./renderer.zig");
 pub const utils = @import("./utils.zig");
+pub const gamestate = @import("./gamestate.zig");
 
 pub const Texture = textures.Texture;
 const TextureManager = textures.TextureManager;
