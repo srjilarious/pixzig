@@ -45,6 +45,13 @@ pub const RectF = struct {
             .b = yF + hF
         };
     }
+
+    pub fn ensureSize(self: *RectF, w: i32, h: i32) void {
+        const wF = @as(f32, @floatFromInt(w));
+        const hF = @as(f32, @floatFromInt(h));
+        self.r = self.l + wF;
+        self.b = self.t + hF;
+    }
 };
 
 pub const RectI = struct {

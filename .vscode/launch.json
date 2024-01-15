@@ -16,6 +16,14 @@
       "program": "${workspaceFolder}/zig-out/bin/tile_load_test",
       "cwd": "${workspaceFolder}/zig-out/bin/",
       "args": []
+    },
+    {
+      "type": "zig",
+      "request": "launch",
+      "name": "Debug flecs_test",
+      "program": "${workspaceFolder}/zig-out/bin/flecs_test",
+      "cwd": "${workspaceFolder}/zig-out/bin/",
+      "args": []
     }
   ]
 }

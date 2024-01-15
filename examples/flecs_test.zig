@@ -28,6 +28,10 @@ pub const DebugOutline = struct{
     color: Color
 };
 
+pub const Velocity = struct {
+    speed: Vec2F
+};
+
 pub const Dot = struct{};
 
 pub const App = struct {
@@ -40,7 +44,9 @@ pub const App = struct {
     texShader: pixzig.shaders.Shader,
     colorShader: pixzig.shaders.Shader,
     fps: FpsCounter,
+    paused: bool,
     world: *flecs.world_t,
+    update_query: *flecs.query_t,
     draw_query: *flecs.query_t,
     
     pub fn init(eng: *pixzig.PixzigEngine, alloc: std.mem.Allocator) !App {
@@ -68,7 +74,17 @@ pub const App = struct {
 
         flecs.COMPONENT(world, Player);
         flecs.COMPONENT(world, Sprite);
+        flecs.COMPONENT(world, Velocity);
         flecs.COMPONENT(world, DebugOutline);
+
+        const update_query = try flecs.query_init(world, &.{
+            .filter = .{
+                .terms = [_]flecs.term_t{
+                    .{ .id = flecs.id(Sprite) },
+                    .{ .id = flecs.id(Velocity) },
+                } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 2),
+            },
+        });
 
         const query = try flecs.query_init(world, &.{
             .filter = .{
@@ -83,6 +99,7 @@ pub const App = struct {
             .allocator = alloc,
             .projMat = projMat,
             .scrollOffset = .{ .x = 0, .y = 0}, 
+            .paused = false,
             .spriteBatch = spriteBatch,
             .shapeBatch = shapeBatch,
             .tex = tex,
@@ -90,6 +107,7 @@ pub const App = struct {
             .colorShader = colorShader,
             .fps = FpsCounter.init(),
             .world = world,
+            .update_query = update_query,
             .draw_query = query,
         };
 
@@ -124,7 +142,19 @@ pub const App = struct {
         spr.setPos(x, y);
         _ = flecs.set(self.world, ent, Sprite, spr);
 
+        var prng = std.rand.DefaultPrng.init(blk: {
+            var seed: u64 = undefined;
+            std.os.getrandom(std.mem.asBytes(&seed)) catch unreachable;
+            break :blk seed;
+        });
         
+        const vel = Velocity{ .speed = .{
+            .x = 2*prng.random().floatNorm(f32),
+            .y = 2*prng.random().floatNorm(f32)
+        }};
+
+        _ = flecs.set(self.world, ent, Velocity, vel);
+
         if(val) {
             _ = flecs.set(self.world, ent, DebugOutline, .{ .color = Color.from(100, 255, 200, 220)});
         }
@@ -153,9 +183,49 @@ pub const App = struct {
         if (eng.keyboard.down(.down)) {
             self.scrollOffset.y -= ScrollAmount;
         }
+        if(eng.keyboard.pressed(.p)) {
+            self.paused = !self.paused;
+        }
         if(eng.keyboard.pressed(.escape)) {
             return false;
         }
+
+        if(!self.paused) {
+            var it = flecs.query_iter(self.world, self.update_query);
+            while (flecs.query_next(&it)) {
+                const spr = flecs.field(&it, Sprite, 1).?;
+                const vel = flecs.field(&it, Velocity, 2).?;
+
+                //const entities = it.entities();
+                for (0..it.count()) |idx| {
+
+                    var v: *Velocity = &vel[idx];
+                    var sp: *Sprite = &spr[idx];
+
+                    sp.dest.l += v.speed.x;
+                    if(sp.dest.l < 0 or sp.dest.l > 800 - sp.size.x) {
+                        v.speed.x = -v.speed.x;
+                    }
+
+                    sp.dest.t += v.speed.y;
+                    if(sp.dest.t < 0 or sp.dest.t > 600 - sp.size.y) {
+                        v.speed.y = -v.speed.y;
+                    }
+
+                    sp.dest.ensureSize(@as(i32, @intFromFloat(sp.size.x)), @as(i32, @intFromFloat(sp.size.y)));
+
+                    //spr[idx].draw(&self.spriteBatch) catch {};
+
+                    //const e = entities[idx];
+
+                    // const outline = flecs.get(self.world, e, DebugOutline);
+                    // if(outline != null) {
+                    //     self.shapeBatch.drawEnclosingRect(spr[idx].dest, outline.?.color, 2);
+                    // }
+                }
+            }
+        }
+
         return true;
     }
 
@@ -203,7 +273,7 @@ pub fn main() !void {
     const AppRunner = pixzig.PixzigApp(App);
     var app = try App.init(&eng, gpa);
 
-    glfw.swapInterval(0);
+    //glfw.swapInterval(0);
 
     std.debug.print("Starting main loop...\n", .{});
     AppRunner.gameLoop(&app, &eng);
