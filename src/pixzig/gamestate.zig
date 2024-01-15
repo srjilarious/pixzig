@@ -9,7 +9,7 @@ pub fn GameStateMgr(comptime StateKeysType: type, comptime States: []const type)
         currState: StateKeysType,
         states: []*anyopaque,
 
-        pub fn init(comptime states: []*anyopaque) @This() {
+        pub fn init(states: []*anyopaque) @This() {
             // Contrain the state enum keys to be the same size as the provided states.
             const numStates = comp.numEnumFields(StateKeysType);
             _ = numStates;

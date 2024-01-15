@@ -63,7 +63,7 @@ pub const MyApp = struct {
     fps: FpsCounter,
     states: AppStateMgr,
 
-    pub fn init(val: i32, comptime appStates: []*anyopaque) MyApp {
+    pub fn init(val: i32, appStates: []*anyopaque) MyApp {
         return .{ 
             .testVal = val, 
             .fps = FpsCounter.init(),
@@ -112,8 +112,6 @@ pub const MyApp = struct {
 };
 
 
-var StateAInst = StateA{};
-var ParamStateInst = ParamState{};
 
 pub fn main() !void {
 
@@ -127,7 +125,9 @@ pub fn main() !void {
 
     const AppRunner = pixzig.PixzigApp(MyApp);
 
-    comptime var statesArr = [_]*anyopaque {&StateAInst, &ParamStateInst};
+    var StateAInst = StateA{};
+    var ParamStateInst = ParamState{};
+    var statesArr = [_]*anyopaque {&StateAInst, &ParamStateInst};
     const states: []*anyopaque = statesArr[0..2];
     var app = MyApp.init(123, states);
 
