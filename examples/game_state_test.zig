@@ -37,6 +37,16 @@ const StateA = struct {
         gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 1.0, 0.0, 1.0 });
 
     }
+
+    pub fn activate(self: *StateA) void {
+        _ = self;
+        std.debug.print("State A activated!\n", .{});
+    }
+
+    pub fn deactivate(self: *StateA) void {
+        _ = self;
+        std.debug.print("State A deactivated!\n", .{});
+    }
 };
 
 const ParamState = struct {
@@ -53,8 +63,6 @@ const ParamState = struct {
         gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 1.0, 0.0, 0.0, 1.0 });
     }
 };
-
-
 
 const AppStateMgr = GameStateMgr(States, &[_]type{StateA, ParamState});
 
