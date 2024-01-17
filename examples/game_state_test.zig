@@ -67,13 +67,11 @@ const ParamState = struct {
 const AppStateMgr = GameStateMgr(States, &[_]type{StateA, ParamState});
 
 pub const MyApp = struct {
-    testVal: i32,
     fps: FpsCounter,
     states: AppStateMgr,
 
-    pub fn init(val: i32, appStates: []*anyopaque) MyApp {
+    pub fn init(appStates: []*anyopaque) MyApp {
         return .{ 
-            .testVal = val, 
             .fps = FpsCounter.init(),
             .states = AppStateMgr.init(appStates),
         };
@@ -95,17 +93,7 @@ pub const MyApp = struct {
             self.states.setCurrState(.StateB);
         }
         if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
-        if (eng.keyboard.pressed(.left)) {
-            std.debug.print("Left!\n", .{});
-            self.testVal -= 1;
-        }
-        if (eng.keyboard.pressed(.right)) {
-            std.debug.print("Right!\n", .{});
-            self.testVal += 1;
-        }
-        if( eng.keyboard.pressed(.space)) {
-            std.debug.print("Context: {}\n", .{self.testVal});
-        }
+
         if(eng.keyboard.pressed(.escape)) {
             return false;
         }
@@ -130,14 +118,13 @@ pub fn main() !void {
     var eng = try pixzig.PixzigEngine.init("Glfw Eng Test.", gpa, EngOptions{});
     defer eng.deinit();
 
-
     const AppRunner = pixzig.PixzigApp(MyApp);
 
     var StateAInst = StateA{};
     var ParamStateInst = ParamState{};
     var statesArr = [_]*anyopaque {&StateAInst, &ParamStateInst};
     const states: []*anyopaque = statesArr[0..2];
-    var app = MyApp.init(123, states);
+    var app = MyApp.init(states);
 
     glfw.swapInterval(0);
 

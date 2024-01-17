@@ -8,13 +8,7 @@ pub fn GameStateMgr(comptime StateKeysType: type, comptime States: []const type)
 
     // Contrain the state enum keys to be the same size as the provided states.
     const numStates = comp.numEnumFields(StateKeysType);
-    // std.debug.print("num States: {}\n", .{numStates});
-    // std.debug.print("num states in list: {}\n", .{States.len});
     if(numStates != States.len) {
-    //     @compileLog(numStates);
-    //     @compileLog(states.len);
-    //     @compileLog(states[0]);
-    //     @compileLog(states[1]);
         @compileError("Number of states in keys enum and provided list must match!");
     }
 
@@ -36,7 +30,8 @@ pub fn GameStateMgr(comptime StateKeysType: type, comptime States: []const type)
         pub fn setCurrState(self: *@This(), state: StateKeysType) void {
             const oldState = self.currState;
             self.currState = state;
-            
+           
+            // Check to deactivate the old state.
             const oldStateIdx = @intFromEnum(oldState);
             inline for(0..States.len) |idx| {
                 if(oldStateIdx == idx) {
@@ -48,6 +43,7 @@ pub fn GameStateMgr(comptime StateKeysType: type, comptime States: []const type)
                 }
             }
 
+            // Check to activate the new state.
             const stateIdx = @intFromEnum(self.currState);
             inline for(0..States.len) |idx| {
                 if(stateIdx == idx) {
