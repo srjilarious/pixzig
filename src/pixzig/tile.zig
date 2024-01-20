@@ -652,7 +652,7 @@ pub const Mover = struct {
     }
 
     pub fn moveDown(objRect: *RectF, amount: f32, layer: *TileLayer, tileMask: u32) bool {
-        const bottom: i32 = @intFromFloat(objRect.b - amount);
+        const bottom: i32 = @intFromFloat(objRect.b + amount);
         const left: i32 = @intFromFloat(@ceil(objRect.l) + 0.5);
         const right: i32 = @intFromFloat(@floor(objRect.r) - 0.5);
         const height = objRect.width();
@@ -665,15 +665,15 @@ pub const Mover = struct {
         while(tx <= tX_End) : (tx += 1) {
             const currTile = layer.tile(tx, bottomTileY);
             if(currTile != null and (currTile.?.core & tileMask) > Clear) {
-                objRect.b = @floatFromInt(bottomTileY*layer.tileSize.y);
+                objRect.t = @as(f32, @floatFromInt(bottomTileY*layer.tileSize.y)) - height;
                 // Make sure the width remains unchanged.
-                objRect.t = objRect.b - height;
+                objRect.b = objRect.t + height;
                 return true;
             }
         }
 
-        objRect.b += amount;
-        objRect.t = objRect.b - height;
+        objRect.t += amount;
+        objRect.b = objRect.t + height;
         return false;
     }
 };
