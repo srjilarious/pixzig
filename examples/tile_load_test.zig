@@ -24,6 +24,9 @@ pub const App = struct {
     projMat: zmath.Mat,
     scrollOffset: Vec2F,
     mapRenderer: tile.TileMapRenderer,
+    shapeBatch: pixzig.renderer.ShapeBatchQueue,
+    colorShader: pixzig.shaders.Shader,
+    guy: RectF,
     map: tile.TileMap,
     tex: *pixzig.Texture,
     texShader: pixzig.shaders.Shader,
@@ -51,6 +54,13 @@ pub const App = struct {
 
         std.debug.print("Done creating tile renderering data.\n", .{});
 
+        var colorShader = try pixzig.shaders.Shader.init(
+                &pixzig.shaders.ColorVertexShader,
+                &pixzig.shaders.ColorPixelShader
+            );
+
+        const shapeBatch = try pixzig.renderer.ShapeBatchQueue.init(alloc, &colorShader);
+
         return .{
             .allocator = alloc,
             .projMat = projMat,
@@ -59,6 +69,9 @@ pub const App = struct {
             .map = map,
             .tex = tex,
             .texShader = texShader,
+            .colorShader = colorShader,
+            .shapeBatch = shapeBatch,
+            .guy = RectF.fromPosSize(33,33,32,32),
             .fps = FpsCounter.init() 
         };
     }
@@ -67,6 +80,8 @@ pub const App = struct {
         self.mapRenderer.deinit();
         self.map.deinit();
         self.texShader.deinit();
+        self.shapeBatch.deinit();
+        self.colorShader.deinit();
     }
 
     pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {
@@ -80,20 +95,34 @@ pub const App = struct {
         if (eng.keyboard.pressed(.two)) std.debug.print("two!\n", .{});
         if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
         const ScrollAmount = 3;
-        if (eng.keyboard.down(.left)) {
+        if (eng.keyboard.down(.a)) {
             self.scrollOffset.x += ScrollAmount;
         }
-        if (eng.keyboard.down(.right)) {
+        if (eng.keyboard.down(.d)) {
             self.scrollOffset.x -= ScrollAmount;
         }
-        if (eng.keyboard.down(.up)) {
+        if (eng.keyboard.down(.w)) {
             self.scrollOffset.y += ScrollAmount;
         }
-        if (eng.keyboard.down(.down)) {
+        if (eng.keyboard.down(.s)) {
             self.scrollOffset.y -= ScrollAmount;
         }
         if(eng.keyboard.pressed(.escape)) {
             return false;
+        }
+
+        // Handle guy movement.
+        if (eng.keyboard.down(.left)) {
+            _ = pixzig.tile.Mover.moveLeft(&self.guy, ScrollAmount, &self.map.layers.items[1], pixzig.tile.BlocksAll);
+        }
+        if (eng.keyboard.down(.right)) {
+            _ = pixzig.tile.Mover.moveRight(&self.guy, ScrollAmount, &self.map.layers.items[1], pixzig.tile.BlocksAll);
+        }
+        if (eng.keyboard.down(.up)) {
+            _ = pixzig.tile.Mover.moveUp(&self.guy, ScrollAmount, &self.map.layers.items[1], pixzig.tile.BlocksAll);
+        }
+        if (eng.keyboard.down(.down)) {
+            _ = pixzig.tile.Mover.moveDown(&self.guy, ScrollAmount, &self.map.layers.items[1], pixzig.tile.BlocksAll);
         }
         return true;
     }
@@ -103,7 +132,12 @@ pub const App = struct {
         gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
         self.fps.renderTick();
         const mvp = zmath.mul(zmath.translation(self.scrollOffset.x, self.scrollOffset.y, 0.0), self.projMat);
-        try self.mapRenderer.draw(self.tex, &self.map.layers.items[0], mvp);
+        try self.mapRenderer.draw(self.tex, &self.map.layers.items[1], mvp);
+
+        // Draw outline.
+        self.shapeBatch.begin(mvp);
+        self.shapeBatch.drawRect(self.guy, Color.from(255,255,0,200), 2);
+        self.shapeBatch.end();
     }
 };
 
