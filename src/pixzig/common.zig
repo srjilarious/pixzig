@@ -1,9 +1,25 @@
 // zig fmt: off
 const std = @import("std");
 
-pub const Vec2I = struct { x: i32, y: i32 };
+pub const Vec2I = struct { 
+    x: i32, 
+    y: i32,
+
+    pub fn asVec2F(self: *const Vec2I) Vec2F {
+        return .{ .x = @floatFromInt(self.x), .y = @floatFromInt(self.y) };
+    } 
+};
+
 pub const Vec2U = struct { x: u32, y: u32 };
-pub const Vec2F = struct { x: f32, y: f32 };
+pub const Vec2F = struct { 
+    x: f32, 
+    y: f32,
+
+    pub fn asVec2I(self: *const Vec2F) Vec2I {
+        return .{ .x = @intFromFloat(self.x), .y = @intFromFloat(self.y) };
+    } 
+};
+
 pub const RectF = struct {
     l: f32,
     t: f32,

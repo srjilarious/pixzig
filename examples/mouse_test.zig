@@ -1,6 +1,7 @@
 // zig fmt: off
 const std = @import("std");
 const zgui = @import("zgui");
+const zmath = @import("zmath"); 
 const glfw = @import("zglfw");
 const gl = @import("zopengl");
 const stbi = @import ("zstbi");
@@ -18,12 +19,38 @@ const PixzigEngine = pixzig.PixzigEngine;
 
 pub const MyApp = struct {
     fps: FpsCounter,
+    alloc: std.mem.Allocator,
+    projMat: zmath.Mat,
     mouse: pixzig.input.Mouse,
+    spriteBatch: pixzig.renderer.SpriteBatchQueue,
+    tex: *pixzig.Texture,
+    pointer: pixzig.sprites.Sprite,
+    texShader: pixzig.shaders.Shader,
 
-    pub fn init(eng: *PixzigEngine) MyApp {
+    pub fn init(eng: *PixzigEngine, alloc: std.mem.Allocator) !MyApp {
+
+        // Orthographic projection matrix
+        const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
+
+        var texShader = try pixzig.shaders.Shader.init(
+            &pixzig.shaders.TexVertexShader,
+            &pixzig.shaders.TexPixelShader
+        );
+
+        const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
+       
+        const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &texShader);
+        
         return .{ 
             .fps = FpsCounter.init(),
+            .alloc = alloc,
+            .projMat = projMat,
             .mouse = pixzig.input.Mouse.init(eng.window, eng.allocator),
+            .spriteBatch = spriteBatch,
+            .tex = tex,
+            .pointer = pixzig.sprites.Sprite.create(tex, .{ .x = 32, .y = 32}, 
+                RectF.fromCoords(32, 32, 32, 32, 512, 512)),
+            .texShader = texShader,
         };
     }
 
@@ -34,6 +61,9 @@ pub const MyApp = struct {
 
         eng.keyboard.update();
         self.mouse.update();
+
+        const mousePos = self.mouse.pos().asVec2I();
+        self.pointer.setPos(mousePos.x, mousePos.y);
 
         if (self.mouse.pressed(.left)) {
             std.debug.print("left mouse!\n", .{});
@@ -53,6 +83,10 @@ pub const MyApp = struct {
         _ = eng;
         gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
         self.fps.renderTick();
+
+        self.spriteBatch.begin(self.projMat);
+        try self.pointer.draw(&self.spriteBatch);
+        self.spriteBatch.end();
     }
 };
 
@@ -69,8 +103,9 @@ pub fn main() !void {
 
     const AppRunner = pixzig.PixzigApp(MyApp);
 
-    var app = MyApp.init(&eng);
+    var app = try MyApp.init(&eng, gpa);
 
+    eng.window.setInputMode(.cursor, .hidden);
     glfw.swapInterval(0);
 
     std.debug.print("Starting main loop...\n", .{});
