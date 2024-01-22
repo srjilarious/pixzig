@@ -41,6 +41,14 @@ pub fn example(b: *std.Build,
         .optimize = optimize,
     });
 
+    // Use mach-freetype
+    const mach_freetype_dep = b.dependency("mach_freetype", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.addModule("freetype", mach_freetype_dep.module("mach-freetype"));
+    @import("mach_freetype").linkFreetype(mach_freetype_dep.builder, exe);
+
     // Link with your app
     // zsdl_pkg.link(exe);
     zflecs_pkg.link(exe);
@@ -72,6 +80,7 @@ pub fn example(b: *std.Build,
             .{ .name = "xml", .module = xml },
             .{ .name = "ziglua", .module = ziglua.module("ziglua") },
             .{ .name = "zflecs", .module = zflecs_pkg.zflecs },
+            .{ .name = "freetype", .module = mach_freetype_dep.module("mach-freetype")}
         },
     });
 
@@ -163,6 +172,7 @@ pub fn build(b: *std.Build) void {
     _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
     _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig");
     _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig");
+    _ = example(b, target, optimize, "text_rendering", "examples/text_rendering.zig");
 
     const tests = example(b, target, optimize, "unit_tests", "tests/main.zig");
     const testzMod = b.dependency("testz", .{});
