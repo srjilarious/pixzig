@@ -11,8 +11,8 @@ const RectF = common.RectF;
 const Color = common.Color;
 const Texture = textures.Texture;
 
-const ShaderCode = [*c]const u8;
-const ShaderCodePtr = [*c]const ShaderCode;
+pub const ShaderCode = [*c]const u8;
+pub const ShaderCodePtr = [*c]const ShaderCode;
 
 pub const TexVertexShader: ShaderCode =
     \\ #version 330 core
