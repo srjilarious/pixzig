@@ -70,26 +70,62 @@ pub const MyApp = struct {
 
         const face = try lib.createFace("assets/Roboto-Medium.ttf", 0);
         try face.setCharSize(60 * 48, 0, 50, 0);
-        try face.loadChar('c', .{ .render = true });
-        const bitmap = face.glyph().bitmap();
+        // Generate a buffer for multiple glyphs
+        const GlyphBufferWidth = 512;
+        const GlyphBufferHeight = 512;
+        var glyphBuffer = try alloc.alloc(u8, GlyphBufferWidth*GlyphBufferHeight);
+        defer alloc.free(glyphBuffer);
+
+        var currY: usize = 0;
+        var currLineMaxY: usize = 0;
+        var currLineX: usize = 0;
+
+        for(0x21..128) |c| {
+            
+            try face.loadChar(@intCast(c), .{ .render = true });
+            const bitmap = face.glyph().bitmap();
+            if(bitmap.buffer() == null) {
+                std.debug.print("Skipping char {}\n", .{c});
+                continue;
+            }
+            const buffer = bitmap.buffer().?;
+
+            // Check to move glyph to next line
+            if(currLineX+bitmap.width() > GlyphBufferWidth) {
+                currLineX = 0;
+                currY += currLineMaxY;
+                currLineMaxY = 0;
+            }
+
+            for(0..bitmap.rows()) |y| {
+                for(0..bitmap.width()) |x| {
+                    glyphBuffer[(currY+y)*GlyphBufferWidth+currLineX+x] = buffer[y*bitmap.width()+x];
+                }
+            }
+
+            if(bitmap.rows() > currLineMaxY) {
+                currLineMaxY = bitmap.rows();
+            }
+
+            currLineX += bitmap.width();
+        }
 
         // generate texture
         var charTex: c_uint = undefined;
-        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); 
+        //gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); 
         gl.genTextures(1, &charTex);
         gl.bindTexture(gl.TEXTURE_2D, charTex);
         gl.texImage2D(
             gl.TEXTURE_2D,
             0,
             gl.RED,
-            @intCast(bitmap.width()),
-            @intCast(bitmap.rows()),
+            @intCast(GlyphBufferWidth),
+            @intCast(GlyphBufferHeight),
             0,
             gl.RED,
             gl.UNSIGNED_BYTE,
-            @ptrCast(bitmap.buffer().?)
+            @ptrCast(glyphBuffer)
         );
-
         
         // set texture options
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -106,8 +142,8 @@ pub const MyApp = struct {
             .tex = .{ 
                 .texture = charTex, 
                 .size = .{ 
-                    .x = @intCast(bitmap.width()), 
-                    .y = @intCast(bitmap.rows())
+                    .x = @intCast(GlyphBufferWidth), 
+                    .y = @intCast(GlyphBufferHeight)
                 },
                 .name = null
             },
@@ -135,7 +171,7 @@ pub const MyApp = struct {
 
         self.spriteBatch.begin(self.projMat);
         self.spriteBatch.drawSprite(&self.tex, 
-            RectF.fromPosSize(32, 32, 150, 150), .{ .l=0, .t=0, .r=1, .b=1});
+            RectF.fromPosSize(32, 32, 512, 512), .{ .l=0, .t=0, .r=1, .b=1});
         self.spriteBatch.end();
     }
 };
