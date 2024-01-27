@@ -30,6 +30,7 @@ pub const TextPixelShader: pixzig.shaders.ShaderCode =
     \\ }
 ;
 pub const Character = struct {
+    coords: RectF,
     size: Vec2I,
     bearing: Vec2I,
     advance: u32
@@ -44,7 +45,7 @@ pub const TextRenderer = struct {
     alloc: std.mem.Allocator,
 
     pub fn init(fontFace: [:0]const u8, alloc: std.mem.Allocator) !TextRenderer {
-        const chars = std.AutoHashMap(u32, Character).init(alloc);
+        var chars = std.AutoHashMap(u32, Character).init(alloc);
         var texShader = try pixzig.shaders.Shader.init(
             &pixzig.shaders.TexVertexShader,
             &TextPixelShader
@@ -64,8 +65,6 @@ pub const TextRenderer = struct {
         var glyphBuffer = try alloc.alloc(u8, GlyphBufferWidth*GlyphBufferHeight);
         defer alloc.free(glyphBuffer);
 
-        
-
         var currY: usize = 0;
         var currLineMaxY: usize = 0;
         var currLineX: usize = 0;
@@ -73,7 +72,11 @@ pub const TextRenderer = struct {
         for(0x21..128) |c| {
             
             try face.loadChar(@intCast(c), .{ .render = true });
-            const bitmap = face.glyph().bitmap();
+            const glyph = face.glyph();
+            const bitmap = glyph.bitmap();
+            const bw = bitmap.width();
+            const bh = bitmap.rows();
+
             if(bitmap.buffer() == null) {
                 std.debug.print("Skipping char {}\n", .{c});
                 continue;
@@ -81,17 +84,29 @@ pub const TextRenderer = struct {
             const buffer = bitmap.buffer().?;
 
             // Check to move glyph to next line
-            if(currLineX+bitmap.width() > GlyphBufferWidth) {
+            if(currLineX + bw > GlyphBufferWidth) {
                 currLineX = 0;
                 currY += currLineMaxY;
                 currLineMaxY = 0;
             }
 
-            for(0..bitmap.rows()) |y| {
-                for(0..bitmap.width()) |x| {
-                    glyphBuffer[(currY+y)*GlyphBufferWidth+currLineX+x] = buffer[y*bitmap.width()+x];
+            for(0..bh) |y| {
+                for(0..bw) |x| {
+                    glyphBuffer[(currY+y)*GlyphBufferWidth+currLineX+x] = buffer[y*bw+x];
                 }
             }
+
+            try chars.put(@intCast(c), .{
+                .coords = RectF.fromCoords(
+                    @intCast(currLineX), 
+                    @intCast(currY), 
+                    @intCast(bw), 
+                    @intCast(bh), 
+                    GlyphBufferWidth, GlyphBufferHeight),
+                .size = .{ .x = @intCast(bw), .y = @intCast(bh) },
+                .bearing = .{ .x = glyph.bitmapLeft(), .y = glyph.bitmapTop() },
+                .advance = @intCast(glyph.advance().x)
+            });
 
             if(bitmap.rows() > currLineMaxY) {
                 currLineMaxY = bitmap.rows();
@@ -132,6 +147,12 @@ pub const TextRenderer = struct {
         };
 
     }
+
+    pub fn deinit(self: *TextRenderer) void {
+        self.characters.deinit();
+    }
+
+
 };
 
 pub const MyApp = struct {
@@ -161,6 +182,10 @@ pub const MyApp = struct {
             .projMat = projMat,
             .textRenderer = textRenderer
         };
+    }
+
+    pub fn deinit(self: *MyApp) void {
+        self.textRenderer.deinit();
     }
 
     pub fn update(self: *MyApp, eng: *pixzig.PixzigEngine, delta: f64) bool {
@@ -210,6 +235,7 @@ pub fn main() !void {
     AppRunner.gameLoop(&app, &eng);
 
     std.debug.print("Cleaning up...\n", .{});
+    app.deinit();
 }
 
 
