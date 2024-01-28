@@ -69,7 +69,7 @@ pub const TextRenderer = struct {
         var currLineMaxY: usize = 0;
         var currLineX: usize = 0;
 
-        for(0x21..128) |c| {
+        for(0x20..128) |c| {
             
             try face.loadChar(@intCast(c), .{ .render = true });
             const glyph = face.glyph();
@@ -152,6 +152,22 @@ pub const TextRenderer = struct {
         self.characters.deinit();
     }
 
+    pub fn drawString(self: *TextRenderer, text: []const u8, pos: Vec2I) void {
+        var currX: i32 = pos.x;
+
+        for(text) |c| {
+            const charDataPtr = self.characters.get(@intCast(c));
+            if(charDataPtr == null) continue;
+
+            const charData = charDataPtr.?;
+
+            self.spriteBatch.drawSprite(
+                &self.tex, 
+                RectF.fromPosSize(currX, pos.y - charData.bearing.y, charData.size.x, charData.size.y), 
+                charData.coords);
+            currX += @intCast(charData.advance/64);
+        }
+    }
 
 };
 
@@ -207,8 +223,10 @@ pub const MyApp = struct {
         self.fps.renderTick();
 
         self.textRenderer.spriteBatch.begin(self.projMat);
-        self.textRenderer.spriteBatch.drawSprite(&self.textRenderer.tex, 
-            RectF.fromPosSize(32, 32, 512, 512), .{ .l=0, .t=0, .r=1, .b=1});
+        // self.textRenderer.spriteBatch.drawSprite(&self.textRenderer.tex, 
+            // RectF.fromPosSize(32, 32, 512, 512), .{ .l=0, .t=0, .r=1, .b=1});
+        //
+        self.textRenderer.drawString("Hello World!", .{ .x = 20, .y = 320 });
         self.textRenderer.spriteBatch.end();
     }
 };

@@ -24,6 +24,14 @@
       "program": "${workspaceFolder}/zig-out/bin/flecs_test",
       "cwd": "${workspaceFolder}/zig-out/bin/",
       "args": []
+    },
+    {
+      "type": "zig",
+      "request": "launch",
+      "name": "Debug text_rendering",
+      "program": "${workspaceFolder}/zig-out/bin/text_rendering",
+      "cwd": "${workspaceFolder}/zig-out/bin/",
+      "args": []
     }
   ]
 }
