@@ -152,9 +152,10 @@ pub const TextRenderer = struct {
         self.characters.deinit();
     }
 
-    pub fn drawString(self: *TextRenderer, text: []const u8, pos: Vec2I) void {
+    pub fn drawString(self: *TextRenderer, text: []const u8, pos: Vec2I) Vec2I {
         var currX: i32 = pos.x;
 
+        var drawSize: Vec2I = .{ .x = 0, .y = 0 };
         for(text) |c| {
             const charDataPtr = self.characters.get(@intCast(c));
             if(charDataPtr == null) continue;
@@ -165,8 +166,13 @@ pub const TextRenderer = struct {
                 &self.tex, 
                 RectF.fromPosSize(currX, pos.y - charData.bearing.y, charData.size.x, charData.size.y), 
                 charData.coords);
-            currX += @intCast(charData.advance/64);
+            const adv: i32 = @intCast(charData.advance/64);
+            currX += adv;
+            drawSize.x += adv;
+            drawSize.y = @max(drawSize.y, charData.size.y);
         }
+
+        return drawSize;
     }
 
 };
@@ -176,6 +182,8 @@ pub const MyApp = struct {
     alloc: std.mem.Allocator,
     projMat: zmath.Mat,
     textRenderer: TextRenderer,
+    colorShader: pixzig.shaders.Shader,
+    shapeBatch: pixzig.renderer.ShapeBatchQueue,
 
     pub fn init(eng: *PixzigEngine, alloc: std.mem.Allocator) !MyApp {
         _ = eng;
@@ -191,12 +199,22 @@ pub const MyApp = struct {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.enable(gl.BLEND);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);  
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+        var colorShader = try pixzig.shaders.Shader.init(
+                &pixzig.shaders.ColorVertexShader,
+                &pixzig.shaders.ColorPixelShader
+            );
+
+        const shapeBatch = try pixzig.renderer.ShapeBatchQueue.init(alloc, &colorShader);
+        
         return .{ 
             .fps = FpsCounter.init(),
             .alloc = alloc,
             .projMat = projMat,
-            .textRenderer = textRenderer
+            .textRenderer = textRenderer,
+            .colorShader = colorShader,
+            .shapeBatch = shapeBatch,
         };
     }
 
@@ -222,12 +240,17 @@ pub const MyApp = struct {
         gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
         self.fps.renderTick();
 
+        self.shapeBatch.begin(self.projMat);
         self.textRenderer.spriteBatch.begin(self.projMat);
         // self.textRenderer.spriteBatch.drawSprite(&self.textRenderer.tex, 
             // RectF.fromPosSize(32, 32, 512, 512), .{ .l=0, .t=0, .r=1, .b=1});
         //
-        self.textRenderer.drawString("Hello World!", .{ .x = 20, .y = 320 });
+        const size = self.textRenderer.drawString("Hello World!", .{ .x = 20, .y = 320 });
+        
+        self.shapeBatch.drawEnclosingRect(RectF.fromPosSize(20, 320 - size.y, size.x, size.y), Color.from(100, 255, 100, 255), 2);
+
         self.textRenderer.spriteBatch.end();
+        self.shapeBatch.end();
     }
 };
 
