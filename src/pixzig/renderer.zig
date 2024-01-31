@@ -487,7 +487,7 @@ pub const TextRenderer = struct {
     characters: std.AutoHashMap(u32, Character),
     tex: Texture,
     spriteBatch: SpriteBatchQueue,
-
+    maxY: i32,
     texShader: Shader,
     alloc: std.mem.Allocator,
 
@@ -515,6 +515,7 @@ pub const TextRenderer = struct {
         var currY: usize = 0;
         var currLineMaxY: usize = 0;
         var currLineX: usize = 0;
+        var maxY: i32 = 0;
 
         for(0x20..128) |c| {
             
@@ -559,6 +560,8 @@ pub const TextRenderer = struct {
                 currLineMaxY = bitmap.rows();
             }
 
+            maxY = @max(glyph.bitmapTop(), maxY);
+
             currLineX += bitmap.width();
         }
 
@@ -591,6 +594,7 @@ pub const TextRenderer = struct {
                 .name = null
             },
             .texShader = texShader,
+            .maxY = maxY,
         };
 
     }
@@ -602,6 +606,8 @@ pub const TextRenderer = struct {
     pub fn drawString(self: *TextRenderer, text: []const u8, pos: Vec2I) Vec2I {
         var currX: i32 = pos.x;
 
+        const posY = pos.y + self.maxY;
+
         var drawSize: Vec2I = .{ .x = 0, .y = 0 };
         for(text) |c| {
             const charDataPtr = self.characters.get(@intCast(c));
@@ -611,7 +617,7 @@ pub const TextRenderer = struct {
 
             self.spriteBatch.drawSprite(
                 &self.tex, 
-                RectF.fromPosSize(currX, pos.y - charData.bearing.y, charData.size.x, charData.size.y), 
+                RectF.fromPosSize(currX, posY - charData.bearing.y, charData.size.x, charData.size.y), 
                 charData.coords);
             const adv: i32 = @intCast(charData.advance/64);
             currX += adv;

@@ -89,9 +89,11 @@ pub const MyApp = struct {
         // self.textRenderer.spriteBatch.drawSprite(&self.textRenderer.tex, 
             // RectF.fromPosSize(32, 32, 512, 512), .{ .l=0, .t=0, .r=1, .b=1});
         //
-        const size = self.textRenderer.drawString("Hello World!", .{ .x = 20, .y = 320 });
+        const size = self.textRenderer.drawString("@!$() Hello World!", .{ .x = 20, .y = 320 });
         
-        self.shapeBatch.drawEnclosingRect(RectF.fromPosSize(20, 320 - size.y, size.x, size.y), Color.from(100, 255, 100, 255), 2);
+        self.shapeBatch.drawEnclosingRect(RectF.fromPosSize(20, 320, size.x, size.y), Color.from(100, 255, 100, 255), 2);
+        
+        self.shapeBatch.drawFilledRect(RectF.fromPosSize(20, 320, size.x, size.y), Color.from(255, 100, 100, 100));
 
         self.textRenderer.spriteBatch.end();
         self.shapeBatch.end();
