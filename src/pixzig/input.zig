@@ -247,3 +247,162 @@ pub const Mouse = struct {
 };
 
 
+const KeyModifier = enum(u8) {
+    none = 0x0,
+    ctrl = 0x1,
+    alt = 0x2,
+    shift = 0x4,
+    meta = 0x8,
+};
+
+const DefaultChordTimeoutUs: i64 = 2e6;
+const InitialRepeatRate: i64 = 1e5;
+const DownRepeatRate: i64 = 2e4;
+
+const KeyChordPiece = struct {
+    // GLFW keys go up to 348, so we use the lower 24 bits for the key
+    // and the top 8 bits for the modifiers.
+    value: u32,
+
+    pub fn from(mod: KeyModifier, k: glfw.Key) KeyChordPiece 
+    {
+        const modVal = @as(u32, @intCast(@intFromEnum(mod))) << 24;
+        const keyVal = @as(u32, @intCast(k)) & 0xffffff;
+        return .{
+            .value = modVal | keyVal,
+        };
+    }
+
+    pub fn key(self: *const KeyChordPiece) glfw.Key
+    {
+        return @enumFromInt(self.value & 0xffffff);
+    }
+
+    pub fn modifier(self: *const KeyChordPiece) KeyModifier
+    {
+       return @enumFromInt((self.value >> 24) & 0xff);
+    }
+};
+
+const KeyChord = struct {
+    alloc: std.mem.Allocator,
+    // The script func to call, can be straight lua code.
+    func: ?*[]const u8, // Change to ArrayList of context/func.
+    piece: KeyChordPiece,
+    children: std.AutoHashMap(KeyChordPiece, KeyChord),
+
+    pub fn init(alloc: std.mem.Allocator, piece: KeyChordPiece, func: ?[]const u8) !KeyChord {
+        var fnc = func;
+        if(fnc != null) {
+            fnc = alloc.dupe(u8, func.?);
+        }
+        return .{
+            .alloc = alloc,
+            .func = fnc,
+            .piece = piece,
+            .children = try std.AutoHashMap(KeyChordPiece, KeyChord).init(alloc)
+        };
+    }
+
+    pub fn deinit(self: *KeyChord) void {
+        if(self.func != null) {
+            self.alloc.free(self.func.?);
+        }
+
+        self.children.deinit();
+    }
+};
+
+const ChordTree = struct {
+    alloc: std.mem.Allocator,
+    context: ?*[]const u8,
+    downKey: glfw.Key,
+    currChord: ?*KeyChord,
+    rootChord: KeyChord,
+    elapsedUsCounter: i64,
+    repeatCounter: i64,
+    
+    pub fn init(alloc: std.mem.Allocator, context: ?[]const u8) !ChordTree {
+        var ctxt = context;
+        if(ctxt != null) {
+            ctxt = alloc.dupe(u8, context.?);
+        }
+
+        return .{
+            .alloc = alloc,
+            .context = ctxt,
+            .downKey = .unknown,
+            .currChord = null,
+            .rootChord = try KeyChord.init(alloc, KeyChordPiece.from(.none, .unknown), null),
+            .elapsedUsCounter = 0,
+            .repeatCounter = 0,
+        };
+    }
+
+    pub fn deinit(self: *ChordTree) void {
+        if(self.context != null) {
+            self.alloc.free(self.context);
+        }
+
+        self.rootChord.deinit();
+    }
+
+    pub fn reset(self: *ChordTree) void {
+        self.currChord = &self.rootChord;
+        self.elapsedUsCounter = 0;
+        self.downKey = .unknown;
+    }
+};
+
+const KeyMap = struct {
+    chords: ChordTree,
+    //currentContext: ?*ChordTree,
+    // current context name?
+    //contexts: std.StringHashMap(*ChordTree),
+    alloc: std.mem.Allocator,
+
+    pub fn init(alloc: std.mem.Allocator) !KeyMap {
+        return .{
+            .chords = ChordTree.init(alloc, null),
+            .alloc = alloc,
+            .contexts = try std.StringHashMap(*ChordTree).init(alloc),
+        };
+    }
+
+    pub fn deinit(self: *KeyMap) void {
+       _ = self;
+
+    }
+
+    pub fn addKeyChord(self: *KeyMap, mods: KeyModifier, key: glfw.Key, func: []const u8, context: ?[]const u8) !bool {
+       _ = self;
+       _ = context;
+       _ = func;
+       _ = key;
+       _ = mods;
+        return false;
+    }
+
+    pub fn addTwoKeyChord(self: *KeyMap, mods: KeyModifier, key1: glfw.Key, key2: glfw.Key, func: []const u8, context: ?[]const u8) !bool {
+       _ = self;
+       _ = key2;
+       _ = context;
+       _ = func;
+       _ = key1;
+       _ = mods;
+        return false;
+    }
+
+    pub fn addComplexChord(self: *KeyMap, pkp1: KeyChordPiece, kp2: KeyChordPiece, func: []const u8, context: ?[]const u8) !bool {
+       _ = pkp1;
+       _ = self;
+       _ = context;
+       _ = func;
+       _ = kp2;
+        return false;
+    }
+
+    // pub fn printKeyMap(self: *KeyMap) void {
+    //
+    // }
+};
