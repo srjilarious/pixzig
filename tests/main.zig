@@ -4,6 +4,7 @@ const testz = @import("testz");
 
 const Tests = testz.discoverTests(.{ 
     @import("./tile_tests.zig"),
+    @import("./keymap_tests.zig"),
 });
 
 pub fn main() void {

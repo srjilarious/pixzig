@@ -247,7 +247,7 @@ pub const Mouse = struct {
 };
 
 
-const KeyModifier = enum(u8) {
+pub const KeyModifier = enum(u8) {
     none = 0x0,
     ctrl = 0x1,
     alt = 0x2,
@@ -267,7 +267,7 @@ const KeyChordPiece = struct {
     pub fn from(mod: KeyModifier, k: glfw.Key) KeyChordPiece 
     {
         const modVal = @as(u32, @intCast(@intFromEnum(mod))) << 24;
-        const keyVal = @as(u32, @intCast(k)) & 0xffffff;
+        const keyVal = @as(u32, @bitCast(@intFromEnum(k))) & 0xffffff;
         return .{
             .value = modVal | keyVal,
         };
@@ -287,20 +287,20 @@ const KeyChordPiece = struct {
 const KeyChord = struct {
     alloc: std.mem.Allocator,
     // The script func to call, can be straight lua code.
-    func: ?*[]const u8, // Change to ArrayList of context/func.
+    func: ?[]const u8, // Change to ArrayList of context/func.
     piece: KeyChordPiece,
     children: std.AutoHashMap(KeyChordPiece, KeyChord),
 
     pub fn init(alloc: std.mem.Allocator, piece: KeyChordPiece, func: ?[]const u8) !KeyChord {
-        var fnc = func;
+        var fnc: ?[]const u8 = null;
         if(fnc != null) {
-            fnc = alloc.dupe(u8, func.?);
+            fnc = try alloc.dupe(u8, func.?);
         }
         return .{
             .alloc = alloc,
             .func = fnc,
             .piece = piece,
-            .children = try std.AutoHashMap(KeyChordPiece, KeyChord).init(alloc)
+            .children = std.AutoHashMap(KeyChordPiece, KeyChord).init(alloc)
         };
     }
 
@@ -315,7 +315,7 @@ const KeyChord = struct {
 
 const ChordTree = struct {
     alloc: std.mem.Allocator,
-    context: ?*[]const u8,
+    context: ?[]const u8,
     downKey: glfw.Key,
     currChord: ?*KeyChord,
     rootChord: KeyChord,
@@ -323,9 +323,9 @@ const ChordTree = struct {
     repeatCounter: i64,
     
     pub fn init(alloc: std.mem.Allocator, context: ?[]const u8) !ChordTree {
-        var ctxt = context;
+        var ctxt: ?[]const u8 = null;
         if(ctxt != null) {
-            ctxt = alloc.dupe(u8, context.?);
+            ctxt = try alloc.dupe(u8, context.?);
         }
 
         return .{
@@ -354,7 +354,7 @@ const ChordTree = struct {
     }
 };
 
-const KeyMap = struct {
+pub const KeyMap = struct {
     chords: ChordTree,
     //currentContext: ?*ChordTree,
     // current context name?
@@ -363,9 +363,9 @@ const KeyMap = struct {
 
     pub fn init(alloc: std.mem.Allocator) !KeyMap {
         return .{
-            .chords = ChordTree.init(alloc, null),
+            .chords = try ChordTree.init(alloc, null),
             .alloc = alloc,
-            .contexts = try std.StringHashMap(*ChordTree).init(alloc),
+            // .contexts = try std.StringHashMap(*ChordTree).init(alloc),
         };
     }
 
