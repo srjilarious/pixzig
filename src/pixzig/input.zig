@@ -251,25 +251,36 @@ pub const KeyModifier = enum(u8) {
     none = 0x0,
     ctrl = 0x1,
     alt = 0x2,
+    ctrl_alt = 0x3,
     shift = 0x4,
-    meta = 0x8,
+    ctrl_shift = 0x5,
+    alt_shift = 0x6,
+    ctrl_alt_shift = 0x7,
+    super = 0x8,
+    ctrl_super = 0x9,
+    alt_super = 0xa,
+    ctrl_alt_super = 0xb,
+    shift_super = 0xc,
+    ctrl_shift_super = 0xd,
+    alt_shift_super = 0xe,
+    ctrl_alt_shift_super = 0xf
 };
 
 const DefaultChordTimeoutUs: i64 = 2e6;
 const InitialRepeatRate: i64 = 1e5;
 const DownRepeatRate: i64 = 2e4;
 
-const KeyChordPiece = struct {
+pub const KeyChordPiece = struct {
     // GLFW keys go up to 348, so we use the lower 24 bits for the key
     // and the top 8 bits for the modifiers.
     value: u32,
 
     pub fn from(mod: KeyModifier, k: glfw.Key) KeyChordPiece 
     {
-        const modVal = @as(u32, @intCast(@intFromEnum(mod))) << 24;
-        const keyVal = @as(u32, @bitCast(@intFromEnum(k))) & 0xffffff;
+        const modValue = @as(u32, @intCast(@intFromEnum(mod))) << 24;
+        const keyValue = @as(u32, @bitCast(@intFromEnum(k))) & 0xffffff;
         return .{
-            .value = modVal | keyVal,
+            .value = modValue | keyValue,
         };
     }
 
@@ -280,7 +291,59 @@ const KeyChordPiece = struct {
 
     pub fn modifier(self: *const KeyChordPiece) KeyModifier
     {
-       return @enumFromInt((self.value >> 24) & 0xff);
+       return @enumFromInt(self.modVal());
+    }
+
+    fn modVal(self: *const KeyChordPiece) u8 {
+        return @as(u8, @intCast((self.value >> 24) & 0xff));
+    }
+
+    pub fn print(self: *const KeyChordPiece) void {
+        const mod = self.modVal();
+        const k = self.key();
+        if((mod & @intFromEnum(KeyModifier.ctrl)) != 0) {
+            std.debug.print("Ctrl+", .{});
+        }
+        if((mod & @intFromEnum(KeyModifier.alt)) != 0) {
+            std.debug.print("Alt+", .{});
+        }
+        if((mod & @intFromEnum(KeyModifier.shift)) != 0) {
+            std.debug.print("Shift+", .{});
+        }
+        if((mod & @intFromEnum(KeyModifier.super)) != 0) {
+            std.debug.print("Super+", .{});
+        }
+
+        const keyNames: [111][]const u8 = .{
+            "space", "'", ",", "-", ".", "/",
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+            ";", "=", 
+            "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l",
+            "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x",
+            "y", "z", "[", "\\", "]", "`", "world_1", "world_2",
+            "escape", "enter", "tab", "backspace", "insert", "delete",
+            "right", "left", "down", "up",
+            "page_up", "page_down", "home", "end",
+            "caps_lock", "scroll_lock", "num_lock", "print_screen",
+            "pause", 
+            "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9",
+            "F10", "F11", "F12", "F13", "F14", "F15", "F16", "F17",
+            "F18", "F19", "F20", "F21", "F22", "F23", "F24", "F25",
+            "kp_0", "kp_1", "kp_2", "kp_3", "kp_4", "kp_5", "kp_6",
+            "kp_7", "kp_8", "kp_9", "kp_decimal", "kp_divide", 
+            "kp_multiply", "kp_subtract", "kp_add", "kp_enter", "kp_equal",
+        };
+
+        const kIdx = getIndexForKey(k) - 1;
+        if(kIdx < keyNames.len) {
+            std.debug.print("{s}", .{keyNames[kIdx]});
+        }
+        else {
+            std.debug.print("Unknown ({any})", .{k});
+        }
+        // inline for(0..keyNames.len) |knIdx| {
+        //     if(kIdx == )
+        // }
     }
 };
 
@@ -310,6 +373,11 @@ const KeyChord = struct {
         }
 
         self.children.deinit();
+    }
+
+    pub fn print(self: *KeyChord) void {
+       _ = self;
+
     }
 };
 

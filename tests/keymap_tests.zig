@@ -10,3 +10,8 @@ pub fn simpleChordTest() !void {
 
     _ = km.addKeyChord(.ctrl, .a, "test", null) catch unreachable;
 }
+
+pub fn printKeyChordPieceTest() !void {
+    const kp1 = input.KeyChordPiece.from(.ctrl_shift, .a);
+    kp1.print();
+}
