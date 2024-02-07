@@ -347,7 +347,7 @@ pub const KeyChordPiece = struct {
     }
 };
 
-const KeyChord = struct {
+pub const KeyChord = struct {
     alloc: std.mem.Allocator,
     // The script func to call, can be straight lua code.
     func: ?[]const u8, // Change to ArrayList of context/func.
@@ -376,8 +376,18 @@ const KeyChord = struct {
     }
 
     pub fn print(self: *KeyChord) void {
-       _ = self;
+        if(self.func != null) {
+            self.piece.print();
+            std.debug.print(": {s}\n", .{self.func.?});
+        }
 
+        var it = self.children.keyIterator();
+        while(it.next()) |k| {
+            self.piece.print();
+            std.debug.print(", ", .{});
+            k.print();
+            self.children.getPtr(k.*).?.print();
+        }
     }
 };
 
