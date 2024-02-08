@@ -298,29 +298,34 @@ pub const KeyChordPiece = struct {
         return @as(u8, @intCast((self.value >> 24) & 0xff));
     }
 
-    pub fn print(self: *const KeyChordPiece) void {
+    pub fn print(self: *const KeyChordPiece, buf: []u8) !usize {
         const mod = self.modVal();
         const k = self.key();
+        var len: usize = 0;
         if((mod & @intFromEnum(KeyModifier.ctrl)) != 0) {
-            std.debug.print("Ctrl+", .{});
+            const sl = try std.fmt.bufPrint(buf[len..], "Ctrl+", .{});
+            len += sl.len;
         }
         if((mod & @intFromEnum(KeyModifier.alt)) != 0) {
-            std.debug.print("Alt+", .{});
+            const sl = try std.fmt.bufPrint(buf[len..], "Alt+", .{});
+            len += sl.len;
         }
         if((mod & @intFromEnum(KeyModifier.shift)) != 0) {
-            std.debug.print("Shift+", .{});
+            const sl = try std.fmt.bufPrint(buf[len..], "Shift+", .{});
+            len += sl.len;
         }
         if((mod & @intFromEnum(KeyModifier.super)) != 0) {
-            std.debug.print("Super+", .{});
+            const sl = try std.fmt.bufPrint(buf[len..], "Super+", .{});
+            len += sl.len;
         }
 
         const keyNames: [111][]const u8 = .{
             "space", "'", ",", "-", ".", "/",
             "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
             ";", "=", 
-            "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l",
-            "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x",
-            "y", "z", "[", "\\", "]", "`", "world_1", "world_2",
+            "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L",
+            "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X",
+            "Y", "Z", "[", "\\", "]", "`", "world_1", "world_2",
             "escape", "enter", "tab", "backspace", "insert", "delete",
             "right", "left", "down", "up",
             "page_up", "page_down", "home", "end",
@@ -336,14 +341,18 @@ pub const KeyChordPiece = struct {
 
         const kIdx = getIndexForKey(k) - 1;
         if(kIdx < keyNames.len) {
-            std.debug.print("{s}", .{keyNames[kIdx]});
+            const sl = try std.fmt.bufPrint(buf[len..], "{s}", .{keyNames[kIdx]});
+            len += sl.len;
         }
         else {
-            std.debug.print("Unknown ({any})", .{k});
+            const sl = try std.fmt.bufPrint(buf[len..], "Unknown ({any})", .{k});
+            len += sl.len;
         }
         // inline for(0..keyNames.len) |knIdx| {
         //     if(kIdx == )
         // }
+        
+        return len;
     }
 };
 
@@ -375,19 +384,25 @@ pub const KeyChord = struct {
         self.children.deinit();
     }
 
-    pub fn print(self: *KeyChord) void {
+    pub fn print(self: *KeyChord, buff: []u8) !usize {
+        var len: usize = 0;
         if(self.func != null) {
-            self.piece.print();
-            std.debug.print(": {s}\n", .{self.func.?});
+            len = try self.piece.print(buff);
+            const sl = try std.fmt.bufPrint(buff[len..], ": {s}\n", .{self.func.?});
+            len += sl.len;
         }
 
         var it = self.children.keyIterator();
         while(it.next()) |k| {
-            self.piece.print();
-            std.debug.print(", ", .{});
-            k.print();
-            self.children.getPtr(k.*).?.print();
+            len += try self.piece.print(buff[len..]);
+            _= try std.fmt.bufPrint(buff[len..], ", ", .{});
+            len += 2;
+
+            len += try k.print(buff[len..]);
+            len += try self.children.getPtr(k.*).?.print(buff[len..]);
         }
+
+        return len;
     }
 };
 
