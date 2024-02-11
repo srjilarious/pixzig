@@ -5,23 +5,23 @@ const KeyMap = input.KeyMap;
 
 pub fn simpleChordTest() !void {
     // TODO: change to anyerror in testz.
-    var km = KeyMap.init(std.heap.page_allocator) catch unreachable;
+    var km = try KeyMap.init(std.heap.page_allocator);
     defer km.deinit();
 
-    _ = km.addKeyChord(.ctrl, .a, "test", null) catch unreachable;
+    _ = try km.addKeyChord(.ctrl, .a, "test", null);
 }
 
 pub fn printKeyChordPieceTest() !void {
     const kp1 = input.KeyChordPiece.from(.ctrl_shift, .a);
 
     var buff: [256]u8 = undefined;
-    const len = kp1.print(buff[0..]) catch unreachable;
-    std.debug.print("{s}\n", .{buff[0..len]});
+    _ = try kp1.print(buff[0..]);
+    // std.debug.print("{s}\n", .{buff[0..len]});
 
-    var kc = input.KeyChord.init(std.heap.page_allocator, kp1, "test") catch unreachable;
+    var kc = try input.KeyChord.init(std.heap.page_allocator, kp1, "test");
     const kp2 = input.KeyChordPiece.from(.alt, .p);
-    const kc2 = input.KeyChord.init(std.heap.page_allocator, kp2, "another") catch unreachable;
-    kc.children.put(kp2, kc2) catch unreachable;
-    const len2 = kc.print(buff[0..]) catch unreachable;
-    std.debug.print("\n{s}\n", .{buff[0..len2]});
+    const kc2 = try input.KeyChord.init(std.heap.page_allocator, kp2, "another");
+    try kc.children.put(kp2, kc2);
+    _ = try kc.print(buff[0..]);
+    // std.debug.print("\n{s}\n", .{buff[0..len2]});
 }
