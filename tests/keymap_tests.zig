@@ -15,13 +15,13 @@ pub fn printKeyChordPieceTest() !void {
     const kp1 = input.KeyChordPiece.from(.ctrl_shift, .a);
 
     var buff: [256]u8 = undefined;
-    _ = try kp1.print(buff[0..]);
-    // std.debug.print("{s}\n", .{buff[0..len]});
+    const len1 = try kp1.print(buff[0..]);
+    try testz.expectTrue(std.mem.eql(u8, buff[0..len1], "Ctrl+Shift+A"));
 
     var kc = try input.KeyChord.init(std.heap.page_allocator, kp1, "test");
     const kp2 = input.KeyChordPiece.from(.alt, .p);
     const kc2 = try input.KeyChord.init(std.heap.page_allocator, kp2, "another");
     try kc.children.put(kp2, kc2);
-    _ = try kc.print(buff[0..]);
-    // std.debug.print("\n{s}\n", .{buff[0..len2]});
+    const len2 = try kc.print(buff[0..]);
+    try testz.expectTrue(std.mem.eql(u8, buff[0..len2], "Ctrl+Shift+A, Alt+P"));
 }
