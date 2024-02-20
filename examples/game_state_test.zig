@@ -2,7 +2,7 @@
 const std = @import("std");
 const zgui = @import("zgui");
 const glfw = @import("zglfw");
-const gl = @import("zopengl");
+const gl = @import("zopengl").bindings;
 const stbi = @import ("zstbi");
 const pixzig = @import("pixzig");
 const RectF = pixzig.common.RectF;

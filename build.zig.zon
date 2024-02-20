@@ -1,22 +1,40 @@
 .{
-  .name = "pixzig",
-  .version = "0.1.0",
-  .paths = .{"src"},
-  .dependencies = .{
-    .testz = .{
-      .url = "https://github.com/srjilarious/testz/archive/e6609f0.tar.gz",
-      .hash = "122066ef70c186f9cd2129ef08734b442ad6461e0f260a1a8ed2f2a6a01ef6ed6409"
-      //.path = "../testz",
+    .name = "pixzig",
+    .version = "0.1.0",
+    .paths = .{"src"},
+    .dependencies = .{
+        .testz = .{
+            .url = "https://github.com/srjilarious/testz/archive/49528d2.tar.gz",
+            .hash = "12200811a46177bab3a72c34cd184d715133751a1c2b447caf61f7f6652e552f3dcb",
+            //.path = "../testz",
+        },
+        .mach_freetype = .{
+            .url = "https://github.com/hexops/mach-freetype/archive/dc4a5d8.tar.gz",
+            .hash = "122070070dd2c402d94c279d64d4a4d154691ad49f46fa2c24ed7c6e4e4f5c531477",
+        },
+        .ziglua = .{
+            // Use a tagged release of Ziglua tracking a stable Zig release
+            .url = "https://github.com/natecraddock/ziglua/archive/0f0f489.tar.gz",
+            .hash = "1220dbbecca0fe5811ea4da61cbc29868ddc34469c0817ea6f73a7e57d637288c2fe",
+            // .path = "libs/ziglua",
+            //.hash = ""
+        },
+        .zopengl = .{ .path = "libs/zig-gamedev/libs/zopengl" },
+        .zmath = .{ .path = "libs/zig-gamedev/libs/zmath" },
+        .zglfw = .{ .path = "libs/zig-gamedev/libs/zglfw" },
+        // .zpool = .{ .path = "libs/zpool" },
+        // .zjobs = .{ .path = "libs/zjobs" },
+        // .zmesh = .{ .path = "libs/zmesh" },
+        // .znoise = .{ .path = "libs/znoise" },
+        .zstbi = .{ .path = "libs/zig-gamedev/libs/zstbi" },
+        .common = .{ .path = "libs/zig-gamedev/libs/common" },
+        // .zbullet = .{ .path = "libs/zbullet" },
+        .zgui = .{ .path = "libs/zig-gamedev/libs/zgui" },
+        .zgpu = .{ .path = "libs/zig-gamedev/libs/zgpu" },
+        // .ztracy = .{ .path = "libs/ztracy" },
+        // .zphysics = .{ .path = "libs/zphysics" },
+        .zaudio = .{ .path = "libs/zig-gamedev/libs/zaudio" },
+        .zflecs = .{ .path = "libs/zig-gamedev/libs/zflecs" },
+        .system_sdk = .{ .path = "libs/zig-gamedev/libs/system-sdk" },
     },
-    .mach_freetype = .{
-      .url = "https://github.com/hexops/mach-freetype/archive/a491465.tar.gz",
-      .hash = "122005e6f87cbd05262be65156ed662e1fe824ebf0150625a153bae2798d4be7a322"
-    },
-    .ziglua = .{
-          // Use a tagged release of Ziglua tracking a stable Zig release
-          //.url = "https://github.com/natecraddock/ziglua/archive/refs/tags/0.2.0.tar.gz",
-          .path = "libs/ziglua",
-          //.hash = ""
-      },
-  }  
 }

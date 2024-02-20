@@ -1,5 +1,5 @@
 const std = @import("std");
-const gl = @import("zopengl");
+const gl = @import("zopengl").bindings;
 const glfw = @import("zglfw");
 // const sdl = @import("zsdl");
 const stbi = @import("zstbi");

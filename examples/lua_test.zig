@@ -26,7 +26,7 @@ pub fn main() anyerror!void {
     defer _ = gpa.deinit();
 
     // Initialize the Lua vm
-    var script = try scripting.ScriptEngine.init(allocator);
+    var script = try scripting.ScriptEngine.init(&allocator);
     defer script.deinit();
 
     try script.registerFunc("test", myFunc);

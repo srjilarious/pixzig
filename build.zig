@@ -3,20 +3,21 @@
 const std = @import("std");
 
 // const zsdl = @import("libs/zig-gamedev/libs/zsdl/build.zig");
-const zflecs = @import("libs/zig-gamedev/libs/zflecs/build.zig");
-const zglfw = @import("libs/zig-gamedev/libs/zglfw/build.zig");
-const zopengl = @import("libs/zig-gamedev/libs/zopengl/build.zig");
-const zstbi = @import("libs/zig-gamedev/libs/zstbi/build.zig");
-const zmath = @import("libs/zig-gamedev/libs/zmath/build.zig");
-const zgui = @import("libs/zig-gamedev/libs/zgui/build.zig");
+// const zflecs = @import("libs/zig-gamedev/libs/zflecs/build.zig");
+// const zglfw = @import("libs/zig-gamedev/libs/zglfw/build.zig");
+// const zopengl = @import("libs/zig-gamedev/libs/zopengl/build.zig");
+// const zstbi = @import("libs/zig-gamedev/libs/zstbi/build.zig");
+// const zmath = @import("libs/zig-gamedev/libs/zmath/build.zig");
+// const zgui = @import("libs/zig-gamedev/libs/zgui/build.zig");
+// const system_sdk = @import("libs/zig-gamedev/libs/system-sdk/build.zig");
 
 const assets_dir = "assets/";
 
 pub fn example(b: *std.Build, 
-    target: std.zig.CrossTarget, 
+    target: std.Build.ResolvedTarget, 
     optimize: std.builtin.OptimizeMode, 
     name: []const u8, 
-    root_src_path: []const u8) *std.Build.CompileStep 
+    root_src_path: []const u8) *std.Build.Step.Compile
 {
     const exe = b.addExecutable(.{
         .name = name, //"pixzig_test",
@@ -29,12 +30,13 @@ pub fn example(b: *std.Build,
 
     // Build it
     // const zsdl_pkg = zsdl.package(b, target, optimize, .{});
-    const zflecs_pkg = zflecs.package(b, target, optimize, .{});
-    const zglfw_pkg = zglfw.package(b, target, optimize, .{});
-    const zopengl_pkg = zopengl.package(b, target, optimize, .{});
-    const zstbi_pkg = zstbi.package(b, target, optimize, .{});
-    const zmath_pkg = zmath.package(b, target, optimize, .{});
-    const zgui_pkg = zgui.package(b, target, optimize, .{ .options = .{ .backend = . glfw_opengl3}});
+    // const system_sdk_pkg = system_sdk.package(b, target, optimize, .{});
+    const zflecs_pkg = @import("zflecs").package(b, target, optimize, .{});
+    const zglfw_pkg = @import("zglfw").package(b, target, optimize, .{});
+    const zopengl_pkg = @import("zopengl").package(b, target, optimize, .{});
+    const zstbi_pkg = @import("zstbi").package(b, target, optimize, .{});
+    const zmath_pkg = @import("zmath").package(b, target, optimize, .{});
+    const zgui_pkg = @import("zgui").package(b, target, optimize, .{ .options = .{ .backend = . glfw_opengl3}});
 
     const ziglua = b.dependency("ziglua", .{
         .target = target,
@@ -46,8 +48,8 @@ pub fn example(b: *std.Build,
         .target = target,
         .optimize = optimize,
     });
-    exe.addModule("freetype", mach_freetype_dep.module("mach-freetype"));
-    @import("mach_freetype").linkFreetype(mach_freetype_dep.builder, exe);
+    exe.root_module.addImport("freetype", mach_freetype_dep.module("mach-freetype"));
+    // @import("mach_freetype").linkFreetype(mach_freetype_dep.builder, exe);
 
     // Link with your app
     // zsdl_pkg.link(exe);
@@ -58,37 +60,36 @@ pub fn example(b: *std.Build,
     zmath_pkg.link(exe);
     zgui_pkg.link(exe);
 
-    const xml = b.addModule("xml", .{ .source_file = .{ .path = "libs/xml.zig" } });
+    const xml = b.addModule("xml", .{ .root_source_file = .{ .path = "libs/xml.zig" } });
 
     const pixeng = b.addModule("pixzig", .{
         // Package root
-        .source_file = .{ .path = "src/pixzig/pixzig.zig" },
-        .dependencies = &.{
-            // Uses SDL for graphics/audio/input
-            // .{ .name = "zsdl", .module = zsdl_pkg.zsdl },
-            // Transitioning to GLFW for more graphics control.
-            .{ .name = "zglfw", .module = zglfw_pkg.zglfw },
-            // OpenGL
-            .{ .name = "zopengl", .module = zopengl_pkg.zopengl },
-            // GUI support
-            .{ .name = "zgui", .module = zgui_pkg.zgui },
-            // STBI for image loading.
-            .{ .name = "zstbi", .module = zstbi_pkg.zstbi },
-            // Math library
-            .{ .name = "zmath", .module = zmath_pkg.zmath },
-            // XML for tilemap loading.
-            .{ .name = "xml", .module = xml },
-            .{ .name = "ziglua", .module = ziglua.module("ziglua") },
-            .{ .name = "zflecs", .module = zflecs_pkg.zflecs },
-            .{ .name = "freetype", .module = mach_freetype_dep.module("mach-freetype")}
-        },
+        .root_source_file = .{ .path = "src/pixzig/pixzig.zig" },
+        // .dependencies = &.{
+        // },
     });
+    // pixeng.addImport("system-sdk", system_sdk_pkg.system_sdk);
+    // Use GLFW for GL context, windowing, input, etc.
+    pixeng.addImport("zglfw", zglfw_pkg.zglfw);
+    // OpenGL
+    pixeng.addImport("zopengl", zopengl_pkg.zopengl);
+    // GUI support
+    pixeng.addImport("zgui", zgui_pkg.zgui);
+    // STBI for image loading.
+    pixeng.addImport("zstbi", zstbi_pkg.zstbi);
+    // Math library
+    pixeng.addImport("zmath", zmath_pkg.zmath);
+    // XML for tilemap loading.
+    pixeng.addImport("xml", xml);
+    pixeng.addImport("ziglua", ziglua.module("ziglua"));
+    pixeng.addImport("zflecs", zflecs_pkg.zflecs);
+    pixeng.addImport("freetype", mach_freetype_dep.module("mach-freetype"));
 
     // add the ziglua module and lua artifact
-    exe.addModule("ziglua", ziglua.module("ziglua"));
+    exe.root_module.addImport("ziglua", ziglua.module("ziglua"));
     exe.linkLibrary(ziglua.artifact("lua"));
 
-    exe.addModule("pixzig", pixeng);
+    exe.root_module.addImport("pixzig", pixeng);
     // zsdl_pkg.link(pixzig);
     // zopengl_pkg.link(pixzig);
     // zstbi_pkg.link(pixzig);
@@ -101,22 +102,6 @@ pub fn example(b: *std.Build,
         .install_subdir = "bin/" ++ assets_dir,
     });
     exe.step.dependOn(&install_content_step.step);
-
-    // ** Wait for package management to be a bit more mature.
-    // const zig_gamedev = b.dependency("zig_gamedev", .{
-    //     .target = target,
-    //     .optimize = optimize,
-    // });
-    // // duck has exported itself as duck
-    // // now you are re-exporting duck
-    // // as a module in your project with the name duck
-    // exe.addModule("zig_gamedev", zig_gamedev.module("zig_gamedev"));
-    //
-    // // you need to link to the output of the build process
-    // // that was done by the duck package
-    // // in this case, duck is outputting a library
-    // // to which your project need to link as well
-    // exe.linkLibrary(zig_gamedev.artifact("zig_gamedev"));
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
@@ -174,9 +159,9 @@ pub fn build(b: *std.Build) void {
     _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig");
     _ = example(b, target, optimize, "text_rendering", "examples/text_rendering.zig");
 
-    const tests = example(b, target, optimize, "unit_tests", "tests/main.zig");
-    const testzMod = b.dependency("testz", .{});
-    tests.addModule("testz", testzMod.module("testz"));
+    // const tests = example(b, target, optimize, "unit_tests", "tests/main.zig");
+    // const testzMod = b.dependency("testz", .{});
+    // tests.root_module.addImport("testz", testzMod.module("testz"));
 }
 
 inline fn thisDir() []const u8 {

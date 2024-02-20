@@ -4,7 +4,6 @@ const input = @import("pixzig").input;
 const KeyMap = input.KeyMap;
 
 pub fn simpleChordTest() !void {
-    // TODO: change to anyerror in testz.
     var km = try KeyMap.init(std.heap.page_allocator);
     defer km.deinit();
 

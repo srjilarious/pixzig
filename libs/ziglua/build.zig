@@ -23,7 +23,7 @@ pub fn build(b: *Build) void {
 
     // Zig module
     const ziglua = b.addModule("ziglua", .{
-        .source_file = switch (lua_version) {
+        .root_source_file = switch (lua_version) {
             .lua_51 => .{ .path = "src/ziglua-5.1/lib.zig" },
             .lua_52 => .{ .path = "src/ziglua-5.2/lib.zig" },
             .lua_53 => .{ .path = "src/ziglua-5.3/lib.zig" },
@@ -70,7 +70,7 @@ pub fn build(b: *Build) void {
             .target = target,
             .optimize = optimize,
         });
-        exe.addModule("ziglua", ziglua);
+        exe.root_module.addImport("ziglua", ziglua);
         exe.linkLibrary(lib);
 
         const artifact = b.addInstallArtifact(exe, .{});

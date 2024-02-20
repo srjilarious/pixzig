@@ -4,7 +4,7 @@ const sdl = @import("zsdl");
 const glfw = @import("zglfw");
 const stbi = @import("zstbi");
 
-const gl = @import("zopengl");
+const zopengl = @import("zopengl");
 
 const zgui = @import("zgui");
 
@@ -105,7 +105,7 @@ pub const PixzigEngine = struct {
         glfw.makeContextCurrent(window);
         glfw.swapInterval(1);
 
-        try gl.loadCoreProfile(glfw.getProcAddress, gl_major, gl_minor);
+        try zopengl.loadCoreProfile(glfw.getProcAddress, gl_major, gl_minor);
         
         const scale_factor = scale_factor: {
             const scale = window.getContentScale();

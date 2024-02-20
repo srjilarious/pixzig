@@ -2,7 +2,7 @@
 const std = @import("std");
 const zgui = @import("zgui");
 const glfw = @import("zglfw");
-const gl = @import("zopengl");
+const gl = @import("zopengl").bindings;
 const stbi = @import ("zstbi");
 const zmath = @import("zmath"); 
 const flecs = @import("zflecs"); 
@@ -39,10 +39,10 @@ pub const App = struct {
     projMat: zmath.Mat,
     scrollOffset: Vec2F,
     spriteBatch: pixzig.renderer.SpriteBatchQueue,
-    shapeBatch: pixzig.renderer.ShapeBatchQueue,
     tex: *pixzig.Texture,
     texShader: pixzig.shaders.Shader,
     colorShader: pixzig.shaders.Shader,
+    shapeBatch: pixzig.renderer.ShapeBatchQueue,
     fps: FpsCounter,
     paused: bool,
     world: *flecs.world_t,

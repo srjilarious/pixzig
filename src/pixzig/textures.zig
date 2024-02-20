@@ -1,7 +1,7 @@
 // zig fmt: off
 const std = @import("std");
 const stbi = @import("zstbi");
-const gl = @import("zopengl");
+const gl = @import("zopengl").bindings;
 const common = @import("./common.zig");
 
 const Vec2U = common.Vec2U;
