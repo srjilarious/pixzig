@@ -4,18 +4,18 @@
     .paths = .{"src"},
     .dependencies = .{
         .testz = .{
-            .url = "https://github.com/srjilarious/testz/archive/49528d2.tar.gz",
-            .hash = "12200811a46177bab3a72c34cd184d715133751a1c2b447caf61f7f6652e552f3dcb",
-            //.path = "../testz",
+            // .url = "https://github.com/srjilarious/testz/archive/49528d2.tar.gz",
+            // .hash = "12200811a46177bab3a72c34cd184d715133751a1c2b447caf61f7f6652e552f3dcb",
+            .path = "../testz",
         },
-        .mach_freetype = .{
-            .url = "https://github.com/hexops/mach-freetype/archive/dc4a5d8.tar.gz",
-            .hash = "122070070dd2c402d94c279d64d4a4d154691ad49f46fa2c24ed7c6e4e4f5c531477",
-        },
+        // .mach_freetype = .{
+        //     .url = "https://github.com/hexops/mach-freetype/archive/309be0c.tar.gz",
+        //     .hash = "1220fcebb0b1a4561f9d116182e30d0a91d2a556dad8564c8f425fd729556dedc7cf",
+        // },
         .ziglua = .{
             // Use a tagged release of Ziglua tracking a stable Zig release
-            .url = "https://github.com/natecraddock/ziglua/archive/0f0f489.tar.gz",
-            .hash = "1220dbbecca0fe5811ea4da61cbc29868ddc34469c0817ea6f73a7e57d637288c2fe",
+            .url = "https://github.com/natecraddock/ziglua/archive/486f51d.tar.gz",
+            .hash = "12208603e0f51fa6ce7201d8e851c5979b6b78887434623ac87a0f2a5a3dd3e75130",
             // .path = "libs/ziglua",
             //.hash = ""
         },

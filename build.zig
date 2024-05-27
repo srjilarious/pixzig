@@ -29,14 +29,18 @@ pub fn example(b: *std.Build,
     });
 
     // Build it
-    // const zsdl_pkg = zsdl.package(b, target, optimize, .{});
     // const system_sdk_pkg = system_sdk.package(b, target, optimize, .{});
-    const zflecs_pkg = @import("zflecs").package(b, target, optimize, .{});
-    const zglfw_pkg = @import("zglfw").package(b, target, optimize, .{});
-    const zopengl_pkg = @import("zopengl").package(b, target, optimize, .{});
-    const zstbi_pkg = @import("zstbi").package(b, target, optimize, .{});
-    const zmath_pkg = @import("zmath").package(b, target, optimize, .{});
-    const zgui_pkg = @import("zgui").package(b, target, optimize, .{ .options = .{ .backend = . glfw_opengl3}});
+    const zglfw = b.dependency("zglfw", .{ .target = target });
+    const zflecs = b.dependency("zflecs", .{ .target = target });
+    const zopengl = b.dependency("zopengl", .{ .target = target });
+    const zstbi = b.dependency("zstbi", .{ .target = target });
+    const zmath = b.dependency("zmath", .{ .target = target });
+    const zgui = b.dependency("zgui", .{ 
+        .target = target,
+        .backend = .glfw_opengl3,
+        // .shared = false,
+        // .with_implot = true,
+    });
 
     const ziglua = b.dependency("ziglua", .{
         .target = target,
@@ -44,22 +48,18 @@ pub fn example(b: *std.Build,
     });
 
     // Use mach-freetype
-    const mach_freetype_dep = b.dependency("mach_freetype", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    exe.root_module.addImport("freetype", mach_freetype_dep.module("mach-freetype"));
-    // @import("mach_freetype").linkFreetype(mach_freetype_dep.builder, exe);
+    // const mach_freetype_dep = b.dependency("mach_freetype", .{
+    //     .target = target,
+    //     .optimize = optimize,
+    // });
+    // exe.root_module.addImport("freetype", mach_freetype_dep.module("mach_freetype"));
 
     // Link with your app
-    // zsdl_pkg.link(exe);
-    zflecs_pkg.link(exe);
-    zglfw_pkg.link(exe);
-    zopengl_pkg.link(exe);
-    zstbi_pkg.link(exe);
-    zmath_pkg.link(exe);
-    zgui_pkg.link(exe);
-
+    exe.linkLibrary(zflecs.artifact("flecs"));
+    exe.linkLibrary(zglfw.artifact("glfw"));
+    exe.linkLibrary(zgui.artifact("imgui"));
+    exe.linkLibrary(zstbi.artifact("zstbi"));
+    
     const xml = b.addModule("xml", .{ .root_source_file = .{ .path = "libs/xml.zig" } });
 
     const pixeng = b.addModule("pixzig", .{
@@ -70,20 +70,27 @@ pub fn example(b: *std.Build,
     });
     // pixeng.addImport("system-sdk", system_sdk_pkg.system_sdk);
     // Use GLFW for GL context, windowing, input, etc.
-    pixeng.addImport("zglfw", zglfw_pkg.zglfw);
+    exe.root_module.addImport("zglfw", zglfw.module("root"));
+    pixeng.addImport("zglfw", zglfw.module("root"));
     // OpenGL
-    pixeng.addImport("zopengl", zopengl_pkg.zopengl);
+    exe.root_module.addImport("zopengl", zopengl.module("root"));
+    pixeng.addImport("zopengl", zopengl.module("root"));
     // GUI support
-    pixeng.addImport("zgui", zgui_pkg.zgui);
+    exe.root_module.addImport("zgui", zgui.module("root"));
+    pixeng.addImport("zgui", zgui.module("root"));
     // STBI for image loading.
-    pixeng.addImport("zstbi", zstbi_pkg.zstbi);
+    pixeng.addImport("zstbi", zstbi.module("root"));
     // Math library
-    pixeng.addImport("zmath", zmath_pkg.zmath);
+    exe.root_module.addImport("zmath", zmath.module("root"));
+    pixeng.addImport("zmath", zmath.module("root"));
+    // ECS library.
+    exe.root_module.addImport("zflecs", zflecs.module("root"));
+    pixeng.addImport("zflecs", zflecs.module("root"));
     // XML for tilemap loading.
     pixeng.addImport("xml", xml);
+    exe.root_module.addImport("ziglua", ziglua.module("ziglua"));
     pixeng.addImport("ziglua", ziglua.module("ziglua"));
-    pixeng.addImport("zflecs", zflecs_pkg.zflecs);
-    pixeng.addImport("freetype", mach_freetype_dep.module("mach-freetype"));
+    // pixeng.addImport("freetype", mach_freetype_dep.module("mach_freetype"));
 
     // add the ziglua module and lua artifact
     exe.root_module.addImport("ziglua", ziglua.module("ziglua"));
@@ -157,7 +164,7 @@ pub fn build(b: *std.Build) void {
     _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
     _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig");
     _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig");
-    _ = example(b, target, optimize, "text_rendering", "examples/text_rendering.zig");
+    // _ = example(b, target, optimize, "text_rendering", "examples/text_rendering.zig");
 
     // const tests = example(b, target, optimize, "unit_tests", "tests/main.zig");
     // const testzMod = b.dependency("testz", .{});

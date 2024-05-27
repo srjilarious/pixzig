@@ -144,7 +144,7 @@ pub const App = struct {
 
         var prng = std.rand.DefaultPrng.init(blk: {
             var seed: u64 = undefined;
-            std.os.getrandom(std.mem.asBytes(&seed)) catch unreachable;
+            std.posix.getrandom(std.mem.asBytes(&seed)) catch unreachable;
             break :blk seed;
         });
         

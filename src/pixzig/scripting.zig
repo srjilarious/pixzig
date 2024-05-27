@@ -5,7 +5,7 @@ const Lua = ziglua.Lua;
 
 const LuaFunc = fn (*Lua) i32;
 pub const ScriptEngine = struct {
-    lua: Lua,
+    lua: *Lua,
 
     pub fn init(allocator: *const std.mem.Allocator) !ScriptEngine {
         var lua = try Lua.init(allocator);
