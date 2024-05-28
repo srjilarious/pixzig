@@ -3,7 +3,7 @@ const std = @import("std");
 const stbi = @import("zstbi");
 const gl = @import("zopengl").bindings;
 const zmath = @import("zmath");
-// const freetype = @import("freetype");
+const freetype = @import("freetype");
 
 const common = @import("./common.zig");
 const textures = @import("./textures.zig");
@@ -483,159 +483,159 @@ pub const Character = struct {
 };
 
 
-// pub const TextRenderer = struct {
-//     characters: std.AutoHashMap(u32, Character),
-//     tex: Texture,
-//     spriteBatch: SpriteBatchQueue,
-//     maxY: i32,
-//     texShader: Shader,
-//     alloc: std.mem.Allocator,
-//
-//     pub fn init(fontFace: [:0]const u8, alloc: std.mem.Allocator) !TextRenderer {
-//         var chars = std.AutoHashMap(u32, Character).init(alloc);
-//         var texShader = try shaders.Shader.init(
-//             &shaders.TexVertexShader,
-//             &TextPixelShader
-//         );
-//
-//         const spriteBatch = try SpriteBatchQueue.init(alloc, &texShader);
-//
-//         // Test font loading.
-//         const lib = try freetype.Library.init();
-//         defer lib.deinit();
-//
-//         const face = try lib.createFace(fontFace, 0);
-//         try face.setCharSize(60 * 48, 0, 50, 0);
-//         // Generate a buffer for multiple glyphs
-//         const GlyphBufferWidth = 512;
-//         const GlyphBufferHeight = 512;
-//         var glyphBuffer = try alloc.alloc(u8, GlyphBufferWidth*GlyphBufferHeight);
-//         defer alloc.free(glyphBuffer);
-//
-//         var currY: usize = 0;
-//         var currLineMaxY: usize = 0;
-//         var currLineX: usize = 0;
-//         var maxY: i32 = 0;
-//
-//         for(0x20..128) |c| {
-//             
-//             try face.loadChar(@intCast(c), .{ .render = true });
-//             const glyph = face.glyph();
-//             const bitmap = glyph.bitmap();
-//             const bw = bitmap.width();
-//             const bh = bitmap.rows();
-//
-//             if(bitmap.buffer() == null) {
-//                 //std.debug.print("Skipping char {}\n", .{c});
-//                 continue;
-//             }
-//             const buffer = bitmap.buffer().?;
-//
-//             // Check to move glyph to next line
-//             if(currLineX + bw > GlyphBufferWidth) {
-//                 currLineX = 0;
-//                 currY += currLineMaxY;
-//                 currLineMaxY = 0;
-//             }
-//
-//             for(0..bh) |y| {
-//                 for(0..bw) |x| {
-//                     glyphBuffer[(currY+y)*GlyphBufferWidth+currLineX+x] = buffer[y*bw+x];
-//                 }
-//             }
-//
-//             try chars.put(@intCast(c), .{
-//                 .coords = RectF.fromCoords(
-//                     @intCast(currLineX), 
-//                     @intCast(currY), 
-//                     @intCast(bw), 
-//                     @intCast(bh), 
-//                     GlyphBufferWidth, GlyphBufferHeight),
-//                 .size = .{ .x = @intCast(bw), .y = @intCast(bh) },
-//                 .bearing = .{ .x = glyph.bitmapLeft(), .y = glyph.bitmapTop() },
-//                 .advance = @intCast(glyph.advance().x)
-//             });
-//
-//             if(bitmap.rows() > currLineMaxY) {
-//                 currLineMaxY = bitmap.rows();
-//             }
-//
-//             maxY = @max(glyph.bitmapTop(), maxY);
-//
-//             currLineX += bitmap.width();
-//         }
-//
-//         // generate texture
-//         var charTex: c_uint = undefined;
-//         gl.genTextures(1, &charTex);
-//         gl.bindTexture(gl.TEXTURE_2D, charTex);
-//         gl.texImage2D(
-//             gl.TEXTURE_2D,
-//             0,
-//             gl.RED,
-//             @intCast(GlyphBufferWidth),
-//             @intCast(GlyphBufferHeight),
-//             0,
-//             gl.RED,
-//             gl.UNSIGNED_BYTE,
-//             @ptrCast(glyphBuffer)
-//         );
-//
-//         return .{ 
-//             .alloc = alloc,
-//             .characters = chars,
-//             .spriteBatch = spriteBatch,
-//             .tex = .{ 
-//                 .texture = charTex, 
-//                 .size = .{ 
-//                     .x = @intCast(GlyphBufferWidth), 
-//                     .y = @intCast(GlyphBufferHeight)
-//                 },
-//                 .name = null
-//             },
-//             .texShader = texShader,
-//             .maxY = maxY,
-//         };
-//
-//     }
-//
-//     pub fn deinit(self: *TextRenderer) void {
-//         self.characters.deinit();
-//     }
-//
-//     pub fn drawString(self: *TextRenderer, text: []const u8, pos: Vec2I) Vec2I {
-//         var currX: i32 = pos.x;
-//
-//         const posY = pos.y + self.maxY;
-//
-//         var drawSize: Vec2I = .{ .x = 0, .y = 0 };
-//         for(text) |c| {
-//             const charDataPtr = self.characters.get(@intCast(c));
-//             if(charDataPtr == null) continue;
-//
-//             const charData = charDataPtr.?;
-//
-//             self.spriteBatch.drawSprite(
-//                 &self.tex, 
-//                 RectF.fromPosSize(currX, posY - charData.bearing.y, charData.size.x, charData.size.y), 
-//                 charData.coords);
-//             const adv: i32 = @intCast(charData.advance/64);
-//             currX += adv;
-//             drawSize.x += adv;
-//             drawSize.y = @max(drawSize.y, charData.size.y);
-//         }
-//
-//         return drawSize;
-//     }
-//
-// };
+pub const TextRenderer = struct {
+    characters: std.AutoHashMap(u32, Character),
+    tex: Texture,
+    spriteBatch: SpriteBatchQueue,
+    maxY: i32,
+    texShader: Shader,
+    alloc: std.mem.Allocator,
+
+    pub fn init(fontFace: [:0]const u8, alloc: std.mem.Allocator) !TextRenderer {
+        var chars = std.AutoHashMap(u32, Character).init(alloc);
+        var texShader = try shaders.Shader.init(
+            &shaders.TexVertexShader,
+            &TextPixelShader
+        );
+
+        const spriteBatch = try SpriteBatchQueue.init(alloc, &texShader);
+
+        // Test font loading.
+        const lib = try freetype.Library.init();
+        defer lib.deinit();
+
+        const face = try lib.createFace(fontFace, 0);
+        try face.setCharSize(60 * 48, 0, 50, 0);
+        // Generate a buffer for multiple glyphs
+        const GlyphBufferWidth = 512;
+        const GlyphBufferHeight = 512;
+        var glyphBuffer = try alloc.alloc(u8, GlyphBufferWidth*GlyphBufferHeight);
+        defer alloc.free(glyphBuffer);
+
+        var currY: usize = 0;
+        var currLineMaxY: usize = 0;
+        var currLineX: usize = 0;
+        var maxY: i32 = 0;
+
+        for(0x20..128) |c| {
+            
+            try face.loadChar(@intCast(c), .{ .render = true });
+            const glyph = face.glyph();
+            const bitmap = glyph.bitmap();
+            const bw = bitmap.width();
+            const bh = bitmap.rows();
+
+            if(bitmap.buffer() == null) {
+                //std.debug.print("Skipping char {}\n", .{c});
+                continue;
+            }
+            const buffer = bitmap.buffer().?;
+
+            // Check to move glyph to next line
+            if(currLineX + bw > GlyphBufferWidth) {
+                currLineX = 0;
+                currY += currLineMaxY;
+                currLineMaxY = 0;
+            }
+
+            for(0..bh) |y| {
+                for(0..bw) |x| {
+                    glyphBuffer[(currY+y)*GlyphBufferWidth+currLineX+x] = buffer[y*bw+x];
+                }
+            }
+
+            try chars.put(@intCast(c), .{
+                .coords = RectF.fromCoords(
+                    @intCast(currLineX), 
+                    @intCast(currY), 
+                    @intCast(bw), 
+                    @intCast(bh), 
+                    GlyphBufferWidth, GlyphBufferHeight),
+                .size = .{ .x = @intCast(bw), .y = @intCast(bh) },
+                .bearing = .{ .x = glyph.bitmapLeft(), .y = glyph.bitmapTop() },
+                .advance = @intCast(glyph.advance().x)
+            });
+
+            if(bitmap.rows() > currLineMaxY) {
+                currLineMaxY = bitmap.rows();
+            }
+
+            maxY = @max(glyph.bitmapTop(), maxY);
+
+            currLineX += bitmap.width();
+        }
+
+        // generate texture
+        var charTex: c_uint = undefined;
+        gl.genTextures(1, &charTex);
+        gl.bindTexture(gl.TEXTURE_2D, charTex);
+        gl.texImage2D(
+            gl.TEXTURE_2D,
+            0,
+            gl.RED,
+            @intCast(GlyphBufferWidth),
+            @intCast(GlyphBufferHeight),
+            0,
+            gl.RED,
+            gl.UNSIGNED_BYTE,
+            @ptrCast(glyphBuffer)
+        );
+
+        return .{ 
+            .alloc = alloc,
+            .characters = chars,
+            .spriteBatch = spriteBatch,
+            .tex = .{ 
+                .texture = charTex, 
+                .size = .{ 
+                    .x = @intCast(GlyphBufferWidth), 
+                    .y = @intCast(GlyphBufferHeight)
+                },
+                .name = null
+            },
+            .texShader = texShader,
+            .maxY = maxY,
+        };
+
+    }
+
+    pub fn deinit(self: *TextRenderer) void {
+        self.characters.deinit();
+    }
+
+    pub fn drawString(self: *TextRenderer, text: []const u8, pos: Vec2I) Vec2I {
+        var currX: i32 = pos.x;
+
+        const posY = pos.y + self.maxY;
+
+        var drawSize: Vec2I = .{ .x = 0, .y = 0 };
+        for(text) |c| {
+            const charDataPtr = self.characters.get(@intCast(c));
+            if(charDataPtr == null) continue;
+
+            const charData = charDataPtr.?;
+
+            self.spriteBatch.drawSprite(
+                &self.tex, 
+                RectF.fromPosSize(currX, posY - charData.bearing.y, charData.size.x, charData.size.y), 
+                charData.coords);
+            const adv: i32 = @intCast(charData.advance/64);
+            currX += adv;
+            drawSize.x += adv;
+            drawSize.y = @max(drawSize.y, charData.size.y);
+        }
+
+        return drawSize;
+    }
+
+};
 
 pub fn Renderer(NumExpectedTextures: usize) type {
 
     return struct {
         batches: [NumExpectedTextures]SpriteBatchQueue,
         shapes: ShapeBatchQueue,
-        // text: TextRenderer,
+        text: TextRenderer,
 
         // pub fn init(alloc: std.mem.Allocator) @This() {
         //     

@@ -8,10 +8,9 @@
             // .hash = "12200811a46177bab3a72c34cd184d715133751a1c2b447caf61f7f6652e552f3dcb",
             .path = "../testz",
         },
-        // .mach_freetype = .{
-        //     .url = "https://github.com/hexops/mach-freetype/archive/309be0c.tar.gz",
-        //     .hash = "1220fcebb0b1a4561f9d116182e30d0a91d2a556dad8564c8f425fd729556dedc7cf",
-        // },
+        .mach_freetype = .{
+            .path = "libs/mach-freetype",
+        },
         .ziglua = .{
             // Use a tagged release of Ziglua tracking a stable Zig release
             .url = "https://github.com/natecraddock/ziglua/archive/486f51d.tar.gz",
