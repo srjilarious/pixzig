@@ -41,4 +41,8 @@ pub const ScriptEngine = struct {
             self.lua.pop(1);
         };
     }
+
+    pub fn runScript(self: *ScriptEngine, file: [:0]const u8) !void {
+        try self.lua.doFile(file);
+    }
 };

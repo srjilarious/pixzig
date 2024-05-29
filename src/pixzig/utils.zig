@@ -34,3 +34,8 @@ pub const FpsCounter = struct {
         return self.mTotalFrames;
     }
 };
+
+pub fn cStrToSlice(c_str: [*:0]const u8) []const u8 {
+    const length = std.mem.len(c_str);
+    return c_str[0..length];
+}

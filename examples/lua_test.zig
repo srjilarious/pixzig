@@ -3,6 +3,7 @@ const std = @import("std");
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
 const scripting = @import("pixzig").scripting;
+const console = @import("pixzig").console;
 
 fn myFunc(lua: *Lua) i32 {
     _ = lua;
@@ -34,6 +35,21 @@ pub fn main() anyerror!void {
 
     try script.run("test()");
     try script.run("log('My message here!')");
+
+    const cons = try console.Console.init(allocator, &script, .{});
+    defer cons.deinit();
+
+    try script.run("my_console:log('test from example inline run.')");
+
+    try script.runScript("assets/test.lua");
+
+    std.debug.print("Console entries:\n", .{});
+    for (cons.history.items) |entry| {
+        std.debug.print("{s}\n", .{entry});
+    }
+
+    //try script.run("my_console:log('console logging yo!')");
+
     // Add an integer to the Lua stack and retrieve it
     //lua.pushInteger(42);
     //std.debug.print("{}\n", .{try lua.toInteger(1)});
