@@ -30,6 +30,35 @@ pub const TextureManager = struct {
         self.textures.clearAndFree();
     }
 
+    pub fn loadTextureFromBuffer(self: *TextureManager, name: []const u8, width: usize, height: usize, buffer:[]u8) !*Texture{
+        var texture: c_uint = undefined;
+        gl.genTextures(1, &texture);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        const format = gl.RGBA;
+        gl.texImage2D(gl.TEXTURE_2D, 0, format, 
+            @intCast(width), 
+            @intCast(height), 
+            0, format, 
+            gl.UNSIGNED_BYTE, 
+            @ptrCast(buffer)
+        );
+
+        const copied_name = try self.allocator.alloc(u8, name.len);
+        @memcpy(copied_name, name);
+        try self.textures.append(.{
+            .texture = texture,
+            .size = .{ .x = @intCast(width), .y = @intCast(height) },
+            .name = copied_name,
+        });
+
+        return &self.textures.items[self.textures.items.len - 1];
+    }
+
+
     // TODO: Add error handler.
     pub fn loadTexture(self: *TextureManager, name: []const u8, file_path: []const u8) !*Texture{
 
@@ -46,25 +75,32 @@ pub const TextureManager = struct {
 
         std.debug.print("Loaded image '{s}', width={}, height={}\n", .{ name, image.width, image.height });
 
-        var texture: c_uint = undefined;
-        gl.genTextures(1, &texture);
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        const format = gl.RGBA;
-        gl.texImage2D(gl.TEXTURE_2D, 0, format, @intCast(image.width), @intCast(image.height), 0, format, gl.UNSIGNED_BYTE, @ptrCast(image.data));
-
-        const copied_name = try self.allocator.alloc(u8, name.len);
-        @memcpy(copied_name, name);
-        try self.textures.append(.{
-            .texture = texture,
-            .size = .{ .x = image.width, .y = image.height },
-            .name = copied_name,
-        });
-
-        return &self.textures.items[self.textures.items.len - 1];
+        return try self.loadTextureFromBuffer(name, image.width, image.height, image.data);
+        // var texture: c_uint = undefined;
+        // gl.genTextures(1, &texture);
+        // gl.bindTexture(gl.TEXTURE_2D, texture);
+        // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        // const format = gl.RGBA;
+        // gl.texImage2D(gl.TEXTURE_2D, 0, format, 
+        //     @intCast(image.width), 
+        //     @intCast(image.height), 
+        //     0, format, 
+        //     gl.UNSIGNED_BYTE, 
+        //     @ptrCast(image.data)
+        // );
+        //
+        // const copied_name = try self.allocator.alloc(u8, name.len);
+        // @memcpy(copied_name, name);
+        // try self.textures.append(.{
+        //     .texture = texture,
+        //     .size = .{ .x = image.width, .y = image.height },
+        //     .name = copied_name,
+        // });
+        //
+        // return &self.textures.items[self.textures.items.len - 1];
     }
 };
 

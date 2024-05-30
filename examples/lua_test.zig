@@ -48,8 +48,6 @@ pub fn main() anyerror!void {
         std.debug.print("{s}\n", .{entry});
     }
 
-    //try script.run("my_console:log('console logging yo!')");
-
     // Add an integer to the Lua stack and retrieve it
     //lua.pushInteger(42);
     //std.debug.print("{}\n", .{try lua.toInteger(1)});

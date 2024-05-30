@@ -29,7 +29,6 @@ pub const Console = struct {
 
         // Create a new table to represent the Console object
         lua.newTable();
-        // _ = lua.pushValue(-1); // Copy Console table
 
         // Set the light userdata as a field in the Console table
         _ = lua.pushString("userdata");
