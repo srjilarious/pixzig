@@ -5,6 +5,7 @@ const gl = @import("zopengl").bindings;
 const common = @import("./common.zig");
 
 const Vec2U = common.Vec2U;
+const Color8 = common.Color8;
 
 pub const Texture = struct {
     // GL Texture ID once loaded.
@@ -12,6 +13,12 @@ pub const Texture = struct {
     size: Vec2U,
     name: ?[]u8,
 };
+
+pub const CharToColor = struct {
+    char: u8,
+    color: Color8, 
+};
+
 
 pub const TextureManager = struct {
     textures: std.ArrayList(Texture),
@@ -29,6 +36,55 @@ pub const TextureManager = struct {
         }
         self.textures.clearAndFree();
     }
+
+    pub fn createTextureFromChars(
+        self: *TextureManager, 
+        name: []const u8, 
+        width: usize, 
+        height: usize, 
+        chars: []const u8, 
+        mapping: []const CharToColor) !*Texture
+    {
+        // Generate the color buffer, mapping chars to their given colors.
+        var buffer: []u8 = try self.allocator.alloc(u8, width*height*4);
+        defer self.allocator.free(buffer);
+
+        // Manually track the index since we need to skip newlines.
+        var chrIdx: usize = 0;
+        var h: usize = 0;
+        var w: usize = 0;
+
+        while(chrIdx < chars.len) {
+            const curr_ch = chars[chrIdx];
+            chrIdx += 1;
+
+            // Skip over newlines from raw literals
+            if(curr_ch == '\n' or curr_ch == '\r') continue;
+
+            var color: Color8 = .{ .r=0, .g=0, .b=0, .a=255 };
+            for(0..mapping.len) |idx| {
+                if(mapping[idx].char == curr_ch) {
+                    color = mapping[idx].color;
+                }
+            }
+
+            const col_idx:usize = (h*width+w)*4;
+            buffer[col_idx] = color.r;
+            buffer[col_idx+1] = color.g;
+            buffer[col_idx+2] = color.b;
+            buffer[col_idx+3] = color.a;
+
+            // Update pixel buffer locations.
+            w += 1;
+            if(w >= width) {
+                w = 0;
+                h += 1;
+            }
+        }
+
+        return try self.loadTextureFromBuffer(name, width, height, buffer);
+    }
+
 
     pub fn loadTextureFromBuffer(self: *TextureManager, name: []const u8, width: usize, height: usize, buffer:[]u8) !*Texture{
         var texture: c_uint = undefined;

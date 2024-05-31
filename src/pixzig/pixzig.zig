@@ -24,6 +24,10 @@ pub const Texture = textures.Texture;
 const TextureManager = textures.TextureManager;
 
 pub const Vec2I = common.Vec2I;
+pub const RectF = common.RectF;
+pub const Color = common.Color;
+pub const Color8 = common.Color8;
+
 
 pub const PixzigEngineOptions = struct {
     withGui: bool = true,

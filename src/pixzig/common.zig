@@ -114,3 +114,14 @@ pub const Color = struct {
     }
 };
 
+pub const Color8 = struct {
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+
+    pub fn from(r: u8, g: u8, b: u8, a:u8) Color8 {
+        return .{ .r=r, .g=g, .b=b, .a=a };
+    }
+};
+
