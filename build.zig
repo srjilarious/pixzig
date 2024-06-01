@@ -174,7 +174,9 @@ pub fn build(b: *std.Build) void {
     _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
     _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig");
     _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig");
-     _ = example(b, target, optimize, "text_rendering", "examples/text_rendering.zig");
+    _ = example(b, target, optimize, "text_rendering", "examples/text_rendering.zig");
+
+    _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig");
 
     // const tests = example(b, target, optimize, "unit_tests", "tests/main.zig");
     // const testzMod = b.dependency("testz", .{});

@@ -1,15 +1,21 @@
-// An example of generating a texture from a character buffer with a
-// mapping from character to color.  Useful for simple game assets.
-const std = @import("std");
+// zig fmt: off
+// Natetris: A tetris clone for Nate.
 
+const std = @import("std");
+const zgui = @import("zgui");
 const glfw = @import("zglfw");
 const gl = @import("zopengl").bindings;
-const math = @import("zmath");
-
+const stbi = @import ("zstbi");
+const zmath = @import("zmath"); 
+const flecs = @import("zflecs"); 
 const pixzig = @import("pixzig");
-const RectF = pixzig.RectF;
-const Color8 = pixzig.Color8;
+const RectF = pixzig.common.RectF;
+const RectI = pixzig.common.RectI;
+const Color = pixzig.common.Color;
+
+const math = @import("zmath");
 const EngOptions = pixzig.PixzigEngineOptions;
+const Color8 = pixzig.Color8;
 const CharToColor = pixzig.textures.CharToColor;
 
 pub fn main() !void {
@@ -17,7 +23,7 @@ pub fn main() !void {
     defer _ = gpa_state.deinit();
     const gpa = gpa_state.allocator();
 
-    var eng = try pixzig.PixzigEngine.init("Create Texture Example", gpa, EngOptions{});
+    var eng = try pixzig.PixzigEngine.init("Natetris", gpa, EngOptions{});
     defer eng.deinit();
 
     std.debug.print("Engine initialized.\n", .{});
@@ -44,7 +50,7 @@ pub fn main() !void {
 
     std.debug.print("Created texture from characters.\n", .{});
 
-    const projMat = math.orthographicOffCenterLhGl(0, 320, 0, 240, -0.1, 1000);
+    const projMat = math.orthographicOffCenterLhGl(0, 640, 0, 480, -0.1, 1000);
 
     var texShader = try pixzig.shaders.Shader.init(&pixzig.shaders.TexVertexShader, &pixzig.shaders.TexPixelShader);
 
@@ -65,10 +71,10 @@ pub fn main() !void {
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-        spriteBatch.drawSprite(tex, RectF.fromPosSize(64, 64, 64, 64), RectF.fromCoords(0, 0, 8, 8, 8, 8));
-        spriteBatch.drawSprite(tex, RectF.fromPosSize(128, 64, 64, 64), RectF.fromCoords(0, 0, 8, 8, 8, 8));
-        spriteBatch.drawSprite(tex, RectF.fromPosSize(192, 64, 64, 64), RectF.fromCoords(0, 0, 8, 8, 8, 8));
-        spriteBatch.drawSprite(tex, RectF.fromPosSize(128, 128, 64, 64), RectF.fromCoords(0, 0, 8, 8, 8, 8));
+        spriteBatch.drawSprite(tex, RectF.fromPosSize(32, 32, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
+        spriteBatch.drawSprite(tex, RectF.fromPosSize(64, 32, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
+        spriteBatch.drawSprite(tex, RectF.fromPosSize(96, 32, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
+        spriteBatch.drawSprite(tex, RectF.fromPosSize(64, 64, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
         spriteBatch.end();
 
         eng.window.swapBuffers();
