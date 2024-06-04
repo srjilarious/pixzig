@@ -22,44 +22,51 @@ const Color8 = pixzig.Color8;
 const CharToColor = pixzig.textures.CharToColor;
 const Vec2I = pixzig.common.Vec2I;
 
-const ShapeWidth = 4;
-const ShapeHeight = 4;
+const ShapeWidth = 5;
+const ShapeHeight = 5;
 
 const Shapes: []const []const u8 = &.{
-      " x  " ++
-      " x  " ++
-      " x  " ++
-      " x  ",
+      "     " ++
+      "  x  " ++
+      "  x  " ++
+      "  x  " ++
+      "  x  ",
 
-      "    " ++
-      " x  " ++
-      " xx " ++
-      " x  ",
+      "     " ++
+      " x   " ++
+      " xx  " ++
+      " x   " ++
+      "     ",
 
-      "    " ++
-      " x  " ++
-      " x  " ++
-      " xx ",
+      "     " ++
+      "  x  " ++
+      "  x  " ++
+      "  xx " ++
+      "     ",
 
-      "    " ++
-      " x  " ++
-      " x  " ++
-      "xx  ",
+      "     " ++
+      "  x  " ++
+      "  x  " ++
+      " xx  " ++
+      "     ",
 
-      "    " ++
-      " xx " ++
-      "xx  " ++
-      "    ",
+      "     " ++
+      "     " ++
+      "  xx " ++
+      " xx  " ++
+      "     ",
 
-      "    " ++
-      "xx  " ++
-      " xx " ++
-      "    ",
+      "     " ++
+      "     " ++
+      " xx  " ++
+      "  xx " ++
+      "     ",
 
-      "    " ++
-      " xx " ++
-      " xx " ++
-      "    ",
+      "     " ++
+      "     " ++
+      " xx  " ++
+      " xx  " ++
+      "     ",
 };
 
 pub const Natetris = struct {
@@ -69,6 +76,7 @@ pub const Natetris = struct {
     projMat: zmath.Mat,
     alloc: std.mem.Allocator,
     currIdx: usize,
+    shape: []u8,
 
     // states: AppStateMgr,
 
@@ -105,7 +113,7 @@ pub const Natetris = struct {
         const alloc = eng.allocator;
 
         const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &texShader);
-        return .{ 
+        var app = .{ 
             .fps = FpsCounter.init(),
             // .states = AppStateMgr.init(appStates),
             .tex = tex,
@@ -113,11 +121,20 @@ pub const Natetris = struct {
             .projMat = projMat,
             .alloc = alloc,
             .currIdx = 0,
+            .shape = try alloc.alloc(u8, ShapeWidth*ShapeHeight),
         };
+        app.currIdx = 0;
+
+        // for(0..15) |idx| {
+        //     app.shape[idx] = Shapes[0][idx];
+        // }
+        @memcpy(app.shape, Shapes[0]);
+        return app;
     }
 
     pub fn deinit(self: *Natetris) void {
         self.spriteBatch.deinit();
+        self.alloc.free(self.shape);
     }
 
     pub fn update(self: *Natetris, eng: *pixzig.PixzigEngine, delta: f64) bool {
@@ -129,9 +146,14 @@ pub const Natetris = struct {
 
         if (eng.keyboard.pressed(.one)) {
             if(self.currIdx > 0) self.currIdx -= 1;
+            @memcpy(self.shape, Shapes[self.currIdx]);
         } 
         if (eng.keyboard.pressed(.two)) {
             if(self.currIdx < (Shapes.len - 1)) self.currIdx += 1;
+            @memcpy(self.shape, Shapes[self.currIdx]);
+        }
+        if (eng.keyboard.pressed(.three)) {
+            self.rotateClockwise();
         }
 
         if(eng.keyboard.pressed(.escape)) {
@@ -155,13 +177,26 @@ pub const Natetris = struct {
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-        self.drawShape(.{ .x = 10, .y = 10}, .{ .x = 32, .y = 32}, Shapes[self.currIdx]);
+        self.drawShape(.{ .x = 10, .y = 10}, .{ .x = 32, .y = 32}, self.shape);
         // spriteBatch.drawSprite(tex, RectF.fromPosSize(32, 32, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
         // spriteBatch.drawSprite(tex, RectF.fromPosSize(64, 32, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
         // spriteBatch.drawSprite(tex, RectF.fromPosSize(96, 32, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
         // spriteBatch.drawSprite(tex, RectF.fromPosSize(64, 64, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
         self.spriteBatch.end();
         self.fps.renderTick();
+    }
+
+    fn rotateClockwise(self: *Natetris) void {
+        var temp: [ShapeWidth*ShapeHeight]u8 = undefined;
+        @memcpy(temp[0..], self.shape);
+        for(0..ShapeHeight) |h| {
+            for(0..ShapeWidth) |w| {
+                const th = w;
+                const dest = h*ShapeWidth + w;
+                const src = th*ShapeWidth + ShapeHeight-1-h;
+                self.shape[dest] = temp[src];
+            }
+        }
     }
 
     fn drawShape(
