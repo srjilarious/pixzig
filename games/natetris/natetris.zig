@@ -33,9 +33,9 @@ const Shapes: []const []const u8 = &.{
       "  x  ",
 
       "     " ++
-      " x   " ++
-      " xx  " ++
-      " x   " ++
+      "  x  " ++
+      "  xx " ++
+      "  x  " ++
       "     ",
 
       "     " ++
@@ -68,6 +68,8 @@ const Shapes: []const []const u8 = &.{
       " xx  " ++
       "     ",
 };
+
+const SquareIndex = Shapes.len-1;
 
 pub const Natetris = struct {
     fps: FpsCounter,
@@ -153,6 +155,9 @@ pub const Natetris = struct {
             @memcpy(self.shape, Shapes[self.currIdx]);
         }
         if (eng.keyboard.pressed(.three)) {
+            self.rotateCounterClockwise();
+        }
+        if (eng.keyboard.pressed(.four)) {
             self.rotateClockwise();
         }
 
@@ -187,6 +192,23 @@ pub const Natetris = struct {
     }
 
     fn rotateClockwise(self: *Natetris) void {
+        if(self.currIdx == SquareIndex) return;
+
+        var temp: [ShapeWidth*ShapeHeight]u8 = undefined;
+        @memcpy(temp[0..], self.shape);
+        for(0..ShapeHeight) |h| {
+            for(0..ShapeWidth) |w| {
+                const th = w;
+                const dest = th*ShapeWidth + ShapeHeight-1-h;
+                const src = h*ShapeWidth + w;
+                self.shape[dest] = temp[src];
+            }
+        }
+    }
+
+    fn rotateCounterClockwise(self: *Natetris) void {
+        if(self.currIdx == SquareIndex) return;
+
         var temp: [ShapeWidth*ShapeHeight]u8 = undefined;
         @memcpy(temp[0..], self.shape);
         for(0..ShapeHeight) |h| {
