@@ -25,6 +25,9 @@ const Vec2I = pixzig.common.Vec2I;
 const ShapeWidth = 5;
 const ShapeHeight = 5;
 
+const BoardHeight = 16;
+const BoardWidth = 18;
+
 const Shapes: []const []const u8 = &.{
       "     " ++
       "  x  " ++
@@ -69,21 +72,52 @@ const Shapes: []const []const u8 = &.{
       "     ",
 };
 
+// const EmptyBoard: []const u8 = 
+//     "#          #" ++
+//     "#          #" ++
+//     "#          #" ++
+//     "#          #" ++
+//     "#          #" ++
+//     "#          #" ++
+//     "#          #" ++
+//     "#          #" ++
+//     "#          #" ++
+//     "#          #" ++
+//     "#          #" ++
+//     "#          #" ++
+//     "#          #" ++
+//     "#          #" ++
+//     "#          #" ++
+//     "#          #" ++
+//     "#          #" ++
+//     "#          #" ++
+//     "#          #" ++
+//     "#          #" ++
+//     "############";
+
 const SquareIndex = Shapes.len-1;
+
+const BoardSpace = enum {
+    Empty,
+    Wall,
+    Locked,
+};
 
 pub const Natetris = struct {
     fps: FpsCounter,
     tex: *pixzig.Texture,
+    lockedTex: *pixzig.Texture,
     spriteBatch: pixzig.renderer.SpriteBatchQueue,
     projMat: zmath.Mat,
     alloc: std.mem.Allocator,
     currIdx: usize,
     shape: []u8,
+    board: []BoardSpace,
 
     // states: AppStateMgr,
 
     pub fn init(eng: *PixzigEngine) !Natetris {
-        const chars =
+        const blockChars =
         \\=------=
         \\-..####-
         \\-.####=-
@@ -94,12 +128,32 @@ pub const Natetris = struct {
         \\=------=
         ;
 
-        const tex = try eng.textures.createTextureFromChars("test", 8, 8, chars, &[_]CharToColor{
+        const tex = try eng.textures.createTextureFromChars("test", 8, 8, blockChars, &[_]CharToColor{
             .{ .char = '#', .color = Color8.from(40, 255, 40, 255) },
             .{ .char = '-', .color = Color8.from(100, 100, 200, 255) },
             .{ .char = '=', .color = Color8.from(100, 100, 100, 255) },
             .{ .char = '.', .color = Color8.from(240, 240, 240, 255) },
             .{ .char = '@', .color = Color8.from(30, 155, 30, 255) },
+            .{ .char = ' ', .color = Color8.from(0, 0, 0, 0) },
+        });
+
+        const lockedChars =
+        \\=------=
+        \\-######-
+        \\-#####=-
+        \\-#####=-
+        \\-#####=-
+        \\-#####=-
+        \\-##===@-
+        \\=------=
+        ;
+
+        const lockedTex = try eng.textures.createTextureFromChars("test", 8, 8, lockedChars, &[_]CharToColor{
+            .{ .char = '#', .color = Color8.from(180, 180, 180, 255) },
+            .{ .char = '-', .color = Color8.from(80, 80, 80, 255) },
+            .{ .char = '=', .color = Color8.from(100, 100, 100, 255) },
+            .{ .char = '.', .color = Color8.from(240, 240, 240, 255) },
+            .{ .char = '@', .color = Color8.from(30, 30, 30, 255) },
             .{ .char = ' ', .color = Color8.from(0, 0, 0, 0) },
         });
 
@@ -115,15 +169,34 @@ pub const Natetris = struct {
         const alloc = eng.allocator;
 
         const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &texShader);
+
+        var board = try alloc.alloc(BoardSpace, BoardWidth*BoardHeight);
+        for(0..BoardHeight) |bh| {
+            for(0..BoardWidth) |bw| {
+                const bidx = bh*BoardWidth+bw;
+                if(bh == BoardHeight - 1) {
+                    board[bidx] = .Wall;
+                }
+                else if(bw == 0 or bw == BoardWidth - 1) {
+                    board[bidx] = .Wall;
+                }
+                else {
+                    board[bidx] = .Empty;
+                }
+            }
+        }
+
         var app = .{ 
             .fps = FpsCounter.init(),
             // .states = AppStateMgr.init(appStates),
             .tex = tex,
+            .lockedTex = lockedTex,
             .spriteBatch = spriteBatch,
             .projMat = projMat,
             .alloc = alloc,
             .currIdx = 0,
             .shape = try alloc.alloc(u8, ShapeWidth*ShapeHeight),
+            .board = board,
         };
         app.currIdx = 0;
 
@@ -137,6 +210,7 @@ pub const Natetris = struct {
     pub fn deinit(self: *Natetris) void {
         self.spriteBatch.deinit();
         self.alloc.free(self.shape);
+        self.alloc.free(self.board);
     }
 
     pub fn update(self: *Natetris, eng: *pixzig.PixzigEngine, delta: f64) bool {
@@ -182,7 +256,8 @@ pub const Natetris = struct {
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-        self.drawShape(.{ .x = 10, .y = 10}, .{ .x = 32, .y = 32}, self.shape);
+        self.drawBoard(.{ .x = 32, .y = 32});
+        self.drawShape(.{ .x = 200, .y = 30}, .{ .x = 32, .y = 32}, self.shape);
         // spriteBatch.drawSprite(tex, RectF.fromPosSize(32, 32, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
         // spriteBatch.drawSprite(tex, RectF.fromPosSize(64, 32, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
         // spriteBatch.drawSprite(tex, RectF.fromPosSize(96, 32, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
@@ -217,6 +292,29 @@ pub const Natetris = struct {
                 const dest = h*ShapeWidth + w;
                 const src = th*ShapeWidth + ShapeHeight-1-h;
                 self.shape[dest] = temp[src];
+            }
+        }
+    }
+
+
+    fn drawBoard(self: *Natetris, size: Vec2I) void {
+        const baseX: i32 = 100;
+        const baseY: i32 = 40;
+        const source =  RectF.fromCoords(0, 0, 8, 8, 8, 8);
+
+        for(0..BoardHeight) |bh| {
+            for(0..BoardWidth) |bw| {
+                const bidx = bh*BoardWidth+bw;
+                const w: i32 = @intCast(bw);
+                const h: i32 = @intCast(bh);
+                if(self.board[bidx] != .Empty) {
+                    const dest = RectF.fromPosSize(
+                        baseX+w*size.x, 
+                        baseY+h*size.y, 
+                        size.x, size.y);
+                    self.spriteBatch.drawSprite(self.lockedTex, dest, source);
+
+                }
             }
         }
     }
