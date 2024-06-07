@@ -103,6 +103,10 @@ const BoardSpace = enum {
     Locked,
 };
 
+// Base pixel location for board.
+const BaseX: i32 = 100;
+const BaseY: i32 = 40;
+
 pub const Natetris = struct {
     fps: FpsCounter,
     tex: *pixzig.Texture,
@@ -112,6 +116,7 @@ pub const Natetris = struct {
     alloc: std.mem.Allocator,
     currIdx: usize,
     shape: []u8,
+    shapePos: Vec2I,
     board: []BoardSpace,
 
     // states: AppStateMgr,
@@ -196,6 +201,7 @@ pub const Natetris = struct {
             .alloc = alloc,
             .currIdx = 0,
             .shape = try alloc.alloc(u8, ShapeWidth*ShapeHeight),
+            .shapePos = .{ .x = 1, .y = 0 },
             .board = board,
         };
         app.currIdx = 0;
@@ -235,6 +241,25 @@ pub const Natetris = struct {
             self.rotateClockwise();
         }
 
+        if (eng.keyboard.pressed(.left)) {
+            self.shapePos.x -= 1;
+            if(!self.checkShape(self.shapePos)) {
+                self.shapePos.x += 1;
+            }
+        }
+        else if(eng.keyboard.pressed(.right)) {
+            self.shapePos.x += 1;
+            if(!self.checkShape(self.shapePos)) {
+                self.shapePos.x -= 1;
+            }
+        }
+        else if(eng.keyboard.pressed(.down)) {
+            self.shapePos.y += 1;
+            if(!self.checkShape(self.shapePos)) {
+                self.shapePos.y -= 1;
+            }
+        }
+
         if(eng.keyboard.pressed(.escape)) {
             return false;
         }
@@ -257,7 +282,7 @@ pub const Natetris = struct {
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
         self.drawBoard(.{ .x = 32, .y = 32});
-        self.drawShape(.{ .x = 200, .y = 30}, .{ .x = 32, .y = 32}, self.shape);
+        self.drawShape(self.shapePos, .{ .x = 32, .y = 32}, self.shape);
         // spriteBatch.drawSprite(tex, RectF.fromPosSize(32, 32, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
         // spriteBatch.drawSprite(tex, RectF.fromPosSize(64, 32, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
         // spriteBatch.drawSprite(tex, RectF.fromPosSize(96, 32, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
@@ -296,10 +321,27 @@ pub const Natetris = struct {
         }
     }
 
+    // Where pos is the pos offset on the board
+    fn checkShape(self: *Natetris, pos: Vec2I) bool {
+        for(0..ShapeHeight) |h| {
+            for(0..ShapeWidth) |w| {
+                const hi: i32 = @intCast(h);
+                const wi: i32 = @intCast(w);
+
+                const bsx: i32 = pos.x + wi;
+                const bsy: i32 = pos.y + hi;
+                if(bsx < 0 or bsx >= BoardWidth) continue;
+                if(bsy < 0 or bsy >= BoardHeight) continue;
+
+                const bidx = @as(usize, @intCast(bsy))*BoardWidth + @as(usize, @intCast(bsx));
+                if(self.board[bidx] != .Empty and self.shape[h*ShapeWidth+w] == 'x') return false;
+            }
+        }
+        return true;
+    }
 
     fn drawBoard(self: *Natetris, size: Vec2I) void {
-        const baseX: i32 = 100;
-        const baseY: i32 = 40;
+        
         const source =  RectF.fromCoords(0, 0, 8, 8, 8, 8);
 
         for(0..BoardHeight) |bh| {
@@ -309,8 +351,8 @@ pub const Natetris = struct {
                 const h: i32 = @intCast(bh);
                 if(self.board[bidx] != .Empty) {
                     const dest = RectF.fromPosSize(
-                        baseX+w*size.x, 
-                        baseY+h*size.y, 
+                        BaseX+w*size.x, 
+                        BaseY+h*size.y, 
                         size.x, size.y);
                     self.spriteBatch.drawSprite(self.lockedTex, dest, source);
 
@@ -334,8 +376,8 @@ pub const Natetris = struct {
 
                 if(shape[hu*ShapeWidth+wu] == 'x') {
                     const dest = RectF.fromPosSize(
-                        pos.x+w*size.x, 
-                        pos.y+h*size.y, 
+                        BaseX+(pos.x+w)*size.x, 
+                        BaseY+(pos.y+h)*size.y, 
                         size.x, size.y);
                     self.spriteBatch.drawSprite(self.tex, dest, source);
                     
