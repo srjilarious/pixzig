@@ -28,6 +28,9 @@ const ShapeHeight = 5;
 const BoardHeight = 16;
 const BoardWidth = 18;
 
+const PieceStartX = 8;
+const PieceStartY = -1;
+
 const Shapes: []const []const u8 = &.{
       "     " ++
       "  x  " ++
@@ -72,28 +75,6 @@ const Shapes: []const []const u8 = &.{
       "     ",
 };
 
-// const EmptyBoard: []const u8 = 
-//     "#          #" ++
-//     "#          #" ++
-//     "#          #" ++
-//     "#          #" ++
-//     "#          #" ++
-//     "#          #" ++
-//     "#          #" ++
-//     "#          #" ++
-//     "#          #" ++
-//     "#          #" ++
-//     "#          #" ++
-//     "#          #" ++
-//     "#          #" ++
-//     "#          #" ++
-//     "#          #" ++
-//     "#          #" ++
-//     "#          #" ++
-//     "#          #" ++
-//     "#          #" ++
-//     "#          #" ++
-//     "############";
 
 const SquareIndex = Shapes.len-1;
 
@@ -107,6 +88,7 @@ const BoardSpace = enum {
 const BaseX: i32 = 100;
 const BaseY: i32 = 40;
 
+
 pub const Natetris = struct {
     fps: FpsCounter,
     tex: *pixzig.Texture,
@@ -118,6 +100,7 @@ pub const Natetris = struct {
     shape: []u8,
     shapePos: Vec2I,
     board: []BoardSpace,
+    timeTillDrop: f64,
 
     // states: AppStateMgr,
 
@@ -203,6 +186,7 @@ pub const Natetris = struct {
             .shape = try alloc.alloc(u8, ShapeWidth*ShapeHeight),
             .shapePos = .{ .x = 1, .y = 0 },
             .board = board,
+            .timeTillDrop = 0.0,
         };
         app.currIdx = 0;
 
@@ -234,11 +218,18 @@ pub const Natetris = struct {
             if(self.currIdx < (Shapes.len - 1)) self.currIdx += 1;
             @memcpy(self.shape, Shapes[self.currIdx]);
         }
-        if (eng.keyboard.pressed(.three)) {
+        if (eng.keyboard.pressed(.z)) {
             self.rotateCounterClockwise();
+            if(!self.checkShape(self.shapePos)) {
+                // Undo our attempt.
+                self.rotateClockwise();
+            }
         }
-        if (eng.keyboard.pressed(.four)) {
+        if (eng.keyboard.pressed(.x)) {
             self.rotateClockwise();
+            if(!self.checkShape(self.shapePos)) {
+                self.rotateCounterClockwise();
+            }
         }
 
         if (eng.keyboard.pressed(.left)) {
@@ -249,12 +240,16 @@ pub const Natetris = struct {
         }
         else if(eng.keyboard.pressed(.right)) {
             self.shapePos.x += 1;
-            if(!self.checkShape(self.shapePos)) {
+            if(self.checkShape(self.shapePos)) {
+                self.timeTillDrop = 0.0;
+            }
+            else {
                 self.shapePos.x -= 1;
             }
         }
         else if(eng.keyboard.pressed(.down)) {
             self.shapePos.y += 1;
+
             if(!self.checkShape(self.shapePos)) {
                 self.shapePos.y -= 1;
             }
@@ -262,6 +257,12 @@ pub const Natetris = struct {
 
         if(eng.keyboard.pressed(.escape)) {
             return false;
+        }
+
+        self.timeTillDrop += delta;
+        if(self.timeTillDrop > 1.0) {
+            self.tryDropAndLock();
+            self.timeTillDrop = 0.0;
         }
 
         return true;
@@ -289,6 +290,40 @@ pub const Natetris = struct {
         // spriteBatch.drawSprite(tex, RectF.fromPosSize(64, 64, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
         self.spriteBatch.end();
         self.fps.renderTick();
+    }
+
+    fn tryDropAndLock(self: *Natetris) void {
+        self.shapePos.y += 1;
+        if(!self.checkShape(self.shapePos)) {
+            // Put it back to the original position.
+            self.shapePos.y -= 1;
+
+            // If we tried to move down and couldn't, time to lock the pieces in.
+            for(0..ShapeHeight) |h| {
+                for(0..ShapeWidth) |w| {
+                    const hi: i32 = @intCast(h);
+                    const wi: i32 = @intCast(w);
+
+                    const bsx: i32 = self.shapePos.x + wi;
+                    const bsy: i32 = self.shapePos.y + hi;
+                    if(bsx < 0 or bsx >= BoardWidth) continue;
+                    if(bsy < 0 or bsy >= BoardHeight) continue;
+
+                    const bidx = @as(usize, @intCast(bsy))*BoardWidth + @as(usize, @intCast(bsx));
+                    if(self.shape[h*ShapeWidth+w] == 'x') 
+                        self.board[bidx] = .Locked;
+                }
+            }
+
+            // Now weneed to spawn a new piece.
+            self.spawnNewPiece();
+        }
+    }
+
+    fn spawnNewPiece(self: *Natetris) void {
+        self.shapePos = .{ .x = PieceStartX, .y = PieceStartY };
+        @memcpy(self.shape, Shapes[2]);
+        self.timeTillDrop = 0.0;
     }
 
     fn rotateClockwise(self: *Natetris) void {
