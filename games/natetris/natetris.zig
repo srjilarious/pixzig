@@ -93,6 +93,7 @@ pub const Natetris = struct {
     fps: FpsCounter,
     tex: *pixzig.Texture,
     lockedTex: *pixzig.Texture,
+    wallTex: *pixzig.Texture,
     spriteBatch: pixzig.renderer.SpriteBatchQueue,
     projMat: zmath.Mat,
     alloc: std.mem.Allocator,
@@ -136,12 +137,21 @@ pub const Natetris = struct {
         \\=------=
         ;
 
-        const lockedTex = try eng.textures.createTextureFromChars("test", 8, 8, lockedChars, &[_]CharToColor{
+        const wallTex = try eng.textures.createTextureFromChars("wall", 8, 8, lockedChars, &[_]CharToColor{
             .{ .char = '#', .color = Color8.from(180, 180, 180, 255) },
             .{ .char = '-', .color = Color8.from(80, 80, 80, 255) },
             .{ .char = '=', .color = Color8.from(100, 100, 100, 255) },
             .{ .char = '.', .color = Color8.from(240, 240, 240, 255) },
             .{ .char = '@', .color = Color8.from(30, 30, 30, 255) },
+            .{ .char = ' ', .color = Color8.from(0, 0, 0, 0) },
+        });
+
+        const lockedTex = try eng.textures.createTextureFromChars("locked", 8, 8, lockedChars, &[_]CharToColor{
+            .{ .char = '#', .color = Color8.from(150, 150, 210, 255) },
+            .{ .char = '-', .color = Color8.from(80, 80, 120, 255) },
+            .{ .char = '=', .color = Color8.from(100, 100, 150, 255) },
+            .{ .char = '.', .color = Color8.from(240, 240, 240, 255) },
+            .{ .char = '@', .color = Color8.from(30, 30, 60, 255) },
             .{ .char = ' ', .color = Color8.from(0, 0, 0, 0) },
         });
 
@@ -179,6 +189,7 @@ pub const Natetris = struct {
             // .states = AppStateMgr.init(appStates),
             .tex = tex,
             .lockedTex = lockedTex,
+            .wallTex = wallTex,
             .spriteBatch = spriteBatch,
             .projMat = projMat,
             .alloc = alloc,
@@ -389,7 +400,16 @@ pub const Natetris = struct {
                         BaseX+w*size.x, 
                         BaseY+h*size.y, 
                         size.x, size.y);
-                    self.spriteBatch.drawSprite(self.lockedTex, dest, source);
+                    const tex = which: {
+                        if(self.board[bidx] == .Wall) {
+                            break :which self.wallTex;
+                        }
+                        else {
+                            break :which self.lockedTex;
+                        }
+                    };
+
+                    self.spriteBatch.drawSprite(tex, dest, source);
 
                 }
             }
