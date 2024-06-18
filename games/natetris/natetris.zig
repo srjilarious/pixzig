@@ -179,7 +179,12 @@ pub const Natetris = struct {
                     board[bidx] = .Wall;
                 }
                 else {
-                    board[bidx] = .Empty;
+                    if(bh >= BoardHeight-6) {
+                        board[bidx] = .Locked;
+                    }
+                    else {
+                        board[bidx] = .Empty;
+                    }
                 }
             }
         }
@@ -285,13 +290,7 @@ pub const Natetris = struct {
 
         // const fb_size = eng.window.getFramebufferSize();
         self.spriteBatch.begin(self.projMat);
-        // set texture options
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        
 
         self.drawBoard(.{ .x = 32, .y = 32});
         self.drawShape(self.shapePos, .{ .x = 32, .y = 32}, self.shape);
@@ -326,6 +325,8 @@ pub const Natetris = struct {
                 }
             }
 
+            // try finding finished lines.
+            self.checkBoard();
             // Now weneed to spawn a new piece.
             self.spawnNewPiece();
         }
@@ -386,6 +387,42 @@ pub const Natetris = struct {
         return true;
     }
 
+    fn checkBoard(self: *Natetris) void {
+        // Don't check the wall.s
+        for(0..BoardHeight-1) |bh| {
+            var foundEmpty = false;
+            for(1..BoardWidth-1) |bw| {
+                const bidx = bh*BoardWidth+bw;
+                if(self.board[bidx] == .Empty) {
+                    foundEmpty = true;
+                    break;
+                }
+            }
+
+            // We found a completed lines, move the lines above us down.
+            if(!foundEmpty) {
+                self.moveLinesDown(bh);
+            }
+        }
+    }
+
+    fn moveLinesDown(self: *Natetris, startLine: usize) void {
+        // Don't move the walls
+        for(0..startLine) |bh_inv| {
+            const bh:usize = startLine - bh_inv;
+            for(1..BoardWidth-1) |bw| {
+                const dest = bh*BoardWidth+bw;
+                const source = (bh-1)*BoardWidth+bw;
+                self.board[dest] = self.board[source];
+            }
+        }
+
+        // Make sure the top line is empty
+        for(1..BoardWidth-1) |bw| {
+            self.board[bw] = .Empty;
+        }
+    }
+
     fn drawBoard(self: *Natetris, size: Vec2I) void {
         
         const source =  RectF.fromCoords(0, 0, 8, 8, 8, 8);
@@ -409,6 +446,13 @@ pub const Natetris = struct {
                         }
                     };
 
+                    // set texture options
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+                    gl.enable(gl.BLEND);
+                    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
                     self.spriteBatch.drawSprite(tex, dest, source);
 
                 }
