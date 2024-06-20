@@ -256,10 +256,7 @@ pub const Natetris = struct {
         }
         else if(eng.keyboard.pressed(.right)) {
             self.shapePos.x += 1;
-            if(self.checkShape(self.shapePos)) {
-                self.timeTillDrop = 0.0;
-            }
-            else {
+            if(!self.checkShape(self.shapePos)) {
                 self.shapePos.x -= 1;
             }
         }
@@ -268,6 +265,8 @@ pub const Natetris = struct {
 
             if(!self.checkShape(self.shapePos)) {
                 self.shapePos.y -= 1;
+            } else {
+                self.timeTillDrop = 0.0;
             }
         }
 
@@ -291,13 +290,9 @@ pub const Natetris = struct {
         // const fb_size = eng.window.getFramebufferSize();
         self.spriteBatch.begin(self.projMat);
         
-
         self.drawBoard(.{ .x = 32, .y = 32});
         self.drawShape(self.shapePos, .{ .x = 32, .y = 32}, self.shape);
-        // spriteBatch.drawSprite(tex, RectF.fromPosSize(32, 32, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
-        // spriteBatch.drawSprite(tex, RectF.fromPosSize(64, 32, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
-        // spriteBatch.drawSprite(tex, RectF.fromPosSize(96, 32, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
-        // spriteBatch.drawSprite(tex, RectF.fromPosSize(64, 64, 32, 32), RectF.fromCoords(0, 0, 8, 8, 8, 8));
+
         self.spriteBatch.end();
         self.fps.renderTick();
     }
@@ -327,7 +322,7 @@ pub const Natetris = struct {
 
             // try finding finished lines.
             self.checkBoard();
-            // Now weneed to spawn a new piece.
+            // Now we need to spawn a new piece.
             self.spawnNewPiece();
         }
     }
