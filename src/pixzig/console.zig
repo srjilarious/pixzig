@@ -1,5 +1,7 @@
+// zig fmt: off
 const std = @import("std");
 const ziglua = @import("ziglua");
+const zgui = @import("zgui");
 
 const Lua = ziglua.Lua;
 
@@ -17,10 +19,21 @@ pub const Console = struct {
     scriptEng: *ScriptEngine,
     history: std.ArrayList([]u8),
     opts: ConsoleOpts,
+    enabled: bool,
+    inputBuffer: [:0]u8,
 
     pub fn init(alloc: std.mem.Allocator, scriptEng: *ScriptEngine, opts: ConsoleOpts) !*Console {
         const console: *Console = try alloc.create(Console);
-        console.* = .{ .alloc = alloc, .scriptEng = scriptEng, .history = std.ArrayList([]u8).init(alloc), .opts = opts };
+        console.* = .{ 
+            .alloc = alloc, 
+            .scriptEng = scriptEng, 
+            .history = std.ArrayList([]u8).init(alloc), 
+            .opts = opts, 
+            .enabled = true,
+            .inputBuffer = try alloc.allocSentinel(u8, 256, 0),
+        };
+
+        @memset(console.inputBuffer, 0);
 
         // Create a console object in lua.
         var lua = scriptEng.lua;
@@ -55,6 +68,7 @@ pub const Console = struct {
         }
 
         self.history.deinit();
+        self.alloc.free(self.inputBuffer);
         self.alloc.destroy(self);
     }
 
@@ -85,6 +99,38 @@ pub const Console = struct {
         };
 
         std.debug.print("CONSOLE: {s}\n", .{msg});
+        return 0;
+    }
+
+    pub fn draw(self: *Console) void {
+        if (zgui.begin("Console", .{})) {
+            _ = zgui.beginChild("ConsoleTest", .{});
+            for(0..self.history.items.len) |idx| {
+                zgui.pushIntId(@intCast(idx));
+                zgui.textWrapped("{s}", .{self.history.items[idx]});
+                zgui.popId();
+            }
+
+            if(zgui.inputText("Input", .{ 
+                .buf = self.inputBuffer, 
+                .flags = .{ 
+                    .enter_returns_true = true, 
+                    .callback_history = true 
+                },
+                .callback = inputCallback,
+                .user_data = self
+            })) {
+                std.debug.print("Returned true from console!", .{});
+            }
+            zgui.endChild();
+        }
+        zgui.end();
+    }
+
+    fn inputCallback(data: *zgui.InputTextCallbackData) i32 {
+        std.debug.print("Callback hit!", .{});
+        const console: *Console = @alignCast(@ptrCast(data.user_data));
+        _ = console;
         return 0;
     }
 };

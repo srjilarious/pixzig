@@ -9,8 +9,12 @@ const gl = @import("zopengl").bindings;
 const pixzig = @import("pixzig");
 const EngOptions = pixzig.PixzigEngineOptions;
 
+const ziglua = @import("ziglua");
+const Lua = ziglua.Lua;
+const scripting = @import("pixzig").scripting;
+const console = @import("pixzig").console;
+
 const content_dir = "assets/"; //@import("build_options").content_dir;
-const window_title = "zig-gamedev: minimal zgpu glfw opengl3";
 
 pub fn main() !void {
 
@@ -25,8 +29,15 @@ pub fn main() !void {
     defer _ = gpa_state.deinit();
     const gpa = gpa_state.allocator();
 
-    var eng = try pixzig.PixzigEngine.init("Glfw Eng Test.", gpa, EngOptions{});
+    var eng = try pixzig.PixzigEngine.init("Console GUI test", gpa, EngOptions{});
     defer eng.deinit();
+
+    // Initialize the Lua vm
+    var script = try scripting.ScriptEngine.init(&gpa);
+    defer script.deinit();
+
+    const cons = try console.Console.init(gpa, &script, .{});
+    defer cons.deinit();
 
     std.debug.print("Engine initialize.\n", .{});
     _ = zgui.io.addFontFromFile(
@@ -54,6 +65,8 @@ pub fn main() !void {
             }
         }
         zgui.end();
+
+        cons.draw();
 
         zgui.backend.draw();
 
