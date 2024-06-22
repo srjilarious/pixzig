@@ -23,8 +23,8 @@
         //     .lazy = true,
         // },
         .font_assets = .{
-            .url = "https://pkg.machengine.org/font-assets/7977df057e855140a207de49039114f1ab8e6c2d.tar.gz",
-            .hash = "12208106eef051bc730bac17c2d10f7e42ea63b579b919480fec86b7c75a620c75d4",
+            .url = "https://pkg.machengine.org/font-assets/899f16b815fde126ba8f6fb781e65253f461b7bf.tar.gz",
+            .hash = "12202b816e7c31c516bd87218fd56f9b1f93671e4ab42a2a98110d586c4b3bdd2730",
             .lazy = true,
         },
     },

@@ -13,7 +13,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     lib.linkLibC();
-    lib.addIncludePath(.{ .path = "include" });
+    lib.addIncludePath(b.path("include"));
     lib.defineCMacro("FT2_BUILD_LIBRARY", "1");
 
     if (use_system_zlib) {
@@ -31,7 +31,7 @@ pub fn build(b: *std.Build) void {
     lib.defineCMacro("HAVE_UNISTD_H", "1");
     lib.addCSourceFiles(.{ .files = &sources, .flags = &.{} });
     if (target.result.os.tag == .macos) lib.addCSourceFile(.{
-        .file = .{ .path = "src/base/ftmac.c" },
+        .file = b.path("src/base/ftmac.c"),
         .flags = &.{},
     });
     lib.installHeadersDirectory(b.path("include/freetype"), "freetype", .{});

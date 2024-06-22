@@ -23,7 +23,7 @@ pub fn example(b: *std.Build,
         .name = name, //"pixzig_test",
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
-        .root_source_file = .{ .path = root_src_path }, //"src/main.zig" },
+        .root_source_file = b.path(root_src_path), //"src/main.zig" },
         .target = target,
         .optimize = optimize,
     });
@@ -59,11 +59,11 @@ pub fn example(b: *std.Build,
     exe.linkLibrary(zgui.artifact("imgui"));
     exe.linkLibrary(zstbi.artifact("zstbi"));
     
-    const xml = b.addModule("xml", .{ .root_source_file = .{ .path = "libs/xml.zig" } });
+    const xml = b.addModule("xml", .{ .root_source_file = b.path("libs/xml.zig")});
 
     const pixeng = b.addModule("pixzig", .{
         // Package root
-        .root_source_file = .{ .path = "src/pixzig/pixzig.zig" },
+        .root_source_file = b.path("src/pixzig/pixzig.zig"),
         // .dependencies = &.{
         // },
     });
@@ -113,7 +113,7 @@ pub fn example(b: *std.Build,
     // exe.linkLibrary(pixzig);
 
     const install_content_step = b.addInstallDirectory(.{
-        .source_dir = .{ .path = thisDir() ++ "/" ++ assets_dir },
+        .source_dir = b.path(assets_dir),
         .install_dir = .{ .custom = "" },
         .install_subdir = "bin/" ++ assets_dir,
     });
