@@ -72,6 +72,36 @@ pub const Console = struct {
         self.alloc.destroy(self);
     }
 
+    const AddMessageOpts = struct {
+        prepend: ?[]const u8 = null
+    };
+
+    fn addMessageToHistoryZ(self: *Console, msgC: [:0]const u8, opts: AddMessageOpts) !void {
+        const msg = utils.cStrToSlice(msgC);
+        try self.addMessageToHistory(msg, opts);
+    }
+
+    fn addMessageToHistory(self: *Console, msg: []const u8, opts: AddMessageOpts) !void {
+
+        // Allocate a copy of the message to add to our log entries.
+        var spaceNeeded: usize = msg.len;
+        if(opts.prepend != null) {
+            spaceNeeded += opts.prepend.?.len;
+        }
+
+        const new_msg = try self.alloc.alloc(u8, spaceNeeded);
+        if(opts.prepend != null) {
+            const startLen = opts.prepend.?.len;
+            @memcpy(new_msg[0..startLen], opts.prepend.?);
+            @memcpy(new_msg[startLen..], msg);
+        }
+        else {
+            @memcpy(new_msg, msg);
+        }
+
+        try self.history.append(new_msg);
+    }
+
     fn log(lua: *Lua) i32 {
         _ = lua.getField(1, "userdata");
         const console = lua.toUserdata(Console, -1) catch {
@@ -85,33 +115,48 @@ pub const Console = struct {
             std.debug.print("log(): Bad msg parameter.\n", .{});
             return 0;
         };
-        const msg = utils.cStrToSlice(msgC);
-
-        // Allocate a copy of the message to add to our log entries.
-        const new_msg = console.alloc.dupe(u8, msg) catch {
-            std.debug.print("log(): Couldn't allocate for console history!\n", .{});
-            return 0;
-        };
-
-        console.history.append(new_msg) catch {
+        
+        console.addMessageToHistoryZ(msgC, .{}) catch {
             std.debug.print("Error adding message to history!\n", .{});
             return 0;
         };
 
-        std.debug.print("CONSOLE: {s}\n", .{msg});
         return 0;
     }
 
+    fn runCurrentInput(self: *Console) !void {
+        std.debug.print("Running: {s}\n", .{self.inputBuffer});
+        try self.addMessageToHistoryZ(self.inputBuffer, .{ .prepend = ">> " });
+
+        self.scriptEng.run(self.inputBuffer) catch |err| {
+            const msg = try std.fmt.allocPrint(self.alloc, "ERROR: {any}\n", .{err});
+            try self.addMessageToHistory(msg, .{});
+            self.alloc.free(msg);
+        };
+    }
+
     pub fn draw(self: *Console) void {
-        if (zgui.begin("Console", .{})) {
-            _ = zgui.beginChild("ConsoleTest", .{});
+        if (zgui.begin("Console", .{ .flags = .{ .no_scrollbar = true }})) {
+            const currSize = zgui.getWindowSize();
+            const fontSize = zgui.getFontSize();
+            _ = zgui.beginChild("ConsoleTest", .{
+                .w = currSize[0] - 25, 
+                .h = currSize[1] - 3*fontSize - 5,
+                .window_flags = .{ .always_vertical_scrollbar = true }
+            });
+            
             for(0..self.history.items.len) |idx| {
                 zgui.pushIntId(@intCast(idx));
                 zgui.textWrapped("{s}", .{self.history.items[idx]});
                 zgui.popId();
             }
 
-            if(zgui.inputText("Input", .{ 
+            zgui.endChild();
+
+            zgui.text(">> ", .{});
+            zgui.sameLine(.{});
+            zgui.pushItemWidth(-1);
+            if(zgui.inputText("##", .{ 
                 .buf = self.inputBuffer, 
                 .flags = .{ 
                     .enter_returns_true = true, 
@@ -120,9 +165,10 @@ pub const Console = struct {
                 .callback = inputCallback,
                 .user_data = self
             })) {
-                std.debug.print("Returned true from console!", .{});
+                self.runCurrentInput() catch {
+                };
             }
-            zgui.endChild();
+            zgui.popItemWidth();
         }
         zgui.end();
     }

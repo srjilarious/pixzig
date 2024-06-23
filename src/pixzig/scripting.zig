@@ -31,7 +31,7 @@ pub const ScriptEngine = struct {
 
             // Remove the error from the stack and go back to the prompt
             self.lua.pop(1);
-            return;
+            return error.SyntaxError;
         };
 
         // Execute a line of Lua code
@@ -39,6 +39,7 @@ pub const ScriptEngine = struct {
             // Error handling here is the same as above.
             std.debug.print("{s}\n", .{self.lua.toString(-1) catch unreachable});
             self.lua.pop(1);
+            return error.ScriptError;
         };
     }
 
