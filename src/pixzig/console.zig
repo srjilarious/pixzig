@@ -20,6 +20,7 @@ pub const Console = struct {
     history: std.ArrayList([]u8),
     opts: ConsoleOpts,
     enabled: bool,
+    shouldFocus: bool,
     inputBuffer: [:0]u8,
 
     pub fn init(alloc: std.mem.Allocator, scriptEng: *ScriptEngine, opts: ConsoleOpts) !*Console {
@@ -30,6 +31,7 @@ pub const Console = struct {
             .history = std.ArrayList([]u8).init(alloc), 
             .opts = opts, 
             .enabled = true,
+            .shouldFocus = true,
             .inputBuffer = try alloc.allocSentinel(u8, 256, 0),
         };
 
@@ -133,6 +135,9 @@ pub const Console = struct {
             try self.addMessageToHistory(msg, .{});
             self.alloc.free(msg);
         };
+
+        // Clear the current input buffer.
+        @memset(self.inputBuffer, 0);
     }
 
     pub fn draw(self: *Console) void {
@@ -151,10 +156,20 @@ pub const Console = struct {
                 zgui.popId();
             }
 
+            if(self.shouldFocus) {
+                std.debug.print("Scrolling to bottom.\n", .{});
+                zgui.setScrollHereY(.{});
+            }
+
             zgui.endChild();
 
             zgui.text(">> ", .{});
             zgui.sameLine(.{});
+            if(self.shouldFocus) {
+                zgui.setKeyboardFocusHere(0);
+                self.shouldFocus = false;
+            }
+            
             zgui.pushItemWidth(-1);
             if(zgui.inputText("##", .{ 
                 .buf = self.inputBuffer, 
@@ -167,6 +182,7 @@ pub const Console = struct {
             })) {
                 self.runCurrentInput() catch {
                 };
+                self.shouldFocus = true;
             }
             zgui.popItemWidth();
         }
