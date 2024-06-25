@@ -18,24 +18,31 @@ pub const Console = struct {
     alloc: std.mem.Allocator,
     scriptEng: *ScriptEngine,
     history: std.ArrayList([]u8),
+    historyIndex: i32,
+    log: std.ArrayList([]u8),
     opts: ConsoleOpts,
     enabled: bool,
     shouldFocus: bool,
     inputBuffer: [:0]u8,
+    storedCommandBuffer: [:0]u8,
 
     pub fn init(alloc: std.mem.Allocator, scriptEng: *ScriptEngine, opts: ConsoleOpts) !*Console {
         const console: *Console = try alloc.create(Console);
-        console.* = .{ 
-            .alloc = alloc, 
-            .scriptEng = scriptEng, 
-            .history = std.ArrayList([]u8).init(alloc), 
-            .opts = opts, 
+        console.* = .{
+            .alloc = alloc,
+            .scriptEng = scriptEng,
+            .history = std.ArrayList([]u8).init(alloc),
+            .historyIndex = -1,
+            .log = std.ArrayList([]u8).init(alloc),
+            .opts = opts,
             .enabled = true,
             .shouldFocus = true,
             .inputBuffer = try alloc.allocSentinel(u8, 256, 0),
+            .storedCommandBuffer = try alloc.allocSentinel(u8, 256, 0),
         };
 
         @memset(console.inputBuffer, 0);
+        @memset(console.storedCommandBuffer, 0);
 
         // Create a console object in lua.
         var lua = scriptEng.lua;
@@ -65,25 +72,39 @@ pub const Console = struct {
 
     pub fn deinit(self: *Console) void {
         for (self.history.items) |entry| {
-            // Free the log entries we allocated in our log func.
+            // Free the history entries we allocated in our run command func.
             self.alloc.free(entry);
         }
 
         self.history.deinit();
+
+        for (self.log.items) |entry| {
+            // Free the log entries we allocated in our log func.
+            self.alloc.free(entry);
+        }
+
+        self.log.deinit();
         self.alloc.free(self.inputBuffer);
+        self.alloc.free(self.storedCommandBuffer);
         self.alloc.destroy(self);
+    }
+
+    fn addMessageToHistoryZ(self: *Console, msgC: [:0]const u8) !void {
+        const newMsgC = try self.alloc.dupe(u8, msgC);
+        std.debug.print("length = {}", .{newMsgC.len});
+        try self.history.append(newMsgC[0..]);
     }
 
     const AddMessageOpts = struct {
         prepend: ?[]const u8 = null
     };
 
-    fn addMessageToHistoryZ(self: *Console, msgC: [:0]const u8, opts: AddMessageOpts) !void {
+    fn addMessageToLogZ(self: *Console, msgC: [:0]const u8, opts: AddMessageOpts) !void {
         const msg = utils.cStrToSlice(msgC);
-        try self.addMessageToHistory(msg, opts);
+        try self.addMessageToLog(msg, opts);
     }
 
-    fn addMessageToHistory(self: *Console, msg: []const u8, opts: AddMessageOpts) !void {
+    fn addMessageToLog(self: *Console, msg: []const u8, opts: AddMessageOpts) !void {
 
         // Allocate a copy of the message to add to our log entries.
         var spaceNeeded: usize = msg.len;
@@ -101,7 +122,7 @@ pub const Console = struct {
             @memcpy(new_msg, msg);
         }
 
-        try self.history.append(new_msg);
+        try self.log.append(new_msg);
     }
 
     fn log(lua: *Lua) i32 {
@@ -118,7 +139,7 @@ pub const Console = struct {
             return 0;
         };
         
-        console.addMessageToHistoryZ(msgC, .{}) catch {
+        console.addMessageToLogZ(msgC, .{}) catch {
             std.debug.print("Error adding message to history!\n", .{});
             return 0;
         };
@@ -128,11 +149,13 @@ pub const Console = struct {
 
     fn runCurrentInput(self: *Console) !void {
         std.debug.print("Running: {s}\n", .{self.inputBuffer});
-        try self.addMessageToHistoryZ(self.inputBuffer, .{ .prepend = ">> " });
+
+        try self.addMessageToHistoryZ(self.inputBuffer);
+        try self.addMessageToLogZ(self.inputBuffer, .{ .prepend = ">> " });
 
         self.scriptEng.run(self.inputBuffer) catch |err| {
             const msg = try std.fmt.allocPrint(self.alloc, "ERROR: {any}\n", .{err});
-            try self.addMessageToHistory(msg, .{});
+            try self.addMessageToLog(msg, .{});
             self.alloc.free(msg);
         };
 
@@ -150,9 +173,9 @@ pub const Console = struct {
                 .window_flags = .{ .always_vertical_scrollbar = true }
             });
             
-            for(0..self.history.items.len) |idx| {
+            for(0..self.log.items.len) |idx| {
                 zgui.pushIntId(@intCast(idx));
-                zgui.textWrapped("{s}", .{self.history.items[idx]});
+                zgui.textWrapped("{s}", .{self.log.items[idx]});
                 zgui.popId();
             }
 
@@ -192,7 +215,48 @@ pub const Console = struct {
     fn inputCallback(data: *zgui.InputTextCallbackData) i32 {
         std.debug.print("Callback hit!", .{});
         const console: *Console = @alignCast(@ptrCast(data.user_data));
-        _ = console;
+
+        if(data.event_flag.callback_history) {
+            var updateText: bool = false;
+            if(console.history.items.len > 0) {
+                if(data.event_key == .up_arrow) {
+                    if(console.historyIndex == -1) {
+                        @memcpy(console.storedCommandBuffer, console.inputBuffer);
+                        console.historyIndex = @intCast(console.history.items.len - 1);
+                        updateText = true;
+                    }
+                    else if(console.historyIndex > 0) {
+                        console.historyIndex -= 1;
+                        updateText = true;
+                    }
+
+                    const histIndex: usize = @intCast(console.historyIndex);
+                    @memcpy(console.inputBuffer, console.history.items[histIndex]);
+                }
+                else if(data.event_key == .down_arrow) {
+                    if(console.historyIndex != -1) {
+                        console.historyIndex += 1;
+
+                        if(console.historyIndex >= console.history.items.len) {
+                            console.historyIndex = -1;
+                            @memcpy(console.inputBuffer, console.storedCommandBuffer);
+                        }
+                        else {
+                            const histIndex: usize = @intCast(console.historyIndex);
+                            @memcpy(console.inputBuffer, console.history.items[histIndex]);
+                        }
+
+                        updateText = true;
+                    }
+                }
+
+                if(updateText) {
+                    data.deleteChars(0, data.buf_text_len);
+                    const msg = utils.cStrToSlice(console.inputBuffer);
+                    data.insertChars(0, msg);
+                }
+            }
+        }
         return 0;
     }
 };
