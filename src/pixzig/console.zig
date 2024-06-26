@@ -91,7 +91,6 @@ pub const Console = struct {
 
     fn addMessageToHistoryZ(self: *Console, msgC: [:0]const u8) !void {
         const newMsgC = try self.alloc.dupe(u8, msgC);
-        std.debug.print("length = {}", .{newMsgC.len});
         try self.history.append(newMsgC[0..]);
     }
 
@@ -150,7 +149,22 @@ pub const Console = struct {
     fn runCurrentInput(self: *Console) !void {
         std.debug.print("Running: {s}\n", .{self.inputBuffer});
 
-        try self.addMessageToHistoryZ(self.inputBuffer);
+        var addToHistory: bool = false;
+        if( self.history.items.len != 0) {
+            if(!std.mem.eql(u8, self.inputBuffer, self.history.items[self.history.items.len-1])) {
+                addToHistory = true;
+            }
+        }
+        else {
+            addToHistory = true;
+        }
+
+        if(addToHistory) {
+            try self.addMessageToHistoryZ(self.inputBuffer);
+        }
+
+        self.historyIndex = -1;
+
         try self.addMessageToLogZ(self.inputBuffer, .{ .prepend = ">> " });
 
         self.scriptEng.run(self.inputBuffer) catch |err| {
@@ -161,6 +175,7 @@ pub const Console = struct {
 
         // Clear the current input buffer.
         @memset(self.inputBuffer, 0);
+
     }
 
     pub fn draw(self: *Console) void {
@@ -180,13 +195,21 @@ pub const Console = struct {
             }
 
             if(self.shouldFocus) {
-                std.debug.print("Scrolling to bottom.\n", .{});
                 zgui.setScrollHereY(.{});
             }
 
             zgui.endChild();
 
-            zgui.text(">> ", .{});
+            const historyLen = self.history.items.len;
+            if(self.historyIndex == -1 or historyLen == 0) {
+                zgui.text(">> ", .{});
+            } 
+            else {
+                const currIdx = @as(i32, @intCast(historyLen)) - self.historyIndex;
+                zgui.text("[{}/{}] >> ", .{currIdx, historyLen});
+            }
+
+
             zgui.sameLine(.{});
             if(self.shouldFocus) {
                 zgui.setKeyboardFocusHere(0);
@@ -213,7 +236,6 @@ pub const Console = struct {
     }
 
     fn inputCallback(data: *zgui.InputTextCallbackData) i32 {
-        std.debug.print("Callback hit!", .{});
         const console: *Console = @alignCast(@ptrCast(data.user_data));
 
         if(data.event_flag.callback_history) {
