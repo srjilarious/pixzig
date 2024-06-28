@@ -179,9 +179,9 @@ pub fn build(b: *std.Build) void {
 
     _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig");
 
-    // const tests = example(b, target, optimize, "unit_tests", "tests/main.zig");
-    // const testzMod = b.dependency("testz", .{});
-    // tests.root_module.addImport("testz", testzMod.module("testz"));
+    const tests = example(b, target, optimize, "tests", "tests/main.zig");
+    const testzMod = b.dependency("testz", .{});
+    tests.root_module.addImport("testz", testzMod.module("testz"));
 }
 
 inline fn thisDir() []const u8 {

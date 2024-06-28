@@ -3,12 +3,11 @@ const std = @import("std");
 const testz = @import("testz");
 
 const Tests = testz.discoverTests(.{ 
-    @import("./tile_tests.zig"),
-    @import("./keymap_tests.zig"),
-});
+    testz.Group{ .name = "Tilemap Tests", .tag = "tile", .mod = @import("./tile_tests.zig")},
+    testz.Group{ .name = "Keymap Tests", .tag = "keymap", .mod = @import("./keymap_tests.zig")},
+    testz.Group{ .name = "Collision Tests", .tag = "collision", .mod = @import("./collision_tests.zig")},
+}, .{});
 
-pub fn main() void {
-    const verbose = if(std.os.argv.len > 1 and std.mem.eql(u8, "verbose", std.mem.span(std.os.argv[1]))) true else false;
-    
-    _ = testz.runTests(Tests, verbose);
+pub fn main() !void {
+    try testz.testzRunner(Tests);
 }
