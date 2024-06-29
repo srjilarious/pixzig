@@ -26,11 +26,11 @@ pub const RectF = struct {
     r: f32,
     b: f32,
 
-    pub fn width(self: *RectF) f32 {
+    pub fn width(self: *const RectF) f32 {
         return self.r - self.l;
     }
 
-    pub fn height(self: *RectF) f32 {
+    pub fn height(self: *const RectF) f32 {
         return self.b - self.t;
     }
 

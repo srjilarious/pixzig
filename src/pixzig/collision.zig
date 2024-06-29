@@ -11,6 +11,7 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
 
         grid: std.ArrayList([maxItemsPerCell]?T),
         gridSize: Vec2U,
+        gridExtent: Vec2U,
         cellSize: Vec2U,
 
         pub fn init(alloc: std.mem.Allocator, gridSize: Vec2U, cellSize: Vec2U) !Self {
@@ -26,6 +27,7 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             return .{
                 .grid = grid,
                 .gridSize = gridSize,
+                .gridExtent = .{ .x = gridSize.x * cellSize.x, .y = gridSize.y * cellSize.y },
                 .cellSize = cellSize,
             };
         }
@@ -56,37 +58,98 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             return error.NoMoreSpace;
         }
 
-        // pub fn insertRect(self: *Self, bounds: RectF, obj: T) !void {
-        //
-        // }
+        pub fn insertRect(self: *Self, bounds: RectF, obj: T) !void {
+            const cx: usize = @as(usize, @intFromFloat(bounds.l)) / self.cellSize.x;
+            const cy: usize = @as(usize, @intFromFloat(bounds.t)) / self.cellSize.y;
+            const nx: usize = (@as(usize, @intFromFloat(bounds.width())) + self.cellSize.x - 1) / self.cellSize.x;
+            const ny: usize = (@as(usize, @intFromFloat(bounds.height())) + self.cellSize.y - 1) / self.cellSize.y;
 
-        // pub fn removeRect(self: *Self, bounds: RectF, obj: T) !void {
-        //
-        // }
+            for (cy..cy + ny) |y| {
+                if (y < 0) continue;
+                if (y >= self.gridSize.y) break;
+
+                for (cx..cx + nx) |x| {
+                    if (x < 0) continue;
+                    if (x >= self.gridSize.x) break;
+
+                    // Go through the current cell's list and find a spot for the object.
+                    const idx: usize = y * self.gridSize.x + x;
+                    var items = &self.grid.items[idx];
+                    var placed: bool = false;
+                    for (0..items.len) |itIdx| {
+                        if (items[itIdx] == null) {
+                            items[itIdx] = obj;
+                            placed = true;
+                            break;
+                        }
+                    }
+
+                    if (!placed) {
+                        return error.NoMoreSpace;
+                    }
+                }
+            }
+        }
+
+        pub fn removeRect(self: *Self, bounds: RectF, obj: T) !void {
+            const cx: usize = @as(usize, @intFromFloat(bounds.l)) / self.cellSize.x;
+            const cy: usize = @as(usize, @intFromFloat(bounds.t)) / self.cellSize.y;
+            const nx: usize = (@as(usize, @intFromFloat(bounds.width())) + self.cellSize.x - 1) / self.cellSize.x;
+            const ny: usize = (@as(usize, @intFromFloat(bounds.height())) + self.cellSize.y - 1) / self.cellSize.y;
+
+            for (cy..cy + ny) |y| {
+                if (y < 0) continue;
+                if (y >= self.gridSize.y) break;
+
+                for (cx..cx + nx) |x| {
+                    if (x < 0) continue;
+                    if (x >= self.gridSize.x) break;
+
+                    // Go through the current cell's list and find a spot for the object.
+                    const idx: usize = y * self.gridSize.x + x;
+                    var items = &self.grid.items[idx];
+                    for (0..items.len) |itIdx| {
+                        if (items[itIdx] == obj) {
+                            items[itIdx] = null;
+
+                            // TODO: swap this cell's null with the last non-null item to fill it in.
+                            //
+                            break;
+                        }
+                    }
+                }
+            }
+        }
 
         pub fn checkPoint(self: *Self, pixelPos: Vec2I, outList: *const []?T) !bool {
-            if ((pixelPos.x < 0) or (@as(usize, @intCast(pixelPos.x)) >= self.gridSize.x)) {
+            if ((pixelPos.x < 0) or (@as(usize, @intCast(pixelPos.x)) >= self.gridExtent.x)) {
+                std.debug.print("pos = {}\n", .{@as(usize, @intCast(pixelPos.x))});
                 return false;
             }
 
-            if ((pixelPos.y < 0) or (@as(usize, @intCast(pixelPos.y)) >= self.gridSize.y)) {
+            if ((pixelPos.y < 0) or (@as(usize, @intCast(pixelPos.y)) >= self.gridExtent.y)) {
                 return false;
             }
 
             const cx: usize = @as(usize, @intCast(pixelPos.x)) / self.cellSize.x;
             const cy: usize = @as(usize, @intCast(pixelPos.y)) / self.cellSize.y;
             const idx: usize = cy * self.gridSize.x + cx;
-            const items = self.grid.items[idx];
+            const items = &self.grid.items[idx];
 
-            var foundItem: bool = false;
+            var numFound: usize = 0;
             for (0..items.len) |itIdx| {
                 if (items[itIdx] == null) break;
 
                 outList.*[itIdx] = items[itIdx];
-                foundItem = true;
+                numFound += 1;
             }
 
-            return foundItem;
+            // null the rest of the list
+            for (0..maxItemsPerCell - numFound) |i| {
+                outList.*[numFound + i] = null;
+            }
+
+            return numFound > 0;
         }
     };
 }
