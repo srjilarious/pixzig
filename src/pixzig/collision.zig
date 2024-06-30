@@ -151,5 +151,48 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
 
             return numFound > 0;
         }
+
+        pub fn checkHorz(self: *Self, cxStart: i32, cxEnd: i32, cy: i32, outList: *const []?T) !usize {
+            var baseIdx: usize = 0;
+            var numFound: usize = 0;
+            const cxStartU: usize = @intCast(cxStart);
+            const cxEndU: usize = @intCast(cxEnd);
+            const cyU: usize = @intCast(cy);
+            for (cxStartU..cxEndU) |cx| {
+                const idx: usize = cyU * self.gridSize.x + cx;
+                const items = &self.grid.items[idx];
+
+                var subNumFound: usize = 0;
+                for (0..items.len) |itIdx| {
+                    if (items[itIdx] == null) break;
+
+                    var itemFound: bool = false;
+                    for (0..baseIdx) |olIdx| {
+                        if (outList.*[olIdx] == items[itIdx]) {
+                            itemFound = true;
+                            break;
+                        }
+                    }
+                    if (!itemFound) {
+                        if (baseIdx + itIdx >= outList.len) {
+                            return error.NoMoreSpace;
+                        }
+
+                        outList.*[baseIdx + subNumFound] = items[itIdx];
+                        subNumFound += 1;
+                    }
+                }
+
+                numFound += subNumFound;
+                baseIdx += subNumFound;
+            }
+
+            // Null out remaining part of hit list.
+            for (numFound..outList.len) |idx| {
+                outList.*[idx] = null;
+            }
+
+            return numFound;
+        }
     };
 }
