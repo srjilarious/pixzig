@@ -83,7 +83,7 @@ pub fn insertRectTest() !void {
     try testz.expectEqual(hits[1].?, 200);
 }
 
-pub fn checkHorzTest_() !void {
+pub fn checkHorzTest() !void {
     // creates a 10x10 grid with cells 5x5 pixels
     var grid = try IntCollisionGrid.init(std.heap.page_allocator, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
     defer grid.deinit();
@@ -121,6 +121,51 @@ pub fn checkHorzTest_() !void {
     // Test that a line without items doesn't pick anything up.
     {
         const res = try grid.checkHorz(0, 1, 7, &hitList[0..]);
+        try testz.expectEqual(res, 0);
+        for (0..hitList.len) |idx| {
+            try testz.expectEqual(hitList[idx], null);
+        }
+    }
+}
+
+pub fn checkVertTest() !void {
+    // creates a 10x10 grid with cells 5x5 pixels
+    var grid = try IntCollisionGrid.init(std.heap.page_allocator, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
+    defer grid.deinit();
+
+    grid.insertRect(.{ .t = 0, .l = 0, .r = 15, .b = 20 }, 100) catch {
+        try testz.fail();
+    };
+
+    grid.insertRect(.{ .t = 6, .l = 10, .r = 25, .b = 15 }, 200) catch {
+        try testz.fail();
+    };
+
+    var hitList: [5]?i32 = .{ null, null, null, null, null };
+
+    // Check case where we hit both rects.
+    {
+        const res = grid.checkVert(2, 0, 2, &hitList[0..]) catch |err| {
+            try testz.failWith(err);
+            return error.Fail;
+        };
+
+        try testz.expectEqual(res, 2);
+        try testz.expectNotEqual(hitList[0], null);
+        try testz.expectEqual(hitList[0].?, 100);
+
+        try testz.expectNotEqual(hitList[1], null);
+        try testz.expectEqual(hitList[1].?, 200);
+
+        // Rest should be null
+        for (2..hitList.len) |idx| {
+            try testz.expectEqual(hitList[idx], null);
+        }
+    }
+
+    // Test that a line without items doesn't pick anything up.
+    {
+        const res = try grid.checkVert(7, 0, 9, &hitList[0..]);
         try testz.expectEqual(res, 0);
         for (0..hitList.len) |idx| {
             try testz.expectEqual(hitList[idx], null);

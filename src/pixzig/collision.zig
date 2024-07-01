@@ -194,5 +194,48 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
 
             return numFound;
         }
+
+        pub fn checkVert(self: *Self, cx: i32, cyStart: i32, cyEnd: i32, outList: *const []?T) !usize {
+            var baseIdx: usize = 0;
+            var numFound: usize = 0;
+            const cyStartU: usize = @intCast(cyStart);
+            const cyEndU: usize = @intCast(cyEnd);
+            const cxU: usize = @intCast(cx);
+            for (cyStartU..cyEndU) |cy| {
+                const idx: usize = cy * self.gridSize.x + cxU;
+                const items = &self.grid.items[idx];
+
+                var subNumFound: usize = 0;
+                for (0..items.len) |itIdx| {
+                    if (items[itIdx] == null) break;
+
+                    var itemFound: bool = false;
+                    for (0..baseIdx) |olIdx| {
+                        if (outList.*[olIdx] == items[itIdx]) {
+                            itemFound = true;
+                            break;
+                        }
+                    }
+                    if (!itemFound) {
+                        if (baseIdx + itIdx >= outList.len) {
+                            return error.NoMoreSpace;
+                        }
+
+                        outList.*[baseIdx + subNumFound] = items[itIdx];
+                        subNumFound += 1;
+                    }
+                }
+
+                numFound += subNumFound;
+                baseIdx += subNumFound;
+            }
+
+            // Null out remaining part of hit list.
+            for (numFound..outList.len) |idx| {
+                outList.*[idx] = null;
+            }
+
+            return numFound;
+        }
     };
 }
