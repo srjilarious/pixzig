@@ -166,6 +166,7 @@ pub fn build(b: *std.Build) void {
 
     _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig");
     _ = example(b, target, optimize, "console_test", "examples/console_test.zig");
+    _ = example(b, target, optimize, "collision_test", "examples/collision_test.zig");
     _ = example(b, target, optimize, "create_texture", "examples/create_texture.zig");
     _ = example(b, target, optimize, "tile_load_test", "examples/tile_load_test.zig");
     _ = example(b, target, optimize, "flecs_test", "examples/flecs_test.zig");
