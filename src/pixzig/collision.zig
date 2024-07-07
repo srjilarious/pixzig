@@ -158,7 +158,7 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             const cxStartU: usize = @intCast(cxStart);
             const cxEndU: usize = @intCast(cxEnd);
             const cyU: usize = @intCast(cy);
-            for (cxStartU..cxEndU) |cx| {
+            for (cxStartU..cxEndU + 1) |cx| {
                 const idx: usize = cyU * self.gridSize.x + cx;
                 const items = &self.grid.items[idx];
 
@@ -201,7 +201,7 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             const cyStartU: usize = @intCast(cyStart);
             const cyEndU: usize = @intCast(cyEnd);
             const cxU: usize = @intCast(cx);
-            for (cyStartU..cyEndU) |cy| {
+            for (cyStartU..cyEndU + 1) |cy| {
                 const idx: usize = cy * self.gridSize.x + cxU;
                 const items = &self.grid.items[idx];
 
@@ -237,5 +237,32 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
 
             return numFound;
         }
+
+        pub fn checkLeft(self: *Self, objRect: *const RectF, outList: *const []?T) !usize {
+            const left: i32 = @intFromFloat(objRect.l);
+            const top: i32 = @as(i32, @intFromFloat(objRect.t)) + 1;
+            const bottom: i32 = @as(i32, @intFromFloat(objRect.b)) - 1;
+
+            const leftTileX = @divTrunc(left, @as(i32, @intCast(self.cellSize.x)));
+            const tyStart = @divTrunc(top, @as(i32, @intCast(self.cellSize.y)));
+            const tyEnd = @divTrunc(bottom, @as(i32, @intCast(self.cellSize.y)));
+
+            return self.checkVert(leftTileX, tyStart, tyEnd, outList);
+        }
+
+        pub fn checkRight(self: *Self, objRect: *const RectF, outList: *const []?T) !usize {
+            const right: i32 = @intFromFloat(objRect.r);
+            const top: i32 = @as(i32, @intFromFloat(objRect.t)) + 1;
+            const bottom: i32 = @as(i32, @intFromFloat(objRect.b)) - 1;
+
+            const rightTileX = @divTrunc(right, @as(i32, @intCast(self.cellSize.x)));
+            const tyStart = @divTrunc(top, @as(i32, @intCast(self.cellSize.y)));
+            const tyEnd = @divTrunc(bottom, @as(i32, @intCast(self.cellSize.y)));
+
+            return self.checkVert(rightTileX, tyStart, tyEnd, outList);
+        }
+
+        // pub fn checkUp(self: *Self, objRect: *const RectF, outList: *const []?T) !usize {}
+        // pub fn checkDown(self: *Self, objRect: *const RectF, outList: *const []?T) !usize {}
     };
 }
