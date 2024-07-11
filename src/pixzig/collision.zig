@@ -262,7 +262,28 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             return self.checkVert(rightTileX, tyStart, tyEnd, outList);
         }
 
-        // pub fn checkUp(self: *Self, objRect: *const RectF, outList: *const []?T) !usize {}
-        // pub fn checkDown(self: *Self, objRect: *const RectF, outList: *const []?T) !usize {}
+        pub fn checkUp(self: *Self, objRect: *const RectF, outList: *const []?T) !usize {
+            const top: i32 = @intFromFloat(objRect.t);
+            const left: i32 = @as(i32, @intFromFloat(objRect.l)) + 1;
+            const right: i32 = @as(i32, @intFromFloat(objRect.r)) - 1;
+
+            const topTileY = @divTrunc(top, @as(i32, @intCast(self.cellSize.y)));
+            const txStart = @divTrunc(left, @as(i32, @intCast(self.cellSize.x)));
+            const txEnd = @divTrunc(right, @as(i32, @intCast(self.cellSize.x)));
+
+            return self.checkHorz(txStart, txEnd, topTileY, outList);
+        }
+
+        pub fn checkDown(self: *Self, objRect: *const RectF, outList: *const []?T) !usize {
+            const bottom: i32 = @intFromFloat(objRect.b);
+            const left: i32 = @as(i32, @intFromFloat(objRect.l)) + 1;
+            const right: i32 = @as(i32, @intFromFloat(objRect.r)) - 1;
+
+            const bottomTileY = @divTrunc(bottom, @as(i32, @intCast(self.cellSize.y)));
+            const txStart = @divTrunc(left, @as(i32, @intCast(self.cellSize.x)));
+            const txEnd = @divTrunc(right, @as(i32, @intCast(self.cellSize.x)));
+
+            return self.checkHorz(txStart, txEnd, bottomTileY, outList);
+        }
     };
 }
