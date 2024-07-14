@@ -20,7 +20,9 @@ const Frame = pixzig.sprites.Frame;
 const Vec2F = pixzig.common.Vec2F;
 const FpsCounter = pixzig.utils.FpsCounter;
 const Sprite = pixzig.sprites.Sprite;
+const CollisionGrid = pixzig.collision.CollisionGrid;
 
+const CollisionGridEntity = CollisionGrid(flecs.entity_t, 4);
 
 pub const App = struct {
     allocator: std.mem.Allocator,
@@ -29,14 +31,15 @@ pub const App = struct {
     spriteBatch: pixzig.renderer.SpriteBatchQueue,
     tex: *pixzig.Texture,
     texShader: pixzig.shaders.Shader,
+    collideGrid: CollisionGridEntity,
     // colorShader: pixzig.shaders.Shader,
     // shapeBatch: pixzig.renderer.ShapeBatchQueue,
     fps: FpsCounter,
     paused: bool,
     world: *flecs.world_t,
-    // update_query: *flecs.query_t,
-    // draw_query: *flecs.query_t,
-    
+    update_query: *flecs.query_t,
+    draw_query: *flecs.query_t,
+ 
     pub fn init(eng: *pixzig.PixzigEngine, alloc: std.mem.Allocator) !App {
         // Orthographic projection matrix
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
@@ -46,7 +49,7 @@ pub const App = struct {
             &pixzig.shaders.TexPixelShader
         );
 
-        const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
+        const tex = try eng.textures.loadTexture("tiles", "assets/pac-tiles.png");
        
         const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &texShader);
 
@@ -65,25 +68,25 @@ pub const App = struct {
         // flecs.COMPONENT(world, Velocity);
         // flecs.COMPONENT(world, DebugOutline);
 
-        // const update_query = try flecs.query_init(world, &.{
-        //     .filter = .{
-        //         .terms = [_]flecs.term_t{
-        //             .{ .id = flecs.id(Sprite) },
-        //             .{ .id = flecs.id(Velocity) },
-        //         } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 2),
-        //     },
-        // });
-        //
-        // const query = try flecs.query_init(world, &.{
-        //     .filter = .{
-        //         .terms = [_]flecs.term_t{
-        //             .{ .id = flecs.id(Sprite) },
-        //         } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 1),
-        //     },
-        // });
+        const update_query = try flecs.query_init(world, &.{
+            .filter = .{
+                .terms = [_]flecs.term_t{
+                    .{ .id = flecs.id(Sprite) },
+                    // .{ .id = flecs.id(Velocity) },
+                } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 1),
+            },
+        });
+
+        const query = try flecs.query_init(world, &.{
+            .filter = .{
+                .terms = [_]flecs.term_t{
+                    .{ .id = flecs.id(Sprite) },
+                } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 1),
+            },
+        });
 
 
-        const app = App{
+        var app = App{
             .allocator = alloc,
             .projMat = projMat,
             .scrollOffset = .{ .x = 0, .y = 0}, 
@@ -92,12 +95,19 @@ pub const App = struct {
             // .shapeBatch = shapeBatch,
             .tex = tex,
             .texShader = texShader,
+            .collideGrid = try CollisionGridEntity.init(alloc, .{ .x=100, .y=100}, .{.x=8, .y=8}),
             // .colorShader = colorShader,
             .fps = FpsCounter.init(),
             .world = world,
-            // .update_query = update_query,
-            // .draw_query = query,
+            .update_query = update_query,
+            .draw_query = query,
         };
+
+        for(0..10) |y| {
+            for(0..10) |x| {
+                try app.spawn(16, @intCast(x*16), @intCast(y*16));
+            }
+        }
 
         // app.spawn(6, 300, 210, false);
         // app.spawn(11, 15, 320, false);
@@ -111,41 +121,45 @@ pub const App = struct {
         // self.shapeBatch.deinit();
         // self.colorShader.deinit();
         self.texShader.deinit();
+        self.collideGrid.deinit();
 
         // flecs.query_fini(self.draw_query);
         _ = flecs.fini(self.world);
     }
 
-    // pub fn spawn(self: *App, which: usize, x: i32, y: i32, val: bool) void
-    // {
-    //     const ent = flecs.new_id(self.world);
-    //     const srcX: i32 = @intCast(32*@rem(which, 16));
-    //     const srcY:i32 = @intCast(32*@divTrunc(which, 16));
-    //     var spr = Sprite.create(
-    //             self.tex, 
-    //             .{ .x = 32, .y = 32}, 
-    //             RectF.fromCoords(srcX, srcY, 32, 32, 512, 512));
-    //
-    //     spr.setPos(x, y);
-    //     _ = flecs.set(self.world, ent, Sprite, spr);
-    //
-    //     var prng = std.rand.DefaultPrng.init(blk: {
-    //         var seed: u64 = undefined;
-    //         std.posix.getrandom(std.mem.asBytes(&seed)) catch unreachable;
-    //         break :blk seed;
-    //     });
-    //     
-    //     const vel = Velocity{ .speed = .{
-    //         .x = 2*prng.random().floatNorm(f32),
-    //         .y = 2*prng.random().floatNorm(f32)
-    //     }};
-    //
-    //     _ = flecs.set(self.world, ent, Velocity, vel);
-    //
-    //     if(val) {
-    //         _ = flecs.set(self.world, ent, DebugOutline, .{ .color = Color.from(100, 255, 200, 220)});
-    //     }
-    // }
+    pub fn spawn(self: *App, which: usize, x: i32, y: i32) !void
+    {
+        const ent = flecs.new_id(self.world);
+        const srcX: i32 = @intCast(32*@rem(which, 16));
+        const srcY: i32 = @intCast(32*@divTrunc(which, 16));
+        var spr = Sprite.create(
+                self.tex, 
+                .{ .x = 32, .y = 32}, 
+                RectF.fromCoords(srcX, srcY, 32, 32, 512, 512));
+
+        spr.setPos(x, y);
+        _ = flecs.set(self.world, ent, Sprite, spr);
+
+        try self.collideGrid.insertRect(spr.dest, ent);
+
+        // var prng = std.rand.DefaultPrng.init(blk: {
+        //     var seed: u64 = undefined;
+        //     std.posix.getrandom(std.mem.asBytes(&seed)) catch unreachable;
+        //     break :blk seed;
+        // });
+        // 
+        // const vel = Velocity{ .speed = .{
+        //     .x = 2*prng.random().floatNorm(f32),
+        //     .y = 2*prng.random().floatNorm(f32)
+        // }};
+        //
+        // _ = flecs.set(self.world, ent, Velocity, vel);
+
+        // if(val) {
+        //     _ = flecs.set(self.world, ent, DebugOutline, .{ .color = Color.from(100, 255, 200, 220)});
+        // }
+
+    }
 
     pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {
         if(self.fps.update(delta)) {
@@ -178,39 +192,39 @@ pub const App = struct {
         }
 
         if(!self.paused) {
-            // var it = flecs.query_iter(self.world, self.update_query);
-            // while (flecs.query_next(&it)) {
-            //     const spr = flecs.field(&it, Sprite, 1).?;
-            //     const vel = flecs.field(&it, Velocity, 2).?;
-            //
-            //     //const entities = it.entities();
-            //     for (0..it.count()) |idx| {
-            //
-            //         var v: *Velocity = &vel[idx];
-            //         var sp: *Sprite = &spr[idx];
-            //
-            //         sp.dest.l += v.speed.x;
-            //         if(sp.dest.l < 0 or sp.dest.l > 800 - sp.size.x) {
-            //             v.speed.x = -v.speed.x;
-            //         }
-            //
-            //         sp.dest.t += v.speed.y;
-            //         if(sp.dest.t < 0 or sp.dest.t > 600 - sp.size.y) {
-            //             v.speed.y = -v.speed.y;
-            //         }
-            //
-            //         sp.dest.ensureSize(@as(i32, @intFromFloat(sp.size.x)), @as(i32, @intFromFloat(sp.size.y)));
-            //
-            //         //spr[idx].draw(&self.spriteBatch) catch {};
-            //
-            //         //const e = entities[idx];
-            //
-            //         // const outline = flecs.get(self.world, e, DebugOutline);
-            //         // if(outline != null) {
-            //         //     self.shapeBatch.drawEnclosingRect(spr[idx].dest, outline.?.color, 2);
-            //         // }
-            //     }
-            // }
+            var it = flecs.query_iter(self.world, self.update_query);
+            while (flecs.query_next(&it)) {
+                const spr = flecs.field(&it, Sprite, 1).?;
+                // const vel = flecs.field(&it, Velocity, 2).?;
+
+                //const entities = it.entities();
+                for (0..it.count()) |idx| {
+
+                    // var v: *Velocity = &vel[idx];
+                    var sp: *Sprite = &spr[idx];
+
+                    // sp.dest.l += v.speed.x;
+                    // if(sp.dest.l < 0 or sp.dest.l > 800 - sp.size.x) {
+                    //     v.speed.x = -v.speed.x;
+                    // }
+                    //
+                    // sp.dest.t += v.speed.y;
+                    // if(sp.dest.t < 0 or sp.dest.t > 600 - sp.size.y) {
+                    //     v.speed.y = -v.speed.y;
+                    // }
+
+                    sp.dest.ensureSize(@as(i32, @intFromFloat(sp.size.x)), @as(i32, @intFromFloat(sp.size.y)));
+
+                    //spr[idx].draw(&self.spriteBatch) catch {};
+
+                    //const e = entities[idx];
+
+                    // const outline = flecs.get(self.world, e, DebugOutline);
+                    // if(outline != null) {
+                    //     self.shapeBatch.drawEnclosingRect(spr[idx].dest, outline.?.color, 2);
+                    // }
+                }
+            }
         }
 
         return true;
@@ -223,22 +237,22 @@ pub const App = struct {
        
         self.spriteBatch.begin(self.projMat);
 
-        // var it = flecs.query_iter(self.world, self.draw_query);
-        // while (flecs.query_next(&it)) {
-        //     const spr = flecs.field(&it, Sprite, 1).?;
-        //     //const debug = flecs.field(&it, DebugOutline, 2).?;
-        //
-        //     const entities = it.entities();
-        //     for (0..it.count()) |idx| {
-        //         spr[idx].draw(&self.spriteBatch) catch {};
-        //         const e = entities[idx];
-        //
-        //         const outline = flecs.get(self.world, e, DebugOutline);
-        //         if(outline != null) {
-        //             self.shapeBatch.drawEnclosingRect(spr[idx].dest, outline.?.color, 2);
-        //         }
-        //     }
-        // }
+        var it = flecs.query_iter(self.world, self.draw_query);
+        while (flecs.query_next(&it)) {
+            const spr = flecs.field(&it, Sprite, 1).?;
+            //const debug = flecs.field(&it, DebugOutline, 2).?;
+
+            // const entities = it.entities();
+            for (0..it.count()) |idx| {
+                spr[idx].draw(&self.spriteBatch) catch {};
+                // const e = entities[idx];
+
+                // const outline = flecs.get(self.world, e, DebugOutline);
+                // if(outline != null) {
+                //     self.shapeBatch.drawEnclosingRect(spr[idx].dest, outline.?.color, 2);
+                // }
+            }
+        }
 
         self.spriteBatch.end();
     }
