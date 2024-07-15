@@ -28,7 +28,7 @@ pub fn insertionTest() !void {
         try testz.fail();
     };
 
-    try testz.expectTrue(res);
+    try testz.expectEqual(res, 2);
     try testz.expectNotEqual(hits[0], null);
     try testz.expectEqual(hits[0].?, 100);
 
@@ -55,7 +55,7 @@ pub fn insertRectTest() !void {
         try testz.fail();
     };
 
-    try testz.expectTrue(res);
+    try testz.expectEqual(res, 1);
     try testz.expectNotEqual(hits[0], null);
     try testz.expectEqual(hits[0].?, 100);
     try testz.expectEqual(hits[1], null);
@@ -64,7 +64,7 @@ pub fn insertRectTest() !void {
     res = grid.checkPoint(.{ .x = 40, .y = 40 }, &hits[0..]) catch {
         try testz.fail();
     };
-    try testz.expectFalse(res);
+    try testz.expectEqual(res, 0);
 
     // Make sure our hit list got nulled out properly.
     try testz.expectEqual(hits[0], null);
@@ -75,7 +75,7 @@ pub fn insertRectTest() !void {
         try testz.fail();
     };
 
-    try testz.expectTrue(res);
+    try testz.expectEqual(res, 2);
     try testz.expectNotEqual(hits[0], null);
     try testz.expectEqual(hits[0].?, 100);
 

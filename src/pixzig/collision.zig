@@ -121,14 +121,14 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             }
         }
 
-        pub fn checkPoint(self: *Self, pixelPos: Vec2I, outList: *const []?T) !bool {
+        pub fn checkPoint(self: *Self, pixelPos: Vec2I, outList: *const []?T) !usize {
             if ((pixelPos.x < 0) or (@as(usize, @intCast(pixelPos.x)) >= self.gridExtent.x)) {
                 std.debug.print("pos = {}\n", .{@as(usize, @intCast(pixelPos.x))});
-                return false;
+                return 0;
             }
 
             if ((pixelPos.y < 0) or (@as(usize, @intCast(pixelPos.y)) >= self.gridExtent.y)) {
-                return false;
+                return 0;
             }
 
             const cx: usize = @as(usize, @intCast(pixelPos.x)) / self.cellSize.x;
@@ -149,7 +149,7 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
                 outList.*[numFound + i] = null;
             }
 
-            return numFound > 0;
+            return numFound;
         }
 
         pub fn checkHorz(self: *Self, cxStart: i32, cxEnd: i32, cy: i32, outList: *const []?T) !usize {

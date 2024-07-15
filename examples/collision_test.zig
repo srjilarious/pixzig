@@ -32,6 +32,7 @@ pub const App = struct {
     tex: *pixzig.Texture,
     texShader: pixzig.shaders.Shader,
     collideGrid: CollisionGridEntity,
+    mouse: pixzig.input.Mouse,
     // colorShader: pixzig.shaders.Shader,
     // shapeBatch: pixzig.renderer.ShapeBatchQueue,
     fps: FpsCounter,
@@ -92,6 +93,7 @@ pub const App = struct {
             .scrollOffset = .{ .x = 0, .y = 0}, 
             .paused = false,
             .spriteBatch = spriteBatch,
+            .mouse = pixzig.input.Mouse.init(eng.window, eng.allocator),
             // .shapeBatch = shapeBatch,
             .tex = tex,
             .texShader = texShader,
@@ -123,7 +125,8 @@ pub const App = struct {
         self.texShader.deinit();
         self.collideGrid.deinit();
 
-        // flecs.query_fini(self.draw_query);
+        flecs.query_fini(self.update_query);
+        flecs.query_fini(self.draw_query);
         _ = flecs.fini(self.world);
     }
 
@@ -167,6 +170,7 @@ pub const App = struct {
         }
 
         eng.keyboard.update();
+        self.mouse.update();
 
         if (eng.keyboard.pressed(.one)) std.debug.print("one!\n", .{});
         if (eng.keyboard.pressed(.two)) std.debug.print("two!\n", .{});
@@ -191,6 +195,7 @@ pub const App = struct {
             return false;
         }
 
+        
         if(!self.paused) {
             var it = flecs.query_iter(self.world, self.update_query);
             while (flecs.query_next(&it)) {
@@ -227,6 +232,16 @@ pub const App = struct {
             }
         }
 
+        const mousePos = self.mouse.pos().asVec2I();
+        var hits: [4]?flecs.entity_t = .{ null, null, null, null };
+        const num = try self.collideGrid.checkPoint(mousePos, &hits[0..]);
+        if(num > 0) {
+            for(0..num) |idx| {
+                std.debug.print("Hit {?}\n", .{hits[idx]});
+                flecs.delete(self.world, hits[idx].?);
+            }
+        }
+        
         return true;
     }
 
