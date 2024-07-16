@@ -238,6 +238,7 @@ pub const App = struct {
         if(num > 0) {
             for(0..num) |idx| {
                 std.debug.print("Hit {?}\n", .{hits[idx]});
+                try self.collideGrid.removeRect(RectF.fromPosSize(mousePos.x, mousePos.y, 16, 16), hits[idx].?);
                 flecs.delete(self.world, hits[idx].?);
             }
         }

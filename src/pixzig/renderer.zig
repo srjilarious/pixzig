@@ -630,16 +630,116 @@ pub const TextRenderer = struct {
 
 };
 
-pub fn Renderer(NumExpectedTextures: usize) type {
+pub const RendererOptions = struct {
+    numSpriteTextures: u8 = 1,
+    shapeRendering: bool = true,
+    textRenderering: bool = false,
+    fontFace: ?[:0]const u8 = null,
+};
+
+pub fn Renderer(opts: RendererOptions) type {
 
     return struct {
-        batches: [NumExpectedTextures]SpriteBatchQueue,
-        shapes: ShapeBatchQueue,
-        text: TextRenderer,
+        alloc: std.mem.Allocator,
+        impl: *Impl,
 
-        // pub fn init(alloc: std.mem.Allocator) @This() {
-        //     
-        // }
+        const Impl = struct {
+            batches: [opts.numSpriteTextures]SpriteBatchQueue,
+            texShader: Shader,
+
+            shapes: ShapeBatchQueue = undefined,
+            colorShader: Shader = undefined,
+            
+            text: TextRenderer = undefined,
+
+        };
+
+        pub fn init(alloc: std.mem.Allocator) !@This() {
+            var rend = try alloc.create(Impl);
+
+            rend.texShader = try Shader.init(
+                &shaders.TexVertexShader,
+                &shaders.TexPixelShader
+            );
+
+            for(0..opts.numSpriteTextures) |idx| {
+                rend.batches[idx] = try SpriteBatchQueue.init(alloc, &rend.texShader);
+            }
+
+            if(opts.shapeRendering) {
+                rend.colorShader = try shaders.Shader.init(
+                    &shaders.ColorVertexShader,
+                    &shaders.ColorPixelShader
+                );
+
+                rend.shapes = try ShapeBatchQueue.init(alloc, &rend.colorShader);
+            }
+
+            // TODO: Add in text renderering init too.
+            return .{ 
+                .alloc = alloc,
+                .impl = rend
+            };
+        }
+
+        pub fn deinit(self: *@This()) void {
+            for(0..self.impl.batches.len) |idx| {
+                self.impl.batches[idx].deinit();
+            }
+
+            self.impl.texShader.deinit();
+
+            if(opts.shapeRendering) {
+                self.impl.colorShader.deinit();
+                self.impl.shapes.deinit();
+            }
+
+            self.alloc.destroy(self.impl);
+        }
+
+        pub fn begin(self: *@This(), mvp: zmath.Mat) void {
+            for(0..self.impl.batches.len) |idx| {
+                self.impl.batches[idx].begin(mvp);
+            }
+
+            if(opts.shapeRendering) {
+                self.impl.shapes.begin(mvp);
+            }
+
+            // TODO: Text rendering
+        }
+
+        pub fn end(self: *@This()) void {
+            for(0..self.impl.batches.len) |idx| {
+                self.impl.batches[idx].end();
+            }
+
+            if(opts.shapeRendering) {
+                self.impl.shapes.end();
+            }
+        }
+        
+        pub fn drawSprite(self: *@This(), texture: *Texture, dest: RectF, srcCoords: RectF) void {
+            // Handle multiple batches
+            self.impl.batches[0].drawSprite(texture, dest, srcCoords);
+        }
+
+        pub fn drawFilledRect(self: *@This(), dest: RectF, color: Color) void {
+            std.debug.assert(opts.shapeRendering);
+
+            self.impl.shapes.drawFilledRect(dest, color);
+        }
+
+        pub fn drawRect(self: *@This(), dest: RectF, color: Color, lineWidth: u8) void {
+            std.debug.assert(opts.shapeRendering);
+            self.impl.shapes.drawRect(dest, color, lineWidth);
+        }
+
+        // This moves the outline of the rect to enclose the dest by lineWidth.
+        pub fn drawEnclosingRect(self: *@This(), dest: RectF, color: Color, lineWidth: u8) void {
+            std.debug.assert(opts.shapeRendering);
+            self.impl.shapes.drawEnclosingRect(dest, color, lineWidth);
+        }
     };
 }
 

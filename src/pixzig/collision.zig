@@ -123,7 +123,7 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
 
         pub fn checkPoint(self: *Self, pixelPos: Vec2I, outList: *const []?T) !usize {
             if ((pixelPos.x < 0) or (@as(usize, @intCast(pixelPos.x)) >= self.gridExtent.x)) {
-                std.debug.print("pos = {}\n", .{@as(usize, @intCast(pixelPos.x))});
+                // std.debug.print("pos = {}\n", .{pixelPos.x});
                 return 0;
             }
 

@@ -23,11 +23,8 @@ pub const App = struct {
     allocator: std.mem.Allocator,
     projMat: zmath.Mat,
     scrollOffset: Vec2F,
-    spriteBatch: pixzig.renderer.SpriteBatchQueue,
-    shapeBatch: pixzig.renderer.ShapeBatchQueue,
     tex: *pixzig.Texture,
-    texShader: pixzig.shaders.Shader,
-    colorShader: pixzig.shaders.Shader,
+    renderer: pixzig.renderer.Renderer(.{}),
     fps: FpsCounter,
 
     dest: [3]RectF,
@@ -39,32 +36,17 @@ pub const App = struct {
         // Orthographic projection matrix
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
 
-        var texShader = try pixzig.shaders.Shader.init(
-            &pixzig.shaders.TexVertexShader,
-            &pixzig.shaders.TexPixelShader
-        );
+         const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
 
-        const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
-       
-        const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &texShader);
-
-        var colorShader = try pixzig.shaders.Shader.init(
-                &pixzig.shaders.ColorVertexShader,
-                &pixzig.shaders.ColorPixelShader
-            );
-
-        const shapeBatch = try pixzig.renderer.ShapeBatchQueue.init(alloc, &colorShader);
+        const renderer = try pixzig.renderer.Renderer(.{}).init(alloc);
         std.debug.print("Done creating tile renderering data.\n", .{});
 
         return .{
             .allocator = alloc,
             .projMat = projMat,
             .scrollOffset = .{ .x = 0, .y = 0}, 
-            .spriteBatch = spriteBatch,
-            .shapeBatch = shapeBatch,
             .tex = tex,
-            .texShader = texShader,
-            .colorShader = colorShader,
+            .renderer = renderer,
             .fps = FpsCounter.init(),
             .dest = [_]RectF{
                 RectF.fromPosSize(10, 10, 32, 32),
@@ -94,10 +76,7 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        self.spriteBatch.deinit();
-        self.shapeBatch.deinit();
-        self.colorShader.deinit();
-        self.texShader.deinit();
+        self.renderer.deinit();
     }
 
     pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {
@@ -134,26 +113,25 @@ pub const App = struct {
         gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
         self.fps.renderTick();
        
-        self.spriteBatch.begin(self.projMat);
+        self.renderer.begin(self.projMat);
         
         for(0..3) |idx| {
-            self.spriteBatch.drawSprite(self.tex, self.dest[idx], self.srcCoords[idx]);
+            self.renderer.drawSprite(self.tex, self.dest[idx], self.srcCoords[idx]);
         }
-        self.spriteBatch.end();
         
-        self.shapeBatch.begin(self.projMat);
         
         // Draw sprite outlines.
         for(0..3) |idx| {
-            self.shapeBatch.drawRect(self.dest[idx], Color.from(255,255,0,200), 2);
+            self.renderer.drawRect(self.dest[idx], Color.from(255,255,0,200), 2);
         }
         for(0..3) |idx| {
-            self.shapeBatch.drawEnclosingRect(self.dest[idx], Color.from(255,0,255,200), 2);
+            self.renderer.drawEnclosingRect(self.dest[idx], Color.from(255,0,255,200), 2);
         }
         for(0..3) |idx| {
-            self.shapeBatch.drawFilledRect(self.destRects[idx], self.colorRects[idx]);
+            self.renderer.drawFilledRect(self.destRects[idx], self.colorRects[idx]);
         }
-        self.shapeBatch.end();
+
+        self.renderer.end();
  
     }
 };
@@ -180,13 +158,4 @@ pub fn main() !void {
     std.debug.print("Cleaning up...\n", .{});
     app.deinit();
 }
-
-
-
-
-
-    // gl.enable(gl.BLEND);
-    // gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    // gl.enable(gl.TEXTURE_2D);
-
 
