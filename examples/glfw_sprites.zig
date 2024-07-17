@@ -19,12 +19,14 @@ const Frame = pixzig.sprites.Frame;
 const Vec2F = pixzig.common.Vec2F;
 const FpsCounter = pixzig.utils.FpsCounter;
 
+const Renderer = pixzig.renderer.Renderer(.{});
+
 pub const App = struct {
     allocator: std.mem.Allocator,
     projMat: zmath.Mat,
     scrollOffset: Vec2F,
     tex: *pixzig.Texture,
-    renderer: pixzig.renderer.Renderer(.{}),
+    renderer: Renderer,
     fps: FpsCounter,
 
     dest: [3]RectF,
@@ -36,9 +38,9 @@ pub const App = struct {
         // Orthographic projection matrix
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
 
-         const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
+        const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
 
-        const renderer = try pixzig.renderer.Renderer(.{}).init(alloc);
+        const renderer = try Renderer.init(alloc, .{});
         std.debug.print("Done creating tile renderering data.\n", .{});
 
         return .{

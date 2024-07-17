@@ -634,6 +634,9 @@ pub const RendererOptions = struct {
     numSpriteTextures: u8 = 1,
     shapeRendering: bool = true,
     textRenderering: bool = false,
+};
+
+pub const RendererInitOpts = struct {
     fontFace: ?[:0]const u8 = null,
 };
 
@@ -654,7 +657,7 @@ pub fn Renderer(opts: RendererOptions) type {
 
         };
 
-        pub fn init(alloc: std.mem.Allocator) !@This() {
+        pub fn init(alloc: std.mem.Allocator, initOpts: RendererInitOpts) !@This() {
             var rend = try alloc.create(Impl);
 
             rend.texShader = try Shader.init(
@@ -675,7 +678,11 @@ pub fn Renderer(opts: RendererOptions) type {
                 rend.shapes = try ShapeBatchQueue.init(alloc, &rend.colorShader);
             }
 
-            // TODO: Add in text renderering init too.
+            if(opts.textRenderering) {
+                std.debug.assert(initOpts.fontFace != null);
+                rend.text = try TextRenderer.init(initOpts.fontFace.?, alloc);
+            }
+
             return .{ 
                 .alloc = alloc,
                 .impl = rend
@@ -694,6 +701,10 @@ pub fn Renderer(opts: RendererOptions) type {
                 self.impl.shapes.deinit();
             }
 
+            if(opts.textRenderering) {
+                self.impl.text.deinit();
+            }
+
             self.alloc.destroy(self.impl);
         }
 
@@ -706,7 +717,9 @@ pub fn Renderer(opts: RendererOptions) type {
                 self.impl.shapes.begin(mvp);
             }
 
-            // TODO: Text rendering
+            if(opts.textRenderering) {
+                self.impl.text.spriteBatch.begin(mvp);
+            }
         }
 
         pub fn end(self: *@This()) void {
@@ -716,6 +729,10 @@ pub fn Renderer(opts: RendererOptions) type {
 
             if(opts.shapeRendering) {
                 self.impl.shapes.end();
+            }
+
+            if(opts.textRenderering) {
+                self.impl.text.spriteBatch.end();
             }
         }
         
@@ -739,6 +756,11 @@ pub fn Renderer(opts: RendererOptions) type {
         pub fn drawEnclosingRect(self: *@This(), dest: RectF, color: Color, lineWidth: u8) void {
             std.debug.assert(opts.shapeRendering);
             self.impl.shapes.drawEnclosingRect(dest, color, lineWidth);
+        }
+
+        pub fn drawString(self: *@This(), text: []const u8, pos: Vec2I) Vec2I {
+            std.debug.assert(opts.textRenderering);
+            return self.impl.text.drawString(text, pos);
         }
     };
 }
