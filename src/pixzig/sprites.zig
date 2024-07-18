@@ -9,7 +9,7 @@ const Vec2I = common.Vec2I;
 const Vec2F = common.Vec2F;
 const RectF = common.RectF;
 const Texture = textures.Texture;
-const SpriteBatchQueue = renderer.SpriteBatchQueue;
+// const SpriteBatchQueue = renderer.SpriteBatchQueue;
 
 pub const Sprite = struct {
     texture: *Texture,
@@ -37,9 +37,9 @@ pub const Sprite = struct {
             @as(i32, @intFromFloat(self.size.y)));
     }
 
-    pub fn draw(self: *Sprite, batch: *SpriteBatchQueue) !void {
-        batch.drawSprite(self.texture, self.dest, self.src_coords);
-    }
+    // pub fn draw(self: *Sprite, batch: *SpriteBatchQueue) !void {
+    //     batch.drawSprite(self.texture, self.dest, self.src_coords);
+    // }
 };
 
 pub const Flip = enum(u8) { 

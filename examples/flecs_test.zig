@@ -34,15 +34,14 @@ pub const Velocity = struct {
 
 pub const Dot = struct{};
 
+pub const Renderer = pixzig.renderer.Renderer(.{});
+
 pub const App = struct {
     allocator: std.mem.Allocator,
     projMat: zmath.Mat,
     scrollOffset: Vec2F,
-    spriteBatch: pixzig.renderer.SpriteBatchQueue,
     tex: *pixzig.Texture,
-    texShader: pixzig.shaders.Shader,
-    colorShader: pixzig.shaders.Shader,
-    shapeBatch: pixzig.renderer.ShapeBatchQueue,
+    renderer: Renderer,
     fps: FpsCounter,
     paused: bool,
     world: *flecs.world_t,
@@ -52,23 +51,9 @@ pub const App = struct {
     pub fn init(eng: *pixzig.PixzigEngine, alloc: std.mem.Allocator) !App {
         // Orthographic projection matrix
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
-
-        var texShader = try pixzig.shaders.Shader.init(
-            &pixzig.shaders.TexVertexShader,
-            &pixzig.shaders.TexPixelShader
-        );
-
         const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
        
-        const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &texShader);
-
-        var colorShader = try pixzig.shaders.Shader.init(
-                &pixzig.shaders.ColorVertexShader,
-                &pixzig.shaders.ColorPixelShader
-            );
-
-        const shapeBatch = try pixzig.renderer.ShapeBatchQueue.init(alloc, &colorShader);
-        std.debug.print("Done creating tile renderering data.\n", .{});
+        const renderer = try Renderer.init(alloc, .{});
 
         const world = flecs.init();
 
@@ -100,11 +85,8 @@ pub const App = struct {
             .projMat = projMat,
             .scrollOffset = .{ .x = 0, .y = 0}, 
             .paused = false,
-            .spriteBatch = spriteBatch,
-            .shapeBatch = shapeBatch,
+            .renderer = renderer,
             .tex = tex,
-            .texShader = texShader,
-            .colorShader = colorShader,
             .fps = FpsCounter.init(),
             .world = world,
             .update_query = update_query,
@@ -120,10 +102,7 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        self.spriteBatch.deinit();
-        self.shapeBatch.deinit();
-        self.colorShader.deinit();
-        self.texShader.deinit();
+        self.renderer.deinit();
 
         flecs.query_fini(self.draw_query);
         _ = flecs.fini(self.world);
@@ -234,8 +213,7 @@ pub const App = struct {
         gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
         self.fps.renderTick();
        
-        self.spriteBatch.begin(self.projMat);
-        self.shapeBatch.begin(self.projMat);
+        self.renderer.begin(self.projMat);
 
         var it = flecs.query_iter(self.world, self.draw_query);
         while (flecs.query_next(&it)) {
@@ -244,18 +222,18 @@ pub const App = struct {
 
             const entities = it.entities();
             for (0..it.count()) |idx| {
-                spr[idx].draw(&self.spriteBatch) catch {};
+                self.renderer.drawSprite(&spr[idx]);
+                // spr[idx].draw(&self.spriteBatch) catch {};
                 const e = entities[idx];
 
                 const outline = flecs.get(self.world, e, DebugOutline);
                 if(outline != null) {
-                    self.shapeBatch.drawEnclosingRect(spr[idx].dest, outline.?.color, 2);
+                    self.renderer.drawEnclosingRect(spr[idx].dest, outline.?.color, 2);
                 }
             }
         }
 
-        self.spriteBatch.end();
-        self.shapeBatch.end();
+        self.renderer.end();
     }
 };
 

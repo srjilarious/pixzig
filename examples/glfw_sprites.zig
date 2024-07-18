@@ -118,7 +118,7 @@ pub const App = struct {
         self.renderer.begin(self.projMat);
         
         for(0..3) |idx| {
-            self.renderer.drawSprite(self.tex, self.dest[idx], self.srcCoords[idx]);
+            self.renderer.draw(self.tex, self.dest[idx], self.srcCoords[idx]);
         }
         
         

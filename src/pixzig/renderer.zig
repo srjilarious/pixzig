@@ -9,6 +9,7 @@ const common = @import("./common.zig");
 const textures = @import("./textures.zig");
 const shaders = @import("./shaders.zig");
 
+const Sprite = @import("./sprites.zig").Sprite;
 const Vec2I = common.Vec2I;
 const RectF = common.RectF;
 const Color = common.Color;
@@ -683,6 +684,14 @@ pub fn Renderer(opts: RendererOptions) type {
                 rend.text = try TextRenderer.init(initOpts.fontFace.?, alloc);
             }
 
+            // set texture options
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
             return .{ 
                 .alloc = alloc,
                 .impl = rend
@@ -736,9 +745,15 @@ pub fn Renderer(opts: RendererOptions) type {
             }
         }
         
-        pub fn drawSprite(self: *@This(), texture: *Texture, dest: RectF, srcCoords: RectF) void {
-            // Handle multiple batches
+        pub fn draw(self: *@This(), texture: *Texture, dest: RectF, srcCoords: RectF) void {
+            // TODO: Handle multiple batches
             self.impl.batches[0].drawSprite(texture, dest, srcCoords);
+        }
+
+        pub fn drawSprite(self: *@This(), sprite: *Sprite) void
+        {
+            // TODO: Handle batches
+            self.impl.batches[0].drawSprite(sprite.texture, sprite.dest, sprite.src_coords);
         }
 
         pub fn drawFilledRect(self: *@This(), dest: RectF, color: Color) void {
