@@ -75,7 +75,7 @@ pub fn main() !void {
 
         spriteBatch.begin(projMat);
         actor.update(30, &spr);
-        try spr.draw(&spriteBatch);
+        spriteBatch.drawSprite(&spr);
         spriteBatch.end();
 
         if (eng.keyboard.pressed(.one)) fr1.apply(&spr);

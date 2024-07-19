@@ -164,18 +164,18 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    // _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig");
+    _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig");
     _ = example(b, target, optimize, "console_test", "examples/console_test.zig");
-    // _ = example(b, target, optimize, "collision_test", "examples/collision_test.zig");
-    // _ = example(b, target, optimize, "create_texture", "examples/create_texture.zig");
-    // _ = example(b, target, optimize, "tile_load_test", "examples/tile_load_test.zig");
+    _ = example(b, target, optimize, "collision_test", "examples/collision_test.zig");
+    _ = example(b, target, optimize, "create_texture", "examples/create_texture.zig");
+    _ = example(b, target, optimize, "tile_load_test", "examples/tile_load_test.zig");
     _ = example(b, target, optimize, "flecs_test", "examples/flecs_test.zig");
-    // _ = example(b, target, optimize, "game_state_test", "examples/game_state_test.zig");
-    // _ = example(b, target, optimize, "glfw_test", "examples/glfw_test.zig");
+    _ = example(b, target, optimize, "game_state_test", "examples/game_state_test.zig");
+    _ = example(b, target, optimize, "glfw_test", "examples/glfw_test.zig");
     _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig");
     _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
     _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig");
-    // _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig");
+    _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig");
     _ = example(b, target, optimize, "text_rendering", "examples/text_rendering.zig");
 
     _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig");

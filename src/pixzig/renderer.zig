@@ -89,7 +89,11 @@ pub const SpriteBatchQueue = struct {
         self.mvpArr = zmath.matToArr(mvp);
     }
 
-    pub fn drawSprite(self: *SpriteBatchQueue, texture: *Texture, dest: RectF, srcCoords: RectF) void {
+    pub fn drawSprite(self: *SpriteBatchQueue, sprite: *Sprite) void {
+        self.draw(sprite.texture, sprite.dest, sprite.src_coords);
+    }
+
+    pub fn draw(self: *SpriteBatchQueue, texture: *Texture, dest: RectF, srcCoords: RectF) void {
         std.debug.assert(self.begun);
 
         if(self.texture == null) {
@@ -616,7 +620,7 @@ pub const TextRenderer = struct {
 
             const charData = charDataPtr.?;
 
-            self.spriteBatch.drawSprite(
+            self.spriteBatch.draw(
                 &self.tex, 
                 RectF.fromPosSize(currX, posY - charData.bearing.y, charData.size.x, charData.size.y), 
                 charData.coords);
@@ -747,13 +751,13 @@ pub fn Renderer(opts: RendererOptions) type {
         
         pub fn draw(self: *@This(), texture: *Texture, dest: RectF, srcCoords: RectF) void {
             // TODO: Handle multiple batches
-            self.impl.batches[0].drawSprite(texture, dest, srcCoords);
+            self.impl.batches[0].draw(texture, dest, srcCoords);
         }
 
         pub fn drawSprite(self: *@This(), sprite: *Sprite) void
         {
             // TODO: Handle batches
-            self.impl.batches[0].drawSprite(sprite.texture, sprite.dest, sprite.src_coords);
+            self.impl.batches[0].drawSprite(sprite);
         }
 
         pub fn drawFilledRect(self: *@This(), dest: RectF, color: Color) void {

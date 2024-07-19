@@ -260,7 +260,7 @@ pub const App = struct {
 
             // const entities = it.entities();
             for (0..it.count()) |idx| {
-                spr[idx].draw(&self.spriteBatch) catch {};
+                self.spriteBatch.drawSprite(&spr[idx]);
                 // const e = entities[idx];
 
                 // const outline = flecs.get(self.world, e, DebugOutline);

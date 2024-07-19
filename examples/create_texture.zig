@@ -65,10 +65,10 @@ pub fn main() !void {
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-        spriteBatch.drawSprite(tex, RectF.fromPosSize(64, 64, 64, 64), RectF.fromCoords(0, 0, 8, 8, 8, 8));
-        spriteBatch.drawSprite(tex, RectF.fromPosSize(128, 64, 64, 64), RectF.fromCoords(0, 0, 8, 8, 8, 8));
-        spriteBatch.drawSprite(tex, RectF.fromPosSize(192, 64, 64, 64), RectF.fromCoords(0, 0, 8, 8, 8, 8));
-        spriteBatch.drawSprite(tex, RectF.fromPosSize(128, 128, 64, 64), RectF.fromCoords(0, 0, 8, 8, 8, 8));
+        spriteBatch.draw(tex, RectF.fromPosSize(64, 64, 64, 64), RectF.fromCoords(0, 0, 8, 8, 8, 8));
+        spriteBatch.draw(tex, RectF.fromPosSize(128, 64, 64, 64), RectF.fromCoords(0, 0, 8, 8, 8, 8));
+        spriteBatch.draw(tex, RectF.fromPosSize(192, 64, 64, 64), RectF.fromCoords(0, 0, 8, 8, 8, 8));
+        spriteBatch.draw(tex, RectF.fromPosSize(128, 128, 64, 64), RectF.fromCoords(0, 0, 8, 8, 8, 8));
         spriteBatch.end();
 
         eng.window.swapBuffers();

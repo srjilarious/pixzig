@@ -85,7 +85,7 @@ pub const MyApp = struct {
         self.fps.renderTick();
 
         self.spriteBatch.begin(self.projMat);
-        try self.pointer.draw(&self.spriteBatch);
+        self.spriteBatch.drawSprite(&self.pointer);
         self.spriteBatch.end();
     }
 };

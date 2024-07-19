@@ -448,7 +448,7 @@ pub const Natetris = struct {
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
                     gl.enable(gl.BLEND);
                     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-                    self.spriteBatch.drawSprite(tex, dest, source);
+                    self.spriteBatch.draw(tex, dest, source);
 
                 }
             }
@@ -473,7 +473,7 @@ pub const Natetris = struct {
                         BaseX+(pos.x+w)*size.x, 
                         BaseY+(pos.y+h)*size.y, 
                         size.x, size.y);
-                    self.spriteBatch.drawSprite(self.tex, dest, source);
+                    self.spriteBatch.draw(self.tex, dest, source);
                     
                 }
             }
