@@ -207,6 +207,21 @@ pub const TileLayer = struct {
         };
     }
 
+    pub fn initEmpty(alloc: std.mem.Allocator, size: Vec2I, tileSize: Vec2I) !TileLayer {
+        var tilesArr = std.ArrayList(i32).init(alloc);
+        try tilesArr.appendNTimes(0, @intCast(size.x*size.y));
+        return .{
+            .tiles = tilesArr,
+            .properties = PropertyList.init(alloc),
+            .size = size,
+            .name = null,
+            .tileset = null,
+            .tileSize = tileSize,
+            .isDirty = false,
+            .alloc = alloc
+        };
+    }
+
     pub fn initFromElement(alloc: std.mem.Allocator, node: *xml.Element) !TileLayer {
         var layer = try init(alloc);
 
@@ -264,22 +279,22 @@ pub const TileLayer = struct {
         self.tileset = null;
     }
 
-    pub fn tileData(self: *TileLayer, x: i32, y: i32) i32 {
+    pub fn tileData(self: *const TileLayer, x: i32, y: i32) i32 {
         if(x < 0 or x >= self.size.x) return 0;
         if(y < 0 or y >= self.size.y) return 0;
 
         return self.tileDataUnchecked(x, y);
     }
 
-    pub fn tileDataUnchecked(self: *TileLayer, x: i32, y: i32) i32 {
+    pub fn tileDataUnchecked(self: *const TileLayer, x: i32, y: i32) i32 {
         return self.tiles.items[self.tileIndex(x, y)];
     }
 
-    pub fn tileIndex(self: *TileLayer, x: i32, y: i32) usize {
+    pub fn tileIndex(self: *const TileLayer, x: i32, y: i32) usize {
         return @intCast(y*self.size.x + x);
     }
 
-    pub fn tile(self: *TileLayer, x: i32, y:i32) ?*Tile {
+    pub fn tile(self: *const TileLayer, x: i32, y:i32) ?*Tile {
         if(self.tileset == null) return null;
         if(x < 0 or x >= self.size.x) return null;
         if(y < 0 or y >= self.size.y) return null;
