@@ -66,7 +66,7 @@ pub const BasicTileMapPathChecker = struct {
         const tile = self.tileLayer.tile(loc.x, loc.y);
         if (tile == null) return true;
 
-        return (tile.?.core & tiles.BlocksAll) != 0;
+        return (tile.?.core & tiles.BlocksAll) == 0;
     }
 };
 

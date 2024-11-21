@@ -279,6 +279,17 @@ pub const TileLayer = struct {
         self.tileset = null;
     }
 
+    pub fn tileDataPtrUnchecked(self: *TileLayer, x: i32, y: i32) *i32 {
+        return &self.tiles.items[self.tileIndex(x, y)];
+    }
+
+    pub fn setTileData(self: *TileLayer, x: i32, y: i32, val: i32) void {
+        if(x < 0 or x >= self.size.x) return;
+        if(y < 0 or y >= self.size.y) return;
+
+        self.tileDataPtrUnchecked(x, y).* = val;
+    }
+
     pub fn tileData(self: *const TileLayer, x: i32, y: i32) i32 {
         if(x < 0 or x >= self.size.x) return 0;
         if(y < 0 or y >= self.size.y) return 0;
@@ -301,7 +312,7 @@ pub const TileLayer = struct {
 
         const tsVal = self.tileDataUnchecked(x, y);
         if(tsVal < 0) return null;
-
+    
         const tsIdx:usize = @intCast(tsVal);
         return self.tileset.?.tile(tsIdx);
     }
