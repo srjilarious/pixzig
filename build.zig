@@ -173,6 +173,7 @@ pub fn build(b: *std.Build) void {
     _ = example(b, target, optimize, "game_state_test", "examples/game_state_test.zig");
     _ = example(b, target, optimize, "glfw_test", "examples/glfw_test.zig");
     _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig");
+    _ = example(b, target, optimize, "grid_render", "examples/grid_render.zig");
     _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
     _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig");
     _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig");
