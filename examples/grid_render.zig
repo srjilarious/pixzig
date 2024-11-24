@@ -42,8 +42,7 @@ pub const App = struct {
                 &shaders.ColorVertexShader,
                 &shaders.ColorPixelShader
             );
-        var grid = try GridRenderer.init(alloc, shader);
-        try grid.recreateVertices(.{ .x = 20, .y = 12}, .{ .x = 32, .y = 32});
+        const grid = try GridRenderer.init(alloc, shader, .{ .x = 20, .y = 12}, .{ .x = 32, .y = 32}, 1);
         return .{
             .allocator = alloc,
             .projMat = projMat,
@@ -57,6 +56,7 @@ pub const App = struct {
 
     pub fn deinit(self: *App) void {
         self.renderer.deinit();
+        self.grid.deinit();
     }
 
     pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {

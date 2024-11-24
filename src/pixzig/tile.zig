@@ -607,31 +607,32 @@ pub const GridRenderer = struct {
     currColorCoord: usize = 0,
     currIdx: usize = 0,
     numRects: usize = 0,
+    initialized: bool = false,
 
-    pub fn init(alloc: std.mem.Allocator, shader: Shader) !GridRenderer {
-        var tr = GridRenderer{
+    pub fn init(alloc: std.mem.Allocator, shader: Shader, mapSize: Vec2I, tileSize: Vec2I, borderSize: usize) !GridRenderer {
+        var gr = GridRenderer{
             .shader = shader,
             .alloc = alloc
-
         };
-        gl.genVertexArrays(1, &tr.vao);
+        gl.genVertexArrays(1, &gr.vao);
 
-        gl.genBuffers(1, &tr.vboVertices);
-        gl.genBuffers(1, &tr.vboColorCoords);
-        gl.genBuffers(1, &tr.vboIndices);
+        gl.genBuffers(1, &gr.vboVertices);
+        gl.genBuffers(1, &gr.vboColorCoords);
+        gl.genBuffers(1, &gr.vboIndices);
 
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         gl.enable(gl.TEXTURE_2D);
         
-        tr.attrCoord = @intCast(gl.getAttribLocation(tr.shader.program, "coord3d"));
-        tr.attrColor = @intCast(gl.getAttribLocation(tr.shader.program, "color"));
-        tr.uniformMVP = @intCast(gl.getUniformLocation(tr.shader.program, "projectionMatrix"));
+        gr.attrCoord = @intCast(gl.getAttribLocation(gr.shader.program, "coord3d"));
+        gr.attrColor = @intCast(gl.getAttribLocation(gr.shader.program, "color"));
+        gr.uniformMVP = @intCast(gl.getUniformLocation(gr.shader.program, "projectionMatrix"));
 
-        return tr;
+        try gr.recreateVertices(mapSize, tileSize, borderSize);
+        return gr;
     }
 
-    pub fn deinit(self: *TileMapRenderer) void {
+    pub fn deinit(self: *GridRenderer) void {
         self.alloc.free(self.vertices);
         self.alloc.free(self.colorCoords);
         self.alloc.free(self.indices);
@@ -701,7 +702,7 @@ pub const GridRenderer = struct {
         self.drawFilledRect(RectF.fromPosSize(0, y, w, h), color);
     }
 
-    pub fn recreateVertices(self: *GridRenderer, mapSize: Vec2I, tileSize: Vec2I) !void {
+    pub fn recreateVertices(self: *GridRenderer, mapSize: Vec2I, tileSize: Vec2I, borderSize: usize) !void {
         self.currVert = 0;
         self.currColorCoord = 0;
         self.currIdx = 0;
@@ -713,18 +714,27 @@ pub const GridRenderer = struct {
         const numVert: usize = @as(usize, @intCast(mapSize.y)) + 1;
         // const mapSize: i32 = @intCast(layerWidth*layerHeight);
         // _ = mapSize;
+    
+        // Check if we need to release previous buffers.
+        if(self.initialized) {
+            self.alloc.free(self.vertices);
+            self.alloc.free(self.colorCoords);
+            self.alloc.free(self.indices);
+        }
+
         self.vertices = try self.alloc.alloc(f32, @intCast(2*4*numHorz*numVert*2));
         self.colorCoords = try self.alloc.alloc(f32, @intCast(4*4*numHorz*numVert*2));
         self.indices = try self.alloc.alloc(u16, @intCast(6*numHorz*numVert*2));
-        
+        self.initialized = true;
+
         std.debug.print("Creating {} vertices\n", .{self.vertices.len});
         const gridWidth:i32 = @intCast((numHorz-1)*tw);
         const gridHeight:i32 = @intCast((numVert-1)*th);
         const color = Color{.r=255, .g=255, .b=255, .a=255};
         for(0..numVert) |yy| {
             for(0..numHorz) |xx| {
-                self.drawHorzLine(@intCast(yy*th), gridWidth, 2, color); 
-                self.drawVertLine(@intCast(xx*tw), 2, gridHeight, color); 
+                self.drawHorzLine(@intCast(yy*th), gridWidth, @intCast(borderSize), color); 
+                self.drawVertLine(@intCast(xx*tw), @intCast(borderSize), gridHeight, color); 
             }
         }
     }
