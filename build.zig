@@ -165,6 +165,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig");
+    _ = example(b, target, optimize, "a_star_path", "examples/a_star_path.zig");
     _ = example(b, target, optimize, "console_test", "examples/console_test.zig");
     _ = example(b, target, optimize, "collision_test", "examples/collision_test.zig");
     _ = example(b, target, optimize, "create_texture", "examples/create_texture.zig");

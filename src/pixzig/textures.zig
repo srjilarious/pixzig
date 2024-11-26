@@ -19,6 +19,41 @@ pub const CharToColor = struct {
     color: Color8, 
 };
 
+pub fn drawBufferFromChars(buffer: []u8, buffSize: Vec2U, chars: []const u8, charsSize: Vec2U, offsetIntoBuffer: Vec2U, mapping: []const CharToColor) void {
+    // Manually track the index since we need to skip newlines.
+    var chrIdx: usize = 0;
+    var h: usize = offsetIntoBuffer.y;
+    var w: usize = offsetIntoBuffer.x;
+
+    while(chrIdx < chars.len) {
+        const curr_ch = chars[chrIdx];
+        chrIdx += 1;
+
+        // Skip over newlines from raw literals
+        if(curr_ch == '\n' or curr_ch == '\r') continue;
+
+        // Find the color for the char.
+        var color: Color8 = .{ .r=0, .g=0, .b=0, .a=255 };
+        for(0..mapping.len) |idx| {
+            if(mapping[idx].char == curr_ch) {
+                color = mapping[idx].color;
+            }
+        }
+
+        const col_idx:usize = (h*buffSize.x+w)*4;
+        buffer[col_idx] = color.r;
+        buffer[col_idx+1] = color.g;
+        buffer[col_idx+2] = color.b;
+        buffer[col_idx+3] = color.a;
+
+        // Update pixel buffer locations.
+        w += 1;
+        if(w >= (offsetIntoBuffer.x+charsSize.x)) {
+            w = offsetIntoBuffer.x;
+            h += 1;
+        }
+    }
+}
 
 pub const TextureManager = struct {
     textures: std.ArrayList(Texture),
@@ -92,8 +127,8 @@ pub const TextureManager = struct {
         gl.bindTexture(gl.TEXTURE_2D, texture);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         const format = gl.RGBA;
         gl.texImage2D(gl.TEXTURE_2D, 0, format, 
             @intCast(width), 

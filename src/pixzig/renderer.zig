@@ -11,6 +11,7 @@ const shaders = @import("./shaders.zig");
 
 const Sprite = @import("./sprites.zig").Sprite;
 const Vec2I = common.Vec2I;
+const Vec2U = common.Vec2U;
 const RectF = common.RectF;
 const Color = common.Color;
 const Texture = textures.Texture;
@@ -162,7 +163,8 @@ pub const SpriteBatchQueue = struct {
 
         // Set 'tex' to use texture unit 0
         gl.activeTexture(gl.TEXTURE0); 
-        gl.bindTexture(gl.TEXTURE_2D, self.texture.?.texture); 
+        gl.bindTexture(gl.TEXTURE_2D, self.texture.?.texture);
+        
         gl.uniform1i(gl.getUniformLocation(self.shader.program, "tex"), 0); 
 
         gl.bindVertexArray(self.vao);
@@ -758,6 +760,20 @@ pub fn Renderer(opts: RendererOptions) type {
         {
             // TODO: Handle batches
             self.impl.batches[0].drawSprite(sprite);
+        }
+
+        pub fn drawTexture(self: *@This(), texture: *Texture, dest: RectF, srcCoords: RectF) void {
+             self.impl.batches[0].draw(texture, dest, srcCoords);
+        }
+
+        pub fn drawFullTexture(self: *@This(), texture: *Texture, pos: Vec2I, scale: f32) void {
+            const tsx = @as(f32, @floatFromInt(texture.size.x))*scale;
+            const tsy = @as(f32, @floatFromInt(texture.size.y))*scale;
+            self.impl.batches[0].draw(
+                texture, 
+                RectF.fromPosSize(pos.x, pos.y, @intFromFloat(tsx), @intFromFloat(tsy)),
+                .{.t=0, .l=0, .r=1, .b=1}
+            );
         }
 
         pub fn drawFilledRect(self: *@This(), dest: RectF, color: Color) void {
