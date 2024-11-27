@@ -73,6 +73,72 @@ pub const App = struct {
         \\-##===@-
         \\=------=
         ;
+
+        const horzChars =
+        \\        
+        \\        
+        \\########
+        \\........
+        \\........
+        \\########
+        \\        
+        \\        
+        ;
+    
+        const vertChars =
+        \\  #..#  
+        \\  #..#  
+        \\  #..#  
+        \\  #..#  
+        \\  #..#  
+        \\  #..#  
+        \\  #..#  
+        \\  #..#  
+        ;
+
+        const topRightChars =
+        \\        
+        \\        
+        \\#####   
+        \\.....#  
+        \\.....#  
+        \\###..#  
+        \\  #..#  
+        \\  #..#  
+        ;
+
+        const topLeftChars =
+        \\        
+        \\        
+        \\   #####
+        \\  #.....
+        \\  #.....
+        \\  #..###
+        \\  #..#  
+        \\  #..#  
+        ;
+
+        const bottomRightChars =
+        \\  #..#  
+        \\  #..#  
+        \\###..#  
+        \\.....#  
+        \\.....#  
+        \\#####   
+        \\        
+        \\        
+        ;
+
+        const bottomLeftChars =
+        \\  #..#  
+        \\  #..#  
+        \\  #..###
+        \\  #.....
+        \\  #.....
+        \\   #####
+        \\        
+        \\        
+        ;
     
         
         const textureBuff: []u8 = try alloc.alloc(u8, (NumTilesHorz*NumTilesVert)*TileWidth*TileHeight*4);
@@ -81,6 +147,12 @@ pub const App = struct {
         const bufferSize = Vec2U{.x = NumTilesHorz*TileWidth, .y=NumTilesVert*TileHeight};
 
         pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, lockedChars, .{.x=TileWidth, .y=TileHeight}, .{.x=0, .y=0}, colorMap);
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, horzChars, .{.x=TileWidth, .y=TileHeight}, .{.x=8, .y=0}, colorMap);
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, vertChars, .{.x=TileWidth, .y=TileHeight}, .{.x=16, .y=0}, colorMap);
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, topLeftChars, .{.x=TileWidth, .y=TileHeight}, .{.x=24, .y=0}, colorMap);
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, topRightChars, .{.x=TileWidth, .y=TileHeight}, .{.x=0, .y=8}, colorMap);
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, bottomLeftChars, .{.x=TileWidth, .y=TileHeight}, .{.x=8, .y=8}, colorMap);
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, bottomRightChars, .{.x=TileWidth, .y=TileHeight}, .{.x=16, .y=8}, colorMap);
         // const wallTex = try eng.textures.createTextureFromChars("wall", 8, 8, lockedChars, );
 
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
@@ -141,7 +213,7 @@ pub const App = struct {
         
 
         self.renderer.begin(self.projMat);
-        self.renderer.drawFullTexture(self.tex, .{.x=10, .y=10}, 8);
+        self.renderer.drawFullTexture(self.tex, .{.x=0, .y=0}, 8);
         // 
         // for(0..3) |idx| {
         //     self.renderer.draw(self.tex, self.dest[idx], self.srcCoords[idx]);
@@ -160,7 +232,7 @@ pub const App = struct {
         // }
         //
         self.renderer.end();
-        // try self.grid.draw(self.projMat);
+        try self.grid.draw(self.projMat);
  
     }
 };
