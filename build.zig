@@ -181,6 +181,7 @@ pub fn build(b: *std.Build) void {
     _ = example(b, target, optimize, "text_rendering", "examples/text_rendering.zig");
 
     _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig");
+    _ = example(b, target, optimize, "digcraft", "games/digcraft/digcraft.zig");
 
     const tests = example(b, target, optimize, "tests", "tests/main.zig");
     const testzMod = b.dependency("testz", .{});

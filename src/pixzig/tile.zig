@@ -119,6 +119,25 @@ pub const TileSet = struct {
         };
     }
 
+    pub fn initEmpty(alloc: std.mem.Allocator, tileSize: Vec2I, textureSize: Vec2I, tileCount: usize) !TileSet {
+        var tiles = std.ArrayList(Tile).init(alloc);
+        const baseTile = Tile{
+            .core = Clear,
+            .properties = null,
+            .alloc = alloc
+        };
+        try tiles.appendNTimes(baseTile, tileCount);
+
+        return .{
+            .tiles = tiles,
+            .tileSize = tileSize,
+            .textureSize = textureSize,
+            .columns = @divFloor(textureSize.x, tileSize.x),
+            .name = null,
+            .alloc = alloc,
+        };
+    }
+
     pub fn initFromElement(alloc: std.mem.Allocator, node: *xml.Element) !TileSet {
         var tileset = try TileSet.init(alloc);
 
