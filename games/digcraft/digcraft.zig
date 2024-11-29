@@ -1,6 +1,13 @@
 // zig fmt: off
 // DigCraft - A 2d Minecraft-inspired game.
 
+// TODO list:
+// - main player
+// - player movement
+// - different blocks
+// - world seeding
+// - world simulation steps
+// - 
 
 const std = @import("std");
 const zgui = @import("zgui");
@@ -9,11 +16,14 @@ const gl = @import("zopengl").bindings;
 const stbi = @import ("zstbi");
 const zmath = @import("zmath"); 
 const pixzig = @import("pixzig");
+const flecs = @import("zflecs"); 
+
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
 const shaders = pixzig.shaders;
 const Shader = shaders.Shader;
+const Sprite = pixzig.sprites.Sprite;
 
 const math = @import("zmath");
 const EngOptions = pixzig.PixzigEngineOptions;
@@ -31,10 +41,11 @@ const CharToColor = pixzig.textures.CharToColor;
 const Color8 = pixzig.Color8;
 const Texture = pixzig.textures.Texture;
 
-const NumTilesHorz = 4;
-const NumTilesVert = 4;
-const TileWidth = 8;
-const TileHeight = 8;
+const entities = @import("./entities.zig");
+const Player = entities.Player;
+const Mover = entities.Mover;
+
+const C = @import("./constants.zig");
 
 pub const App = struct {
     allocator: std.mem.Allocator,
@@ -46,6 +57,9 @@ pub const App = struct {
     map: tile.TileMap,
     mapRenderer: tile.TileMapRenderer,
     texShader: pixzig.shaders.Shader,
+    world: *flecs.world_t,
+    update_query: *flecs.query_t,
+    draw_query: *flecs.query_t,
 
     pub fn init(eng: *pixzig.PixzigEngine, alloc: std.mem.Allocator) !App {
         // Orthographic projection matrix
@@ -66,8 +80,21 @@ pub const App = struct {
             .{ .char = '=', .color = Color8.from(100, 100, 100, 255) },
             .{ .char = '.', .color = Color8.from(240, 240, 240, 255) },
             .{ .char = '@', .color = Color8.from(30, 30, 30, 255) },
+            .{ .char = 'h', .color = Color8.from(200, 150, 60, 255) },
+            .{ .char = 'e', .color = Color8.from(50, 150, 255, 255) },
             .{ .char = ' ', .color = Color8.from(0, 0, 0, 0) },
         };
+
+        const emptyChars = 
+        \\        
+        \\        
+        \\        
+        \\        
+        \\        
+        \\        
+        \\        
+        \\        
+        ;
 
         const lockedChars =
         \\=------=
@@ -146,19 +173,35 @@ pub const App = struct {
         \\        
         ;
     
+       const playerChars =
+        \\hhhhhhhh
+        \\h######h
+        \\h#e##e#h
+        \\ #e##e# 
+        \\ ###### 
+        \\ ##==## 
+        \\ #====# 
+        \\ ###### 
+        ;
+ 
+    
         
-        const textureBuff: []u8 = try alloc.alloc(u8, (NumTilesHorz*NumTilesVert)*TileWidth*TileHeight*4);
+        const textureBuff: []u8 = try alloc.alloc(u8, (C.NumTilesHorz*C.NumTilesVert)*C.TileWidth*C.TileHeight*4);
         defer alloc.free(textureBuff);
 
-        const bufferSize = Vec2U{.x = NumTilesHorz*TileWidth, .y=NumTilesVert*TileHeight};
+        const bufferSize = Vec2U{.x = C.NumTilesHorz*C.TileWidth, .y=C.NumTilesVert*C.TileHeight};
 
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, lockedChars, .{.x=TileWidth, .y=TileHeight}, .{.x=0, .y=0}, colorMap);
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, horzChars, .{.x=TileWidth, .y=TileHeight}, .{.x=8, .y=0}, colorMap);
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, vertChars, .{.x=TileWidth, .y=TileHeight}, .{.x=16, .y=0}, colorMap);
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, topLeftChars, .{.x=TileWidth, .y=TileHeight}, .{.x=24, .y=0}, colorMap);
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, topRightChars, .{.x=TileWidth, .y=TileHeight}, .{.x=0, .y=8}, colorMap);
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, bottomLeftChars, .{.x=TileWidth, .y=TileHeight}, .{.x=8, .y=8}, colorMap);
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, bottomRightChars, .{.x=TileWidth, .y=TileHeight}, .{.x=16, .y=8}, colorMap);
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, emptyChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=0, .y=0}, colorMap);
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, horzChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=8, .y=0}, colorMap);
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, vertChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=16, .y=0}, colorMap);
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, topLeftChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=24, .y=0}, colorMap);
+    
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, topRightChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=0, .y=8}, colorMap);
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, bottomLeftChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=8, .y=8}, colorMap);
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, bottomRightChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=16, .y=8}, colorMap);
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, lockedChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=24, .y=8}, colorMap);
+
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, playerChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=0, .y=16}, colorMap);
         // const wallTex = try eng.textures.createTextureFromChars("wall", 8, 8, lockedChars, );
 
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
@@ -174,14 +217,46 @@ pub const App = struct {
         );
 
         var map = try tile.TileMap.init(alloc);
-        const tileset = try tile.TileSet.initEmpty(alloc, .{ .x = 8, .y = 8 }, .{ .x=NumTilesHorz*TileWidth, .y=NumTilesVert*TileHeight}, NumTilesHorz*NumTilesVert);
+        const tileset = try tile.TileSet.initEmpty(alloc, .{ .x = 8, .y = 8 }, .{ .x=C.NumTilesHorz*C.TileWidth, .y=C.NumTilesVert*C.TileHeight}, C.NumTilesHorz*C.NumTilesVert);
         const layer = try tile.TileLayer.initEmpty(alloc, .{ .x=28, .y=18}, .{.x=32, .y=32});
         try map.layers.append(layer);
         try map.tilesets.append(tileset);
 
         var mapRender = try tile.TileMapRenderer.init(std.heap.page_allocator, texShader);
-        try mapRender.recreateVertices(&map.tilesets.items[0], &map.layers.items[0]);
 
+        // Create some tiles for the tile set
+        map.tilesets.items[0].tile(7).?.* = .{.core = tile.BlocksAll, .properties = null, .alloc = alloc};
+
+        const idxs = [_]usize{0, 1, 2, 12, 45, 23};
+        for(idxs) |idx| {
+            map.layers.items[0].tiles.items[idx] = 7;
+        }
+        
+        try mapRender.recreateVertices(&map.tilesets.items[0], &map.layers.items[0]);
+        
+        // Setup world and entities
+        const world = flecs.init();
+        entities.setupEntities(world);
+
+        const update_query = try flecs.query_init(world, &.{
+            .filter = .{
+                .terms = [_]flecs.term_t{
+                    .{ .id = flecs.id(Sprite) },
+                    .{ .id = flecs.id(Mover) },
+                } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 2),
+            },
+        });
+
+        const draw_query = try flecs.query_init(world, &.{
+            .filter = .{
+                .terms = [_]flecs.term_t{
+                    .{ .id = flecs.id(Sprite) },
+                } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 1),
+            },
+        });
+
+
+        entities.spawn(world, .Player, tex, 8);
 
         // Create application.
         return .{
@@ -195,6 +270,9 @@ pub const App = struct {
             .texShader = texShader,
             .map = map,
             .mapRenderer = mapRender,
+            .world = world,
+            .update_query = update_query,
+            .draw_query = draw_query,
         };
     }
 
@@ -203,6 +281,8 @@ pub const App = struct {
         self.grid.deinit();
         self.map.deinit();
         self.mapRenderer.deinit();
+        _ = flecs.fini(self.world);
+        // TODO: deinit queries too.
     }
 
     pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {
@@ -242,7 +322,25 @@ pub const App = struct {
         const mvp = zmath.mul(zmath.scaling(4.0, 4.0, 1.0), self.projMat);
         try self.mapRenderer.draw(self.tex, &self.map.layers.items[0], mvp);
 
-        self.renderer.begin(self.projMat);
+        self.renderer.begin(mvp);
+        
+        var it = flecs.query_iter(self.world, self.draw_query);
+        while (flecs.query_next(&it)) {
+            const spr = flecs.field(&it, Sprite, 1).?;
+            //const debug = flecs.field(&it, DebugOutline, 2).?;
+
+            // const ents = it.entities();
+            for (0..it.count()) |idx| {
+                self.renderer.drawSprite(&spr[idx]);
+                // spr[idx].draw(&self.spriteBatch) catch {};
+                // const e = ents[idx];
+
+                // const outline = flecs.get(self.world, e, DebugOutline);
+                // if(outline != null) {
+                //     self.renderer.drawEnclosingRect(spr[idx].dest, outline.?.color, 2);
+                // }
+            }
+        }
         // self.renderer.drawFullTexture(self.tex, .{.x=0, .y=0}, 4);
         // 
         // for(0..3) |idx| {
