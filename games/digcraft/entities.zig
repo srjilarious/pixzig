@@ -32,6 +32,7 @@ pub fn setupEntities(world: *flecs.world_t) void {
 }
 
 pub fn spawn(world: *flecs.world_t, which: Entities, tex: *Texture, sprNum: i32) void {
+    _ = sprNum;
     const ent = flecs.new_id(world);
     switch(which) {
         .Player => {
@@ -42,12 +43,12 @@ pub fn spawn(world: *flecs.world_t, which: Entities, tex: *Texture, sprNum: i32)
             };
             _ = flecs.set(world, ent, Mover, move);
        
-            const srcX: i32 = @intCast(C.TileWidth*@rem(sprNum, C.NumTilesHorz));
-            const srcY:i32 = @intCast(C.TileHeight*@divTrunc(sprNum, C.NumTilesVert));
+            // const srcX: i32 = @intCast(C.TileWidth*@rem(sprNum, C.NumTilesHorz));
+            // const srcY:i32 = @intCast(C.TileHeight*@divTrunc(sprNum, C.NumTilesVert));
             var spr = Sprite.create(
                 tex, 
-                .{ .x = C.TileWidth, .y = C.TileHeight}, 
-                RectF.fromCoords(srcX, srcY, C.TileWidth, C.TileHeight, @intCast(tex.size.x), @intCast(tex.size.y)));
+                .{ .x = 16, .y = 16}, 
+                .{ .t = 0, .l = 0, .b = 1, .r = 1});
             spr.setPos(16, 16);
             _ = flecs.set(world, ent, Sprite, spr);
         },

@@ -218,9 +218,10 @@ pub const App = struct {
 
         var map = try tile.TileMap.init(alloc);
         const tileset = try tile.TileSet.initEmpty(alloc, .{ .x = 8, .y = 8 }, .{ .x=C.NumTilesHorz*C.TileWidth, .y=C.NumTilesVert*C.TileHeight}, C.NumTilesHorz*C.NumTilesVert);
-        const layer = try tile.TileLayer.initEmpty(alloc, .{ .x=28, .y=18}, .{.x=32, .y=32});
+        const layer = try tile.TileLayer.initEmpty(alloc, .{ .x=28, .y=18}, .{.x=8, .y=8});
         try map.layers.append(layer);
         try map.tilesets.append(tileset);
+        map.layers.items[0].tileset = &map.tilesets.items[0];
 
         var mapRender = try tile.TileMapRenderer.init(std.heap.page_allocator, texShader);
 
@@ -231,6 +232,11 @@ pub const App = struct {
         for(idxs) |idx| {
             map.layers.items[0].tiles.items[idx] = 7;
         }
+
+        for(0..C.MapWidth) |idx| {
+            map.layers.items[0].tiles.items[(C.MapHeight-1)*C.MapWidth+idx] = 7;
+        }
+
         
         try mapRender.recreateVertices(&map.tilesets.items[0], &map.layers.items[0]);
         
@@ -256,8 +262,12 @@ pub const App = struct {
         });
 
 
-        entities.spawn(world, .Player, tex, 8);
+        const playerTex = eng.textures.loadTexture("player", "assets/remi.png") catch unreachable;
 
+        entities.spawn(world, .Player, playerTex, 8);
+
+        map.layers.items[0].dumpLayer();
+        
         // Create application.
         return .{
             .allocator = alloc,
@@ -291,6 +301,47 @@ pub const App = struct {
         }
 
         eng.keyboard.update();
+
+
+        var it = flecs.query_iter(self.world, self.update_query);
+        while (flecs.query_next(&it)) {
+            const spr = flecs.field(&it, Sprite, 1).?;
+            const vel = flecs.field(&it, Mover, 2).?;
+
+            //const entities = it.entities();
+            for (0..it.count()) |idx| {
+
+                var v: *Mover = &vel[idx];
+                var sp: *Sprite = &spr[idx];
+                v.speed.y += 0.01;
+                if(pixzig.tile.Mover.moveDown(&sp.dest, v.speed.y, &self.map.layers.items[0], pixzig.tile.BlocksAll)) {
+                    v.speed.y = 0;
+                }
+
+                // sp.dest.l += v.speed.x;
+                // if(sp.dest.l < 0 or sp.dest.l > 800 - sp.size.x) {
+                //     v.speed.x = -v.speed.x;
+                // }
+                //
+                // sp.dest.t += v.speed.y;
+                // if(sp.dest.t < 0 or sp.dest.t > 600 - sp.size.y) {
+                //     v.speed.y = -v.speed.y;
+                // }
+
+                sp.dest.ensureSize(@as(i32, @intFromFloat(sp.size.x)), @as(i32, @intFromFloat(sp.size.y)));
+
+                //spr[idx].draw(&self.spriteBatch) catch {};
+
+                //const e = entities[idx];
+
+                // const outline = flecs.get(self.world, e, DebugOutline);
+                // if(outline != null) {
+                //     self.shapeBatch.drawEnclosingRect(spr[idx].dest, outline.?.color, 2);
+                // }
+            }
+        }
+        
+
 
         if (eng.keyboard.pressed(.one)) std.debug.print("one!\n", .{});
         if (eng.keyboard.pressed(.two)) std.debug.print("two!\n", .{});
@@ -332,6 +383,8 @@ pub const App = struct {
             // const ents = it.entities();
             for (0..it.count()) |idx| {
                 self.renderer.drawSprite(&spr[idx]);
+                self.renderer.drawEnclosingRect(spr[idx].dest, Color.from(255, 0, 255, 255), 1);
+
                 // spr[idx].draw(&self.spriteBatch) catch {};
                 // const e = ents[idx];
 

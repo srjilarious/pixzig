@@ -228,7 +228,7 @@ pub const TileLayer = struct {
 
     pub fn initEmpty(alloc: std.mem.Allocator, size: Vec2I, tileSize: Vec2I) !TileLayer {
         var tilesArr = std.ArrayList(i32).init(alloc);
-        try tilesArr.appendNTimes(0, @intCast(size.x*size.y));
+        try tilesArr.appendNTimes(-1, @intCast(size.x*size.y));
         return .{
             .tiles = tilesArr,
             .properties = PropertyList.init(alloc),
@@ -310,8 +310,8 @@ pub const TileLayer = struct {
     }
 
     pub fn tileData(self: *const TileLayer, x: i32, y: i32) i32 {
-        if(x < 0 or x >= self.size.x) return 0;
-        if(y < 0 or y >= self.size.y) return 0;
+        if(x < 0 or x >= self.size.x) return -1;
+        if(y < 0 or y >= self.size.y) return -1;
 
         return self.tileDataUnchecked(x, y);
     }
@@ -331,9 +331,18 @@ pub const TileLayer = struct {
 
         const tsVal = self.tileDataUnchecked(x, y);
         if(tsVal < 0) return null;
-    
+   
         const tsIdx:usize = @intCast(tsVal);
         return self.tileset.?.tile(tsIdx);
+    }
+
+    pub fn dumpLayer(self: *const TileLayer) void {
+        for(0..@intCast(self.size.y)) |yy| {
+            for(0..@intCast(self.size.x)) |xx| {
+                std.debug.print("{} ", .{self.tileData(@intCast(xx), @intCast(yy))});
+            }
+            std.debug.print("\n", .{});
+        }
     }
 };
 
