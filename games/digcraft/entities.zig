@@ -22,7 +22,8 @@ pub const Player = struct {
 
 pub const Mover = struct { 
     bounds: RectF,
-    speed: Vec2F 
+    speed: Vec2F,
+    inAir: bool,
 };
 
 pub fn setupEntities(world: *flecs.world_t) void {
@@ -39,7 +40,8 @@ pub fn spawn(world: *flecs.world_t, which: Entities, tex: *Texture, sprNum: i32)
             std.debug.print("Spawning player!\n", .{});
             const move: Mover = .{
                 .bounds = RectF.fromPosSize(16, 16, C.TileWidth, C.TileHeight),
-                .speed = .{ .x=0, .y= 0}
+                .speed = .{ .x=0, .y= 0},
+                .inAir = false,
             };
             _ = flecs.set(world, ent, Mover, move);
        

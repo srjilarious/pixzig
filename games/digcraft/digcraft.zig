@@ -52,6 +52,7 @@ pub const App = struct {
     projMat: zmath.Mat,
     renderer: Renderer,
     fps: FpsCounter,
+    mouse: pixzig.input.Mouse,
     grid: GridRenderer,
     tex: *Texture,
     map: tile.TileMap,
@@ -228,7 +229,7 @@ pub const App = struct {
         // Create some tiles for the tile set
         map.tilesets.items[0].tile(7).?.* = .{.core = tile.BlocksAll, .properties = null, .alloc = alloc};
 
-        const idxs = [_]usize{0, 1, 2, 12, 45, 23};
+        const idxs = [_]usize{0, 1, 2, 12, 45, 23, 140, 213, 313, 480};
         for(idxs) |idx| {
             map.layers.items[0].tiles.items[idx] = 7;
         }
@@ -276,6 +277,7 @@ pub const App = struct {
             .renderer = renderer,
             .fps = FpsCounter.init(),
             .grid = grid,
+            .mouse = pixzig.input.Mouse.init(eng.window, eng.allocator),
             .tex= tex,
             .texShader = texShader,
             .map = map,
@@ -313,11 +315,36 @@ pub const App = struct {
 
                 var v: *Mover = &vel[idx];
                 var sp: *Sprite = &spr[idx];
-                v.speed.y += 0.01;
-                if(pixzig.tile.Mover.moveDown(&sp.dest, v.speed.y, &self.map.layers.items[0], pixzig.tile.BlocksAll)) {
-                    v.speed.y = 0;
+                v.speed.y += 0.05;
+
+                if(v.speed.y > 0) {
+                    if(pixzig.tile.Mover.moveDown(&sp.dest, v.speed.y, &self.map.layers.items[0], pixzig.tile.BlocksAll)) {
+                        v.speed.y = 0;
+                        v.inAir = false;
+                    }
+                    else {
+                        v.inAir = true;
+                    }
+                }
+                else {
+                    if(pixzig.tile.Mover.moveUp(&sp.dest, -v.speed.y, &self.map.layers.items[0], pixzig.tile.BlocksAll)) {
+                        v.speed.y = 0;
+                    }
                 }
 
+                if(!v.inAir and eng.keyboard.down(.up)) {
+                    std.debug.print("YEET!\n", .{});
+                    v.speed.y = -2;
+                    // v.inAir = true;
+                }
+
+                // Handle guy movement.
+                if (eng.keyboard.down(.left)) {
+                    _ = pixzig.tile.Mover.moveLeft(&sp.dest, 2, &self.map.layers.items[0], pixzig.tile.BlocksAll);
+                }
+                if (eng.keyboard.down(.right)) {
+                    _ = pixzig.tile.Mover.moveRight(&sp.dest, 2, &self.map.layers.items[0], pixzig.tile.BlocksAll);
+                }
                 // sp.dest.l += v.speed.x;
                 // if(sp.dest.l < 0 or sp.dest.l > 800 - sp.size.x) {
                 //     v.speed.x = -v.speed.x;
@@ -328,6 +355,11 @@ pub const App = struct {
                 //     v.speed.y = -v.speed.y;
                 // }
 
+                self.mouse.update();
+                if(self.mouse.down(.left)) {
+                    const mousePos = self.mouse.pos().asVec2I();
+                    sp.setPos(@divFloor(mousePos.x,4), @divFloor(mousePos.y,4));
+                }
                 sp.dest.ensureSize(@as(i32, @intFromFloat(sp.size.x)), @as(i32, @intFromFloat(sp.size.y)));
 
                 //spr[idx].draw(&self.spriteBatch) catch {};
