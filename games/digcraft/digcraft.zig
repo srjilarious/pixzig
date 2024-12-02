@@ -315,7 +315,10 @@ pub const App = struct {
 
                 var v: *Mover = &vel[idx];
                 var sp: *Sprite = &spr[idx];
-                v.speed.y += 0.05;
+                v.speed.y += 0.08;
+                if(v.speed.y > 4.0) {
+                    v.speed.y = 4.0;
+                }
 
                 if(v.speed.y > 0) {
                     if(pixzig.tile.Mover.moveDown(&sp.dest, v.speed.y, &self.map.layers.items[0], pixzig.tile.BlocksAll)) {
@@ -334,8 +337,8 @@ pub const App = struct {
 
                 if(!v.inAir and eng.keyboard.down(.up)) {
                     std.debug.print("YEET!\n", .{});
-                    v.speed.y = -2;
-                    // v.inAir = true;
+                    v.speed.y = -3;
+                    v.inAir = true;
                 }
 
                 // Handle guy movement.
@@ -357,6 +360,7 @@ pub const App = struct {
 
                 self.mouse.update();
                 if(self.mouse.down(.left)) {
+                    v.speed.y = 0;
                     const mousePos = self.mouse.pos().asVec2I();
                     sp.setPos(@divFloor(mousePos.x,4), @divFloor(mousePos.y,4));
                 }
