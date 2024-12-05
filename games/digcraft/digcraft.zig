@@ -2,6 +2,9 @@
 // DigCraft - A 2d Minecraft-inspired game.
 
 // TODO list:
+// - Change to real texture
+// - Change to 16x16 blocks
+// - camera and larger world.
 // - different blocks
 // - world seeding
 // - world simulation steps
@@ -71,7 +74,7 @@ pub const App = struct {
                 &shaders.ColorVertexShader,
                 &shaders.ColorPixelShader
             );
-        const grid = try GridRenderer.init(alloc, colorShader, .{ .x = 28, .y = 18}, .{ .x = 32, .y = 32}, 1, Color{.r=0.5, .g=0.0, .b=0.5, .a=1});
+        const grid = try GridRenderer.init(alloc, colorShader, .{ .x = C.MapWidth, .y = C.MapHeight}, .{ .x = C.TileWidth*C.Scale, .y = C.TileHeight*C.Scale}, 1, Color{.r=0.5, .g=0.0, .b=0.5, .a=1});
 
         // Create a texture for the path tiles.
         const colorMap = &[_]CharToColor{
@@ -86,102 +89,42 @@ pub const App = struct {
         };
 
         const emptyChars = 
-        \\        
-        \\        
-        \\        
-        \\        
-        \\        
-        \\        
-        \\        
-        \\        
+        \\                
+        \\                
+        \\                
+        \\                
+        \\                
+        \\                
+        \\                
+        \\                
+        \\                
+        \\                
+        \\                
+        \\                
+        \\                
+        \\                
+        \\                
+        \\                
+        \\                
         ;
 
         const lockedChars =
-        \\=------=
-        \\-######-
-        \\-#####=-
-        \\-#####=-
-        \\-#####=-
-        \\-#####=-
-        \\-##===@-
-        \\=------=
-        ;
-
-        const horzChars =
-        \\        
-        \\        
-        \\########
-        \\........
-        \\........
-        \\########
-        \\        
-        \\        
-        ;
-    
-        const vertChars =
-        \\  #..#  
-        \\  #..#  
-        \\  #..#  
-        \\  #..#  
-        \\  #..#  
-        \\  #..#  
-        \\  #..#  
-        \\  #..#  
-        ;
-
-        const topRightChars =
-        \\        
-        \\        
-        \\#####   
-        \\.....#  
-        \\.....#  
-        \\###..#  
-        \\  #..#  
-        \\  #..#  
-        ;
-
-        const topLeftChars =
-        \\        
-        \\        
-        \\   #####
-        \\  #.....
-        \\  #.....
-        \\  #..###
-        \\  #..#  
-        \\  #..#  
-        ;
-
-        const bottomRightChars =
-        \\  #..#  
-        \\  #..#  
-        \\###..#  
-        \\.....#  
-        \\.....#  
-        \\#####   
-        \\        
-        \\        
-        ;
-
-        const bottomLeftChars =
-        \\  #..#  
-        \\  #..#  
-        \\  #..###
-        \\  #.....
-        \\  #.....
-        \\   #####
-        \\        
-        \\        
-        ;
-    
-       const playerChars =
-        \\hhhhhhhh
-        \\h######h
-        \\h#e##e#h
-        \\ #e##e# 
-        \\ ###### 
-        \\ ##==## 
-        \\ #====# 
-        \\ ###### 
+        \\=--------------=
+        \\-##############-
+        \\-#############=-
+        \\-#############=-
+        \\-#############=-
+        \\-#############=-
+        \\-#############=-
+        \\-#############=-
+        \\-#############=-
+        \\-#############=-
+        \\-#############=-
+        \\-#############=-
+        \\-#############=-
+        \\-#############=-
+        \\-##########===@-
+        \\=--------------=
         ;
  
     
@@ -192,17 +135,8 @@ pub const App = struct {
         const bufferSize = Vec2U{.x = C.NumTilesHorz*C.TileWidth, .y=C.NumTilesVert*C.TileHeight};
 
         pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, emptyChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=0, .y=0}, colorMap);
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, horzChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=8, .y=0}, colorMap);
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, vertChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=16, .y=0}, colorMap);
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, topLeftChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=24, .y=0}, colorMap);
-    
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, topRightChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=0, .y=8}, colorMap);
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, bottomLeftChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=8, .y=8}, colorMap);
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, bottomRightChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=16, .y=8}, colorMap);
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, lockedChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=24, .y=8}, colorMap);
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, lockedChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=16, .y=0}, colorMap);
 
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, playerChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=0, .y=16}, colorMap);
-        // const wallTex = try eng.textures.createTextureFromChars("wall", 8, 8, lockedChars, );
 
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
@@ -217,8 +151,8 @@ pub const App = struct {
         );
 
         var map = try tile.TileMap.init(alloc);
-        const tileset = try tile.TileSet.initEmpty(alloc, .{ .x = 8, .y = 8 }, .{ .x=C.NumTilesHorz*C.TileWidth, .y=C.NumTilesVert*C.TileHeight}, C.NumTilesHorz*C.NumTilesVert);
-        const layer = try tile.TileLayer.initEmpty(alloc, .{ .x=28, .y=18}, .{.x=8, .y=8});
+        const tileset = try tile.TileSet.initEmpty(alloc, .{ .x = C.TileWidth, .y = C.TileHeight }, .{ .x=C.NumTilesHorz*C.TileWidth, .y=C.NumTilesVert*C.TileHeight}, C.NumTilesHorz*C.NumTilesVert);
+        const layer = try tile.TileLayer.initEmpty(alloc, .{ .x=C.MapWidth, .y=C.MapHeight}, .{.x=C.TileWidth, .y=C.TileHeight});
         try map.layers.append(layer);
         try map.tilesets.append(tileset);
         map.layers.items[0].tileset = &map.tilesets.items[0];
@@ -226,15 +160,16 @@ pub const App = struct {
         var mapRender = try tile.TileMapRenderer.init(std.heap.page_allocator, texShader);
 
         // Create some tiles for the tile set
-        map.tilesets.items[0].tile(7).?.* = .{.core = tile.BlocksAll, .properties = null, .alloc = alloc};
+        const WallIdx = 1;
+        map.tilesets.items[0].tile(WallIdx).?.* = .{.core = tile.BlocksAll, .properties = null, .alloc = alloc};
 
         const idxs = [_]usize{0, 1, 2, 12, 45, 23, 140, 213, 313, 480};
         for(idxs) |idx| {
-            map.layers.items[0].tiles.items[idx] = 7;
+            map.layers.items[0].tiles.items[idx] = WallIdx;
         }
 
         for(0..C.MapWidth) |idx| {
-            map.layers.items[0].tiles.items[(C.MapHeight-1)*C.MapWidth+idx] = 7;
+            map.layers.items[0].tiles.items[(C.MapHeight-1)*C.MapWidth+idx] = WallIdx;
         }
 
         
@@ -305,7 +240,7 @@ pub const App = struct {
         }
 
         eng.keyboard.update();
-
+        self.mouse.update();
 
         var it = flecs.query_iter(self.world, self.update_query);
         while (flecs.query_next(&it)) {
@@ -350,21 +285,14 @@ pub const App = struct {
                 if (eng.keyboard.down(.right)) {
                     _ = pixzig.tile.Mover.moveRight(&sp.dest, 2, &self.map.layers.items[0], pixzig.tile.BlocksAll);
                 }
-                // sp.dest.l += v.speed.x;
-                // if(sp.dest.l < 0 or sp.dest.l > 800 - sp.size.x) {
-                //     v.speed.x = -v.speed.x;
-                // }
-                //
-                // sp.dest.t += v.speed.y;
-                // if(sp.dest.t < 0 or sp.dest.t > 600 - sp.size.y) {
-                //     v.speed.y = -v.speed.y;
-                // }
 
-                self.mouse.update();
                 if(self.mouse.down(.left)) {
                     v.speed.y = 0;
                     const mousePos = self.mouse.pos().asVec2I();
-                    sp.setPos(@divFloor(mousePos.x,4), @divFloor(mousePos.y,4));
+                    sp.setPos(
+                        @divFloor(mousePos.x,C.Scale), 
+                        @divFloor(mousePos.y,C.Scale)
+                    );
                 }
                 sp.dest.ensureSize(@as(i32, @intFromFloat(sp.size.x)), @as(i32, @intFromFloat(sp.size.y)));
 
@@ -408,7 +336,7 @@ pub const App = struct {
         gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
         self.fps.renderTick();
       
-        const mvp = zmath.mul(zmath.scaling(4.0, 4.0, 1.0), self.projMat);
+        const mvp = zmath.mul(zmath.scaling(C.Scale, C.Scale, 1.0), self.projMat);
         try self.mapRenderer.draw(self.tex, &self.map.layers.items[0], mvp);
 
         try self.grid.draw(self.projMat);
