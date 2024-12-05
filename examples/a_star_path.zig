@@ -51,7 +51,7 @@ pub const App = struct {
                 &shaders.ColorVertexShader,
                 &shaders.ColorPixelShader
             );
-        const grid = try GridRenderer.init(alloc, shader, .{ .x = 20, .y = 12}, .{ .x = 32, .y = 32}, 1);
+        const grid = try GridRenderer.init(alloc, shader, .{ .x = 20, .y = 12}, .{ .x = 32, .y = 32}, 1, Color{.r=1.0, .g=1.0, .b=1.0, .a=1.0});
 
         // Create a texture for the path tiles.
         const colorMap = &[_]CharToColor{

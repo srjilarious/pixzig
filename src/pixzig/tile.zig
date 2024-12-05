@@ -619,6 +619,7 @@ pub const TileMapRenderer = struct {
 
 pub const GridRenderer = struct {
     shader: Shader = undefined,
+    color: Color = undefined,
     vao: u32 = 0,
     vboVertices: u32 = 0,
     vboColorCoords: u32 = 0,
@@ -637,9 +638,10 @@ pub const GridRenderer = struct {
     numRects: usize = 0,
     initialized: bool = false,
 
-    pub fn init(alloc: std.mem.Allocator, shader: Shader, mapSize: Vec2I, tileSize: Vec2I, borderSize: usize) !GridRenderer {
+    pub fn init(alloc: std.mem.Allocator, shader: Shader, mapSize: Vec2I, tileSize: Vec2I, borderSize: usize, color: Color) !GridRenderer {
         var gr = GridRenderer{
             .shader = shader,
+            .color = color,
             .alloc = alloc
         };
         gl.genVertexArrays(1, &gr.vao);
@@ -656,7 +658,7 @@ pub const GridRenderer = struct {
         gr.attrColor = @intCast(gl.getAttribLocation(gr.shader.program, "color"));
         gr.uniformMVP = @intCast(gl.getUniformLocation(gr.shader.program, "projectionMatrix"));
 
-        try gr.recreateVertices(mapSize, tileSize, borderSize);
+        try gr.recreateVertices(mapSize, tileSize, borderSize, color);
         return gr;
     }
 
@@ -730,7 +732,7 @@ pub const GridRenderer = struct {
         self.drawFilledRect(RectF.fromPosSize(0, y, w, h), color);
     }
 
-    pub fn recreateVertices(self: *GridRenderer, mapSize: Vec2I, tileSize: Vec2I, borderSize: usize) !void {
+    pub fn recreateVertices(self: *GridRenderer, mapSize: Vec2I, tileSize: Vec2I, borderSize: usize, color:Color) !void {
         self.currVert = 0;
         self.currColorCoord = 0;
         self.currIdx = 0;
@@ -758,7 +760,6 @@ pub const GridRenderer = struct {
         std.debug.print("Creating {} vertices\n", .{self.vertices.len});
         const gridWidth:i32 = @intCast((numHorz-1)*tw);
         const gridHeight:i32 = @intCast((numVert-1)*th);
-        const color = Color{.r=255, .g=255, .b=255, .a=255};
         for(0..numVert) |yy| {
             for(0..numHorz) |xx| {
                 self.drawHorzLine(@intCast(yy*th), gridWidth, @intCast(borderSize), color); 

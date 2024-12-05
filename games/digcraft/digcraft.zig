@@ -2,8 +2,6 @@
 // DigCraft - A 2d Minecraft-inspired game.
 
 // TODO list:
-// - main player
-// - player movement
 // - different blocks
 // - world seeding
 // - world simulation steps
@@ -58,6 +56,7 @@ pub const App = struct {
     map: tile.TileMap,
     mapRenderer: tile.TileMapRenderer,
     texShader: pixzig.shaders.Shader,
+    colorShader: pixzig.shaders.Shader,
     world: *flecs.world_t,
     update_query: *flecs.query_t,
     draw_query: *flecs.query_t,
@@ -68,11 +67,11 @@ pub const App = struct {
 
         const renderer = try Renderer.init(alloc, .{});
 
-        const shader = try Shader.init(
+        const colorShader = try Shader.init(
                 &shaders.ColorVertexShader,
                 &shaders.ColorPixelShader
             );
-        const grid = try GridRenderer.init(alloc, shader, .{ .x = 28, .y = 18}, .{ .x = 32, .y = 32}, 1);
+        const grid = try GridRenderer.init(alloc, colorShader, .{ .x = 28, .y = 18}, .{ .x = 32, .y = 32}, 1, Color{.r=0.5, .g=0.0, .b=0.5, .a=1});
 
         // Create a texture for the path tiles.
         const colorMap = &[_]CharToColor{
@@ -280,6 +279,7 @@ pub const App = struct {
             .mouse = pixzig.input.Mouse.init(eng.window, eng.allocator),
             .tex= tex,
             .texShader = texShader,
+            .colorShader = colorShader,
             .map = map,
             .mapRenderer = mapRender,
             .world = world,
@@ -293,6 +293,8 @@ pub const App = struct {
         self.grid.deinit();
         self.map.deinit();
         self.mapRenderer.deinit();
+        self.colorShader.deinit();
+        self.texShader.deinit();
         _ = flecs.fini(self.world);
         // TODO: deinit queries too.
     }
@@ -409,8 +411,10 @@ pub const App = struct {
         const mvp = zmath.mul(zmath.scaling(4.0, 4.0, 1.0), self.projMat);
         try self.mapRenderer.draw(self.tex, &self.map.layers.items[0], mvp);
 
+        try self.grid.draw(self.projMat);
+
         self.renderer.begin(mvp);
-        
+
         var it = flecs.query_iter(self.world, self.draw_query);
         while (flecs.query_next(&it)) {
             const spr = flecs.field(&it, Sprite, 1).?;
@@ -430,26 +434,8 @@ pub const App = struct {
                 // }
             }
         }
-        // self.renderer.drawFullTexture(self.tex, .{.x=0, .y=0}, 4);
-        // 
-        // for(0..3) |idx| {
-        //     self.renderer.draw(self.tex, self.dest[idx], self.srcCoords[idx]);
-        // }
-        // 
-        // 
-        // // Draw sprite outlines.
-        // for(0..3) |idx| {
-        //     self.renderer.drawRect(self.dest[idx], Color.from(255,255,0,200), 2);
-        // }
-        // for(0..3) |idx| {
-        //     self.renderer.drawEnclosingRect(self.dest[idx], Color.from(255,0,255,200), 2);
-        // }
-        // for(0..3) |idx| {
-        //     self.renderer.drawFilledRect(self.destRects[idx], self.colorRects[idx]);
-        // }
-        //
+
         self.renderer.end();
-        try self.grid.draw(self.projMat);
  
     }
 };

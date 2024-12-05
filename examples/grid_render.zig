@@ -42,11 +42,10 @@ pub const App = struct {
                 &shaders.ColorVertexShader,
                 &shaders.ColorPixelShader
             );
-        const grid = try GridRenderer.init(alloc, shader, .{ .x = 20, .y = 12}, .{ .x = 32, .y = 32}, 1);
+        const grid = try GridRenderer.init(alloc, shader, .{ .x = 20, .y = 12}, .{ .x = 32, .y = 32}, 1, Color{.r=1, .g=0, .b=1, .a=1});
         return .{
             .allocator = alloc,
             .projMat = projMat,
-            // .scrollOffset = .{ .x = 0, .y = 0}, 
             .renderer = renderer,
             .fps = FpsCounter.init(),
             .grid = grid
@@ -69,19 +68,7 @@ pub const App = struct {
         if (eng.keyboard.pressed(.one)) std.debug.print("one!\n", .{});
         if (eng.keyboard.pressed(.two)) std.debug.print("two!\n", .{});
         if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
-        // const ScrollAmount = 3;
-        // if (eng.keyboard.down(.left)) {
-        //     self.scrollOffset.x += ScrollAmount;
-        // }
-        // if (eng.keyboard.down(.right)) {
-        //     self.scrollOffset.x -= ScrollAmount;
-        // }
-        // if (eng.keyboard.down(.up)) {
-        //     self.scrollOffset.y += ScrollAmount;
-        // }
-        // if (eng.keyboard.down(.down)) {
-        //     self.scrollOffset.y -= ScrollAmount;
-        // }
+
         if(eng.keyboard.pressed(.escape)) {
             return false;
         }
@@ -94,26 +81,6 @@ pub const App = struct {
         self.fps.renderTick();
        
         try self.grid.draw(self.projMat);
-        // self.renderer.begin(self.projMat);
-        // 
-        // for(0..3) |idx| {
-        //     self.renderer.draw(self.tex, self.dest[idx], self.srcCoords[idx]);
-        // }
-        // 
-        // 
-        // // Draw sprite outlines.
-        // for(0..3) |idx| {
-        //     self.renderer.drawRect(self.dest[idx], Color.from(255,255,0,200), 2);
-        // }
-        // for(0..3) |idx| {
-        //     self.renderer.drawEnclosingRect(self.dest[idx], Color.from(255,0,255,200), 2);
-        // }
-        // for(0..3) |idx| {
-        //     self.renderer.drawFilledRect(self.destRects[idx], self.colorRects[idx]);
-        // }
-        //
-        // self.renderer.end();
- 
     }
 };
 
