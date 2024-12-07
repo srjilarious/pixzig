@@ -49,13 +49,14 @@ const Mover = entities.Mover;
 const C = @import("./constants.zig");
 
 const Gravity = @import("systems/gravity.zig").Gravity;
+const PlayerControl = @import("systems/player_control.zig").PlayerControl;
 
 pub const App = struct {
     allocator: std.mem.Allocator,
     projMat: zmath.Mat,
     renderer: Renderer,
     fps: FpsCounter,
-    mouse: pixzig.input.Mouse,
+    mouse: *pixzig.input.Mouse,
     grid: GridRenderer,
     tex: *Texture,
     map: tile.TileMap,
@@ -65,7 +66,8 @@ pub const App = struct {
     world: *flecs.world_t,
     update_query: *flecs.query_t,
     draw_query: *flecs.query_t,
-    gravity: Gravity,
+    gravity: Gravity = undefined,
+    playerControl: PlayerControl = undefined,
 
     pub fn init(eng: *pixzig.PixzigEngine, alloc: std.mem.Allocator) !App {
         // Orthographic projection matrix
@@ -206,17 +208,17 @@ pub const App = struct {
 
         map.layers.items[0].dumpLayer();
         
-        const gravity = try Gravity.init(world);
-
+        const mouse = try alloc.create(pixzig.input.Mouse);
+        mouse.* = pixzig.input.Mouse.init(eng.window, eng.allocator);
         // Create application.
-        return .{
+        var app = App{
             .allocator = alloc,
             .projMat = projMat,
             // .scrollOffset = .{ .x = 0, .y = 0}, 
             .renderer = renderer,
             .fps = FpsCounter.init(),
             .grid = grid,
-            .mouse = pixzig.input.Mouse.init(eng.window, eng.allocator),
+            .mouse = mouse,
             .tex= tex,
             .texShader = texShader,
             .colorShader = colorShader,
@@ -225,8 +227,12 @@ pub const App = struct {
             .world = world,
             .update_query = update_query,
             .draw_query = draw_query,
-            .gravity = gravity,
         };
+
+        app.gravity = try Gravity.init(world);
+        app.playerControl = try PlayerControl.init(world, eng, app.mouse);
+
+        return app;
     }
 
     pub fn deinit(self: *App) void {
@@ -237,8 +243,10 @@ pub const App = struct {
         self.colorShader.deinit();
         self.texShader.deinit();
         self.gravity.deinit();
+        self.playerControl.deinit();
+        self.allocator.destroy(self.mouse);
         _ = flecs.fini(self.world);
-        // TODO: deinit queries too.
+        flecs.query_fini(self.draw_query);
     }
 
     pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {
@@ -249,54 +257,9 @@ pub const App = struct {
         eng.keyboard.update();
         self.mouse.update();
 
-        self.gravity.update(&self.map.layers.items[0]);
-
-        var it = flecs.query_iter(self.world, self.update_query);
-        while (flecs.query_next(&it)) {
-            const spr = flecs.field(&it, Sprite, 1).?;
-            const vel = flecs.field(&it, Mover, 2).?;
-
-            //const entities = it.entities();
-            for (0..it.count()) |idx| {
-
-                var v: *Mover = &vel[idx];
-                var sp: *Sprite = &spr[idx];
-                
-                if(!v.inAir and eng.keyboard.down(.up)) {
-                    std.debug.print("YEET!\n", .{});
-                    v.speed.y = -3;
-                    v.inAir = true;
-                }
-
-                // Handle guy movement.
-                if (eng.keyboard.down(.left)) {
-                    _ = pixzig.tile.Mover.moveLeft(&sp.dest, 2, &self.map.layers.items[0], pixzig.tile.BlocksAll);
-                }
-                if (eng.keyboard.down(.right)) {
-                    _ = pixzig.tile.Mover.moveRight(&sp.dest, 2, &self.map.layers.items[0], pixzig.tile.BlocksAll);
-                }
-
-                if(self.mouse.down(.left)) {
-                    v.speed.y = 0;
-                    const mousePos = self.mouse.pos().asVec2I();
-                    sp.setPos(
-                        @divFloor(mousePos.x,C.Scale), 
-                        @divFloor(mousePos.y,C.Scale)
-                    );
-                }
-                sp.dest.ensureSize(@as(i32, @intFromFloat(sp.size.x)), @as(i32, @intFromFloat(sp.size.y)));
-
-                //spr[idx].draw(&self.spriteBatch) catch {};
-
-                //const e = entities[idx];
-
-                // const outline = flecs.get(self.world, e, DebugOutline);
-                // if(outline != null) {
-                //     self.shapeBatch.drawEnclosingRect(spr[idx].dest, outline.?.color, 2);
-                // }
-            }
-        }
-        
+        const mapLayer = &self.map.layers.items[0];
+        self.gravity.update(mapLayer);
+        self.playerControl.update(mapLayer);
 
         // const ScrollAmount = 3;
         // if (eng.keyboard.down(.left)) {
