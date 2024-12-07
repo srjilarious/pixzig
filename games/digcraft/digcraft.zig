@@ -48,6 +48,8 @@ const Mover = entities.Mover;
 
 const C = @import("./constants.zig");
 
+const Gravity = @import("systems/gravity.zig").Gravity;
+
 pub const App = struct {
     allocator: std.mem.Allocator,
     projMat: zmath.Mat,
@@ -63,6 +65,7 @@ pub const App = struct {
     world: *flecs.world_t,
     update_query: *flecs.query_t,
     draw_query: *flecs.query_t,
+    gravity: Gravity,
 
     pub fn init(eng: *pixzig.PixzigEngine, alloc: std.mem.Allocator) !App {
         // Orthographic projection matrix
@@ -203,6 +206,8 @@ pub const App = struct {
 
         map.layers.items[0].dumpLayer();
         
+        const gravity = try Gravity.init(world);
+
         // Create application.
         return .{
             .allocator = alloc,
@@ -220,6 +225,7 @@ pub const App = struct {
             .world = world,
             .update_query = update_query,
             .draw_query = draw_query,
+            .gravity = gravity,
         };
     }
 
@@ -230,6 +236,7 @@ pub const App = struct {
         self.mapRenderer.deinit();
         self.colorShader.deinit();
         self.texShader.deinit();
+        self.gravity.deinit();
         _ = flecs.fini(self.world);
         // TODO: deinit queries too.
     }
@@ -242,6 +249,8 @@ pub const App = struct {
         eng.keyboard.update();
         self.mouse.update();
 
+        self.gravity.update(&self.map.layers.items[0]);
+
         var it = flecs.query_iter(self.world, self.update_query);
         while (flecs.query_next(&it)) {
             const spr = flecs.field(&it, Sprite, 1).?;
@@ -252,26 +261,7 @@ pub const App = struct {
 
                 var v: *Mover = &vel[idx];
                 var sp: *Sprite = &spr[idx];
-                v.speed.y += 0.08;
-                if(v.speed.y > 4.0) {
-                    v.speed.y = 4.0;
-                }
-
-                if(v.speed.y > 0) {
-                    if(pixzig.tile.Mover.moveDown(&sp.dest, v.speed.y, &self.map.layers.items[0], pixzig.tile.BlocksAll)) {
-                        v.speed.y = 0;
-                        v.inAir = false;
-                    }
-                    else {
-                        v.inAir = true;
-                    }
-                }
-                else {
-                    if(pixzig.tile.Mover.moveUp(&sp.dest, -v.speed.y, &self.map.layers.items[0], pixzig.tile.BlocksAll)) {
-                        v.speed.y = 0;
-                    }
-                }
-
+                
                 if(!v.inAir and eng.keyboard.down(.up)) {
                     std.debug.print("YEET!\n", .{});
                     v.speed.y = -3;
@@ -308,10 +298,6 @@ pub const App = struct {
         }
         
 
-
-        if (eng.keyboard.pressed(.one)) std.debug.print("one!\n", .{});
-        if (eng.keyboard.pressed(.two)) std.debug.print("two!\n", .{});
-        if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
         // const ScrollAmount = 3;
         // if (eng.keyboard.down(.left)) {
         //     self.scrollOffset.x += ScrollAmount;
