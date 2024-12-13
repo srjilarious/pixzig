@@ -1,12 +1,15 @@
 .{
     .name = "pixzig",
-    .version = "0.1.0",
+    .version = "0.2.0",
     .paths = .{"src"},
     .dependencies = .{
         .testz = .{
             // .url = "https://github.com/srjilarious/testz/archive/49528d2.tar.gz",
             // .hash = "12200811a46177bab3a72c34cd184d715133751a1c2b447caf61f7f6652e552f3dcb",
             .path = "../testz",
+        },
+        .zargunaught = .{
+            .path = "../zargunaught",
         },
         .mach_freetype = .{
             .path = "libs/mach-freetype",

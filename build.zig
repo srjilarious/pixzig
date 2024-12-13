@@ -183,6 +183,13 @@ pub fn build(b: *std.Build) void {
     _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig");
     _ = example(b, target, optimize, "digcraft", "games/digcraft/digcraft.zig");
 
+    const spack = example(b, target, optimize, "spack", "tools/spack/spack.zig");
+    const zargs = b.dependency("zargunaught", .{});
+    spack.root_module.addImport("zargunaught", zargs.module("zargunaught"));
+
+    const zstbi = b.dependency("zstbi", .{ .target = target });
+    spack.root_module.addImport("zstbi", zstbi.module("root"));
+
     const tests = example(b, target, optimize, "tests", "tests/main.zig");
     const testzMod = b.dependency("testz", .{});
     tests.root_module.addImport("testz", testzMod.module("testz"));
