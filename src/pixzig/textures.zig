@@ -19,6 +19,20 @@ pub const CharToColor = struct {
     color: Color8, 
 };
 
+pub fn blit(dest: []u8, destSize: Vec2U, src: []const u8, srcSize: Vec2U, offsetIntoBuffer: Vec2U) void {
+    var srcIdx: usize = 0;
+    const lineLen: usize = srcSize.x*4;
+    const destLineLen: usize = destSize.x*4;
+    var destIdx: usize = (offsetIntoBuffer.y*destSize.x+offsetIntoBuffer.x)*4;
+
+    // Copy each line of the source image into the dest.
+    while(srcIdx < src.len) {
+        @memcpy(dest[destIdx..destIdx+lineLen], src[srcIdx..srcIdx+lineLen]);
+        srcIdx += lineLen;
+        destIdx += destLineLen;
+    }
+}
+
 pub fn drawBufferFromChars(buffer: []u8, buffSize: Vec2U, chars: []const u8, charsSize: Vec2U, offsetIntoBuffer: Vec2U, mapping: []const CharToColor) void {
     // Manually track the index since we need to skip newlines.
     var chrIdx: usize = 0;
