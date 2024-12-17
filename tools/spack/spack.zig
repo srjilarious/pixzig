@@ -17,6 +17,7 @@ pub const SpriteFrame = struct {
 const SpackProcessor = struct {
     curPos: Vec2U,
     image: stbi.Image,
+    rects: std.ArrayList(SpriteFrame),
 
     fn handleImageFile(self: *SpackProcessor, alloc: std.mem.Allocator, path: []const u8) !void {
         // Convert our string slice to a null terminated string
@@ -36,6 +37,25 @@ const SpackProcessor = struct {
         pixzig.textures.blit(
             self.image.data, .{ .x=self.image.width, .y=self.image.height}, 
             image.data, .{ .x=image.width, .y=image.height}, self.curPos);
+
+        const name = blk: {
+            const lastIndex = std.mem.lastIndexOf(u8, path, "/");
+            if(lastIndex != null) {
+                break :blk path[lastIndex.?+1..];
+            }
+            else {
+                break :blk path;
+            }
+        };
+
+        try self.rects.append(.{ 
+            .name = try alloc.dupe(u8, name),
+            .pos = RectI.init(
+                @intCast(self.curPos.x), 
+                @intCast(self.curPos.y), 
+                @intCast(image.width), 
+                @intCast(image.height))
+        });
 
         // Update position for next sprite.
         self.curPos.x += image.width;
@@ -87,8 +107,10 @@ pub fn main() !void {
     var spack = SpackProcessor{
         .curPos = .{ .x = 0, .y = 0},
         .image = try stbi.Image.createEmpty(256, 256, 4, .{}),
+        .rects = std.ArrayList(SpriteFrame).init(alloc),
     };
     defer spack.image.deinit();
+    defer spack.rects.deinit();
 
     for(args.positional.items) |path| {
         const metadata = try std.fs.cwd().statFile(path);
@@ -104,11 +126,32 @@ pub fn main() !void {
         }
     }
 
-    const outputName = "test.png";
-    try spack.image.writeToFile(outputName, .png);
+    const output: []const u8 = blk: {
+        if(args.hasOption("output")) {
+            break :blk args.optionVal("output").?;
+        } else {
+            break :blk "sprites";
+        }
+    };
 
-    // TODO: Write out the json file.
+    const imageName = try std.mem.concatWithSentinel(alloc, u8, &[_][]const u8{ output, ".png"}, 0);
+    defer alloc.free(imageName);
 
+    try spack.image.writeToFile(imageName, .png);
+
+    // Write out the json file.
+    const data = .{
+        .frames = spack.rects.items
+    };
+
+    const jsonName = try std.mem.concat(alloc, u8, &[_][]const u8{ output, ".json"});
+    defer alloc.free(jsonName);
+
+    var file = try std.fs.cwd().createFile(jsonName, .{});
+    defer file.close();
+
+    try std.json.stringify(data, .{ .whitespace = .indent_2 }, file.writer());
+    try stdout.print("Wrote out json file with {} rects.\n", .{spack.rects.items.len});
     try stdout.flush();
 }
 
