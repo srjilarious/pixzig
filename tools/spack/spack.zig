@@ -19,7 +19,20 @@ const SpackProcessor = struct {
     image: stbi.Image,
     rects: std.ArrayList(SpriteFrame),
 
-    fn handleImageFile(self: *SpackProcessor, alloc: std.mem.Allocator, path: []const u8) !void {
+    const Self = @This();
+    pub fn init(alloc: std.mem.Allocator, size: Vec2U) !Self {
+        return .{
+            .curPos = .{ .x = 0, .y = 0},
+            .image = try stbi.Image.createEmpty(size.x, size.y, 4, .{}),
+            .rects = std.ArrayList(SpriteFrame).init(alloc),
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.image.deinit();
+        self.rects.deinit();
+    }
+    pub fn handleImageFile(self: *Self, alloc: std.mem.Allocator, path: []const u8) !void {
         // Convert our string slice to a null terminated string
         var nt_str = try alloc.alloc(u8, path.len + 1);
         defer alloc.free(nt_str);
@@ -38,7 +51,7 @@ const SpackProcessor = struct {
             self.image.data, .{ .x=self.image.width, .y=self.image.height}, 
             image.data, .{ .x=image.width, .y=image.height}, self.curPos);
 
-        const name = blk: {
+        const rootName = blk: {
             const lastIndex = std.mem.lastIndexOf(u8, path, "/");
             if(lastIndex != null) {
                 break :blk path[lastIndex.?+1..];
@@ -48,13 +61,24 @@ const SpackProcessor = struct {
             }
         };
 
-        try self.rects.append(.{ 
-            .name = try alloc.dupe(u8, name),
-            .pos = RectI.init(
-                @intCast(self.curPos.x), 
-                @intCast(self.curPos.y), 
-                @intCast(image.width), 
-                @intCast(image.height))
+        const name = blk: {
+            const lastIndex = std.mem.lastIndexOf(u8, rootName, ".");
+            if(lastIndex != null) {
+                break :blk rootName[0..lastIndex.?];
+            }
+            else {
+                break :blk rootName;
+            }
+        };
+
+        try self.rects.append(
+            .{ 
+                .name = try alloc.dupe(u8, name),
+                .pos = RectI.init(
+                    @intCast(self.curPos.x), 
+                    @intCast(self.curPos.y), 
+                    @intCast(image.width), 
+                    @intCast(image.height))
         });
 
         // Update position for next sprite.
@@ -104,13 +128,8 @@ pub fn main() !void {
         };
     }
 
-    var spack = SpackProcessor{
-        .curPos = .{ .x = 0, .y = 0},
-        .image = try stbi.Image.createEmpty(256, 256, 4, .{}),
-        .rects = std.ArrayList(SpriteFrame).init(alloc),
-    };
-    defer spack.image.deinit();
-    defer spack.rects.deinit();
+    var spack = try SpackProcessor.init(alloc, .{.x = 256, .y = 256});
+    defer spack.deinit();
 
     for(args.positional.items) |path| {
         const metadata = try std.fs.cwd().statFile(path);
