@@ -6,12 +6,19 @@ const common = @import("./common.zig");
 
 const Vec2U = common.Vec2U;
 const Color8 = common.Color8;
+const RectF = common.RectF;
 
-pub const Texture = struct {
+pub const TextureImage = struct {
     // GL Texture ID once loaded.
     texture: c_uint,
     size: Vec2U,
     name: ?[]u8,
+};
+
+pub const Texture = struct {
+    texture: c_uint,
+    size: Vec2U,
+    src: RectF
 };
 
 pub const CharToColor = struct {
@@ -70,12 +77,16 @@ pub fn drawBufferFromChars(buffer: []u8, buffSize: Vec2U, chars: []const u8, cha
 }
 
 pub const TextureManager = struct {
-    textures: std.ArrayList(Texture),
+    textures: std.ArrayList(TextureImage),
+    atlas: std.StringHashMap(Texture),
     allocator: std.mem.Allocator,
 
     pub fn init(alloc: std.mem.Allocator) TextureManager{
-        const textures = std.ArrayList(Texture).init(alloc);
-        return .{ .textures = textures, .allocator = alloc };
+        return .{ 
+            .textures = std.ArrayList(TextureImage).init(alloc),
+            .atlas = std.StringHashMap(Texture).init(alloc),
+            .allocator = alloc 
+        };
     }
 
     pub fn destroy(self: *TextureManager) void {
@@ -84,9 +95,10 @@ pub const TextureManager = struct {
             self.allocator.free(t.name.?);
         }
         self.textures.clearAndFree();
+        self.atlas.deinit();
     }
 
-    pub fn createTextureFromChars(
+    pub fn createTextureImageFromChars(
         self: *TextureManager, 
         name: []const u8, 
         width: usize, 
@@ -135,7 +147,8 @@ pub const TextureManager = struct {
     }
 
 
-    pub fn loadTextureFromBuffer(self: *TextureManager, name: []const u8, width: usize, height: usize, buffer:[]u8) !*Texture{
+    pub fn loadTextureFromBuffer(self: *TextureManager, name: []const u8, width: usize, height: usize, buffer:[]u8) !*Texture
+    {
         var texture: c_uint = undefined;
         gl.genTextures(1, &texture);
         gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -160,12 +173,18 @@ pub const TextureManager = struct {
             .name = copied_name,
         });
 
-        return &self.textures.items[self.textures.items.len - 1];
+        try self.atlas.put(name, .{
+            .texture = texture,
+            .size = .{ .x = @intCast(width), .y = @intCast(height) },
+            .src = .{ .t = 0, .l = 0, .b = 1, .r = 1}
+        });
+
+        return self.atlas.getPtr(name).?;
     }
 
 
     // TODO: Add error handler.
-    pub fn loadTexture(self: *TextureManager, name: []const u8, file_path: []const u8) !*Texture{
+    pub fn loadTexture(self: *TextureManager, name: []const u8, file_path: []const u8) !*Texture {
 
         // Convert our string slice to a null terminated string
         var nt_str = try self.allocator.alloc(u8, file_path.len + 1);
@@ -181,32 +200,15 @@ pub const TextureManager = struct {
         std.debug.print("Loaded image '{s}', width={}, height={}\n", .{ name, image.width, image.height });
 
         return try self.loadTextureFromBuffer(name, image.width, image.height, image.data);
-        // var texture: c_uint = undefined;
-        // gl.genTextures(1, &texture);
-        // gl.bindTexture(gl.TEXTURE_2D, texture);
-        // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-        // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-        // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        // const format = gl.RGBA;
-        // gl.texImage2D(gl.TEXTURE_2D, 0, format, 
-        //     @intCast(image.width), 
-        //     @intCast(image.height), 
-        //     0, format, 
-        //     gl.UNSIGNED_BYTE, 
-        //     @ptrCast(image.data)
-        // );
-        //
-        // const copied_name = try self.allocator.alloc(u8, name.len);
-        // @memcpy(copied_name, name);
-        // try self.textures.append(.{
-        //     .texture = texture,
-        //     .size = .{ .x = image.width, .y = image.height },
-        //     .name = copied_name,
-        // });
-        //
-        // return &self.textures.items[self.textures.items.len - 1];
     }
+
+    // pub fn loadAtlas(self: *TextureManager, baseName: []const u8) !void {
+    //
+    // }
+    //
+    // pub fn getTexture(self: *TextureManager, name: []const u8) !*Texture {
+    //
+    // }
 };
 
 

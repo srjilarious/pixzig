@@ -598,7 +598,7 @@ pub const TextRenderer = struct {
                     .x = @intCast(GlyphBufferWidth), 
                     .y = @intCast(GlyphBufferHeight)
                 },
-                .name = null
+                .src = . { .l = 0, .t = 0, .r = 1, .b = 1 },
             },
             .texShader = texShader,
             .maxY = maxY,
