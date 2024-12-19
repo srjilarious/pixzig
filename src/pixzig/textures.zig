@@ -3,10 +3,12 @@ const std = @import("std");
 const stbi = @import("zstbi");
 const gl = @import("zopengl").bindings;
 const common = @import("./common.zig");
+const utils = @import("./utils.zig");
 
 const Vec2U = common.Vec2U;
 const Color8 = common.Color8;
 const RectF = common.RectF;
+const RectI = common.RectI;
 
 pub const TextureImage = struct {
     // GL Texture ID once loaded.
@@ -24,6 +26,18 @@ pub const Texture = struct {
 pub const CharToColor = struct {
     char: u8,
     color: Color8, 
+};
+
+// A sprite pack file.
+pub const SpackFile = struct {
+    frames: []SpackFrame
+};
+
+// A sprite frame as stored in an atlas json file.
+pub const SpackFrame = struct {
+    name: []u8,
+    sizePx: Vec2U,
+    pos: RectI,
 };
 
 pub fn blit(dest: []u8, destSize: Vec2U, src: []const u8, srcSize: Vec2U, offsetIntoBuffer: Vec2U) void {
@@ -202,13 +216,55 @@ pub const TextureManager = struct {
         return try self.loadTextureFromBuffer(name, image.width, image.height, image.data);
     }
 
-    // pub fn loadAtlas(self: *TextureManager, baseName: []const u8) !void {
-    //
-    // }
-    //
-    // pub fn getTexture(self: *TextureManager, name: []const u8) !*Texture {
-    //
-    // }
+    pub fn loadAtlas(self: *TextureManager, baseName: []const u8) !usize {
+        const imageName = try utils.addExtension(self.allocator, baseName, ".png");
+        defer self.allocator.free(imageName);
+        const texImage = try self.loadTexture(baseName, imageName);
+
+        const jsonName = try utils.addExtension(self.allocator, baseName, ".json");
+        defer self.allocator.free(jsonName);
+        const f = try std.fs.cwd().openFile(jsonName, .{});
+        defer f.close();
+
+        var buffered = std.io.bufferedReader(f.reader());
+        var reader = std.json.reader(self.allocator, buffered.reader());
+        defer reader.deinit();
+        const parsed = try std.json.parseFromTokenSource(
+            SpackFile, 
+            self.allocator, 
+            &reader, 
+            .{}
+        );
+
+        const spack = parsed.value;
+
+        var num: usize = 0;
+        for(spack.frames) |frame| {
+            try self.atlas.put(frame.name, .{
+                .texture = texImage.texture,
+                .size = frame.sizePx,
+                .src = RectF.fromCoords(
+                    frame.pos.t, 
+                    frame.pos.l, 
+                    frame.pos.width(), 
+                    frame.pos.height(), 
+                    @intCast(texImage.size.x),
+                    @intCast(texImage.size.y)
+                ),
+            });
+            num += 1;
+        }
+
+        return num;
+    }
+    
+    pub fn getTexture(self: *TextureManager, name: []const u8) !*Texture {
+        const tex = self.atlas.getPtr(name);
+        if(tex == null) {
+            return error.NoTextureWithThatName;
+        }
+        return tex.?;
+    }
 };
 
 

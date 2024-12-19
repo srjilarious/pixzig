@@ -39,3 +39,31 @@ pub fn cStrToSlice(c_str: [*:0]const u8) []const u8 {
     const length = std.mem.len(c_str);
     return c_str[0..length];
 }
+
+// Removes the starting path and end extension from the given path
+pub fn baseNameFromPath(path: []const u8) []const u8 {
+    const rootName = blk: {
+        const lastIndex = std.mem.lastIndexOf(u8, path, "/");
+        if (lastIndex != null) {
+            break :blk path[lastIndex.? + 1 ..];
+        } else {
+            break :blk path;
+        }
+    };
+
+    const name = blk: {
+        const lastIndex = std.mem.lastIndexOf(u8, rootName, ".");
+        if (lastIndex != null) {
+            break :blk rootName[0..lastIndex.?];
+        } else {
+            break :blk rootName;
+        }
+    };
+
+    return name;
+}
+
+// Adds the extension to the path, caller is responsible for freeing.
+pub fn addExtension(alloc: std.mem.Allocator, path: []const u8, ext: []const u8) ![]const u8 {
+    return try std.mem.concat(alloc, u8, &[_][]const u8{ path, ext });
+}

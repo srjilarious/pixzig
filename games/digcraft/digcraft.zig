@@ -201,8 +201,11 @@ pub const App = struct {
             },
         });
 
+        const atlasName = "assets/digcraft_sprites";
+        const numSprites = try eng.textures.loadAtlas(atlasName);
+        std.debug.print("Loaded {} sprites from '{s}' atlas", .{numSprites, atlasName});
 
-        const playerTex = eng.textures.loadTexture("player", "assets/remi.png") catch unreachable;
+        const playerTex = eng.textures.getTexture("remi") catch unreachable;
 
         entities.spawn(world, .Player, playerTex, 8);
 

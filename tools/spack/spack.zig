@@ -9,22 +9,20 @@ const Vec2U = pixzig.common.Vec2U;
 
 const Option = zargs.Option;
 
-pub const SpriteFrame = struct {
-    name: []u8,
-    pos: RectI,
-};
+const SpackFile = pixzig.textures.SpackFile;
+const SpackFrame = pixzig.textures.SpackFrame;
 
 const SpackProcessor = struct {
     curPos: Vec2U,
     image: stbi.Image,
-    rects: std.ArrayList(SpriteFrame),
+    rects: std.ArrayList(SpackFrame),
 
     const Self = @This();
     pub fn init(alloc: std.mem.Allocator, size: Vec2U) !Self {
         return .{
             .curPos = .{ .x = 0, .y = 0},
             .image = try stbi.Image.createEmpty(size.x, size.y, 4, .{}),
-            .rects = std.ArrayList(SpriteFrame).init(alloc),
+            .rects = std.ArrayList(SpackFrame).init(alloc),
         };
     }
 
@@ -74,6 +72,10 @@ const SpackProcessor = struct {
         try self.rects.append(
             .{ 
                 .name = try alloc.dupe(u8, name),
+                .sizePx = .{ 
+                    .x = @intCast(image.width), 
+                    .y = @intCast(image.height)
+                },
                 .pos = RectI.init(
                     @intCast(self.curPos.x), 
                     @intCast(self.curPos.y), 
@@ -159,7 +161,7 @@ pub fn main() !void {
     try spack.image.writeToFile(imageName, .png);
 
     // Write out the json file.
-    const data = .{
+    const data: SpackFile = .{
         .frames = spack.rects.items
     };
 

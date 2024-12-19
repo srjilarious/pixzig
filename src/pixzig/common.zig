@@ -85,11 +85,11 @@ pub const RectI = struct {
         };
     }
 
-    pub fn width(self: *RectI) i32 {
+    pub fn width(self: *const RectI) i32 {
         return self.r - self.l;
     }
 
-    pub fn height(self: *RectI) i32 {
+    pub fn height(self: *const RectI) i32 {
         return self.b - self.t;
     }
 };
