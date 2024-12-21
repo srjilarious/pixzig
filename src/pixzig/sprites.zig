@@ -8,7 +8,10 @@ const renderer = @import("./renderer.zig");
 const Vec2I = common.Vec2I;
 const Vec2F = common.Vec2F;
 const RectF = common.RectF;
+const Rotate = common.Rotate;
+
 const Texture = textures.Texture;
+
 // const SpriteBatchQueue = renderer.SpriteBatchQueue;
 
 pub const Sprite = struct {
@@ -17,6 +20,7 @@ pub const Sprite = struct {
     dest: RectF,
     size: Vec2F,
     flip: Flip,
+    rotate: Rotate,
 
     pub fn create(tex: *Texture, size: Vec2F) Sprite {
         return Sprite{ 
@@ -26,7 +30,8 @@ pub const Sprite = struct {
                 @as(i32, @intFromFloat(size.x)), 
                 @as(i32, @intFromFloat(size.y))),
             .size = size,
-            .flip = Flip.None
+            .flip = .none,
+            .rotate = .none,
         };
     }
 
@@ -43,10 +48,10 @@ pub const Sprite = struct {
 };
 
 pub const Flip = enum(u8) { 
-    None = 0, 
-    Horz = 1, 
-    Vert = 2, 
-    Both = 3 
+    none = 0, 
+    horz = 1, 
+    vert = 2, 
+    both = 3 
 };
 
 pub const Frame = struct { 
@@ -57,45 +62,45 @@ pub const Frame = struct {
     pub fn apply(self: *Frame, spr: *Sprite) void {
         spr.src_coords = self.coords;
         spr.flip = self.flip;
-        // switch(self.flip) {
-        //     Flip.None => spr.src_coords = self.coords,
-        //     Flip.Horz => {
-        //         spr.src_coords = .{
-        //             .x = self.coords.x + self.coords.w,
-        //             .y = self.coords.y,
-        //             .w = -self.coords.w,
-        //             .h = self.coords.h
-        //         };
-        //     },
-        //     Flip.Vert => {
-        //         spr.src_coords = .{
-        //             .x = self.coords.x,
-        //             .y = self.coords.y + self.coords.h,
-        //             .w = self.coords.w,
-        //             .h = -self.coords.h
-        //         };
-        //     },
-        //     Flip.Both => {
-        //         spr.src_coords = .{
-        //             .x = self.coords.x + self.coords.w,
-        //             .y = self.coords.y + self.coords.h,
-        //             .w = -self.coords.w,
-        //             .h = -self.coords.h
-        //         };
-        //     }
-        // }
+        switch(self.flip) {
+            .none => spr.src_coords = self.coords,
+            .horz => {
+                spr.src_coords = .{
+                    .l = self.coords.r,
+                    .t = self.coords.t,
+                    .r = self.coords.l,
+                    .b = self.coords.b
+                };
+            },
+            .vert => {
+                spr.src_coords = .{
+                    .l = self.coords.l,
+                    .t = self.coords.b,
+                    .r = self.coords.r,
+                    .b = self.coords.t
+                };
+            },
+            .both => {
+                spr.src_coords = .{
+                    .l = self.coords.r,
+                    .t = self.coords.b,
+                    .r = self.coords.l,
+                    .b = self.coords.t
+                };
+            }
+        }
     }
 };
 
 pub const AnimPlayMode = enum { 
-    Loop, 
-    Once 
+    loop, 
+    once 
 };
 
 pub const SpriteRenderOffset = enum { 
-    None, 
-    Sequence, 
-    HorzCenterBottomAligned 
+    none, 
+    sequence, 
+    horzCenterBottomAligned 
 };
 
 pub const FrameSequence = struct {
@@ -120,7 +125,7 @@ pub const FrameSequence = struct {
         return .{ 
             .frames = frames,
             .alloc = alloc,
-            .mode = AnimPlayMode.Loop, 
+            .mode = .loop, 
             .name = null,//nameCopy, 
             .nextState = null 
         };

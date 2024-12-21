@@ -14,10 +14,13 @@ const Vec2I = common.Vec2I;
 const Vec2U = common.Vec2U;
 const RectF = common.RectF;
 const Color = common.Color;
+const Rotate = common.Rotate;
 const Texture = textures.Texture;
 const Shader = shaders.Shader;
 
 const MaxSprites = 1000;
+
+
 
 pub const SpriteBatchQueue = struct {
     shader: *Shader = undefined,
@@ -91,17 +94,18 @@ pub const SpriteBatchQueue = struct {
     }
 
     pub fn drawSprite(self: *SpriteBatchQueue, sprite: *Sprite) void {
-        self.draw(sprite.texture, sprite.dest, sprite.src_coords);
+        self.draw(sprite.texture, sprite.dest, sprite.src_coords, sprite.rotate);
     }
 
-    pub fn draw(self: *SpriteBatchQueue, texture: *Texture, dest: RectF, srcCoords: RectF) void {
+    pub fn draw(self: *SpriteBatchQueue, texture: *Texture, dest: RectF, srcCoords: RectF,
+        rot: Rotate) void {
         std.debug.assert(self.begun);
 
         if(self.texture == null) {
             self.texture = texture;
         } 
 
-        if(self.texture != texture) {
+        if(self.texture.?.texture != texture.texture) {
             self.flush();
             self.texture = texture;
         }
@@ -120,17 +124,87 @@ pub const SpriteBatchQueue = struct {
         verts[7] = dest.b;
 
         const texCoords = self.texCoords[self.currTexCoord..self.currTexCoord+8];
-        texCoords[0] = srcCoords.l;
-        texCoords[1] = srcCoords.b;
+        switch(rot) {
+            .none => {
+                texCoords[0] = srcCoords.l;
+                texCoords[1] = srcCoords.b;
 
-        texCoords[2] = srcCoords.l;
-        texCoords[3] = srcCoords.t;
-        
-        texCoords[4] = srcCoords.r;
-        texCoords[5] = srcCoords.t;
-        
-        texCoords[6] = srcCoords.r;
-        texCoords[7] = srcCoords.b;
+                texCoords[2] = srcCoords.l;
+                texCoords[3] = srcCoords.t;
+                
+                texCoords[4] = srcCoords.r;
+                texCoords[5] = srcCoords.t;
+                
+                texCoords[6] = srcCoords.r;
+                texCoords[7] = srcCoords.b;
+            },
+            .rot90 => {
+                texCoords[0] = srcCoords.l;
+                texCoords[1] = srcCoords.t;
+                
+                texCoords[2] = srcCoords.r;
+                texCoords[3] = srcCoords.t;
+                
+                texCoords[4] = srcCoords.r;
+                texCoords[5] = srcCoords.b;
+
+                texCoords[6] = srcCoords.l;
+                texCoords[7] = srcCoords.b;
+            },
+            .rot180 => {
+                texCoords[0] = srcCoords.r;
+                texCoords[1] = srcCoords.t;
+                
+                texCoords[2] = srcCoords.r;
+                texCoords[3] = srcCoords.b;
+
+                texCoords[4] = srcCoords.l;
+                texCoords[5] = srcCoords.b;
+
+                texCoords[6] = srcCoords.l;
+                texCoords[7] = srcCoords.t;
+            },
+            .rot270 => {
+                texCoords[0] = srcCoords.r;
+                texCoords[1] = srcCoords.b;
+
+                texCoords[2] = srcCoords.l;
+                texCoords[3] = srcCoords.b;
+
+                texCoords[4] = srcCoords.l;
+                texCoords[5] = srcCoords.t;
+                
+                texCoords[6] = srcCoords.r;
+                texCoords[7] = srcCoords.t;
+            },
+            .flipHorz => {
+                texCoords[0] = srcCoords.r;
+                texCoords[1] = srcCoords.b;
+
+                texCoords[2] = srcCoords.r;
+                texCoords[3] = srcCoords.t;
+                
+                texCoords[4] = srcCoords.l;
+                texCoords[5] = srcCoords.t;
+                
+                texCoords[6] = srcCoords.l;
+                texCoords[7] = srcCoords.b;
+            },
+            .flipVert => {
+                texCoords[0] = srcCoords.l;
+                texCoords[1] = srcCoords.t;
+
+                texCoords[2] = srcCoords.l;
+                texCoords[3] = srcCoords.b;
+                
+                texCoords[4] = srcCoords.r;
+                texCoords[5] = srcCoords.b;
+                
+                texCoords[6] = srcCoords.r;
+                texCoords[7] = srcCoords.t;
+            },
+
+        }
 
         const indices = self.indices[self.currIdx..self.currIdx+6];
         const currVertIdx: u16 = @intCast(self.currVert / 2);
@@ -625,7 +699,8 @@ pub const TextRenderer = struct {
             self.spriteBatch.draw(
                 &self.tex, 
                 RectF.fromPosSize(currX, posY - charData.bearing.y, charData.size.x, charData.size.y), 
-                charData.coords);
+                charData.coords,
+                .none);
             const adv: i32 = @intCast(charData.advance/64);
             currX += adv;
             drawSize.x += adv;
@@ -753,7 +828,7 @@ pub fn Renderer(opts: RendererOptions) type {
         
         pub fn draw(self: *@This(), texture: *Texture, dest: RectF, srcCoords: RectF) void {
             // TODO: Handle multiple batches
-            self.impl.batches[0].draw(texture, dest, srcCoords);
+            self.impl.batches[0].draw(texture, dest, srcCoords, .none);
         }
 
         pub fn drawSprite(self: *@This(), sprite: *Sprite) void
@@ -763,7 +838,7 @@ pub fn Renderer(opts: RendererOptions) type {
         }
 
         pub fn drawTexture(self: *@This(), texture: *Texture, dest: RectF, srcCoords: RectF) void {
-             self.impl.batches[0].draw(texture, dest, srcCoords);
+             self.impl.batches[0].draw(texture, dest, srcCoords, .none);
         }
 
         pub fn drawFullTexture(self: *@This(), texture: *Texture, pos: Vec2I, scale: f32) void {
@@ -772,7 +847,8 @@ pub fn Renderer(opts: RendererOptions) type {
             self.impl.batches[0].draw(
                 texture, 
                 RectF.fromPosSize(pos.x, pos.y, @intFromFloat(tsx), @intFromFloat(tsy)),
-                .{.t=0, .l=0, .r=1, .b=1}
+                .{.t=0, .l=0, .r=1, .b=1},
+                .none
             );
         }
 

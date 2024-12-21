@@ -137,3 +137,11 @@ pub const Color8 = struct {
     }
 };
 
+pub const Rotate = enum {
+    none,
+    rot90,
+    rot180,
+    rot270,
+    flipHorz,
+    flipVert,
+};
