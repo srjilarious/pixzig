@@ -207,6 +207,7 @@ pub const App = struct {
 
         const playerTex = eng.textures.getTexture("remi") catch unreachable;
 
+        std.debug.print("player tex: {}, {}, {}, {}\n", .{playerTex.src.l, playerTex.src.t, playerTex.src.r, playerTex.src.b});
         entities.spawn(world, .Player, playerTex, 8);
 
         map.layers.items[0].dumpLayer();

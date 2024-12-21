@@ -37,8 +37,10 @@ pub const MyApp = struct {
             &pixzig.shaders.TexPixelShader
         );
 
-        const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
+        const bigtex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
        
+        const tex = try eng.textures.addSubTexture(bigtex, "guy", RectF.fromCoords(32, 32, 32, 32, 512, 512));
+
         const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &texShader);
         
         return .{ 
@@ -48,8 +50,7 @@ pub const MyApp = struct {
             .mouse = pixzig.input.Mouse.init(eng.window, eng.allocator),
             .spriteBatch = spriteBatch,
             .tex = tex,
-            .pointer = pixzig.sprites.Sprite.create(tex, .{ .x = 32, .y = 32}, 
-                RectF.fromCoords(32, 32, 32, 32, 512, 512)),
+            .pointer = pixzig.sprites.Sprite.create(tex, .{ .x = 32, .y = 32}),
             .texShader = texShader,
         };
     }

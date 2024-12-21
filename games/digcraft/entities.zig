@@ -49,8 +49,7 @@ pub fn spawn(world: *flecs.world_t, which: Entities, tex: *Texture, sprNum: i32)
             // const srcY:i32 = @intCast(C.TileHeight*@divTrunc(sprNum, C.NumTilesVert));
             var spr = Sprite.create(
                 tex, 
-                .{ .x = 16, .y = 16}, 
-                .{ .t = 0, .l = 0, .b = 1, .r = 1});
+                .{ .x = 16, .y = 16});
             spr.setPos(16, 16);
             _ = flecs.set(world, ent, Sprite, spr);
         },

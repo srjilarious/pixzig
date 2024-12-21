@@ -18,10 +18,10 @@ pub const Sprite = struct {
     size: Vec2F,
     flip: Flip,
 
-    pub fn create(tex: *Texture, size: Vec2F, scoords: RectF) Sprite {
+    pub fn create(tex: *Texture, size: Vec2F) Sprite {
         return Sprite{ 
             .texture = tex, 
-            .src_coords = scoords, 
+            .src_coords = tex.src, 
             .dest = RectF.fromPosSize(0, 0, 
                 @as(i32, @intFromFloat(size.x)), 
                 @as(i32, @intFromFloat(size.y))),

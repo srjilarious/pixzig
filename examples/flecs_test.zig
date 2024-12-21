@@ -51,8 +51,9 @@ pub const App = struct {
     pub fn init(eng: *pixzig.PixzigEngine, alloc: std.mem.Allocator) !App {
         // Orthographic projection matrix
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
-        const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
+        const bigtex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
        
+        const tex = try eng.textures.addSubTexture(bigtex, "guy", RectF.fromCoords(32, 32, 32, 32, 512, 512));
         const renderer = try Renderer.init(alloc, .{});
 
         const world = flecs.init();
@@ -111,12 +112,12 @@ pub const App = struct {
     pub fn spawn(self: *App, which: usize, x: i32, y: i32, val: bool) void
     {
         const ent = flecs.new_id(self.world);
-        const srcX: i32 = @intCast(32*@rem(which, 16));
-        const srcY:i32 = @intCast(32*@divTrunc(which, 16));
+        _ = which;
+        // const srcX: i32 = @intCast(32*@rem(which, 16));
+        // const srcY:i32 = @intCast(32*@divTrunc(which, 16));
         var spr = Sprite.create(
                 self.tex, 
-                .{ .x = 32, .y = 32}, 
-                RectF.fromCoords(srcX, srcY, 32, 32, 512, 512));
+                .{ .x = 32, .y = 32});
 
         spr.setPos(x, y);
         _ = flecs.set(self.world, ent, Sprite, spr);

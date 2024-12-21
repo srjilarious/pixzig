@@ -68,6 +68,12 @@ pub const RectF = struct {
         self.r = self.l + wF;
         self.b = self.t + hF;
     }
+
+    pub fn size2U(self: *const RectF) Vec2U {
+        const w: usize = @intFromFloat(self.width());
+        const h: usize = @intFromFloat(self.height());
+        return .{ .x = w, .y = h };
+    }
 };
 
 pub const RectI = struct {
@@ -91,6 +97,12 @@ pub const RectI = struct {
 
     pub fn height(self: *const RectI) i32 {
         return self.b - self.t;
+    }
+
+    pub fn size2U(self: *const RectI) Vec2U {
+        const w: usize = @intCast(self.width());
+        const h: usize = @intCast(self.height());
+        return .{ .x = w, .y = h };
     }
 };
 

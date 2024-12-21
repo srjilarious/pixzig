@@ -50,8 +50,9 @@ pub const App = struct {
             &pixzig.shaders.TexPixelShader
         );
 
-        const tex = try eng.textures.loadTexture("tiles", "assets/pac-tiles.png");
-       
+        const bigtex = try eng.textures.loadTexture("tiles", "assets/pac-tiles.png");
+        const tex = try eng.textures.addSubTexture(bigtex, "guy", RectF.fromCoords(32, 32, 32, 32, 512, 512));
+
         const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &texShader);
 
         // var colorShader = try pixzig.shaders.Shader.init(
@@ -133,12 +134,11 @@ pub const App = struct {
     pub fn spawn(self: *App, which: usize, x: i32, y: i32) !void
     {
         const ent = flecs.new_id(self.world);
-        const srcX: i32 = @intCast(32*@rem(which, 16));
-        const srcY: i32 = @intCast(32*@divTrunc(which, 16));
-        var spr = Sprite.create(
-                self.tex, 
-                .{ .x = 32, .y = 32}, 
-                RectF.fromCoords(srcX, srcY, 32, 32, 512, 512));
+        _ = which;
+        // const srcX: i32 = @intCast(32*@rem(which, 16));
+        // const srcY: i32 = @intCast(32*@divTrunc(which, 16));
+        var spr = Sprite.create(self.tex,
+                .{ .x = 32, .y = 32});
 
         spr.setPos(x, y);
         _ = flecs.set(self.world, ent, Sprite, spr);

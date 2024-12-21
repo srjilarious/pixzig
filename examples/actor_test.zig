@@ -58,7 +58,7 @@ pub fn main() !void {
     _ = try actor.addState(frseq_2, "left");
     // actor.setState("test");
 
-    var spr = pixzig.sprites.Sprite.create(tex, .{ .x = 16, .y = 16 }, RectF.fromPosSize(0, 0, 16, 16));
+    var spr = pixzig.sprites.Sprite.create(tex, .{ .x = 16, .y = 16 });
     spr.setPos(32, 32);
     fr1.apply(&spr);
     fr2.apply(&spr);
