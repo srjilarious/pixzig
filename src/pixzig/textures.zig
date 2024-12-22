@@ -119,6 +119,12 @@ pub const TextureManager = struct {
             self.allocator.free(t.name.?);
         }
         self.textures.clearAndFree();
+
+        var atlasKeys = self.atlas.keyIterator();
+        while(atlasKeys.next()) |key| {
+            self.allocator.free(key.*);
+        }
+
         self.atlas.deinit();
     }
 
@@ -197,7 +203,7 @@ pub const TextureManager = struct {
             .name = copied_name,
         });
 
-        try self.atlas.put(name, .{
+        try self.atlas.put(try self.allocator.dupe(u8, name), .{
             .texture = texture,
             .size = .{ .x = @intCast(width), .y = @intCast(height) },
             .src = .{ .t = 0, .l = 0, .b = 1, .r = 1}
@@ -245,23 +251,28 @@ pub const TextureManager = struct {
             &reader, 
             .{}
         );
+        defer parsed.deinit();
 
         const spack = parsed.value;
 
         var num: usize = 0;
         for(spack.frames) |frame| {
-            try self.atlas.put(frame.name, .{
-                .texture = texImage.texture,
-                .size = frame.sizePx,
-                .src = RectF.fromCoords(
-                    frame.pos.t, 
-                    frame.pos.l, 
-                    frame.pos.width(), 
-                    frame.pos.height(), 
-                    @intCast(texImage.size.x),
-                    @intCast(texImage.size.y)
-                ),
-            });
+            try self.atlas.put(
+                try self.allocator.dupe(u8, frame.name), 
+                .{
+                    .texture = texImage.texture,
+                    .size = frame.sizePx,
+                    .src = RectF.fromCoords(
+                        frame.pos.t, 
+                        frame.pos.l, 
+                        frame.pos.width(), 
+                        frame.pos.height(), 
+                        @intCast(texImage.size.x),
+                        @intCast(texImage.size.y)
+                    ),
+                }
+            );
+
             num += 1;
         }
 
@@ -269,7 +280,7 @@ pub const TextureManager = struct {
     }
     
     pub fn addSubTexture(self: *TextureManager, tex: *Texture, name: []const u8, coords: RectF) !*Texture {
-       try self.atlas.put(name, tex.sub(coords));
+       try self.atlas.put(try self.allocator.dupe(u8, name), tex.sub(coords));
        return self.atlas.getPtr(name).?;
     }
 

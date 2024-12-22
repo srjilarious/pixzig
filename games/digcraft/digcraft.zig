@@ -2,8 +2,6 @@
 // DigCraft - A 2d Minecraft-inspired game.
 
 // TODO list:
-// - Change to real texture
-// - Change to 16x16 blocks
 // - camera and larger world.
 // - different blocks
 // - world seeding
@@ -249,8 +247,8 @@ pub const App = struct {
         self.gravity.deinit();
         self.playerControl.deinit();
         self.allocator.destroy(self.mouse);
-        _ = flecs.fini(self.world);
         flecs.query_fini(self.draw_query);
+        _ = flecs.fini(self.world);
     }
 
     pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {
