@@ -48,6 +48,7 @@ const C = @import("./constants.zig");
 
 const Gravity = @import("systems/gravity.zig").Gravity;
 const PlayerControl = @import("systems/player_control.zig").PlayerControl;
+const Camera = @import("systems/camera.zig").Camera;
 
 pub const App = struct {
     allocator: std.mem.Allocator,
@@ -66,6 +67,7 @@ pub const App = struct {
     draw_query: *flecs.query_t,
     gravity: Gravity = undefined,
     playerControl: PlayerControl = undefined,
+    camera: Camera = undefined,
 
     pub fn init(eng: *pixzig.PixzigEngine, alloc: std.mem.Allocator) !App {
         // Orthographic projection matrix
@@ -206,7 +208,7 @@ pub const App = struct {
         const playerTex = eng.textures.getTexture("remi") catch unreachable;
 
         std.debug.print("player tex: {}, {}, {}, {}\n", .{playerTex.src.l, playerTex.src.t, playerTex.src.r, playerTex.src.b});
-        entities.spawn(world, .Player, playerTex, 8);
+        const playerId = entities.spawn(world, .Player, playerTex, 8);
 
         map.layers.items[0].dumpLayer();
         
@@ -233,7 +235,8 @@ pub const App = struct {
 
         app.gravity = try Gravity.init(world);
         app.playerControl = try PlayerControl.init(world, eng, app.mouse);
-
+        app.camera = try Camera.init(world, eng, projMat);
+        app.camera.tracked = playerId;
         return app;
     }
 
@@ -263,6 +266,8 @@ pub const App = struct {
         self.gravity.update(mapLayer);
         self.playerControl.update(mapLayer);
 
+        self.camera.update();
+
         // const ScrollAmount = 3;
         // if (eng.keyboard.down(.left)) {
         //     self.scrollOffset.x += ScrollAmount;
@@ -287,7 +292,7 @@ pub const App = struct {
         gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
         self.fps.renderTick();
       
-        const mvp = zmath.mul(zmath.scaling(C.Scale, C.Scale, 1.0), self.projMat);
+        const mvp = self.camera.cameraMat;
         try self.mapRenderer.draw(self.tex, &self.map.layers.items[0], mvp);
 
         try self.grid.draw(self.projMat);

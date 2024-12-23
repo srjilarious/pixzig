@@ -74,6 +74,16 @@ pub const RectF = struct {
         const h: usize = @intFromFloat(self.height());
         return .{ .x = w, .y = h };
     }
+
+    pub fn pos2I(self: *const RectF) Vec2I {
+        const x: usize = @intFromFloat(self.dest.l);
+        const y: usize = @intFromFloat(self.dest.t);
+        return .{ .x = x, .y = y };
+    }
+
+    pub fn pos2F(self: *const RectF) Vec2F {
+        return .{ .x = self.l, .y = self.t };
+    }
 };
 
 pub const RectI = struct {

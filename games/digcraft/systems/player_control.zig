@@ -9,6 +9,7 @@ const entities = @import("../entities.zig");
 const Player = entities.Player;
 const Mover = entities.Mover;
 const Sprite = pixzig.sprites.Sprite;
+const HumanController = entities.HumanController;
 const TileLayer = pixzig.tile.TileLayer;
 
 const C = @import("../constants.zig");
@@ -29,7 +30,8 @@ pub const PlayerControl = struct {
                     .terms = [_]flecs.term_t{
                         .{ .id = flecs.id(Sprite) },
                         .{ .id = flecs.id(Mover) },
-                    } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 2),
+                        .{ .id = flecs.id(HumanController) },
+                    } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 3),
                 },
             }),
         };

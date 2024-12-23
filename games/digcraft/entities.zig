@@ -26,13 +26,18 @@ pub const Mover = struct {
     inAir: bool,
 };
 
+pub const HumanController = struct {
+    dummy: bool = false,
+};
+
 pub fn setupEntities(world: *flecs.world_t) void {
     flecs.COMPONENT(world, Player);
     flecs.COMPONENT(world, Mover);
     flecs.COMPONENT(world, Sprite);
+    flecs.COMPONENT(world, HumanController);
 }
 
-pub fn spawn(world: *flecs.world_t, which: Entities, tex: *Texture, sprNum: i32) void {
+pub fn spawn(world: *flecs.world_t, which: Entities, tex: *Texture, sprNum: i32) flecs.entity_t {
     _ = sprNum;
     const ent = flecs.new_id(world);
     switch(which) {
@@ -52,9 +57,14 @@ pub fn spawn(world: *flecs.world_t, which: Entities, tex: *Texture, sprNum: i32)
                 .{ .x = 16, .y = 16});
             spr.setPos(16, 16);
             _ = flecs.set(world, ent, Sprite, spr);
+
+            const human: HumanController = .{};
+            _ = flecs.set(world, ent, HumanController, human);
         },
         else => {
             std.debug.print("Entity not setup to spawn yet!", .{});
         }
     }
+
+    return ent;
 }
