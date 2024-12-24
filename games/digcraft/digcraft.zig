@@ -79,7 +79,7 @@ pub const App = struct {
                 &shaders.ColorVertexShader,
                 &shaders.ColorPixelShader
             );
-        const grid = try GridRenderer.init(alloc, colorShader, .{ .x = C.MapWidth, .y = C.MapHeight}, .{ .x = C.TileWidth*C.Scale, .y = C.TileHeight*C.Scale}, 1, Color{.r=0.5, .g=0.0, .b=0.5, .a=1});
+        const grid = try GridRenderer.init(alloc, colorShader, .{ .x = C.MapWidth, .y = C.MapHeight}, .{ .x = C.TileWidth, .y = C.TileHeight}, 1, Color{.r=0.5, .g=0.0, .b=0.5, .a=1});
 
         // Create a texture for the path tiles.
         const colorMap = &[_]CharToColor{
@@ -168,11 +168,15 @@ pub const App = struct {
         const WallIdx = 1;
         map.tilesets.items[0].tile(WallIdx).?.* = .{.core = tile.BlocksAll, .properties = null, .alloc = alloc};
 
-        const idxs = [_]usize{0, 1, 2, 12, 45, 23, 140, 213, 313, 480};
-        for(idxs) |idx| {
+        // Generate a bunch of random blocks
+        var prng = std.rand.DefaultPrng.init(0xdeadbeef);
+        const rand = prng.random();
+        for(0..200) |_| {
+            const idx = rand.uintAtMost(usize, C.MapWidth*C.MapHeight);
             map.layers.items[0].tiles.items[idx] = WallIdx;
         }
 
+        // Draw a row on the entire bottom of the map.
         for(0..C.MapWidth) |idx| {
             map.layers.items[0].tiles.items[(C.MapHeight-1)*C.MapWidth+idx] = WallIdx;
         }
@@ -295,7 +299,7 @@ pub const App = struct {
         const mvp = self.camera.cameraMat;
         try self.mapRenderer.draw(self.tex, &self.map.layers.items[0], mvp);
 
-        try self.grid.draw(self.projMat);
+        try self.grid.draw(mvp);
 
         self.renderer.begin(mvp);
 
