@@ -443,13 +443,14 @@ pub const TileMapRenderer = struct {
     attrCoord: c_uint = 0,
     attrTexCoord: c_uint = 0,
     uniformMVP: c_int = 0,
+    numActualIndices: usize = 0,
     
     pub fn init(alloc: std.mem.Allocator, shader: Shader) !TileMapRenderer {
         var tr = TileMapRenderer{
             .shader = shader,
-            .alloc = alloc
-
+            .alloc = alloc,
         };
+
         gl.genVertexArrays(1, &tr.vao);
 
         gl.genBuffers(1, &tr.vboVertices);
@@ -477,10 +478,10 @@ pub const TileMapRenderer = struct {
         const i: i32 = @intCast(idx);
         if(idx < 0) {
             return .{
-                .l = 0.0,
-                .t = 0.0,
-                .r = 0.0,
-                .b = 0.0,
+                .l = 0.99,
+                .t = 0.99,
+                .r = 0.99,
+                .b = 0.99,
             };
         }
 
@@ -520,6 +521,8 @@ pub const TileMapRenderer = struct {
                 const y: i32 = @intCast(yy);
                 const x: i32 = @intCast(xx);
                 const tile = tiles.tileData(x, y);
+                // if(tile < 0) continue;
+
                 const uv = tileCoords(tile, tileset);
                
                 // Coord 1
@@ -560,6 +563,7 @@ pub const TileMapRenderer = struct {
                 indicesIdx += 6;
             }
         }
+        self.numActualIndices = indicesIdx;
     }
 
     pub fn draw(self: *TileMapRenderer, 
@@ -608,7 +612,7 @@ pub const TileMapRenderer = struct {
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.vboIndices);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * @sizeOf(u16) * mapSize), &self.indices[0], gl.STATIC_DRAW);
 
-        gl.drawElements(gl.TRIANGLES, @intCast(6 * mapSize), gl.UNSIGNED_SHORT, null);
+        gl.drawElements(gl.TRIANGLES, @intCast(6 * self.numActualIndices), gl.UNSIGNED_SHORT, null);
         gl.disableVertexAttribArray(self.attrCoord);
         gl.disableVertexAttribArray(self.attrTexCoord);
 

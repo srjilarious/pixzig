@@ -195,21 +195,21 @@ pub const TextureManager = struct {
             @ptrCast(buffer)
         );
 
-        const copied_name = try self.allocator.alloc(u8, name.len);
-        @memcpy(copied_name, name);
+        const baseName = utils.baseNameFromPath(name);
+
         try self.textures.append(.{
             .texture = texture,
             .size = .{ .x = @intCast(width), .y = @intCast(height) },
-            .name = copied_name,
+            .name = try self.allocator.dupe(u8, baseName),
         });
 
-        try self.atlas.put(try self.allocator.dupe(u8, name), .{
+        try self.atlas.put(try self.allocator.dupe(u8, baseName), .{
             .texture = texture,
             .size = .{ .x = @intCast(width), .y = @intCast(height) },
             .src = .{ .t = 0, .l = 0, .b = 1, .r = 1}
         });
 
-        return self.atlas.getPtr(name).?;
+        return self.atlas.getPtr(baseName).?;
     }
 
 
@@ -263,8 +263,8 @@ pub const TextureManager = struct {
                     .texture = texImage.texture,
                     .size = frame.sizePx,
                     .src = RectF.fromCoords(
-                        frame.pos.t, 
                         frame.pos.l, 
+                        frame.pos.t, 
                         frame.pos.width(), 
                         frame.pos.height(), 
                         @intCast(texImage.size.x),

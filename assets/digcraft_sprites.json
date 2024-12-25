@@ -1,7 +1,7 @@
 {
   "frames": [
     {
-      "name": "remi",
+      "name": "dirt",
       "sizePx": {
         "x": 16,
         "y": 16
@@ -14,7 +14,7 @@
       }
     },
     {
-      "name": "meeper",
+      "name": "grass",
       "sizePx": {
         "x": 16,
         "y": 16
@@ -27,7 +27,7 @@
       }
     },
     {
-      "name": "sweeper",
+      "name": "stone",
       "sizePx": {
         "x": 16,
         "y": 16
@@ -36,6 +36,45 @@
         "l": 32,
         "t": 0,
         "r": 48,
+        "b": 16
+      }
+    },
+    {
+      "name": "remi",
+      "sizePx": {
+        "x": 16,
+        "y": 16
+      },
+      "pos": {
+        "l": 48,
+        "t": 0,
+        "r": 64,
+        "b": 16
+      }
+    },
+    {
+      "name": "meeper",
+      "sizePx": {
+        "x": 16,
+        "y": 16
+      },
+      "pos": {
+        "l": 64,
+        "t": 0,
+        "r": 80,
+        "b": 16
+      }
+    },
+    {
+      "name": "sweeper",
+      "sizePx": {
+        "x": 16,
+        "y": 16
+      },
+      "pos": {
+        "l": 80,
+        "t": 0,
+        "r": 96,
         "b": 16
       }
     }

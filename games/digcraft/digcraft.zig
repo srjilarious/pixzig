@@ -63,7 +63,6 @@ pub const App = struct {
     texShader: pixzig.shaders.Shader,
     colorShader: pixzig.shaders.Shader,
     world: *flecs.world_t,
-    update_query: *flecs.query_t,
     draw_query: *flecs.query_t,
     gravity: Gravity = undefined,
     playerControl: PlayerControl = undefined,
@@ -81,73 +80,10 @@ pub const App = struct {
             );
         const grid = try GridRenderer.init(alloc, colorShader, .{ .x = C.MapWidth, .y = C.MapHeight}, .{ .x = C.TileWidth, .y = C.TileHeight}, 1, Color{.r=0.5, .g=0.0, .b=0.5, .a=1});
 
-        // Create a texture for the path tiles.
-        const colorMap = &[_]CharToColor{
-            .{ .char = '#', .color = Color8.from(180, 180, 180, 255) },
-            .{ .char = '-', .color = Color8.from(80, 80, 80, 255) },
-            .{ .char = '=', .color = Color8.from(100, 100, 100, 255) },
-            .{ .char = '.', .color = Color8.from(240, 240, 240, 255) },
-            .{ .char = '@', .color = Color8.from(30, 30, 30, 255) },
-            .{ .char = 'h', .color = Color8.from(200, 150, 60, 255) },
-            .{ .char = 'e', .color = Color8.from(50, 150, 255, 255) },
-            .{ .char = ' ', .color = Color8.from(0, 0, 0, 0) },
-        };
-
-        const emptyChars = 
-        \\                
-        \\                
-        \\                
-        \\                
-        \\                
-        \\                
-        \\                
-        \\                
-        \\                
-        \\                
-        \\                
-        \\                
-        \\                
-        \\                
-        \\                
-        \\                
-        \\                
-        ;
-
-        const lockedChars =
-        \\=--------------=
-        \\-##############-
-        \\-#############=-
-        \\-#############=-
-        \\-#############=-
-        \\-#############=-
-        \\-#############=-
-        \\-#############=-
-        \\-#############=-
-        \\-#############=-
-        \\-#############=-
-        \\-#############=-
-        \\-#############=-
-        \\-#############=-
-        \\-##########===@-
-        \\=--------------=
-        ;
- 
-    
-        
-        const textureBuff: []u8 = try alloc.alloc(u8, (C.NumTilesHorz*C.NumTilesVert)*C.TileWidth*C.TileHeight*4);
-        defer alloc.free(textureBuff);
-
-        const bufferSize = Vec2U{.x = C.NumTilesHorz*C.TileWidth, .y=C.NumTilesVert*C.TileHeight};
-
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, emptyChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=0, .y=0}, colorMap);
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, lockedChars, .{.x=C.TileWidth, .y=C.TileHeight}, .{.x=16, .y=0}, colorMap);
-
-
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        const tex = try eng.textures.loadTextureFromBuffer("a_star", bufferSize.x, bufferSize.y, textureBuff);
+        const atlasName = "assets/digcraft_sprites";
+        const numSprites = try eng.textures.loadAtlas(atlasName);
+        std.debug.print("Loaded {} sprites from '{s}' atlas", .{numSprites, atlasName});
+        const tex = eng.textures.getTexture("digcraft_sprites") catch unreachable;
 
         // Create base map and renderer
         const texShader = try pixzig.shaders.Shader.init(
@@ -156,7 +92,7 @@ pub const App = struct {
         );
 
         var map = try tile.TileMap.init(alloc);
-        const tileset = try tile.TileSet.initEmpty(alloc, .{ .x = C.TileWidth, .y = C.TileHeight }, .{ .x=C.NumTilesHorz*C.TileWidth, .y=C.NumTilesVert*C.TileHeight}, C.NumTilesHorz*C.NumTilesVert);
+        const tileset = try tile.TileSet.initEmpty(alloc, .{ .x = C.TileWidth, .y = C.TileHeight }, .{ .x=@intCast(tex.size.x), .y=@intCast(tex.size.y)}, C.NumTilesHorz*C.NumTilesVert);
         const layer = try tile.TileLayer.initEmpty(alloc, .{ .x=C.MapWidth, .y=C.MapHeight}, .{.x=C.TileWidth, .y=C.TileHeight});
         try map.layers.append(layer);
         try map.tilesets.append(tileset);
@@ -165,20 +101,24 @@ pub const App = struct {
         var mapRender = try tile.TileMapRenderer.init(std.heap.page_allocator, texShader);
 
         // Create some tiles for the tile set
-        const WallIdx = 1;
-        map.tilesets.items[0].tile(WallIdx).?.* = .{.core = tile.BlocksAll, .properties = null, .alloc = alloc};
+        const DirtIdx = 0;
+        const GrassIdx = 1;
+        const StoneIdx = 2;
+        map.tilesets.items[0].tile(DirtIdx).?.* = .{.core = tile.BlocksAll, .properties = null, .alloc = alloc};
+        map.tilesets.items[0].tile(GrassIdx).?.* = .{.core = tile.BlocksAll, .properties = null, .alloc = alloc};
+        map.tilesets.items[0].tile(StoneIdx).?.* = .{.core = tile.BlocksAll, .properties = null, .alloc = alloc};
 
         // Generate a bunch of random blocks
         var prng = std.rand.DefaultPrng.init(0xdeadbeef);
         const rand = prng.random();
         for(0..200) |_| {
             const idx = rand.uintAtMost(usize, C.MapWidth*C.MapHeight);
-            map.layers.items[0].tiles.items[idx] = WallIdx;
+            map.layers.items[0].tiles.items[idx] = rand.intRangeAtMost(i32, 0, 2);
         }
 
         // Draw a row on the entire bottom of the map.
         for(0..C.MapWidth) |idx| {
-            map.layers.items[0].tiles.items[(C.MapHeight-1)*C.MapWidth+idx] = WallIdx;
+            map.layers.items[0].tiles.items[(C.MapHeight-1)*C.MapWidth+idx] = GrassIdx;
         }
 
         
@@ -188,15 +128,6 @@ pub const App = struct {
         const world = flecs.init();
         entities.setupEntities(world);
 
-        const update_query = try flecs.query_init(world, &.{
-            .filter = .{
-                .terms = [_]flecs.term_t{
-                    .{ .id = flecs.id(Sprite) },
-                    .{ .id = flecs.id(Mover) },
-                } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 2),
-            },
-        });
-
         const draw_query = try flecs.query_init(world, &.{
             .filter = .{
                 .terms = [_]flecs.term_t{
@@ -205,13 +136,9 @@ pub const App = struct {
             },
         });
 
-        const atlasName = "assets/digcraft_sprites";
-        const numSprites = try eng.textures.loadAtlas(atlasName);
-        std.debug.print("Loaded {} sprites from '{s}' atlas", .{numSprites, atlasName});
+
 
         const playerTex = eng.textures.getTexture("remi") catch unreachable;
-
-        std.debug.print("player tex: {}, {}, {}, {}\n", .{playerTex.src.l, playerTex.src.t, playerTex.src.r, playerTex.src.b});
         const playerId = entities.spawn(world, .Player, playerTex, 8);
 
         map.layers.items[0].dumpLayer();
@@ -233,7 +160,6 @@ pub const App = struct {
             .map = map,
             .mapRenderer = mapRender,
             .world = world,
-            .update_query = update_query,
             .draw_query = draw_query,
         };
 
