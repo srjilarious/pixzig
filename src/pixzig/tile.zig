@@ -521,7 +521,7 @@ pub const TileMapRenderer = struct {
                 const y: i32 = @intCast(yy);
                 const x: i32 = @intCast(xx);
                 const tile = tiles.tileData(x, y);
-                // if(tile < 0) continue;
+                if(tile < 0) continue;
 
                 const uv = tileCoords(tile, tileset);
                
@@ -553,7 +553,8 @@ pub const TileMapRenderer = struct {
                 self.texCoords[idx+1] = uv.b;
                 idx += 2;
 
-                const baseIdx: u16 = 4 * @as(u16, @intCast(y*@as(i32, @intCast(layerWidth)) + x));
+                // const baseIdx: u16 = 4 * @as(u16, @intCast(y*@as(i32, @intCast(layerWidth)) + x));
+                const baseIdx: u16 = @divTrunc(@as(u16, @intCast(idx - 8)), 2);
                 self.indices[indicesIdx] = baseIdx;
                 self.indices[indicesIdx + 1] = baseIdx + 1;
                 self.indices[indicesIdx + 2] = baseIdx + 3;
