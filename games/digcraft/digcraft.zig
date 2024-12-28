@@ -49,6 +49,7 @@ const C = @import("./constants.zig");
 const Gravity = @import("systems/gravity.zig").Gravity;
 const PlayerControl = @import("systems/player_control.zig").PlayerControl;
 const Camera = @import("systems/camera.zig").Camera;
+const Outlines = @import("systems/outlines.zig").Outlines;
 
 pub const App = struct {
     allocator: std.mem.Allocator,
@@ -56,29 +57,22 @@ pub const App = struct {
     renderer: Renderer,
     fps: FpsCounter,
     mouse: *pixzig.input.Mouse,
-    grid: GridRenderer,
     tex: *Texture,
     map: tile.TileMap,
     mapRenderer: tile.TileMapRenderer,
     texShader: pixzig.shaders.Shader,
-    colorShader: pixzig.shaders.Shader,
     world: *flecs.world_t,
     draw_query: *flecs.query_t,
     gravity: Gravity = undefined,
     playerControl: PlayerControl = undefined,
     camera: Camera = undefined,
+    outlines: Outlines = undefined,
 
     pub fn init(eng: *pixzig.PixzigEngine, alloc: std.mem.Allocator) !App {
         // Orthographic projection matrix
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
 
         const renderer = try Renderer.init(alloc, .{});
-
-        const colorShader = try Shader.init(
-                &shaders.ColorVertexShader,
-                &shaders.ColorPixelShader
-            );
-        const grid = try GridRenderer.init(alloc, colorShader, .{ .x = C.MapWidth, .y = C.MapHeight}, .{ .x = C.TileWidth, .y = C.TileHeight}, 1, Color{.r=0.5, .g=0.0, .b=0.5, .a=1});
 
         const atlasName = "assets/digcraft_sprites";
         const numSprites = try eng.textures.loadAtlas(atlasName);
@@ -152,11 +146,9 @@ pub const App = struct {
             // .scrollOffset = .{ .x = 0, .y = 0}, 
             .renderer = renderer,
             .fps = FpsCounter.init(),
-            .grid = grid,
             .mouse = mouse,
             .tex= tex,
             .texShader = texShader,
-            .colorShader = colorShader,
             .map = map,
             .mapRenderer = mapRender,
             .world = world,
@@ -165,20 +157,22 @@ pub const App = struct {
 
         app.gravity = try Gravity.init(world);
         app.playerControl = try PlayerControl.init(world, eng, app.mouse);
+
         app.camera = try Camera.init(world, eng, projMat);
         app.camera.tracked = playerId;
+
+        app.outlines = try Outlines.init(alloc, world, eng, &app.camera);
         return app;
     }
 
     pub fn deinit(self: *App) void {
         self.renderer.deinit();
-        self.grid.deinit();
         self.map.deinit();
         self.mapRenderer.deinit();
-        self.colorShader.deinit();
         self.texShader.deinit();
         self.gravity.deinit();
         self.playerControl.deinit();
+        self.outlines.deinit();
         self.allocator.destroy(self.mouse);
         flecs.query_fini(self.draw_query);
         _ = flecs.fini(self.world);
@@ -195,25 +189,14 @@ pub const App = struct {
         const mapLayer = &self.map.layers.items[0];
         self.gravity.update(mapLayer);
         self.playerControl.update(mapLayer);
+        self.outlines.update();
 
         self.camera.update();
 
-        // const ScrollAmount = 3;
-        // if (eng.keyboard.down(.left)) {
-        //     self.scrollOffset.x += ScrollAmount;
-        // }
-        // if (eng.keyboard.down(.right)) {
-        //     self.scrollOffset.x -= ScrollAmount;
-        // }
-        // if (eng.keyboard.down(.up)) {
-        //     self.scrollOffset.y += ScrollAmount;
-        // }
-        // if (eng.keyboard.down(.down)) {
-        //     self.scrollOffset.y -= ScrollAmount;
-        // }
         if(eng.keyboard.pressed(.escape)) {
             return false;
         }
+
         return true;
     }
 
@@ -225,30 +208,18 @@ pub const App = struct {
         const mvp = self.camera.cameraMat;
         try self.mapRenderer.draw(self.tex, &self.map.layers.items[0], mvp);
 
-        try self.grid.draw(mvp);
-
+        try self.outlines.drawMapGrid( mvp);
         self.renderer.begin(mvp);
 
         var it = flecs.query_iter(self.world, self.draw_query);
         while (flecs.query_next(&it)) {
             const spr = flecs.field(&it, Sprite, 1).?;
-            //const debug = flecs.field(&it, DebugOutline, 2).?;
-
-            // const ents = it.entities();
             for (0..it.count()) |idx| {
                 self.renderer.drawSprite(&spr[idx]);
-                self.renderer.drawEnclosingRect(spr[idx].dest, Color.from(255, 0, 255, 255), 1);
-
-                // spr[idx].draw(&self.spriteBatch) catch {};
-                // const e = ents[idx];
-
-                // const outline = flecs.get(self.world, e, DebugOutline);
-                // if(outline != null) {
-                //     self.renderer.drawEnclosingRect(spr[idx].dest, outline.?.color, 2);
-                // }
             }
         }
 
+        try self.outlines.drawSpriteOutlines(&self.renderer);
         self.renderer.end();
  
     }

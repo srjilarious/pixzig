@@ -73,6 +73,17 @@ pub const PlayerControl = struct {
                         @divFloor(mousePos.y,C.Scale)
                     );
                 }
+
+                // Respawn shortcut.
+                if(self.eng.keyboard.pressed(.r)) {
+                    sp.setPos(48, -100);
+                }
+
+                if(sp.dest.t > 900) {
+                    std.debug.print("Respawning since too low!\n", .{});
+                    sp.setPos(48, -100);
+                }
+
                 sp.dest.ensureSize(@as(i32, @intFromFloat(sp.size.x)), @as(i32, @intFromFloat(sp.size.y)));
             }
         }

@@ -104,9 +104,10 @@ pub fn main() !void {
             .description = "A simple sprite packing tool",
             .usage = "Packs identically sized images into a larger sprite sheet as a PNG.",
             .opts = &.{
+                // TODO: Add in default values. Add default value as type to zargs.
                 .{ .longName = "width", .shortName="w", .description = "The width of the sprite sheet", .maxNumParams = 1 },
                 .{ .longName = "height", .shortName="h", .description = "The height of the sprite sheet", .maxNumParams = 1 },
-                .{ .longName = "output", .shortName = "o", .description = "The output base name."},
+                .{ .longName = "output", .shortName = "o", .description = "The output base name.", .maxNumParams = 1},
                 .{ .longName = "help", .description = "Prints out help for the program." },
             },
         });
