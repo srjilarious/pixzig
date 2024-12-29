@@ -227,13 +227,13 @@ pub const App = struct {
 
 pub fn main() !void {
 
-    std.log.info("Pixzig Grid Render Example", .{});
+    std.log.info("Pixzig - DigCraft", .{});
 
     var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa_state.deinit();
     const gpa = gpa_state.allocator();
 
-    var eng = try pixzig.PixzigEngine.init("Pixzig: Grid Render Example", gpa, EngOptions{});
+    var eng = try pixzig.PixzigEngine.init("Pixzig: DigCraft", gpa, EngOptions{});
     defer eng.deinit();
 
     const AppRunner = pixzig.PixzigApp(App);

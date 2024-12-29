@@ -131,7 +131,9 @@ pub fn main() !void {
         };
     }
 
-    var spack = try SpackProcessor.init(alloc, .{.x = 256, .y = 256});
+    const width = try args.optionNumValOrDefault(u32, "width", 256);
+    const height = try args.optionNumValOrDefault(u32, "height", 256);
+    var spack = try SpackProcessor.init(alloc, .{.x = width, .y = height});
     defer spack.deinit();
 
     for(args.positional.items) |path| {
@@ -148,13 +150,7 @@ pub fn main() !void {
         }
     }
 
-    const output: []const u8 = blk: {
-        if(args.hasOption("output")) {
-            break :blk args.optionVal("output").?;
-        } else {
-            break :blk "sprites";
-        }
-    };
+    const output: []const u8 = args.optionValOrDefault("output", "sprites");
 
     const imageName = try std.mem.concatWithSentinel(alloc, u8, &[_][]const u8{ output, ".png"}, 0);
     defer alloc.free(imageName);
