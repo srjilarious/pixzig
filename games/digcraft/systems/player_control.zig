@@ -3,6 +3,7 @@ const std = @import("std");
 const pixzig = @import("pixzig");
 const flecs = @import("zflecs"); 
 
+const Vec2I = pixzig.common.Vec2I;
 const RectF = pixzig.common.RectF;
 
 const entities = @import("../entities.zig");
@@ -11,6 +12,7 @@ const Mover = entities.Mover;
 const Sprite = pixzig.sprites.Sprite;
 const HumanController = entities.HumanController;
 const TileLayer = pixzig.tile.TileLayer;
+const TileMapRenderer = pixzig.tile.TileMapRenderer;
 
 const C = @import("../constants.zig");
 
@@ -41,7 +43,25 @@ pub const PlayerControl = struct {
         flecs.query_fini(self.query);
     }
 
-    pub fn update(self: *@This(), map: *TileLayer) void {
+    fn getLeftBlockIndex(player: *RectF, map: *TileLayer) Vec2I {
+        const right: i32 = @intFromFloat(player.l);
+        const mid: i32 = @intFromFloat((player.t+player.b)/2.0);
+        const tx = @divTrunc(right,map.tileSize.y) - 1;
+        const ty = @divTrunc(mid,map.tileSize.y);
+
+        return .{ .x = tx, .y = ty };
+    }
+
+    fn getRightBlockIndex(player: *RectF, map: *TileLayer) Vec2I {
+        const right: i32 = @intFromFloat(player.r);
+        const mid: i32 = @intFromFloat((player.t+player.b)/2.0);
+        const tx = @divTrunc(right,map.tileSize.y) + 1;
+        const ty = @divTrunc(mid,map.tileSize.y);
+
+        return .{ .x = tx, .y = ty };
+    }
+
+    pub fn update(self: *@This(), map: *TileLayer, mapRenderer: *TileMapRenderer) void {
         var it = flecs.query_iter(self.world, self.query);
         while (flecs.query_next(&it)) {
             const spr = flecs.field(&it, Sprite, 1).?;
@@ -63,6 +83,19 @@ pub const PlayerControl = struct {
                 }
                 if (self.eng.keyboard.down(.right)) {
                     _ = pixzig.tile.Mover.moveRight(&sp.dest, 2, map, pixzig.tile.BlocksAll);
+                }
+
+                if(self.eng.keyboard.pressed(.a)) {
+                    const tileLoc = getLeftBlockIndex(&sp.dest, map);
+                    std.debug.print("Placing block at {}, {}\n", .{tileLoc.x, tileLoc.y});
+                    map.setTileData(tileLoc.x, tileLoc.y, 1);
+                    mapRenderer.recreateVertices(map.tileset.?, map) catch unreachable;
+                }
+                if(self.eng.keyboard.pressed(.d)) {
+                    const tileLoc = getRightBlockIndex(&sp.dest, map);
+                    std.debug.print("Placing block at {}, {}\n", .{tileLoc.x, tileLoc.y});
+                    map.setTileData(tileLoc.x, tileLoc.y, 1);
+                    mapRenderer.recreateVertices(map.tileset.?, map) catch unreachable;
                 }
 
                 if(self.mouse.down(.left)) {

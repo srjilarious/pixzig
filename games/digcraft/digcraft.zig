@@ -188,7 +188,7 @@ pub const App = struct {
 
         const mapLayer = &self.map.layers.items[0];
         self.gravity.update(mapLayer);
-        self.playerControl.update(mapLayer);
+        self.playerControl.update(mapLayer, &self.mapRenderer);
         self.outlines.update();
 
         self.camera.update();
