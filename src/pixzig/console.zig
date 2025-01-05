@@ -63,7 +63,7 @@ pub const Console = struct {
         lua.setTable(-3);
 
         // Set the Console object as a global variable named "my_console"
-        lua.setGlobal("my_console");
+        lua.setGlobal("con");
 
         // Pop the light userdata from the stack
         lua.pop(1);

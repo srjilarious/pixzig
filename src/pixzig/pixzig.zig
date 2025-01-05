@@ -33,6 +33,7 @@ pub const Color8 = common.Color8;
 
 pub const PixzigEngineOptions = struct {
     withGui: bool = true,
+    fullscreen: bool = false,
     windowSize: Vec2I = .{ .x = 800, .y = 600 },
 };
 
@@ -100,12 +101,21 @@ pub const PixzigEngine = struct {
         glfw.windowHintTyped(.opengl_forward_compat, true);
         glfw.windowHintTyped(.client_api, .opengl_api);
         glfw.windowHintTyped(.doublebuffer, true);
+        glfw.windowHintTyped(.resizable, false);
 
+        const monitor = blk: {
+            if(options.fullscreen) {
+                break :blk glfw.Monitor.getPrimary();
+            }
+            else {
+                break :blk  null;
+            }
+        };
         const window = try glfw.Window.create(
-                options.windowSize.x, 
-                options.windowSize.y, 
-                title, 
-                null
+                options.windowSize.x,
+                options.windowSize.y,
+                title,
+                monitor
             );
         window.setSizeLimits(400, 400, -1, -1);
 

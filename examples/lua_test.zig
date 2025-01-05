@@ -39,7 +39,7 @@ pub fn main() anyerror!void {
     const cons = try console.Console.init(allocator, &script, .{});
     defer cons.deinit();
 
-    try script.run("my_console:log('test from example inline run.')");
+    try script.run("con:log('test from example inline run.')");
 
     try script.runScript("assets/test.lua");
 
