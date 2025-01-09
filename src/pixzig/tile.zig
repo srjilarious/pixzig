@@ -430,6 +430,7 @@ pub const TileMap = struct {
     }
 };
 
+const TileIndexMap = std.array_hash_map.AutoArrayHashMap(usize, usize);
 pub const TileMapRenderer = struct {
     shader: Shader = undefined,
     vao: u32 = 0,
@@ -444,11 +445,13 @@ pub const TileMapRenderer = struct {
     attrTexCoord: c_uint = 0,
     uniformMVP: c_int = 0,
     numActualIndices: usize = 0,
-    
+    tileIndexMap: TileIndexMap,
+
     pub fn init(alloc: std.mem.Allocator, shader: Shader) !TileMapRenderer {
         var tr = TileMapRenderer{
             .shader = shader,
             .alloc = alloc,
+            .tileIndexMap = TileIndexMap.init(alloc),
         };
 
         gl.genVertexArrays(1, &tr.vao);
@@ -472,6 +475,7 @@ pub const TileMapRenderer = struct {
         self.alloc.free(self.vertices);
         self.alloc.free(self.texCoords);
         self.alloc.free(self.indices);
+        self.tileIndexMap.deinit();
     }
 
     fn tileCoords(idx: i32, tileset: *TileSet) RectF {
@@ -501,10 +505,68 @@ pub const TileMapRenderer = struct {
         };
     }
 
+    // pub fn tileAdded(self: *TileMapRenderer, tileset: *TileSet, tiles: *TileLayer, loc: Vec2I) !void {
+    //     // if location exists in map
+    //         // Update buffer data
+    //     // if location no in map
+    //         // Add to end of buffer
+    // }
+
+    fn setTileRenderData(self: *TileMapRenderer,
+        loc: Vec2I,
+        vertIdx: usize, 
+        indicesIdx: usize,
+        ts: Vec2I,
+        tile: i32, 
+        tileset: *TileSet) void 
+    {
+        const uv = tileCoords(tile, tileset);
+        var idx = vertIdx;
+        const x = loc.x;
+        const y = loc.y;
+
+        // Coord 1
+        self.vertices[idx] = @as(f32, @floatFromInt(x*ts.x)) - 0.01;
+        self.vertices[idx+1] = @as(f32, @floatFromInt(y*ts.y)) - 0.01;
+        self.texCoords[idx] = uv.l;
+        self.texCoords[idx+1] = uv.t;
+        idx += 2;
+
+        // Coord 2
+        self.vertices[idx] = @as(f32, @floatFromInt((x+1)*ts.x)) + 0.01;
+        self.vertices[idx+1] = @as(f32, @floatFromInt(y*ts.y)) - 0.01;
+        self.texCoords[idx] = uv.r;
+        self.texCoords[idx+1] = uv.t;
+        idx += 2;
+
+        // Coord 3
+        self.vertices[idx] = @as(f32, @floatFromInt((x+1)*ts.x)) + 0.01;
+        self.vertices[idx+1] = @as(f32, @floatFromInt((y+1)*ts.y)) + 0.01;
+        self.texCoords[idx] = uv.r;
+        self.texCoords[idx+1] = uv.b;
+        idx += 2;
+
+        // Coord 4
+        self.vertices[idx] = @as(f32, @floatFromInt(x*ts.x)) - 0.01;
+        self.vertices[idx+1] = @as(f32, @floatFromInt((y+1)*ts.y)) + 0.01;
+        self.texCoords[idx] = uv.l;
+        self.texCoords[idx+1] = uv.b;
+        idx += 2;
+
+        // const baseIdx: u16 = 4 * @as(u16, @intCast(y*@as(i32, @intCast(layerWidth)) + x));
+        const baseIdx: u16 = @divTrunc(@as(u16, @intCast(idx - 8)), 2);
+        self.indices[indicesIdx] = baseIdx;
+        self.indices[indicesIdx + 1] = baseIdx + 1;
+        self.indices[indicesIdx + 2] = baseIdx + 3;
+        self.indices[indicesIdx + 3] = baseIdx + 1;
+        self.indices[indicesIdx + 4] = baseIdx + 2;
+        self.indices[indicesIdx + 5] = baseIdx + 3;
+    }
+
     pub fn recreateVertices(self: *TileMapRenderer, tileset: *TileSet, tiles: *TileLayer) !void {
 
-        const tw = tileset.tileSize.x;
-        const th = tileset.tileSize.y;
+        // const tw = tileset.tileSize.x;
+        // const th = tileset.tileSize.y;
         const layerWidth: usize = @intCast(tiles.size.x);
         const layerHeight: usize = @intCast(tiles.size.y);
         const mapSize: i32 = @intCast(layerWidth*layerHeight);
@@ -514,6 +576,9 @@ pub const TileMapRenderer = struct {
         self.indices = try self.alloc.alloc(u16, @intCast(6*layerWidth*layerHeight));
         
         std.debug.print("Creating {} vertices\n", .{self.vertices.len});
+        self.tileIndexMap.clearRetainingCapacity();
+
+        var buffIdx: usize = 0;
         var idx: usize = 0;
         var indicesIdx: usize = 0;
         for(0..layerHeight) |yy| {
@@ -523,45 +588,57 @@ pub const TileMapRenderer = struct {
                 const tile = tiles.tileData(x, y);
                 if(tile < 0) continue;
 
-                const uv = tileCoords(tile, tileset);
-               
-                // Coord 1
-                self.vertices[idx] = @as(f32, @floatFromInt(x*tw)) - 0.01;
-                self.vertices[idx+1] = @as(f32, @floatFromInt(y*th)) - 0.01;
-                self.texCoords[idx] = uv.l;
-                self.texCoords[idx+1] = uv.t;
-                idx += 2;
+                // Keep a map of which tile index maps to what buffer index.
+                // This lets us handle adding/removing tiles dynamically.
+                const tileIdx = y*@as(i32, @intCast(layerWidth))+x;
+                try self.tileIndexMap.put(@intCast(tileIdx), buffIdx);
 
-                // Coord 2
-                self.vertices[idx] = @as(f32, @floatFromInt((x+1)*tw)) + 0.01;
-                self.vertices[idx+1] = @as(f32, @floatFromInt(y*th)) - 0.01;
-                self.texCoords[idx] = uv.r;
-                self.texCoords[idx+1] = uv.t;
-                idx += 2;
-
-                // Coord 3
-                self.vertices[idx] = @as(f32, @floatFromInt((x+1)*tw)) + 0.01;
-                self.vertices[idx+1] = @as(f32, @floatFromInt((y+1)*th)) + 0.01;
-                self.texCoords[idx] = uv.r;
-                self.texCoords[idx+1] = uv.b;
-                idx += 2;
-
-                // Coord 4
-                self.vertices[idx] = @as(f32, @floatFromInt(x*tw)) - 0.01;
-                self.vertices[idx+1] = @as(f32, @floatFromInt((y+1)*th)) + 0.01;
-                self.texCoords[idx] = uv.l;
-                self.texCoords[idx+1] = uv.b;
-                idx += 2;
-
-                // const baseIdx: u16 = 4 * @as(u16, @intCast(y*@as(i32, @intCast(layerWidth)) + x));
-                const baseIdx: u16 = @divTrunc(@as(u16, @intCast(idx - 8)), 2);
-                self.indices[indicesIdx] = baseIdx;
-                self.indices[indicesIdx + 1] = baseIdx + 1;
-                self.indices[indicesIdx + 2] = baseIdx + 3;
-                self.indices[indicesIdx + 3] = baseIdx + 1;
-                self.indices[indicesIdx + 4] = baseIdx + 2;
-                self.indices[indicesIdx + 5] = baseIdx + 3;
+                self.setTileRenderData(.{.x=x, .y=y}, idx, indicesIdx, tileset.tileSize, tile, tileset);
+                idx += 8;
                 indicesIdx += 6;
+
+                // Since we skip empty tiles, keep track of which index in the buffer each drawn tile
+                // is going to map to.
+                buffIdx += 1;
+
+                //  const uv = tileCoords(tile, tileset);
+                // 
+                //  // Coord 1
+                //  self.vertices[idx] = @as(f32, @floatFromInt(x*tw)) - 0.01;
+                //  self.vertices[idx+1] = @as(f32, @floatFromInt(y*th)) - 0.01;
+                //  self.texCoords[idx] = uv.l;
+                //  self.texCoords[idx+1] = uv.t;
+                //  idx += 2;
+                //
+                //  // Coord 2
+                //  self.vertices[idx] = @as(f32, @floatFromInt((x+1)*tw)) + 0.01;
+                //  self.vertices[idx+1] = @as(f32, @floatFromInt(y*th)) - 0.01;
+                //  self.texCoords[idx] = uv.r;
+                //  self.texCoords[idx+1] = uv.t;
+                //  idx += 2;
+                //
+                //  // Coord 3
+                //  self.vertices[idx] = @as(f32, @floatFromInt((x+1)*tw)) + 0.01;
+                //  self.vertices[idx+1] = @as(f32, @floatFromInt((y+1)*th)) + 0.01;
+                //  self.texCoords[idx] = uv.r;
+                //  self.texCoords[idx+1] = uv.b;
+                //  idx += 2;
+                //
+                //  // Coord 4
+                //  self.vertices[idx] = @as(f32, @floatFromInt(x*tw)) - 0.01;
+                //  self.vertices[idx+1] = @as(f32, @floatFromInt((y+1)*th)) + 0.01;
+                //  self.texCoords[idx] = uv.l;
+                //  self.texCoords[idx+1] = uv.b;
+                //  idx += 2;
+                //
+                //  // const baseIdx: u16 = 4 * @as(u16, @intCast(y*@as(i32, @intCast(layerWidth)) + x));
+                //  const baseIdx: u16 = @divTrunc(@as(u16, @intCast(idx - 8)), 2);
+                //  self.indices[indicesIdx] = baseIdx;
+                //  self.indices[indicesIdx + 1] = baseIdx + 1;
+                //  self.indices[indicesIdx + 2] = baseIdx + 3;
+                //  self.indices[indicesIdx + 3] = baseIdx + 1;
+                //  self.indices[indicesIdx + 4] = baseIdx + 2;
+                //  self.indices[indicesIdx + 5] = baseIdx + 3;
             }
         }
         self.numActualIndices = indicesIdx;

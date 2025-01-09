@@ -233,7 +233,7 @@ pub fn main() !void {
     defer _ = gpa_state.deinit();
     const gpa = gpa_state.allocator();
 
-    var eng = try pixzig.PixzigEngine.init("Pixzig: DigCraft", gpa, EngOptions{ .fullscreen = true });
+    var eng = try pixzig.PixzigEngine.init("Pixzig: DigCraft", gpa, EngOptions{ .fullscreen = false });
     defer eng.deinit();
 
     const AppRunner = pixzig.PixzigApp(App);
