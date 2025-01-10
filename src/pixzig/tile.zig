@@ -445,6 +445,7 @@ pub const TileMapRenderer = struct {
     attrTexCoord: c_uint = 0,
     uniformMVP: c_int = 0,
     numActualIndices: usize = 0,
+    numBuffVals: usize = 0,
     tileIndexMap: TileIndexMap,
 
     pub fn init(alloc: std.mem.Allocator, shader: Shader) !TileMapRenderer {
@@ -505,12 +506,27 @@ pub const TileMapRenderer = struct {
         };
     }
 
-    // pub fn tileAdded(self: *TileMapRenderer, tileset: *TileSet, tiles: *TileLayer, loc: Vec2I) !void {
-    //     // if location exists in map
-    //         // Update buffer data
-    //     // if location no in map
-    //         // Add to end of buffer
-    // }
+    pub fn tileAdded(self: *TileMapRenderer, tileset: *TileSet, tiles: *TileLayer, loc: Vec2I, tile: i32) void {
+        const layerWidth: usize = @intCast(tiles.size.x);
+        const tileIdx: usize = @intCast(loc.y*@as(i32, @intCast(layerWidth))+loc.x);
+
+        // if location exists in map
+        if(self.tileIndexMap.get(tileIdx)) |buffIdx| {
+            // Update buffer data
+            const vertIdx = buffIdx*8;
+            const indicesIdx = buffIdx*6;
+            self.setTileRenderData(loc, vertIdx, indicesIdx, tiles.tileSize, tile, tileset);
+        }
+        // if location no in map
+        else {
+            // Add to end of buffer
+            const vertIdx = self.numBuffVals*8;
+            const indicesIdx = self.numBuffVals*6;
+            self.setTileRenderData(loc, vertIdx, indicesIdx, tiles.tileSize, tile, tileset);
+            self.numBuffVals += 1;
+            self.numActualIndices += 6;
+        }
+    }
 
     fn setTileRenderData(self: *TileMapRenderer,
         loc: Vec2I,
@@ -642,6 +658,7 @@ pub const TileMapRenderer = struct {
             }
         }
         self.numActualIndices = indicesIdx;
+        self.numBuffVals = buffIdx;
     }
 
     pub fn draw(self: *TileMapRenderer, 

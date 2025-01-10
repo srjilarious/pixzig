@@ -89,13 +89,15 @@ pub const PlayerControl = struct {
                     const tileLoc = getLeftBlockIndex(&sp.dest, map);
                     std.debug.print("Placing block at {}, {}\n", .{tileLoc.x, tileLoc.y});
                     map.setTileData(tileLoc.x, tileLoc.y, 1);
-                    mapRenderer.recreateVertices(map.tileset.?, map) catch unreachable;
+                    mapRenderer.tileAdded(map.tileset.?, map, tileLoc, 1);
+                    // mapRenderer.recreateVertices(map.tileset.?, map) catch unreachable;
                 }
                 if(self.eng.keyboard.pressed(.d)) {
                     const tileLoc = getRightBlockIndex(&sp.dest, map);
                     std.debug.print("Placing block at {}, {}\n", .{tileLoc.x, tileLoc.y});
                     map.setTileData(tileLoc.x, tileLoc.y, 1);
-                    mapRenderer.recreateVertices(map.tileset.?, map) catch unreachable;
+                    mapRenderer.tileAdded(map.tileset.?, map, tileLoc, 1);
+                    // mapRenderer.recreateVertices(map.tileset.?, map) catch unreachable;
                 }
 
                 if(self.mouse.down(.left)) {
