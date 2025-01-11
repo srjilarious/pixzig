@@ -61,7 +61,7 @@ pub const PlayerControl = struct {
         return .{ .x = tx, .y = ty };
     }
 
-    pub fn update(self: *@This(), map: *TileLayer, mapRenderer: *TileMapRenderer) void {
+    pub fn update(self: *@This(), map: *TileLayer, mapRenderer: *TileMapRenderer) !void {
         var it = flecs.query_iter(self.world, self.query);
         while (flecs.query_next(&it)) {
             const spr = flecs.field(&it, Sprite, 1).?;
@@ -85,18 +85,27 @@ pub const PlayerControl = struct {
                     _ = pixzig.tile.Mover.moveRight(&sp.dest, 2, map, pixzig.tile.BlocksAll);
                 }
 
+                const tile: i32 = blk: {
+                    if(self.eng.keyboard.down(.left_control)) {
+                        break :blk -1;
+                    }
+                    else {
+                        break :blk 1;
+                    }
+                };
+
                 if(self.eng.keyboard.pressed(.a)) {
                     const tileLoc = getLeftBlockIndex(&sp.dest, map);
                     std.debug.print("Placing block at {}, {}\n", .{tileLoc.x, tileLoc.y});
-                    map.setTileData(tileLoc.x, tileLoc.y, 1);
-                    mapRenderer.tileAdded(map.tileset.?, map, tileLoc, 1);
+                    map.setTileData(tileLoc.x, tileLoc.y, tile);
+                    try mapRenderer.tileChanged(map.tileset.?, map, tileLoc, tile);
                     // mapRenderer.recreateVertices(map.tileset.?, map) catch unreachable;
                 }
                 if(self.eng.keyboard.pressed(.d)) {
                     const tileLoc = getRightBlockIndex(&sp.dest, map);
                     std.debug.print("Placing block at {}, {}\n", .{tileLoc.x, tileLoc.y});
-                    map.setTileData(tileLoc.x, tileLoc.y, 1);
-                    mapRenderer.tileAdded(map.tileset.?, map, tileLoc, 1);
+                    map.setTileData(tileLoc.x, tileLoc.y, tile);
+                    try mapRenderer.tileChanged(map.tileset.?, map, tileLoc, tile);
                     // mapRenderer.recreateVertices(map.tileset.?, map) catch unreachable;
                 }
 

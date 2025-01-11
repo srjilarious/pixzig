@@ -188,7 +188,7 @@ pub const App = struct {
 
         const mapLayer = &self.map.layers.items[0];
         self.gravity.update(mapLayer);
-        self.playerControl.update(mapLayer, &self.mapRenderer);
+        self.playerControl.update(mapLayer, &self.mapRenderer) catch unreachable;
         self.outlines.update();
 
         self.camera.update();
