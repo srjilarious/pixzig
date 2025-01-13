@@ -539,7 +539,7 @@ pub const TileMapRenderer = struct {
         }
         // A tile is being removed.
         else {
-            // TODO: Handle case of only one tile being left.
+            // TODO: There's a bug lurking somewhere...
 
             std.debug.print("Removing block at {}, {}\n", .{loc.x, loc.y});
 
@@ -552,7 +552,7 @@ pub const TileMapRenderer = struct {
                 // If buffIdx is the last, simply stop drawing its indices
                 if(buffIdx == lastV) {
                     std.debug.print("Removing last tile in vertices: {}, buffIdx={} == lastV={}\n", .{keys.len-1, buffIdx, lastV});
-                    self.tileIndexMap.orderedRemoveAt(keys.len-1);
+                    _ = self.tileIndexMap.swapRemove(tileIdx);
                     self.numBuffVals -= 1;
                     self.numActualIndices -= 6;
                 }
@@ -575,8 +575,8 @@ pub const TileMapRenderer = struct {
                     @memcpy(self.indices[destIndicesIdx..destIndicesIdx+6], self.indices[srcIndicesIdx..srcIndicesIdx+6]);
 
                     // Remove the bufferIndex of the removed item.
-                    try self.tileIndexMap.put(lastK, buffIdx);
                     _ = self.tileIndexMap.swapRemove(tileIdx);
+                    try self.tileIndexMap.put(lastK, buffIdx);
 
                     self.numBuffVals -= 1;
                     self.numActualIndices -= 6;
@@ -674,45 +674,6 @@ pub const TileMapRenderer = struct {
                 // Since we skip empty tiles, keep track of which index in the buffer each drawn tile
                 // is going to map to.
                 buffIdx += 1;
-
-                //  const uv = tileCoords(tile, tileset);
-                // 
-                //  // Coord 1
-                //  self.vertices[idx] = @as(f32, @floatFromInt(x*tw)) - 0.01;
-                //  self.vertices[idx+1] = @as(f32, @floatFromInt(y*th)) - 0.01;
-                //  self.texCoords[idx] = uv.l;
-                //  self.texCoords[idx+1] = uv.t;
-                //  idx += 2;
-                //
-                //  // Coord 2
-                //  self.vertices[idx] = @as(f32, @floatFromInt((x+1)*tw)) + 0.01;
-                //  self.vertices[idx+1] = @as(f32, @floatFromInt(y*th)) - 0.01;
-                //  self.texCoords[idx] = uv.r;
-                //  self.texCoords[idx+1] = uv.t;
-                //  idx += 2;
-                //
-                //  // Coord 3
-                //  self.vertices[idx] = @as(f32, @floatFromInt((x+1)*tw)) + 0.01;
-                //  self.vertices[idx+1] = @as(f32, @floatFromInt((y+1)*th)) + 0.01;
-                //  self.texCoords[idx] = uv.r;
-                //  self.texCoords[idx+1] = uv.b;
-                //  idx += 2;
-                //
-                //  // Coord 4
-                //  self.vertices[idx] = @as(f32, @floatFromInt(x*tw)) - 0.01;
-                //  self.vertices[idx+1] = @as(f32, @floatFromInt((y+1)*th)) + 0.01;
-                //  self.texCoords[idx] = uv.l;
-                //  self.texCoords[idx+1] = uv.b;
-                //  idx += 2;
-                //
-                //  // const baseIdx: u16 = 4 * @as(u16, @intCast(y*@as(i32, @intCast(layerWidth)) + x));
-                //  const baseIdx: u16 = @divTrunc(@as(u16, @intCast(idx - 8)), 2);
-                //  self.indices[indicesIdx] = baseIdx;
-                //  self.indices[indicesIdx + 1] = baseIdx + 1;
-                //  self.indices[indicesIdx + 2] = baseIdx + 3;
-                //  self.indices[indicesIdx + 3] = baseIdx + 1;
-                //  self.indices[indicesIdx + 4] = baseIdx + 2;
-                //  self.indices[indicesIdx + 5] = baseIdx + 3;
             }
         }
         self.numActualIndices = indicesIdx;

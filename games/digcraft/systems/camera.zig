@@ -3,10 +3,10 @@ const std = @import("std");
 const pixzig = @import("pixzig");
 const flecs = @import("zflecs"); 
 const math = @import("zmath");
-
 const RectF = pixzig.common.RectF;
 
 const entities = @import("../entities.zig");
+const Camera = entities.Camera;
 const Player = entities.Player;
 const Mover = entities.Mover;
 const Sprite = pixzig.sprites.Sprite;
@@ -14,64 +14,71 @@ const TileLayer = pixzig.tile.TileLayer;
 const Vec2F = pixzig.common.Vec2F;
 const C = @import("../constants.zig");
 
-pub const Camera = struct {
+pub const CameraSystem = struct {
     world: *flecs.world_t,
     eng: *pixzig.PixzigEngine,
     baseMat: math.Mat,
-    cameraMat: math.Mat,
-    cameraPos: Vec2F,
-    winOffset: Vec2F,
-    tracked: ?flecs.entity_t,
-    // query: *flecs.query_t,
+    currCamera: ?flecs.entity_t,
+    query: *flecs.query_t,
     
     const Self = @This();
 
     pub fn init(world: *flecs.world_t, eng: *pixzig.PixzigEngine, projMat: math.Mat) !Self {
         const baseMat = math.mul(math.scaling(C.Scale, C.Scale, 1.0), projMat);
 
+
         const offsX: f32 = @as(f32, @floatFromInt(eng.options.windowSize.x)) / 2.0 / C.Scale;
         const offsY: f32 = @as(f32, @floatFromInt(eng.options.windowSize.y)) / 2.0 / C.Scale;
+
+        const currCamera = entities.spawnCamera(world, null, .{ .x = offsX, .y = offsY});
         return .{
             .world = world,
             .eng = eng,
             .baseMat = baseMat,
-            .cameraMat = projMat,
-            .winOffset = .{ .x = offsX, .y = offsY},
-            .cameraPos = .{ .x = 0, .y = 0 },
-            .tracked = null,
-            // .query = try flecs.query_init(world, &.{
-            //     .filter = .{
-            //         .terms = [_]flecs.term_t{
-            //             .{ .id = flecs.id(Sprite) },
-            //             .{ .id = flecs.id(Mover) },
-            //         } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 2),
-            //     },
-            // }),
+            .currCamera = currCamera,
+            .query = try flecs.query_init(world, &.{
+                .filter = .{
+                    .terms = [_]flecs.term_t{
+                        .{ .id = flecs.id(Camera) },
+                    } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 1),
+                },
+            }),
         };
     }
 
     pub fn deinit(self: *Self) void {
-        _ = self;
-        // flecs.query_fini(self.query);
+        flecs.query_fini(self.query);
+    }
+
+    pub fn currCameraMat(self: *Self) math.Mat {
+        if(self.currCamera) |camId| {
+            const mainCamera = flecs.get(self.world, camId, entities.Camera).?;
+            return mainCamera.cameraMat;
+        }
+        else {
+            return math.identity();
+        }
     }
 
     pub fn update(self: *Self) void {
-        if(self.tracked) |tr| {
-            const spr: ?*const Sprite = flecs.get(self.world, tr, Sprite);
-            if(spr) |sp| {
-                self.cameraPos = sp.dest.pos2F();
-                self.cameraMat = math.mul(
-                    math.translation(@trunc(-self.cameraPos.x+self.winOffset.x), @trunc(-self.cameraPos.y+self.winOffset.y), 0.0), 
-                    self.baseMat);
+        var it = flecs.query_iter(self.world, self.query);
+        while (flecs.query_next(&it)) {
+            const cams = flecs.field(&it, Camera, 1).?;
+
+            for (0..it.count()) |idx| {
+                var cam: *Camera = &cams[idx];
+
+                if(cam.tracked) |tr| {
+                    const spr: ?*const Sprite = flecs.get(self.world, tr, Sprite);
+                    if(spr) |sp| {
+                        cam.cameraPos = sp.dest.pos2F();
+                        cam.cameraMat = math.mul(
+                            math.translation(@trunc(-cam.cameraPos.x+cam.winOffset.x), @trunc(-cam.cameraPos.y+cam.winOffset.y), 0.0), 
+                            self.baseMat);
+                    }
+                }
             }
         }
-
-        // var it = flecs.query_iter(self.world, self.query);
-        // while (flecs.query_next(&it)) {
-        //     const spr = flecs.field(&it, Sprite, 1).?;
-        //     const vel = flecs.field(&it, Mover, 2).?;
-        //
-        //     for (0..it.count()) |idx| {
         //         var v: *Mover = &vel[idx];
         //         var sp: *Sprite = &spr[idx];
         //

@@ -48,7 +48,7 @@ const C = @import("./constants.zig");
 
 const Gravity = @import("systems/gravity.zig").Gravity;
 const PlayerControl = @import("systems/player_control.zig").PlayerControl;
-const Camera = @import("systems/camera.zig").Camera;
+const CameraSystem = @import("systems/camera.zig").CameraSystem;
 const Outlines = @import("systems/outlines.zig").Outlines;
 
 pub const App = struct {
@@ -65,7 +65,7 @@ pub const App = struct {
     draw_query: *flecs.query_t,
     gravity: Gravity = undefined,
     playerControl: PlayerControl = undefined,
-    camera: Camera = undefined,
+    cameras: CameraSystem = undefined,
     outlines: Outlines = undefined,
 
     pub fn init(eng: *pixzig.PixzigEngine, alloc: std.mem.Allocator) !App {
@@ -158,10 +158,11 @@ pub const App = struct {
         app.gravity = try Gravity.init(world);
         app.playerControl = try PlayerControl.init(world, eng, app.mouse);
 
-        app.camera = try Camera.init(world, eng, projMat);
-        app.camera.tracked = playerId;
+        app.cameras = try CameraSystem.init(world, eng, projMat);
+        var mainCamera = flecs.get_mut(world, app.cameras.currCamera.?, entities.Camera).?;
+        mainCamera.tracked = playerId;
 
-        app.outlines = try Outlines.init(alloc, world, eng, &app.camera);
+        app.outlines = try Outlines.init(alloc, world, eng);
         return app;
     }
 
@@ -191,7 +192,7 @@ pub const App = struct {
         self.playerControl.update(mapLayer, &self.mapRenderer) catch unreachable;
         self.outlines.update();
 
-        self.camera.update();
+        self.cameras.update();
 
         if(eng.keyboard.pressed(.escape)) {
             return false;
@@ -205,7 +206,7 @@ pub const App = struct {
         gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
         self.fps.renderTick();
       
-        const mvp = self.camera.cameraMat;
+        const mvp = self.cameras.currCameraMat();
         try self.mapRenderer.draw(self.tex, &self.map.layers.items[0], mvp);
 
         try self.outlines.drawMapGrid( mvp);
@@ -220,6 +221,9 @@ pub const App = struct {
         }
 
         try self.outlines.drawSpriteOutlines(&self.renderer);
+
+        // Draw the cursor
+
         self.renderer.end();
  
     }

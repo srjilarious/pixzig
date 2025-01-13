@@ -1,9 +1,11 @@
 // zig fmt: off
 const std = @import("std");
+const math = @import("zmath");
 const flecs = @import("zflecs");
 const pixzig = @import("pixzig");
 const RectF = pixzig.common.RectF;
 const Vec2F = pixzig.common.Vec2F;
+const Vec2I = pixzig.common.Vec2I;
 
 const Texture = pixzig.textures.Texture;
 const Sprite = pixzig.sprites.Sprite;
@@ -28,6 +30,14 @@ pub const Mover = struct {
 
 pub const HumanController = struct {
     dummy: bool = false,
+    cursorTile: Vec2I,
+};
+
+pub const Camera = struct {
+    cameraMat: math.Mat,
+    cameraPos: Vec2F,
+    winOffset: Vec2F,
+    tracked: ?flecs.entity_t = null,
 };
 
 pub fn setupEntities(world: *flecs.world_t) void {
@@ -35,6 +45,7 @@ pub fn setupEntities(world: *flecs.world_t) void {
     flecs.COMPONENT(world, Mover);
     flecs.COMPONENT(world, Sprite);
     flecs.COMPONENT(world, HumanController);
+    flecs.COMPONENT(world, Camera);
 }
 
 pub fn spawn(world: *flecs.world_t, which: Entities, tex: *Texture, sprNum: i32) flecs.entity_t {
@@ -58,7 +69,7 @@ pub fn spawn(world: *flecs.world_t, which: Entities, tex: *Texture, sprNum: i32)
             spr.setPos(16, 16);
             _ = flecs.set(world, ent, Sprite, spr);
 
-            const human: HumanController = .{};
+            const human: HumanController = .{ .cursorTile = .{ .x = 0, .y = 0} };
             _ = flecs.set(world, ent, HumanController, human);
         },
         else => {
@@ -66,5 +77,17 @@ pub fn spawn(world: *flecs.world_t, which: Entities, tex: *Texture, sprNum: i32)
         }
     }
 
+    return ent;
+}
+
+pub fn spawnCamera(world: *flecs.world_t, tracked: ?flecs.entity_t, offset: Vec2F) flecs.entity_t {
+    const ent = flecs.new_id(world);
+    const cam = Camera{
+        .cameraMat = math.identity(),
+        .cameraPos = .{ .x = 0, .y = 0 },
+        .winOffset = offset,
+        .tracked = tracked,
+    };
+    _ = flecs.set(world, ent, Camera, cam);
     return ent;
 }

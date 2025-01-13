@@ -20,13 +20,13 @@ const GridRenderer = pixzig.tile.GridRenderer;
 const Vec2F = pixzig.common.Vec2F;
 const C = @import("../constants.zig");
 
-const Camera = @import("./camera.zig").Camera;
+// const Camera = @import("./camera.zig").Camera;
 
 pub const Outlines = struct {
     alloc: std.mem.Allocator,
     world: *flecs.world_t,
     eng: *pixzig.PixzigEngine,
-    camera: *Camera,
+    // camera: ?flecs.entity_t,
     query: *flecs.query_t,
     colorShader: pixzig.shaders.Shader,
     grid: GridRenderer,
@@ -35,11 +35,11 @@ pub const Outlines = struct {
     
     const Self = @This();
 
-
     pub fn init(alloc: std.mem.Allocator, 
                 world: *flecs.world_t, 
-                eng: *pixzig.PixzigEngine,
-                cam: *Camera) !Self 
+                eng: *pixzig.PixzigEngine
+        ) !Self
+                // cam: ?flecs.entity_t) !Self 
     {
         const colorShader = try Shader.init(
                 &shaders.ColorVertexShader,
@@ -58,7 +58,7 @@ pub const Outlines = struct {
             .alloc = alloc,
             .world = world,
             .eng = eng,
-            .camera = cam,
+            // .camera = cam,
             .query = try flecs.query_init(world, &.{
                 .filter = .{
                     .terms = [_]flecs.term_t{

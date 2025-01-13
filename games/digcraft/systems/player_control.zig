@@ -66,10 +66,12 @@ pub const PlayerControl = struct {
         while (flecs.query_next(&it)) {
             const spr = flecs.field(&it, Sprite, 1).?;
             const vel = flecs.field(&it, Mover, 2).?;
+            const humCtrl = flecs.field(&it, HumanController, 3).?;
 
             for (0..it.count()) |idx| {
                 var v: *Mover = &vel[idx];
                 var sp: *Sprite = &spr[idx];
+                var hum: *HumanController = &humCtrl[idx];
 
                 if(!v.inAir and self.eng.keyboard.down(.up)) {
                     std.debug.print("YEET!\n", .{});
@@ -109,14 +111,15 @@ pub const PlayerControl = struct {
                     // mapRenderer.recreateVertices(map.tileset.?, map) catch unreachable;
                 }
 
-                if(self.mouse.down(.left)) {
-                    v.speed.y = 0;
-                    const mousePos = self.mouse.pos().asVec2I();
-                    sp.setPos(
-                        @divFloor(mousePos.x,C.Scale), 
-                        @divFloor(mousePos.y,C.Scale)
-                    );
-                }
+                const mousePos = self.mouse.pos().asVec2I();
+                hum.cursorTile = .{ .x = @divFloor(mousePos.x,C.Scale), .y = @divFloor(mousePos.y,C.Scale) };
+                // if(self.mouse.down(.left)) {
+                //     v.speed.y = 0;
+                //     sp.setPos(
+                //         , 
+                //         
+                //     );
+                // }
 
                 // Respawn shortcut.
                 if(self.eng.keyboard.pressed(.r)) {
