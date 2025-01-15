@@ -63,6 +63,7 @@ pub const App = struct {
     texShader: pixzig.shaders.Shader,
     world: *flecs.world_t,
     draw_query: *flecs.query_t,
+    cursor_draw_query: *flecs.query_t,
     gravity: Gravity = undefined,
     playerControl: PlayerControl = undefined,
     cameras: CameraSystem = undefined,
@@ -130,6 +131,14 @@ pub const App = struct {
             },
         });
 
+        const cursor_draw_query = try flecs.query_init(world, &.{
+            .filter = .{
+                .terms = [_]flecs.term_t{
+                    .{ .id = flecs.id(entities.HumanController) },
+                } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 1),
+            },
+        });
+
 
 
         const playerTex = eng.textures.getTexture("remi") catch unreachable;
@@ -153,15 +162,16 @@ pub const App = struct {
             .mapRenderer = mapRender,
             .world = world,
             .draw_query = draw_query,
+            .cursor_draw_query = cursor_draw_query,
         };
 
         app.gravity = try Gravity.init(world);
-        app.playerControl = try PlayerControl.init(world, eng, app.mouse);
 
         app.cameras = try CameraSystem.init(world, eng, projMat);
         var mainCamera = flecs.get_mut(world, app.cameras.currCamera.?, entities.Camera).?;
         mainCamera.tracked = playerId;
 
+        app.playerControl = try PlayerControl.init(world, eng, app.mouse, app.cameras.currCamera.?);
         app.outlines = try Outlines.init(alloc, world, eng);
         return app;
     }
@@ -176,6 +186,7 @@ pub const App = struct {
         self.outlines.deinit();
         self.allocator.destroy(self.mouse);
         flecs.query_fini(self.draw_query);
+        flecs.query_fini(self.cursor_draw_query);
         _ = flecs.fini(self.world);
     }
 
@@ -217,6 +228,15 @@ pub const App = struct {
             const spr = flecs.field(&it, Sprite, 1).?;
             for (0..it.count()) |idx| {
                 self.renderer.drawSprite(&spr[idx]);
+            }
+        }
+
+        var cit = flecs.query_iter(self.world, self.cursor_draw_query);
+        while (flecs.query_next(&cit)) {
+            const humCtrls = flecs.field(&cit, entities.HumanController, 1).?;
+            for (0..it.count()) |idx| {
+                const hum = &humCtrls[idx];
+                self.renderer.drawEnclosingRect(hum.cursorLoc, hum.cursorColor, 1);
             }
         }
 

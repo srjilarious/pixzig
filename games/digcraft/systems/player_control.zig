@@ -5,6 +5,7 @@ const flecs = @import("zflecs");
 
 const Vec2I = pixzig.common.Vec2I;
 const RectF = pixzig.common.RectF;
+const Color = pixzig.common.Color;
 
 const entities = @import("../entities.zig");
 const Player = entities.Player;
@@ -21,12 +22,14 @@ pub const PlayerControl = struct {
     eng: *pixzig.PixzigEngine,
     mouse: *pixzig.input.Mouse,
     query: *flecs.query_t,
+    camera: ?flecs.entity_t,
 
-    pub fn init(world: *flecs.world_t, eng: *pixzig.PixzigEngine, mouse: *pixzig.input.Mouse) !@This() {
+    pub fn init(world: *flecs.world_t, eng: *pixzig.PixzigEngine, mouse: *pixzig.input.Mouse, camera: ?flecs.entity_t) !@This() {
         return .{
             .world = world,
             .eng = eng,
             .mouse = mouse,
+            .camera = camera,
             .query = try flecs.query_init(world, &.{
                 .filter = .{
                     .terms = [_]flecs.term_t{
@@ -113,6 +116,12 @@ pub const PlayerControl = struct {
 
                 const mousePos = self.mouse.pos().asVec2I();
                 hum.cursorTile = .{ .x = @divFloor(mousePos.x,C.Scale), .y = @divFloor(mousePos.y,C.Scale) };
+                const camera = flecs.get(self.world, self.camera.?, entities.Camera).?;
+                const cameraPos = camera.cameraPos.asVec2I();
+                const offs = camera.winOffset.asVec2I();
+                // TODO: Add in tile size here.
+                hum.cursorLoc = RectF.fromPosSize(hum.cursorTile.x + cameraPos.x - offs.x - 8, hum.cursorTile.y + cameraPos.y - offs.y - 8, 16, 16);
+                hum.cursorColor = Color.from(100, 255, 100, 255);
                 // if(self.mouse.down(.left)) {
                 //     v.speed.y = 0;
                 //     sp.setPos(

@@ -6,6 +6,7 @@ const pixzig = @import("pixzig");
 const RectF = pixzig.common.RectF;
 const Vec2F = pixzig.common.Vec2F;
 const Vec2I = pixzig.common.Vec2I;
+const Color = pixzig.common.Color;
 
 const Texture = pixzig.textures.Texture;
 const Sprite = pixzig.sprites.Sprite;
@@ -31,6 +32,8 @@ pub const Mover = struct {
 pub const HumanController = struct {
     dummy: bool = false,
     cursorTile: Vec2I,
+    cursorLoc: RectF,
+    cursorColor: Color
 };
 
 pub const Camera = struct {
@@ -69,7 +72,11 @@ pub fn spawn(world: *flecs.world_t, which: Entities, tex: *Texture, sprNum: i32)
             spr.setPos(16, 16);
             _ = flecs.set(world, ent, Sprite, spr);
 
-            const human: HumanController = .{ .cursorTile = .{ .x = 0, .y = 0} };
+            const human: HumanController = .{ 
+                .cursorTile = .{ .x = 0, .y = 0},
+                .cursorLoc = RectF.fromPosSize(0, 0, 32, 32),
+                .cursorColor = Color.from(0, 0, 0, 0),
+            };
             _ = flecs.set(world, ent, HumanController, human);
         },
         else => {
