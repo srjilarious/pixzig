@@ -76,8 +76,8 @@ pub const RectF = struct {
     }
 
     pub fn pos2I(self: *const RectF) Vec2I {
-        const x: usize = @intFromFloat(self.dest.l);
-        const y: usize = @intFromFloat(self.dest.t);
+        const x: i32 = @intFromFloat(self.l);
+        const y: i32 = @intFromFloat(self.t);
         return .{ .x = x, .y = y };
     }
 

@@ -35,6 +35,21 @@ pub const FpsCounter = struct {
     }
 };
 
+pub const Delay = struct {
+    curr: usize = 0,
+    max: usize,
+
+    pub fn update(self: *Delay, num: usize) bool {
+        self.curr += num;
+        if (self.curr > self.max) {
+            self.curr = 0;
+            return true;
+        }
+
+        return false;
+    }
+};
+
 pub fn cStrToSlice(c_str: [*:0]const u8) []const u8 {
     const length = std.mem.len(c_str);
     return c_str[0..length];

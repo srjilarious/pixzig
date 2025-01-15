@@ -23,6 +23,7 @@ pub const PlayerControl = struct {
     mouse: *pixzig.input.Mouse,
     query: *flecs.query_t,
     camera: ?flecs.entity_t,
+    delay: pixzig.utils.Delay = .{ .max = 120*2 },
 
     pub fn init(world: *flecs.world_t, eng: *pixzig.PixzigEngine, mouse: *pixzig.input.Mouse, camera: ?flecs.entity_t) !@This() {
         return .{
@@ -121,7 +122,22 @@ pub const PlayerControl = struct {
                 const offs = camera.winOffset.asVec2I();
                 // TODO: Add in tile size here.
                 hum.cursorLoc = RectF.fromPosSize(hum.cursorTile.x + cameraPos.x - offs.x - 8, hum.cursorTile.y + cameraPos.y - offs.y - 8, 16, 16);
-                hum.cursorColor = Color.from(100, 255, 100, 255);
+                const cursorPos = hum.cursorLoc.pos2F();
+                const playerPos = sp.dest.pos2F();
+                const distX = @abs(@divFloor(cursorPos.x - playerPos.x, C.TileWidth));
+                const distY = @abs(@divFloor(cursorPos.y - playerPos.y, C.TileHeight));
+                const dist2 = distX*distX + distY*distY;
+
+                if(self.delay.update(1)) {
+                    std.debug.print("player={}, {}; cursor={}, {}; dist={}, {}; dist2={}\n", .{playerPos.x, playerPos.y, cursorPos.x, cursorPos.y, distX, distY, dist2});
+                }
+
+                if(dist2 < 12) {
+                    hum.cursorColor = Color.from(100, 255, 100, 255);
+                } else
+                {
+                    hum.cursorColor = Color.from(255, 100, 100, 255);
+                }
                 // if(self.mouse.down(.left)) {
                 //     v.speed.y = 0;
                 //     sp.setPos(
