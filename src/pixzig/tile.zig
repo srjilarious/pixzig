@@ -508,6 +508,10 @@ pub const TileMapRenderer = struct {
 
     pub fn tileChanged(self: *TileMapRenderer, tileset: *TileSet, tiles: *TileLayer, loc: Vec2I, tile: i32) !void {
         const layerWidth: usize = @intCast(tiles.size.x);
+        const layerHeight: usize = @intCast(tiles.size.y);
+        if(loc.x < 0 or loc.x >= layerWidth) return;
+        if(loc.y < 0 or loc.y >= layerHeight) return;
+
         const tileIdx: usize = @intCast(loc.y*@as(i32, @intCast(layerWidth))+loc.x);
 
         // Check for a tile add/change

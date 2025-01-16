@@ -4,6 +4,7 @@ const pixzig = @import("pixzig");
 const flecs = @import("zflecs"); 
 
 const Vec2I = pixzig.common.Vec2I;
+const Vec2F = pixzig.common.Vec2F;
 const RectF = pixzig.common.RectF;
 const Color = pixzig.common.Color;
 
@@ -45,6 +46,13 @@ pub const PlayerControl = struct {
 
     pub fn deinit(self: *@This()) void {
         flecs.query_fini(self.query);
+    }
+
+    fn getBlockIndex(spotF: Vec2F, map: *TileLayer) Vec2I {
+        const spot = spotF.asVec2I();
+        const tx = @divTrunc(spot.x, map.tileSize.y);
+        const ty = @divTrunc(spot.y, map.tileSize.y);
+        return .{ .x = tx, .y = ty };
     }
 
     fn getLeftBlockIndex(player: *RectF, map: *TileLayer) Vec2I {
@@ -124,27 +132,32 @@ pub const PlayerControl = struct {
                 hum.cursorLoc = RectF.fromPosSize(hum.cursorTile.x + cameraPos.x - offs.x - 8, hum.cursorTile.y + cameraPos.y - offs.y - 8, 16, 16);
                 const cursorPos = hum.cursorLoc.pos2F();
                 const playerPos = sp.dest.pos2F();
-                const distX = @abs(@divFloor(cursorPos.x - playerPos.x, C.TileWidth));
-                const distY = @abs(@divFloor(cursorPos.y - playerPos.y, C.TileHeight));
+                const distX = @abs(@divFloor(cursorPos.x - playerPos.x + 8, C.TileWidth));
+                const distY = @abs(@divFloor(cursorPos.y - playerPos.y + 8, C.TileHeight));
                 const dist2 = distX*distX + distY*distY;
 
                 if(self.delay.update(1)) {
                     std.debug.print("player={}, {}; cursor={}, {}; dist={}, {}; dist2={}\n", .{playerPos.x, playerPos.y, cursorPos.x, cursorPos.y, distX, distY, dist2});
                 }
 
-                if(dist2 < 12) {
+                if(dist2 < 9) {
                     hum.cursorColor = Color.from(100, 255, 100, 255);
+                    if(self.mouse.pressed(.left)) {
+                        const tileLoc = getBlockIndex(cursorPos, map);
+                        std.debug.print("Placing block at {}, {}\n", .{tileLoc.x, tileLoc.y});
+                        map.setTileData(tileLoc.x, tileLoc.y, 1);
+                        try mapRenderer.tileChanged(map.tileset.?, map, tileLoc, 1);
+                    }
+                    else if(self.mouse.pressed(.right)) {
+                        const tileLoc = getBlockIndex(cursorPos, map);
+                        std.debug.print("Removing block at {}, {}\n", .{tileLoc.x, tileLoc.y});
+                        map.setTileData(tileLoc.x, tileLoc.y, -1);
+                        try mapRenderer.tileChanged(map.tileset.?, map, tileLoc, -1);
+                    }
                 } else
                 {
                     hum.cursorColor = Color.from(255, 100, 100, 255);
                 }
-                // if(self.mouse.down(.left)) {
-                //     v.speed.y = 0;
-                //     sp.setPos(
-                //         , 
-                //         
-                //     );
-                // }
 
                 // Respawn shortcut.
                 if(self.eng.keyboard.pressed(.r)) {
