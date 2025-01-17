@@ -2,36 +2,56 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "type": "zig",
+      "type": "lldb",
       "request": "launch",
-      "name": "Debug unit_tests",
-      "program": "${workspaceFolder}/zig-out/bin/unit_tests",
-      "cwd": "${workspaceFolder}/zig-out/bin/",
-      "args": ["verbose"]
+      "name": "Debug Test",
+      "program": "${workspaceFolder}/zig-out/bin/tests",
+      "preLaunchTask": "build",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
     },
     {
-      "type": "zig",
+      "type": "lldb",
       "request": "launch",
-      "name": "Debug tile_load_test",
-      "program": "${workspaceFolder}/zig-out/bin/tile_load_test",
-      "cwd": "${workspaceFolder}/zig-out/bin/",
-      "args": []
+      "name": "Debug Digcraft",
+      "program": "${workspaceFolder}/zig-out/bin/digcraft",
+      "preLaunchTask": "build",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
     },
-    {
-      "type": "zig",
-      "request": "launch",
-      "name": "Debug flecs_test",
-      "program": "${workspaceFolder}/zig-out/bin/flecs_test",
-      "cwd": "${workspaceFolder}/zig-out/bin/",
-      "args": []
-    },
-    {
-      "type": "zig",
-      "request": "launch",
-      "name": "Debug text_rendering",
-      "program": "${workspaceFolder}/zig-out/bin/text_rendering",
-      "cwd": "${workspaceFolder}/zig-out/bin/",
-      "args": []
-    }
+    // {
+    //   "type": "zig",
+    //   "request": "launch",
+    //   "name": "Debug unit_tests",
+    //   "program": "${workspaceFolder}/zig-out/bin/unit_tests",
+    //   "cwd": "${workspaceFolder}/zig-out/bin/",
+    //   "args": ["verbose"]
+    // },
+    // {
+    //   "type": "zig",
+    //   "request": "launch",
+    //   "name": "Debug tile_load_test",
+    //   "program": "${workspaceFolder}/zig-out/bin/tile_load_test",
+    //   "cwd": "${workspaceFolder}/zig-out/bin/",
+    //   "args": []
+    // },
+    // {
+    //   "type": "zig",
+    //   "request": "launch",
+    //   "name": "Debug flecs_test",
+    //   "program": "${workspaceFolder}/zig-out/bin/flecs_test",
+    //   "cwd": "${workspaceFolder}/zig-out/bin/",
+    //   "args": []
+    // },
+    // {
+    //   "type": "zig",
+    //   "request": "launch",
+    //   "name": "Debug text_rendering",
+    //   "program": "${workspaceFolder}/zig-out/bin/text_rendering",
+    //   "cwd": "${workspaceFolder}/zig-out/bin/",
+    //   "args": []
+    // }
   ]
 }

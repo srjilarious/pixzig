@@ -191,6 +191,7 @@ pub const App = struct {
     }
 
     pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {
+        //_ = delta;
         if(self.fps.update(delta)) {
             std.debug.print("FPS: {}\n", .{self.fps.fps()});
         }

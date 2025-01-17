@@ -24,7 +24,7 @@ pub const PlayerControl = struct {
     mouse: *pixzig.input.Mouse,
     query: *flecs.query_t,
     camera: ?flecs.entity_t,
-    delay: pixzig.utils.Delay = .{ .max = 120*2 },
+    delay: pixzig.utils.Delay = .{ .max = 120*1 },
 
     pub fn init(world: *flecs.world_t, eng: *pixzig.PixzigEngine, mouse: *pixzig.input.Mouse, camera: ?flecs.entity_t) !@This() {
         return .{
@@ -48,8 +48,8 @@ pub const PlayerControl = struct {
         flecs.query_fini(self.query);
     }
 
-    fn getBlockIndex(spotF: Vec2F, map: *TileLayer) Vec2I {
-        const spot = spotF.asVec2I();
+    fn getBlockIndex(spot: Vec2I, map: *TileLayer) Vec2I {
+        // const spot = spotF.asVec2I();
         const tx = @divTrunc(spot.x, map.tileSize.y);
         const ty = @divTrunc(spot.y, map.tileSize.y);
         return .{ .x = tx, .y = ty };
@@ -85,71 +85,82 @@ pub const PlayerControl = struct {
                 var sp: *Sprite = &spr[idx];
                 var hum: *HumanController = &humCtrl[idx];
 
-                if(!v.inAir and self.eng.keyboard.down(.up)) {
+                if(!v.inAir and self.eng.keyboard.down(.w)) {
                     std.debug.print("YEET!\n", .{});
                     v.speed.y = -3;
                     v.inAir = true;
                 }
 
                 // Handle guy movement.
-                if (self.eng.keyboard.down(.left)) {
+                if (self.eng.keyboard.down(.a)) {
                     _ = pixzig.tile.Mover.moveLeft(&sp.dest, 2, map, pixzig.tile.BlocksAll);
                 }
-                if (self.eng.keyboard.down(.right)) {
+                if (self.eng.keyboard.down(.d)) {
                     _ = pixzig.tile.Mover.moveRight(&sp.dest, 2, map, pixzig.tile.BlocksAll);
                 }
 
-                const tile: i32 = blk: {
-                    if(self.eng.keyboard.down(.left_control)) {
-                        break :blk -1;
-                    }
-                    else {
-                        break :blk 1;
-                    }
-                };
-
-                if(self.eng.keyboard.pressed(.a)) {
-                    const tileLoc = getLeftBlockIndex(&sp.dest, map);
-                    std.debug.print("Placing block at {}, {}\n", .{tileLoc.x, tileLoc.y});
-                    map.setTileData(tileLoc.x, tileLoc.y, tile);
-                    try mapRenderer.tileChanged(map.tileset.?, map, tileLoc, tile);
-                    // mapRenderer.recreateVertices(map.tileset.?, map) catch unreachable;
-                }
-                if(self.eng.keyboard.pressed(.d)) {
-                    const tileLoc = getRightBlockIndex(&sp.dest, map);
-                    std.debug.print("Placing block at {}, {}\n", .{tileLoc.x, tileLoc.y});
-                    map.setTileData(tileLoc.x, tileLoc.y, tile);
-                    try mapRenderer.tileChanged(map.tileset.?, map, tileLoc, tile);
-                    // mapRenderer.recreateVertices(map.tileset.?, map) catch unreachable;
-                }
+                // const tile: i32 = blk: {
+                //     if(self.eng.keyboard.down(.left_control)) {
+                //         break :blk -1;
+                //     }
+                //     else {
+                //         break :blk 1;
+                //     }
+                // };
 
                 const mousePos = self.mouse.pos().asVec2I();
-                hum.cursorTile = .{ .x = @divFloor(mousePos.x,C.Scale), .y = @divFloor(mousePos.y,C.Scale) };
+                const mouseScaledPos: Vec2I = .{ .x = @divFloor(mousePos.x,C.Scale), .y = @divFloor(mousePos.y,C.Scale) }; 
+                
                 const camera = flecs.get(self.world, self.camera.?, entities.Camera).?;
                 const cameraPos = camera.cameraPos.asVec2I();
+
                 const offs = camera.winOffset.asVec2I();
-                // TODO: Add in tile size here.
-                hum.cursorLoc = RectF.fromPosSize(hum.cursorTile.x + cameraPos.x - offs.x - 8, hum.cursorTile.y + cameraPos.y - offs.y - 8, 16, 16);
-                const cursorPos = hum.cursorLoc.pos2F();
-                const playerPos = sp.dest.pos2F();
-                const distX = @abs(@divFloor(cursorPos.x - playerPos.x + 8, C.TileWidth));
-                const distY = @abs(@divFloor(cursorPos.y - playerPos.y + 8, C.TileHeight));
+                
+                const mouseWorldPos: Vec2I = .{
+                    .x = mouseScaledPos.x + cameraPos.x - offs.x, 
+                    .y = mouseScaledPos.y + cameraPos.y - offs.y,
+                };
+
+                const tileLoc: Vec2I = .{
+                    .x = @divFloor(mouseWorldPos.x, map.tileSize.x),
+                    .y = @divFloor(mouseWorldPos.y, map.tileSize.y)
+                };
+                
+                const cursorPos: Vec2I = .{
+                    .x = tileLoc.x * map.tileSize.x,
+                    .y = tileLoc.y * map.tileSize.y
+                };
+                
+                hum.cursorLoc = RectF.fromPosSize(
+                    cursorPos.x,
+                    cursorPos.y,
+                    16, 16);
+
+                hum.cursorTile = tileLoc;
+                const playerPos = sp.dest.pos2I();
+                const distX = @abs(@divFloor(cursorPos.x - playerPos.x, C.TileWidth));
+                const distY = @abs(@divFloor(cursorPos.y - playerPos.y, C.TileHeight));
                 const dist2 = distX*distX + distY*distY;
 
-                if(self.delay.update(1)) {
-                    std.debug.print("player={}, {}; cursor={}, {}; dist={}, {}; dist2={}\n", .{playerPos.x, playerPos.y, cursorPos.x, cursorPos.y, distX, distY, dist2});
-                }
+                // if(self.delay.update(1)) {
+                //     std.debug.print("mouse={},{}; mouseWorld={}, {}; camera={}, {}; tileLoc={}, {}; cursor={}, {}; dist={}, {}; dist2={}\n", .{
+                //         mousePos.x, mousePos.y,
+                //         mouseWorldPos.x, mouseWorldPos.y,
+                //         cameraPos.x, cameraPos.y,
+                //         tileLoc.x, tileLoc.y, 
+                //         cursorPos.x, cursorPos.y, 
+                //         distX, distY, 
+                //         dist2});
+                // }
 
                 if(dist2 < 9) {
                     hum.cursorColor = Color.from(100, 255, 100, 255);
                     if(self.mouse.pressed(.left)) {
-                        const tileLoc = getBlockIndex(cursorPos, map);
                         std.debug.print("Placing block at {}, {}\n", .{tileLoc.x, tileLoc.y});
                         map.setTileData(tileLoc.x, tileLoc.y, 1);
                         try mapRenderer.tileChanged(map.tileset.?, map, tileLoc, 1);
                     }
                     else if(self.mouse.pressed(.right)) {
-                        const tileLoc = getBlockIndex(cursorPos, map);
                         std.debug.print("Removing block at {}, {}\n", .{tileLoc.x, tileLoc.y});
                         map.setTileData(tileLoc.x, tileLoc.y, -1);
                         try mapRenderer.tileChanged(map.tileset.?, map, tileLoc, -1);

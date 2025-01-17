@@ -10,6 +10,7 @@ const textures = @import("./textures.zig");
 const shaders = @import("./shaders.zig");
 
 const Vec2I = common.Vec2I;
+const Vec2U = common.Vec2U;
 const RectF = common.RectF;
 const Color = common.Color;
 const Texture = textures.Texture;
@@ -430,8 +431,89 @@ pub const TileMap = struct {
     }
 };
 
-const TileIndexMap = std.array_hash_map.AutoArrayHashMap(usize, usize);
+const TileIndexMap = struct {
+    const KV = struct {
+        tileIdx: usize,
+        bufferIdx: usize,
+    };
+    arr: std.ArrayList(KV),
+    alloc: std.mem.Allocator,
+
+    const Self = @This();
+
+    pub fn init(alloc: std.mem.Allocator) Self {
+        return .{
+            .alloc = alloc,
+            .arr = std.ArrayList(KV).init(alloc)
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.arr.deinit();
+    }
+
+    pub fn getBuffIndex(self: *const Self, tileIdx: usize) ?usize {
+        for(self.arr.items) |kv| {
+            if(kv.tileIdx == tileIdx) {
+                return kv.bufferIdx;
+            }
+        }
+        return null;
+    }
+
+    pub fn getTileIndex(self: *const Self, bufferIdx: usize) ?usize {
+        for(self.arr.items) |kv| {
+            if(kv.bufferIdx == bufferIdx) {
+                return kv.tileIdx;
+            }
+        }
+        return null;
+    }
+
+    pub fn getIdxFromTileIndex(self: *const Self, tileIdx: usize) ?usize {
+        for(self.arr.items, 0..) |kv, idx| {
+            if(kv.tileIdx == tileIdx) {
+                return idx;
+            }
+        }
+        return null;
+    }
+
+    pub fn update(self: *Self, tileIdx: usize, bufferIdx: usize) bool {
+        if(self.getIdxFromTileIndex(tileIdx)) |idx| {
+            self.arr.items[idx].bufferIdx = bufferIdx;
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+
+    pub fn removeByTileIndex(self: *Self, tileIndex: usize) bool {
+        if(self.getIdxFromTileIndex(tileIndex)) |idx| {
+            _ = self.arr.swapRemove(idx);
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+
+    pub fn put(self: *Self, tileIndex: usize, bufferIndex: usize) !bool {
+        const val: KV = .{.tileIdx = tileIndex, .bufferIdx = bufferIndex};
+        if(self.getIdxFromTileIndex(tileIndex)) |idx| {
+            self.arr.items[idx] = val;
+            return true;
+        }
+        else {
+            try self.arr.append(val);
+            return false;
+        }
+    }
+};
+
 pub const TileMapRenderer = struct {
+    mapSize: Vec2U = undefined,
     shader: Shader = undefined,
     vao: u32 = 0,
     vboVertices: u32 = 0,
@@ -506,6 +588,34 @@ pub const TileMapRenderer = struct {
         };
     }
 
+    fn dump(self: *TileMapRenderer) void {
+        std.debug.print("*****************\n", .{});
+        
+        std.debug.print("### tileIndexMap:\n", .{});
+        for(self.tileIndexMap.arr.items, 0..) |kv, idx| {
+
+            std.debug.print("[{}] tIdx={}, bIdx={}\n", .{idx, kv.tileIdx, kv.bufferIdx});
+            var vIdx = (kv.bufferIdx)*8;
+            var iIdx = (kv.bufferIdx)*6;
+
+            std.debug.print("Vertices: \n", .{});
+            for(0..4) |_| {
+                std.debug.print("({}, {}) ", .{ @as(i32, @intFromFloat(self.vertices[vIdx])), @as(i32, @intFromFloat(self.vertices[vIdx+1])) });
+                vIdx += 2;
+            }
+            std.debug.print("\n", .{});
+
+            std.debug.print("Indices: \n", .{});
+            for(0..2) |_| {
+                std.debug.print("({}, {}, {}) ", .{ self.indices[iIdx], self.indices[iIdx+1], self.indices[iIdx+2] });
+                iIdx += 3;
+            }
+            std.debug.print("\n\n", .{});
+        }
+
+        std.debug.print("*****************\n", .{});
+    }
+
     pub fn tileChanged(self: *TileMapRenderer, tileset: *TileSet, tiles: *TileLayer, loc: Vec2I, tile: i32) !void {
         const layerWidth: usize = @intCast(tiles.size.x);
         const layerHeight: usize = @intCast(tiles.size.y);
@@ -514,13 +624,15 @@ pub const TileMapRenderer = struct {
 
         const tileIdx: usize = @intCast(loc.y*@as(i32, @intCast(layerWidth))+loc.x);
 
+        std.debug.print("-----------------\n", .{});
         // Check for a tile add/change
         if(tile > 0) {
             // if location exists in map
-            if(self.tileIndexMap.get(tileIdx)) |buffIdx| {
+            if(self.tileIndexMap.getBuffIndex(tileIdx)) |buffIdx| {
                 // Update buffer data
                 const vertIdx = buffIdx*8;
                 const indicesIdx = buffIdx*6;
+                // std.debug.print("Setting tileIdx={} to buffIdx={}\n", .{tileIdx, buffIdx});
                 self.setTileRenderData(loc, vertIdx, indicesIdx, tiles.tileSize, tile, tileset);
             }
             // if location no in map
@@ -530,13 +642,14 @@ pub const TileMapRenderer = struct {
                 const indicesIdx = self.numBuffVals*6;
                 self.setTileRenderData(loc, vertIdx, indicesIdx, tiles.tileSize, tile, tileset);
 
-                std.debug.print("Setting tileIdx={} to buffIdx={}\n", .{tileIdx, self.numBuffVals});
-                try self.tileIndexMap.put(tileIdx, self.numBuffVals);
+                // std.debug.print("Setting tileIdx={} to buffIdx={}\n", .{tileIdx, self.numBuffVals});
+                _ = try self.tileIndexMap.put(tileIdx, self.numBuffVals);
 
-                const keys = self.tileIndexMap.keys();
-                const lastK = keys[keys.len-1];
-                const lastV = self.tileIndexMap.get(lastK).?;
-                std.debug.print("Adding: lastK={} lastV={}\n", .{lastK, lastV});
+
+                // const keys = self.tileIndexMap.keys();
+                // const lastK = keys[keys.len-1];
+                // const lastV = self.tileIndexMap.get(lastK).?;
+                // std.debug.print("Adding: lastK={} lastV={}\n", .{lastK, lastV});
                 self.numBuffVals += 1;
                 self.numActualIndices += 6;
             }
@@ -548,15 +661,18 @@ pub const TileMapRenderer = struct {
             std.debug.print("Removing block at {}, {}\n", .{loc.x, loc.y});
 
             // Find the bufferIndex if location exists in map
-            if(self.tileIndexMap.get(tileIdx)) |buffIdx| {
-                const keys = self.tileIndexMap.keys();
-                const lastK = keys[keys.len-1];
-                const lastV = self.tileIndexMap.get(lastK).?;
+            if(self.tileIndexMap.getBuffIndex(tileIdx)) |buffIdx| {
+                const lastBuffIdx = self.numBuffVals-1;
 
                 // If buffIdx is the last, simply stop drawing its indices
-                if(buffIdx == lastV) {
-                    std.debug.print("Removing last tile in vertices: {}, buffIdx={} == lastV={}\n", .{keys.len-1, buffIdx, lastV});
-                    _ = self.tileIndexMap.swapRemove(tileIdx);
+                if(buffIdx == lastBuffIdx) {
+                    // const destVertIdx = buffIdx*8;
+                    // const vx = @divFloor(@as(i32, @intFromFloat(self.vertices[destVertIdx])), 16);
+                    // const vy = @divFloor(@as(i32, @intFromFloat(self.vertices[destVertIdx+1])), 16);
+                    // std.debug.print("Vertex we are removing at tile pos: {}, {}\n", .{vx, vy});
+                    // std.debug.print("Removing last tile ({}) in vertices: buffIdx={} == lastBuffIdx={}\n", .{tileIdx, buffIdx, lastBuffIdx});
+                    const rem = self.tileIndexMap.removeByTileIndex(tileIdx);
+                    std.debug.assert(rem);
                     self.numBuffVals -= 1;
                     self.numActualIndices -= 6;
                 }
@@ -565,29 +681,35 @@ pub const TileMapRenderer = struct {
                 else {
                     // Update buffer data
                     const destVertIdx = buffIdx*8;
-                    const destIndicesIdx = buffIdx*6;
                     
-                    const srcVertIdx = (lastV)*8;
-                    const srcIndicesIdx = (lastV)*6;
+                    const srcVertIdx = (lastBuffIdx)*8;
+                    const lastK = self.tileIndexMap.getTileIndex(lastBuffIdx).?;
 
-                    std.debug.print("buffIndex={}. numBuffVals={}, lastKV.value={}\n", .{ buffIdx, self.numBuffVals, lastV});
+                    // std.debug.print("Removing idx {}, moving {} to buffIndex={} from lastBufferIdx={}\n", .{ tileIdx, lastK, buffIdx, lastBuffIdx});
 
-                    std.debug.print("verts len={}\n", .{self.vertices[destVertIdx..destVertIdx+8].len});
                     // Copy from the end into the slot we want to erase
+                    // Note we don't want to change the indices, since we're moving the vertex data
+                    // the indices in that slot should stay the same.
                     @memcpy(self.vertices[destVertIdx..destVertIdx+8], self.vertices[srcVertIdx..srcVertIdx+8]);
                     @memcpy(self.texCoords[destVertIdx..destVertIdx+8], self.texCoords[srcVertIdx..srcVertIdx+8]);
-                    @memcpy(self.indices[destIndicesIdx..destIndicesIdx+6], self.indices[srcIndicesIdx..srcIndicesIdx+6]);
 
                     // Remove the bufferIndex of the removed item.
-                    _ = self.tileIndexMap.swapRemove(tileIdx);
-                    try self.tileIndexMap.put(lastK, buffIdx);
+                    _ = self.tileIndexMap.removeByTileIndex(tileIdx);
+                    _ = self.tileIndexMap.update(lastK, buffIdx);
 
                     self.numBuffVals -= 1;
                     self.numActualIndices -= 6;
+                    // std.debug.print("NEW lastBuffIdx tileIdx is {} at {}\n", .{self.tileIndexMap.getTileIndex(self.numBuffVals-1).?, self.numBuffVals-1});
                 }
-                std.debug.print("Blocked removed!", .{});
+                // std.debug.print("Have {} tiles to draw, indices={}, maps to {} tiles\n", .{self.numBuffVals, self.numActualIndices, @divFloor(self.numActualIndices,6)});
+                // std.debug.print("Blocked removed!\n", .{});
+            }
+            else {
+                std.debug.print("No tile set in position!\n", .{});
             }
         }
+
+        // self.dump();
     }
 
     fn setTileRenderData(self: *TileMapRenderer,
@@ -647,6 +769,7 @@ pub const TileMapRenderer = struct {
         // const th = tileset.tileSize.y;
         const layerWidth: usize = @intCast(tiles.size.x);
         const layerHeight: usize = @intCast(tiles.size.y);
+        self.mapSize = .{ .x=@intCast(layerWidth), .y=@intCast(layerHeight) };
         const mapSize: i32 = @intCast(layerWidth*layerHeight);
         _ = mapSize;
         self.vertices = try self.alloc.alloc(f32, @intCast(2*4*layerWidth*layerHeight));
@@ -654,8 +777,7 @@ pub const TileMapRenderer = struct {
         self.indices = try self.alloc.alloc(u16, @intCast(6*layerWidth*layerHeight));
         
         std.debug.print("Creating {} vertices\n", .{self.vertices.len});
-        self.tileIndexMap.clearRetainingCapacity();
-
+        // self.tileIndexMap.clearRetainingCapacity();
         var buffIdx: usize = 0;
         var idx: usize = 0;
         var indicesIdx: usize = 0;
@@ -669,8 +791,8 @@ pub const TileMapRenderer = struct {
                 // Keep a map of which tile index maps to what buffer index.
                 // This lets us handle adding/removing tiles dynamically.
                 const tileIdx = y*@as(i32, @intCast(layerWidth))+x;
-                try self.tileIndexMap.put(@intCast(tileIdx), buffIdx);
-
+                _ = try self.tileIndexMap.put(@intCast(tileIdx), buffIdx);
+                // std.debug.print("Placing tileIdx={} in buffIdx={}\n", .{tileIdx, buffIdx});
                 self.setTileRenderData(.{.x=x, .y=y}, idx, indicesIdx, tileset.tileSize, tile, tileset);
                 idx += 8;
                 indicesIdx += 6;
@@ -680,6 +802,7 @@ pub const TileMapRenderer = struct {
                 buffIdx += 1;
             }
         }
+
         self.numActualIndices = indicesIdx;
         self.numBuffVals = buffIdx;
     }
@@ -728,7 +851,7 @@ pub const TileMapRenderer = struct {
         );
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.vboIndices);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * @sizeOf(u16) * self.numActualIndices), &self.indices[0], gl.STATIC_DRAW);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(@sizeOf(u16) * self.numActualIndices), &self.indices[0], gl.STATIC_DRAW);
 
         gl.drawElements(gl.TRIANGLES, @intCast(self.numActualIndices), gl.UNSIGNED_SHORT, null);
         gl.disableVertexAttribArray(self.attrCoord);
