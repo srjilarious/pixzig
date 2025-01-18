@@ -624,7 +624,6 @@ pub const TileMapRenderer = struct {
 
         const tileIdx: usize = @intCast(loc.y*@as(i32, @intCast(layerWidth))+loc.x);
 
-        std.debug.print("-----------------\n", .{});
         // Check for a tile add/change
         if(tile > 0) {
             // if location exists in map
@@ -632,7 +631,6 @@ pub const TileMapRenderer = struct {
                 // Update buffer data
                 const vertIdx = buffIdx*8;
                 const indicesIdx = buffIdx*6;
-                // std.debug.print("Setting tileIdx={} to buffIdx={}\n", .{tileIdx, buffIdx});
                 self.setTileRenderData(loc, vertIdx, indicesIdx, tiles.tileSize, tile, tileset);
             }
             // if location no in map
@@ -642,22 +640,14 @@ pub const TileMapRenderer = struct {
                 const indicesIdx = self.numBuffVals*6;
                 self.setTileRenderData(loc, vertIdx, indicesIdx, tiles.tileSize, tile, tileset);
 
-                // std.debug.print("Setting tileIdx={} to buffIdx={}\n", .{tileIdx, self.numBuffVals});
                 _ = try self.tileIndexMap.put(tileIdx, self.numBuffVals);
 
-
-                // const keys = self.tileIndexMap.keys();
-                // const lastK = keys[keys.len-1];
-                // const lastV = self.tileIndexMap.get(lastK).?;
-                // std.debug.print("Adding: lastK={} lastV={}\n", .{lastK, lastV});
                 self.numBuffVals += 1;
                 self.numActualIndices += 6;
             }
         }
         // A tile is being removed.
         else {
-            // TODO: There's a bug lurking somewhere...
-
             std.debug.print("Removing block at {}, {}\n", .{loc.x, loc.y});
 
             // Find the bufferIndex if location exists in map
@@ -666,11 +656,6 @@ pub const TileMapRenderer = struct {
 
                 // If buffIdx is the last, simply stop drawing its indices
                 if(buffIdx == lastBuffIdx) {
-                    // const destVertIdx = buffIdx*8;
-                    // const vx = @divFloor(@as(i32, @intFromFloat(self.vertices[destVertIdx])), 16);
-                    // const vy = @divFloor(@as(i32, @intFromFloat(self.vertices[destVertIdx+1])), 16);
-                    // std.debug.print("Vertex we are removing at tile pos: {}, {}\n", .{vx, vy});
-                    // std.debug.print("Removing last tile ({}) in vertices: buffIdx={} == lastBuffIdx={}\n", .{tileIdx, buffIdx, lastBuffIdx});
                     const rem = self.tileIndexMap.removeByTileIndex(tileIdx);
                     std.debug.assert(rem);
                     self.numBuffVals -= 1;
@@ -685,8 +670,6 @@ pub const TileMapRenderer = struct {
                     const srcVertIdx = (lastBuffIdx)*8;
                     const lastK = self.tileIndexMap.getTileIndex(lastBuffIdx).?;
 
-                    // std.debug.print("Removing idx {}, moving {} to buffIndex={} from lastBufferIdx={}\n", .{ tileIdx, lastK, buffIdx, lastBuffIdx});
-
                     // Copy from the end into the slot we want to erase
                     // Note we don't want to change the indices, since we're moving the vertex data
                     // the indices in that slot should stay the same.
@@ -699,10 +682,8 @@ pub const TileMapRenderer = struct {
 
                     self.numBuffVals -= 1;
                     self.numActualIndices -= 6;
-                    // std.debug.print("NEW lastBuffIdx tileIdx is {} at {}\n", .{self.tileIndexMap.getTileIndex(self.numBuffVals-1).?, self.numBuffVals-1});
                 }
-                // std.debug.print("Have {} tiles to draw, indices={}, maps to {} tiles\n", .{self.numBuffVals, self.numActualIndices, @divFloor(self.numActualIndices,6)});
-                // std.debug.print("Blocked removed!\n", .{});
+                
             }
             else {
                 std.debug.print("No tile set in position!\n", .{});

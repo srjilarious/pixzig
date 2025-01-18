@@ -139,8 +139,6 @@ pub const App = struct {
             },
         });
 
-
-
         const playerTex = eng.textures.getTexture("remi") catch unreachable;
         const playerId = entities.spawn(world, .Player, playerTex, 8);
 

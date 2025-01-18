@@ -46,4 +46,61 @@ pub const ScriptEngine = struct {
     pub fn runScript(self: *ScriptEngine, file: [:0]const u8) !void {
         try self.lua.doFile(file);
     }
+
+    pub fn loadStruct(
+        self: *const ScriptEngine,
+        comptime T: type,
+        globalName: [:0]const u8,
+    ) !T {
+        // Push the global `config` table onto the stack
+        _ = try self.lua.getGlobal(globalName);
+
+        // Ensure the global `config` is a table
+        if (!self.lua.isTable(-1)) {
+            self.lua.pop(1); // Pop the `config` table
+            return error.InvalidConfigTable;
+        }
+
+        var myStruct: T = .{};
+        // Iterate over fields of the struct at comptime
+        inline for (@typeInfo(T).Struct.fields) |field| {
+            const field_name = field.name;
+
+            // Get the value from Lua
+            _ = self.lua.getField(-1, field_name); // Pushes `config.<field_name>` onto the stack
+
+            // Match the field type and retrieve the value
+            switch (@typeInfo(field.type)) {
+                // Handle booleans
+                .Bool => {
+                    if (!self.lua.isBoolean(-1)) {
+                        self.lua.pop(2); // Pop the value and table
+                        return error.InvalidFieldType;
+                    }
+                    @field(myStruct, field_name) = self.lua.toBoolean(-1);
+                },
+                // Handle integers
+                .Int, .Float => {
+                    if (!self.lua.isInteger(-1)) {
+                        self.lua.pop(2); // Pop the value and table
+                        return error.InvalidFieldType;
+                    }
+                    @field(myStruct, field_name) = @intCast(try self.lua.toInteger(-1));
+                },
+                // Add more cases for other types as needed
+                else => {
+                    self.lua.pop(2); // Pop the value and table
+                    return error.UnsupportedFieldType;
+                },
+            }
+
+            // Pop the value, keep the table
+            self.lua.pop(1);
+        }
+
+        // Pop the global `config` table
+        self.lua.pop(1);
+
+        return myStruct;
+    }
 };

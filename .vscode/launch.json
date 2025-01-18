@@ -7,7 +7,7 @@
       "name": "Debug Test",
       "program": "${workspaceFolder}/zig-out/bin/tests",
       "preLaunchTask": "build",
-      "args": [],
+      "args": ["-vs"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal"
     },
