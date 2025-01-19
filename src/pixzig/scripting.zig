@@ -47,6 +47,7 @@ pub const ScriptEngine = struct {
         try self.lua.doFile(file);
     }
 
+    // pub fn getValue(self: *const ScriptEngine)
     pub fn loadStruct(
         self: *const ScriptEngine,
         comptime T: type,
@@ -86,6 +87,29 @@ pub const ScriptEngine = struct {
                         return error.InvalidFieldType;
                     }
                     @field(myStruct, field_name) = @intCast(try self.lua.toInteger(-1));
+                },
+                .Optional => |opt| {
+                    switch (@typeInfo(opt.child)) {
+                        .Pointer => |ptr_info| switch (ptr_info.size) {
+                            .Slice => {
+                                if (ptr_info.child != u8) {
+                                    return error.UnsupportedFieldType;
+                                }
+
+                                const lua_str = try self.lua.toString(-1);
+                                const len: usize = self.lua.rawLen(-1);
+                                const buffer = try self.lua.allocator().alloc(u8, len);
+                                @memcpy(buffer, lua_str[0..len]);
+                                @field(myStruct, field_name) = buffer;
+                            },
+                            else => {
+                                return error.UnsupportedFieldType;
+                            },
+                        },
+                        else => {
+                            return error.UnsupportedFieldType;
+                        },
+                    }
                 },
                 // Add more cases for other types as needed
                 else => {

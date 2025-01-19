@@ -6,6 +6,13 @@ const ScriptEngine = pixzig.scripting.ScriptEngine;
 const TestConfig = struct {
     fullscreen: bool = false,
     scale: i32 = 4,
+    title: ?[]u8 = null,
+
+    pub fn deinit(self: *const TestConfig, alloc: std.mem.Allocator) void {
+        if (self.title != null) {
+            alloc.free(self.title.?);
+        }
+    }
 };
 
 const configLuaScript =
@@ -34,4 +41,6 @@ pub fn structFromLuaLoading() !void {
 
     try testz.expectEqual(conf.scale, 2);
     try testz.expectTrue(conf.fullscreen);
+    try testz.expectEqualStr(conf.title.?, "My Game");
+    conf.deinit(std.heap.page_allocator);
 }
