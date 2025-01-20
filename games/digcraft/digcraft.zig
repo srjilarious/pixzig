@@ -23,6 +23,7 @@ const Color = pixzig.common.Color;
 const shaders = pixzig.shaders;
 const Shader = shaders.Shader;
 const Sprite = pixzig.sprites.Sprite;
+const ScriptEngine = pixzig.scripting.ScriptEngine;
 
 const math = @import("zmath");
 const EngOptions = pixzig.PixzigEngineOptions;
@@ -51,6 +52,10 @@ const PlayerControl = @import("systems/player_control.zig").PlayerControl;
 const CameraSystem = @import("systems/camera.zig").CameraSystem;
 const Outlines = @import("systems/outlines.zig").Outlines;
 
+pub const DigcraftConfig = struct {
+    fullscreen: bool = false,
+};
+
 pub const App = struct {
     allocator: std.mem.Allocator,
     projMat: zmath.Mat,
@@ -61,6 +66,7 @@ pub const App = struct {
     map: tile.TileMap,
     mapRenderer: tile.TileMapRenderer,
     texShader: pixzig.shaders.Shader,
+    scripts: *ScriptEngine,
     world: *flecs.world_t,
     draw_query: *flecs.query_t,
     cursor_draw_query: *flecs.query_t,
@@ -69,7 +75,7 @@ pub const App = struct {
     cameras: CameraSystem = undefined,
     outlines: Outlines = undefined,
 
-    pub fn init(eng: *pixzig.PixzigEngine, alloc: std.mem.Allocator) !App {
+    pub fn init(eng: *pixzig.PixzigEngine, scripts: *ScriptEngine, alloc: std.mem.Allocator) !App {
         // Orthographic projection matrix
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
 
@@ -158,6 +164,7 @@ pub const App = struct {
             .texShader = texShader,
             .map = map,
             .mapRenderer = mapRender,
+            .scripts = scripts,
             .world = world,
             .draw_query = draw_query,
             .cursor_draw_query = cursor_draw_query,
@@ -256,11 +263,19 @@ pub fn main() !void {
     defer _ = gpa_state.deinit();
     const gpa = gpa_state.allocator();
 
-    var eng = try pixzig.PixzigEngine.init("Pixzig: DigCraft", gpa, EngOptions{ .fullscreen = false });
+    var scripts = try ScriptEngine.init(&gpa);
+    defer scripts.deinit();
+    
+    try scripts.runScript("assets/digconf.lua");
+    const conf = try scripts.loadStruct(DigcraftConfig, "config");
+
+    var eng = try pixzig.PixzigEngine.init(
+        "Pixzig: DigCraft", gpa, 
+        EngOptions{ .fullscreen = conf.fullscreen });
     defer eng.deinit();
 
     const AppRunner = pixzig.PixzigApp(App);
-    var app = try App.init(&eng, gpa);
+    var app = try App.init(&eng, &scripts, gpa);
 
     glfw.swapInterval(0);
 
