@@ -1,17 +1,33 @@
 // zig fmt: off
 
 const std = @import("std");
-
-// const zsdl = @import("libs/zig-gamedev/libs/zsdl/build.zig");
-// const zflecs = @import("libs/zig-gamedev/libs/zflecs/build.zig");
-// const zglfw = @import("libs/zig-gamedev/libs/zglfw/build.zig");
-// const zopengl = @import("libs/zig-gamedev/libs/zopengl/build.zig");
-// const zstbi = @import("libs/zig-gamedev/libs/zstbi/build.zig");
-// const zmath = @import("libs/zig-gamedev/libs/zmath/build.zig");
-// const zgui = @import("libs/zig-gamedev/libs/zgui/build.zig");
-// const system_sdk = @import("libs/zig-gamedev/libs/system-sdk/build.zig");
+const builtin = std.builtin;
 
 const assets_dir = "assets/";
+
+fn addArchIncludes(b: *std.Build, 
+    target: std.Build.ResolvedTarget, 
+    optimize: std.builtin.OptimizeMode, 
+    dep: *std.Build.Step.Compile) !void
+{
+    _  = optimize;
+    switch (target.result.os.tag) {
+        .emscripten => {
+            if (b.sysroot == null) {
+                @panic("Pass '--sysroot \"~/.cache/emscripten/sysroot\"'");
+            }
+
+            // const cache_include = std.fs.path.join(b.allocator, &.{ "/home/jeffdw/.cache/emscripten/sysroot", "include" }) catch @panic("Out of memory");
+            const cache_include = std.fs.path.join(b.allocator, &.{ b.sysroot.?, "include" }) catch @panic("Out of memory");
+            defer b.allocator.free(cache_include);
+
+            var dir = std.fs.openDirAbsolute(cache_include, std.fs.Dir.OpenDirOptions{ .access_sub_paths = true, .no_follow = true }) catch @panic("No emscripten cache. Generate it!");
+            dir.close();
+            dep.addAfterIncludePath(.{ .cwd_relative = cache_include });
+        },
+        else => {}
+    }
+}
 
 pub fn example(b: *std.Build, 
     target: std.Build.ResolvedTarget, 
@@ -19,98 +35,141 @@ pub fn example(b: *std.Build,
     name: []const u8, 
     root_src_path: []const u8) *std.Build.Step.Compile
 {
-    const exe = b.addExecutable(.{
-        .name = name, //"pixzig_test",
-        // In this case the main source file is merely a path, however, in more
-        // complicated build scripts, this could be a generated file.
-        .root_source_file = b.path(root_src_path), //"src/main.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
+    const exe = blk: {
+        if(target.result.os.tag == .emscripten) {
+            break :blk b.addStaticLibrary(.{
+                .name = name,
+                .root_source_file = b.path(root_src_path),
+                .target = target,
+                .optimize = optimize,
+            });
+        }
+        else {
+            break :blk b.addExecutable(.{
+                .name = name,
+                .root_source_file = b.path(root_src_path),
+                .target = target,
+                .optimize = optimize,
+            });
+        }
+    };
+
+    try addArchIncludes(b, target, optimize, exe);
 
     // Build it
     // const system_sdk_pkg = system_sdk.package(b, target, optimize, .{});
     const zglfw = b.dependency("zglfw", .{ .target = target });
+    const glfw_dep = zglfw.artifact("glfw");
+    try addArchIncludes(b, target, optimize, glfw_dep);
+
     const zflecs = b.dependency("zflecs", .{ .target = target });
+    const flecs_dep = zflecs.artifact("flecs");
+    try addArchIncludes(b, target, optimize, flecs_dep);
+
     const zopengl = b.dependency("zopengl", .{ .target = target });
+    // const opengl_dep = zopengl.artifact("opengl");
+    // try addArchIncludes(b, target, optimize, opengl_dep);
+
     const zstbi = b.dependency("zstbi", .{ .target = target });
+    const stbi_dep = zstbi.artifact("zstbi");
+    try addArchIncludes(b, target, optimize, stbi_dep);
+
     const zmath = b.dependency("zmath", .{ .target = target });
+    
     const zgui = b.dependency("zgui", .{ 
         .target = target,
+        //.backend = .glfw, // emscripten
         .backend = .glfw_opengl3,
         // .shared = false,
         // .with_implot = true,
     });
+    const gui_dep = zgui.artifact("imgui");
+    try addArchIncludes(b, target, optimize, gui_dep);
 
     const ziglua = b.dependency("ziglua", .{
         .target = target,
         .optimize = optimize,
     });
+    const lua_dep = ziglua.artifact("lua");
+    try addArchIncludes(b, target, optimize, lua_dep);
 
     // Use mach-freetype
-    const mach_freetype_dep = b.dependency("mach_freetype", .{
+    const freetype = b.dependency("freetype", .{ 
+            .target = target, 
+            .optimize = optimize, 
+            .enable_brotli=false
+        });
+    const freetype_dep = freetype.artifact("freetype");
+    try addArchIncludes(b, target, optimize, freetype_dep);
+
+    const mach_freetype = b.dependency("mach_freetype", .{
         .target = target,
         .optimize = optimize,
+        .enable_brotli = false,
     });
 
     // Link with your app
-    exe.linkLibrary(zflecs.artifact("flecs"));
-    exe.linkLibrary(zglfw.artifact("glfw"));
-    exe.linkLibrary(zgui.artifact("imgui"));
-    exe.linkLibrary(zstbi.artifact("zstbi"));
-    
-    const xml = b.addModule("xml", .{ .root_source_file = b.path("libs/xml.zig")});
+    if(target.result.os.tag != .emscripten) {
+        exe.linkLibrary(flecs_dep);
+        exe.linkLibrary(glfw_dep);
+        exe.linkLibrary(gui_dep);
+        exe.linkLibrary(stbi_dep);
+        exe.linkLibrary(freetype_dep);
+    }
+
+    exe.linkLibC();
 
     const pixeng = b.addModule("pixzig", .{
-        // Package root
         .root_source_file = b.path("src/pixzig/pixzig.zig"),
-        // .dependencies = &.{
-        // },
     });
-    // pixeng.addImport("system-sdk", system_sdk_pkg.system_sdk);
     
+    const freetype_mod = mach_freetype.module("mach-freetype");
+    exe.root_module.addImport("freetype",freetype_mod);
+    pixeng.addImport("freetype", freetype_mod);
+
+
     // Use GLFW for GL context, windowing, input, etc.
-    exe.root_module.addImport("zglfw", zglfw.module("root"));
-    pixeng.addImport("zglfw", zglfw.module("root"));
+    const zglfw_mod = zglfw.module("root");
+    pixeng.addImport("zglfw", zglfw_mod);
+    exe.root_module.addImport("zglfw", zglfw_mod);
     
     // OpenGL
-    exe.root_module.addImport("zopengl", zopengl.module("root"));
-    pixeng.addImport("zopengl", zopengl.module("root"));
+    const gl_mod = zopengl.module("root");
+    exe.root_module.addImport("zopengl", gl_mod);
+    pixeng.addImport("zopengl", gl_mod);
     
-    // GUI support
-    exe.root_module.addImport("zgui", zgui.module("root"));
-    pixeng.addImport("zgui", zgui.module("root"));
+    // // GUI support
+    const zgui_mod = zgui.module("root");
+    exe.root_module.addImport("zgui",zgui_mod );
+    pixeng.addImport("zgui", zgui_mod);
+    // std.debug.print("zgui mod has {} include dirs.\n", .{zgui_mod.include_dirs.items.len});
     
-    // STBI for image loading.
-    pixeng.addImport("zstbi", zstbi.module("root"));
+    // // STBI for image loading.
+    const zstbi_mod = zstbi.module("root");
+    pixeng.addImport("zstbi", zstbi_mod);
     
-    // Math library
-    exe.root_module.addImport("zmath", zmath.module("root"));
-    pixeng.addImport("zmath", zmath.module("root"));
+    // // Math library
+    const math_mod = zmath.module("root");
+    pixeng.addImport("zmath", math_mod);
+    exe.root_module.addImport("zmath", math_mod);
     
-    // ECS library.
-    exe.root_module.addImport("zflecs", zflecs.module("root"));
-    pixeng.addImport("zflecs", zflecs.module("root"));
-    
-    // XML for tilemap loading.
+    // // ECS library.
+    const zflecs_mod = zflecs.module("root");
+    exe.root_module.addImport("zflecs", zflecs_mod);
+    pixeng.addImport("zflecs", zflecs_mod);
+
+    //  // XML for tilemap loading.
+    const xml = b.addModule("xml", .{ .root_source_file = b.path("libs/xml.zig")});
     pixeng.addImport("xml", xml);
     
-    exe.root_module.addImport("ziglua", ziglua.module("ziglua"));
-    pixeng.addImport("ziglua", ziglua.module("ziglua"));
-
-    pixeng.addImport("freetype", mach_freetype_dep.module("mach-freetype"));
-    exe.root_module.addImport("freetype", mach_freetype_dep.module("mach-freetype"));
+    
 
     // add the ziglua module and lua artifact
-    exe.root_module.addImport("ziglua", ziglua.module("ziglua"));
-    // exe.linkLibrary(ziglua.artifact("lua"));
+    const ziglua_mod = ziglua.module("ziglua");
+    exe.root_module.addImport("ziglua", ziglua_mod);
+    pixeng.addImport("ziglua", ziglua.module("ziglua"));
 
     exe.root_module.addImport("pixzig", pixeng);
-    // zsdl_pkg.link(pixzig);
-    // zopengl_pkg.link(pixzig);
-    // zstbi_pkg.link(pixzig);
-
-    // exe.linkLibrary(pixzig);
 
     const install_content_step = b.addInstallDirectory(.{
         .source_dir = b.path(assets_dir),
@@ -146,6 +205,61 @@ pub fn example(b: *std.Build,
     // This will evaluate the `run` step rather than the default, which is "install".
     const run_step = b.step(name, "Run example");
     run_step.dependOn(&run_cmd.step);
+
+
+    // const emcc_exe = switch (builtin.os.tag) { // TODO bundle emcc as a build dependency
+    //     .windows => "emcc.bat",
+    //     else => "emcc",
+    // };
+
+    switch (target.result.os.tag) {
+        .emscripten => {
+            const emcc_exe_path = "/usr/lib/emscripten/emcc";
+            const emcc_command = b.addSystemCommand(&[_][]const u8{emcc_exe_path});
+            emcc_command.addArgs(&[_][]const u8{
+                "-o",
+                "zig-out/web/index.html",
+                "-sFULL-ES3=1",
+                "-sUSE_GLFW=3",
+                "-O3",
+
+                // "-sAUDIO_WORKLET=1",
+                // "-sWASM_WORKERS=1",
+
+                "-sASYNCIFY",
+                // TODO currently deactivated because it seems as if it doesn't work with local hosting debug workflow
+                // "-pthread",
+                // "-sPTHREAD_POOL_SIZE=4",
+
+                "-sINITIAL_MEMORY=167772160",
+                //"-sEXPORTED_FUNCTIONS=_main,__builtin_return_address",
+
+                // USE_OFFSET_CONVERTER required for @returnAddress used in
+                // std.mem.Allocator interface
+                "-sUSE_OFFSET_CONVERTER",
+                "-sERROR_ON_UNDEFINED_SYMBOLS=0",
+                "--shell-file",
+                b.path("src/shell.html").getPath(b),
+            });
+
+            const link_items: []const *std.Build.Step.Compile = &.{
+                stbi_dep,
+                gui_dep,
+                freetype_dep,
+                flecs_dep,
+                exe,
+            };
+            for (link_items) |item| {
+                emcc_command.addFileArg(item.getEmittedBin());
+                emcc_command.step.dependOn(&item.step);
+            }
+
+            const install = emcc_command;
+            b.default_step.dependOn(&install.step);
+        },
+        else => {}
+    }
+
     return exe;
 }
 

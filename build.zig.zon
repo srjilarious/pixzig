@@ -11,15 +11,15 @@
         .zargunaught = .{
             .path = "../zargunaught",
         },
+        .freetype = .{
+            .path = "libs/freetype",
+        },
         .mach_freetype = .{
             .path = "libs/mach-freetype",
         },
         .ziglua = .{
-            // Use a tagged release of Ziglua tracking a stable Zig release
-            .url = "https://github.com/natecraddock/ziglua/archive/d853aa9.tar.gz",
-            .hash = "1220affeb3fe37ef09411b5a213b5fdf9bb6568e9913bade204694648983a8b2776d",
-            // .path = "libs/ziglua",
-            //.hash = ""
+            .url = "https://github.com/natecraddock/ziglua/archive/refs/tags/0.3.0.tar.gz",
+            .hash = "122069f4b75c946c705c0ed3218f52e0917ca361f55cebf3fb1c66a431a88ccc87b3",
         },
         .zopengl = .{ .path = "libs/zig-gamedev/libs/zopengl" },
         .zmath = .{ .path = "libs/zig-gamedev/libs/zmath" },
