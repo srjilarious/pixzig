@@ -1,13 +1,13 @@
-// zig fmt: off
 const std = @import("std");
 const zgui = @import("zgui");
 const glfw = @import("zglfw");
 const gl = @import("zopengl").bindings;
-const stbi = @import ("zstbi");
+const stbi = @import("zstbi");
 const pixzig = @import("pixzig");
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
+const Delay = pixzig.utils.Delay;
 
 const GameStateMgr = pixzig.gamestate.GameStateMgr;
 
@@ -23,6 +23,7 @@ const States = enum {
 };
 
 const StateA = struct {
+    delay: Delay = .{ .max = 100 },
 
     pub fn update(self: *StateA, eng: *PixzigEngine, delta: f64) bool {
         _ = delta;
@@ -33,8 +34,10 @@ const StateA = struct {
 
     pub fn render(self: *StateA, eng: *PixzigEngine) void {
         _ = eng;
-        _ = self;
-        gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 1.0, 0.0, 1.0 });
+        if (self.delay.update(1)) {
+            std.debug.print("Rendering StateA.\n", .{});
+        }
+        //gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 1.0, 0.0, 1.0 });
 
     }
 
@@ -60,25 +63,26 @@ const ParamState = struct {
     pub fn render(self: *ParamState, eng: *PixzigEngine) void {
         _ = eng;
         _ = self;
-        gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 1.0, 0.0, 0.0, 1.0 });
+        std.debug.print("Rendering ParamState.\n", .{});
+        //gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 1.0, 0.0, 0.0, 1.0 });
     }
 };
 
-const AppStateMgr = GameStateMgr(States, &[_]type{StateA, ParamState});
+const AppStateMgr = GameStateMgr(States, &[_]type{ StateA, ParamState });
 
 pub const MyApp = struct {
     fps: FpsCounter,
     states: AppStateMgr,
 
     pub fn init(appStates: []*anyopaque) MyApp {
-        return .{ 
+        return .{
             .fps = FpsCounter.init(),
             .states = AppStateMgr.init(appStates),
         };
     }
 
     pub fn update(self: *MyApp, eng: *pixzig.PixzigEngine, delta: f64) bool {
-        if(self.fps.update(delta)) {
+        if (self.fps.update(delta)) {
             std.debug.print("FPS: {}\n", .{self.fps.fps()});
         }
 
@@ -87,14 +91,14 @@ pub const MyApp = struct {
         if (eng.keyboard.pressed(.one)) {
             std.debug.print("one!\n", .{});
             self.states.setCurrState(.StateA);
-        } 
+        }
         if (eng.keyboard.pressed(.two)) {
             std.debug.print("two!\n", .{});
             self.states.setCurrState(.StateB);
         }
         if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
 
-        if(eng.keyboard.pressed(.escape)) {
+        if (eng.keyboard.pressed(.escape)) {
             return false;
         }
 
@@ -107,10 +111,7 @@ pub const MyApp = struct {
     }
 };
 
-
-
 pub fn main() !void {
-
     var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa_state.deinit();
     const gpa = gpa_state.allocator();
@@ -122,15 +123,14 @@ pub fn main() !void {
 
     var StateAInst = StateA{};
     var ParamStateInst = ParamState{};
-    var statesArr = [_]*anyopaque {&StateAInst, &ParamStateInst};
+    var statesArr = [_]*anyopaque{ &StateAInst, &ParamStateInst };
     const states: []*anyopaque = statesArr[0..2];
     var app = MyApp.init(states);
 
-    glfw.swapInterval(0);
+    glfw.swapInterval(50);
 
     std.debug.print("Starting main loop...\n", .{});
     AppRunner.gameLoop(&app, &eng);
 
     std.debug.print("Cleaning up...\n", .{});
 }
-

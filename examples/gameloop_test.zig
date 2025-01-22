@@ -1,5 +1,6 @@
 // zig fmt: off
 const std = @import("std");
+const builtin = @import("builtin");
 const zgui = @import("zgui");
 const glfw = @import("zglfw");
 const gl = @import("zopengl").bindings;
@@ -8,14 +9,22 @@ const pixzig = @import("pixzig");
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
+const Delay = pixzig.utils.Delay;
 
 const math = @import("zmath");
 const EngOptions = pixzig.PixzigEngineOptions;
 const FpsCounter = pixzig.utils.FpsCounter;
 
+pub const panic = pixzig.panic;
+
+pub const std_options = std.Options{
+    .logFn = pixzig.log,
+};
+
 pub const MyApp = struct {
     testVal: i32,
     fps: FpsCounter,
+    delay: Delay = .{ .max = 120 },
 
     pub fn init(val: i32) MyApp {
         return .{ 
@@ -29,8 +38,10 @@ pub const MyApp = struct {
             std.debug.print("FPS: {}\n", .{self.fps.fps()});
         }
 
+        // std.log.debug("update: b\n",.{});
         eng.keyboard.update();
 
+        // std.log.debug("update: c\n",.{});
         if (eng.keyboard.pressed(.one)) std.debug.print("one!\n", .{});
         if (eng.keyboard.pressed(.two)) std.debug.print("two!\n", .{});
         if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
@@ -53,28 +64,49 @@ pub const MyApp = struct {
 
     pub fn render(self: *MyApp, eng: *pixzig.PixzigEngine) void {
         _ = eng;
-        gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.0, 1.0 });
+        if(self.delay.update(1)) {
+            std.debug.print("render tick!\n", .{});
+        }
+
+        gl.clearColor(0, 0, 1, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
         self.fps.renderTick();
     }
 };
 
-pub fn main() !void {
+const AppRunner =  pixzig.PixzigApp(MyApp);
+var g_AppRunner = AppRunner{};
+var g_Eng: pixzig.PixzigEngine = undefined;
+var g_App: MyApp = undefined;
 
+export fn mainLoop() void {
+    _ = g_AppRunner.gameLoopCore(&g_App, &g_Eng);
+}
+
+pub fn main() !void {
+    std.log.info("Game loop test start.", .{});
     var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa_state.deinit();
     const gpa = gpa_state.allocator();
 
-    var eng = try pixzig.PixzigEngine.init("Glfw Eng Test.", gpa, EngOptions{});
-    defer eng.deinit();
+    g_Eng = try pixzig.PixzigEngine.init("Glfw Game loop Test.", gpa, EngOptions{});
 
-    const AppRunner = pixzig.PixzigApp(MyApp);
-    var app = MyApp.init(123);
+    g_AppRunner.begin();
+    g_App = MyApp.init(123);
 
+    _ = g_App.update(&g_Eng, 1);
     glfw.swapInterval(0);
 
-    std.debug.print("Starting main loop...\n", .{});
-    AppRunner.gameLoop(&app, &eng);
+    std.log.info("Starting main loop...\n", .{});
 
-    std.debug.print("Cleaning up...\n", .{});
+    if(builtin.target.os.tag == .emscripten) {
+        pixzig.setMainLoop(mainLoop, null, false);
+        std.log.debug("Set main loop.\n", .{});
+    }
+    else {
+        g_AppRunner.gameLoop(&g_App, &g_Eng);
+        std.log.info("Cleaning up...\n", .{});
+        g_Eng.deinit();
+        _ = gpa_state.deinit();
+    }
 }
 

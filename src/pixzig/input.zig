@@ -83,6 +83,7 @@ pub const Keyboard = struct {
         //const prev = self.prevKeys();
         // curr.keys.setRangeValue(.{.start=0, .end=NumKeys}, false);
        
+
         // Update the current keys
         const enumTypeInfo = @typeInfo(glfw.Key).Enum;
         comptime var keyIdx = 0;

@@ -38,8 +38,10 @@ pub const App = struct {
         // Orthographic projection matrix
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
 
+        std.debug.print("Loading texture...\n", .{});
         const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
 
+        std.debug.print("Creating renderer.\n", .{});
         const renderer = try Renderer.init(alloc, .{});
         std.debug.print("Done creating tile renderering data.\n", .{});
 
@@ -142,14 +144,17 @@ pub fn main() !void {
 
     std.log.info("Pixzig Sprite and Shape test!", .{});
 
-    var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
     defer _ = gpa_state.deinit();
     const gpa = gpa_state.allocator();
 
     var eng = try pixzig.PixzigEngine.init("Pixzig: Tile Render Test.", gpa, EngOptions{});
+    std.debug.print("Pixzig engine initialized..\n", .{});
+
     defer eng.deinit();
 
     const AppRunner = pixzig.PixzigApp(App);
+    std.debug.print("Initializing app.\n", .{});
     var app = try App.init(&eng, gpa);
 
     glfw.swapInterval(0);

@@ -1,5 +1,6 @@
 // zig fmt: off
 const std = @import("std");
+const builtin = @import("builtin");
 const sdl = @import("zsdl");
 const glfw = @import("zglfw");
 const stbi = @import("zstbi");
@@ -32,45 +33,111 @@ pub const Color8 = common.Color8;
 
 
 pub const PixzigEngineOptions = struct {
-    withGui: bool = true,
+    withGui: bool = false,
     fullscreen: bool = false,
     windowSize: Vec2I = .{ .x = 800, .y = 600 },
 };
 
+extern fn emscripten_err([*c]const u8) void;
+extern fn emscripten_console_error([*c]const u8) void;
+extern fn emscripten_console_warn([*c]const u8) void;
+extern fn emscripten_console_log([*c]const u8) void;
+
+pub const MainLoopCallback = *const fn () callconv(.C) void;
+extern fn emscripten_set_main_loop(MainLoopCallback, c_int, c_int) void;
+pub fn setMainLoop(cb: MainLoopCallback, maybe_fps: ?i16, simulate_infinite_loop: bool) void {
+    std.debug.print("Setting main loop internal.\n", .{});
+    emscripten_set_main_loop(cb, if (maybe_fps) |fps| fps else -1, @intFromBool(simulate_infinite_loop));
+}
+
+/// std.panic impl
+pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_addr: ?usize) noreturn {
+    _ = error_return_trace;
+    _ = ret_addr;
+
+    var buf: [1024]u8 = undefined;
+    const error_msg: [:0]u8 = std.fmt.bufPrintZ(&buf, "PANIC! {s}", .{msg}) catch unreachable;
+    emscripten_err(error_msg.ptr);
+
+    while (true) {
+        @breakpoint();
+    }
+}
+
+/// std.log impl
+pub fn log(
+    comptime level: std.log.Level,
+    comptime scope: @TypeOf(.EnumLiteral),
+    comptime format: []const u8,
+    args: anytype,
+) void {
+    const level_txt = comptime level.asText();
+    const prefix2 = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
+    const prefix = level_txt ++ prefix2;
+
+    var buf: [1024]u8 = undefined;
+    const msg = std.fmt.bufPrintZ(buf[0 .. buf.len - 1], prefix ++ format, args) catch |err| {
+        switch (err) {
+            error.NoSpaceLeft => {
+                emscripten_console_error("log message too long, skipped.");
+                return;
+            },
+        }
+    };
+    switch (level) {
+        .err => emscripten_console_error(@ptrCast(msg.ptr)),
+        .warn => emscripten_console_warn(@ptrCast(msg.ptr)),
+        else => emscripten_console_log(@ptrCast(msg.ptr)),
+    }
+}
 
 pub fn PixzigApp(comptime T: type) type {
-    return struct {
+    const AppStruct = struct {
         const AppUpdateFunc = fn (*T, *PixzigEngine, f64) bool;
         const AppRenderFunc = fn (*T, *PixzigEngine) void;
         
-        pub fn gameLoop(self: *T, eng: *PixzigEngine) void {
-            const UpdateStepUs: f64 = 1.0 / 120.0;
+        const UpdateStepUs: f64 = 1.0 / 120.0;
 
-            var lag: f64 = 0;
-            var currTime = glfw.getTime();
+        lag: f64 = 0,
+        currTime: f64 = 0,
 
+        const Self = @This();
+
+        pub fn begin(self: *Self) void {
+            self.currTime = glfw.getTime();
+        }
+
+        pub fn gameLoopCore(self: *Self, app: *T, eng: *PixzigEngine) bool {
+            const newCurrTime = glfw.getTime();
+            const delta = newCurrTime - self.currTime;
+            self.lag += delta;
+            self.currTime = newCurrTime;
+
+            glfw.pollEvents();
+
+
+            while(self.lag > UpdateStepUs) {
+                self.lag -= UpdateStepUs;
+
+                if(!app.update(eng, UpdateStepUs)) {
+                    return false;
+                }
+            }
+
+            app.render(eng);
+            eng.window.swapBuffers();
+            return true;
+        }
+
+        pub fn gameLoop(self: *Self, app: *T, eng: *PixzigEngine) void {
             // Main loop
             while (!eng.window.shouldClose()) {
-                const newCurrTime = glfw.getTime();
-                const delta = newCurrTime - currTime;
-                lag += delta;
-                currTime = newCurrTime;
-
-                glfw.pollEvents();
-
-                while(lag > UpdateStepUs) {
-                    lag -= UpdateStepUs;
-
-                    if(!self.update(eng, UpdateStepUs)) {
-                        return;
-                    }
-                }
-
-                self.render(eng);
-                eng.window.swapBuffers();
+                if(!self.gameLoopCore(app, eng)) return;
             }
         }
     };
+
+    return AppStruct;
 }
 
 pub const PixzigEngine = struct {
@@ -93,10 +160,21 @@ pub const PixzigEngine = struct {
         //     std.os.chdir(path) catch {};
         // }
 
-        const gl_major = 4;
+        std.debug.print("GLFW initialized.\n", .{});
+
         const gl_minor = 0;
+        const gl_major = blk: {
+            if(builtin.target.os.tag == .emscripten) {
+                break :blk 2;
+            }
+            else {
+                break :blk 4;
+            }
+        };
+
         glfw.windowHintTyped(.context_version_major, gl_major);
         glfw.windowHintTyped(.context_version_minor, gl_minor);
+
         glfw.windowHintTyped(.opengl_profile, .opengl_core_profile);
         glfw.windowHintTyped(.opengl_forward_compat, true);
         glfw.windowHintTyped(.client_api, .opengl_api);
@@ -122,7 +200,12 @@ pub const PixzigEngine = struct {
         glfw.makeContextCurrent(window);
         glfw.swapInterval(1);
 
-        try zopengl.loadCoreProfile(glfw.getProcAddress, gl_major, gl_minor);
+        if(builtin.target.os.tag == .emscripten) {
+            try zopengl.loadEsProfile(glfw.getProcAddress, gl_major, gl_minor);
+        } else {
+            try zopengl.loadCoreProfile(glfw.getProcAddress, gl_major, gl_minor);
+        }
+        
         
         const scale_factor = scale_factor: {
             const scale = window.getContentScale();

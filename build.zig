@@ -76,13 +76,25 @@ pub fn example(b: *std.Build,
 
     const zmath = b.dependency("zmath", .{ .target = target });
     
-    const zgui = b.dependency("zgui", .{ 
-        .target = target,
-        //.backend = .glfw, // emscripten
-        .backend = .glfw_opengl3,
-        // .shared = false,
-        // .with_implot = true,
-    });
+    const zgui = blk: {
+        if(target.result.os.tag == .emscripten) {
+            break :blk b.dependency("zgui", .{ 
+                .target = target,
+                .backend = .glfw, // emscripten
+                // .shared = false,
+                // .with_implot = true,
+            });
+        }
+        else {
+            break :blk b.dependency("zgui", .{ 
+                .target = target,
+                .backend = .glfw_opengl3,
+                // .shared = false,
+                // .with_implot = true,
+            });
+        }
+    };
+
     const gui_dep = zgui.artifact("imgui");
     try addArchIncludes(b, target, optimize, gui_dep);
 
@@ -93,39 +105,42 @@ pub fn example(b: *std.Build,
     const lua_dep = ziglua.artifact("lua");
     try addArchIncludes(b, target, optimize, lua_dep);
 
-    // Use mach-freetype
-    const freetype = b.dependency("freetype", .{ 
-            .target = target, 
-            .optimize = optimize, 
-            .enable_brotli=false
-        });
-    const freetype_dep = freetype.artifact("freetype");
-    try addArchIncludes(b, target, optimize, freetype_dep);
-
-    const mach_freetype = b.dependency("mach_freetype", .{
-        .target = target,
-        .optimize = optimize,
-        .enable_brotli = false,
-    });
-
-    // Link with your app
-    if(target.result.os.tag != .emscripten) {
-        exe.linkLibrary(flecs_dep);
-        exe.linkLibrary(glfw_dep);
-        exe.linkLibrary(gui_dep);
-        exe.linkLibrary(stbi_dep);
-        exe.linkLibrary(freetype_dep);
-    }
-
     exe.linkLibC();
 
     const pixeng = b.addModule("pixzig", .{
         .root_source_file = b.path("src/pixzig/pixzig.zig"),
     });
+
+    if(target.result.os.tag != .emscripten) {
+        // Use mach-freetype
+        const freetype = b.dependency("freetype", .{ 
+                .target = target, 
+                .optimize = optimize, 
+                .enable_brotli=false
+            });
+        const freetype_dep = freetype.artifact("freetype");
+        try addArchIncludes(b, target, optimize, freetype_dep);
+
+        const mach_freetype = b.dependency("mach_freetype", .{
+            .target = target,
+            .optimize = optimize,
+            .enable_brotli = false,
+        });
     
-    const freetype_mod = mach_freetype.module("mach-freetype");
-    exe.root_module.addImport("freetype",freetype_mod);
-    pixeng.addImport("freetype", freetype_mod);
+        // Link with your app
+    
+        exe.linkLibrary(flecs_dep);
+        exe.linkLibrary(glfw_dep);
+        exe.linkLibrary(gui_dep);
+        exe.linkLibrary(stbi_dep);
+        exe.linkLibrary(freetype_dep);
+
+        const freetype_mod = mach_freetype.module("mach-freetype");
+        exe.root_module.addImport("freetype",freetype_mod);
+        pixeng.addImport("freetype", freetype_mod);
+    }
+
+    
 
 
     // Use GLFW for GL context, windowing, input, etc.
@@ -232,6 +247,9 @@ pub fn example(b: *std.Build,
                 // "-sPTHREAD_POOL_SIZE=4",
 
                 "-sINITIAL_MEMORY=167772160",
+                "-sALLOW_MEMORY_GROWTH=1",
+                "--export=_mainLoop",
+                "-sEXPORTED_FUNCTIONS=_mainLoop,_main",
                 //"-sEXPORTED_FUNCTIONS=_main,__builtin_return_address",
 
                 // USE_OFFSET_CONVERTER required for @returnAddress used in
@@ -245,7 +263,7 @@ pub fn example(b: *std.Build,
             const link_items: []const *std.Build.Step.Compile = &.{
                 stbi_dep,
                 gui_dep,
-                freetype_dep,
+                //freetype_dep,
                 flecs_dep,
                 exe,
             };
@@ -278,35 +296,38 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig");
-    _ = example(b, target, optimize, "a_star_path", "examples/a_star_path.zig");
-    _ = example(b, target, optimize, "console_test", "examples/console_test.zig");
-    _ = example(b, target, optimize, "collision_test", "examples/collision_test.zig");
-    _ = example(b, target, optimize, "create_texture", "examples/create_texture.zig");
-    _ = example(b, target, optimize, "tile_load_test", "examples/tile_load_test.zig");
-    _ = example(b, target, optimize, "flecs_test", "examples/flecs_test.zig");
-    _ = example(b, target, optimize, "game_state_test", "examples/game_state_test.zig");
-    _ = example(b, target, optimize, "glfw_test", "examples/glfw_test.zig");
-    _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig");
-    _ = example(b, target, optimize, "grid_render", "examples/grid_render.zig");
-    _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
+
     _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig");
-    _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig");
-    _ = example(b, target, optimize, "text_rendering", "examples/text_rendering.zig");
+    // if(target.result.os.tag != .emscripten) {
+    //     _ = example(b, target, optimize, "game_state_test", "examples/game_state_test.zig");
+    //     _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig");
+    //     _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig");
+    //     _ = example(b, target, optimize, "a_star_path", "examples/a_star_path.zig");
+    //     _ = example(b, target, optimize, "console_test", "examples/console_test.zig");
+    //     _ = example(b, target, optimize, "collision_test", "examples/collision_test.zig");
+    //     _ = example(b, target, optimize, "create_texture", "examples/create_texture.zig");
+    //     _ = example(b, target, optimize, "tile_load_test", "examples/tile_load_test.zig");
+    //     _ = example(b, target, optimize, "flecs_test", "examples/flecs_test.zig");
+    //     _ = example(b, target, optimize, "glfw_test", "examples/glfw_test.zig");
+    //     _ = example(b, target, optimize, "grid_render", "examples/grid_render.zig");
+    //     _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
+    //     _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig");
+    //     _ = example(b, target, optimize, "text_rendering", "examples/text_rendering.zig");
 
-    _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig");
-    _ = example(b, target, optimize, "digcraft", "games/digcraft/digcraft.zig");
+    //     _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig");
+    //     _ = example(b, target, optimize, "digcraft", "games/digcraft/digcraft.zig");
 
-    const spack = example(b, target, optimize, "spack", "tools/spack/spack.zig");
-    const zargs = b.dependency("zargunaught", .{});
-    spack.root_module.addImport("zargunaught", zargs.module("zargunaught"));
+    //     const spack = example(b, target, optimize, "spack", "tools/spack/spack.zig");
+    //     const zargs = b.dependency("zargunaught", .{});
+    //     spack.root_module.addImport("zargunaught", zargs.module("zargunaught"));
 
-    const zstbi = b.dependency("zstbi", .{ .target = target });
-    spack.root_module.addImport("zstbi", zstbi.module("root"));
+    //     const zstbi = b.dependency("zstbi", .{ .target = target });
+    //     spack.root_module.addImport("zstbi", zstbi.module("root"));
 
-    const tests = example(b, target, optimize, "tests", "tests/main.zig");
-    const testzMod = b.dependency("testz", .{});
-    tests.root_module.addImport("testz", testzMod.module("testz"));
+    //     const tests = example(b, target, optimize, "tests", "tests/main.zig");
+    //     const testzMod = b.dependency("testz", .{});
+    //     tests.root_module.addImport("testz", testzMod.module("testz"));
+    // }
 }
 
 inline fn thisDir() []const u8 {

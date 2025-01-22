@@ -37,7 +37,7 @@ pub fn GameStateMgr(comptime StateKeysType: type, comptime States: []const type)
                 if(oldStateIdx == idx) {
                     const stateType = States[idx];
                     if(@hasDecl(stateType, "deactivate")) {
-                        const statePtr: *stateType = @ptrCast(self.states[oldStateIdx]);
+                        const statePtr: *stateType = @alignCast(@ptrCast(self.states[oldStateIdx]));
                         statePtr.deactivate();
                     }
                 }
@@ -49,7 +49,7 @@ pub fn GameStateMgr(comptime StateKeysType: type, comptime States: []const type)
                 if(stateIdx == idx) {
                     const stateType = States[idx];
                     if(@hasDecl(stateType, "activate")) {
-                        const statePtr: *stateType = @ptrCast(self.states[stateIdx]);
+                        const statePtr: *stateType = @alignCast(@ptrCast(self.states[stateIdx]));
                         statePtr.activate();
                     }
                 }
@@ -61,7 +61,7 @@ pub fn GameStateMgr(comptime StateKeysType: type, comptime States: []const type)
             inline for(0..States.len) |idx| {
                 if(stateIdx == idx) {
                     const stateType = States[idx];
-                    const statePtr: *stateType = @ptrCast(self.states[stateIdx]);
+                    const statePtr: *stateType = @alignCast(@ptrCast(self.states[stateIdx]));
                     return statePtr.update(eng, deltaUs);
                 }
             }
@@ -73,7 +73,7 @@ pub fn GameStateMgr(comptime StateKeysType: type, comptime States: []const type)
             inline for(0..States.len) |idx| {
                 if(stateIdx == idx) {
                     const stateType = States[idx];
-                    const statePtr: *stateType = @ptrCast(self.states[stateIdx]);
+                    const statePtr: *stateType = @alignCast(@ptrCast(self.states[stateIdx]));
                     return statePtr.render(eng);
                 }
             }
