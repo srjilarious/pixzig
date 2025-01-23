@@ -15,57 +15,110 @@ pub const ShaderCode = [*c]const u8;
 pub const ShaderCodePtr = [*c]const ShaderCode;
 
 pub const TexVertexShader: ShaderCode =
-    \\ #version 330 core
-    \\ layout(location = 0) in vec2 coord3d;
-    \\ layout(location = 1) in vec2 texcoord;
-    \\ // Pass texture coordinate to fragment shader
-    \\ out vec2 Texcoord;
+    \\#version 300 es
+    \\in vec2 coord3d;
+    \\in vec2 texcoord;
+    \\out vec2 Texcoord; // Pass texture coordinate to fragment shader
     \\ 
-    \\ uniform mat4 projectionMatrix;
+    \\uniform mat4 projectionMatrix;
     \\ 
-    \\ void main() {
+    \\void main() {
     \\    gl_Position = projectionMatrix * vec4(coord3d, 0.0, 1.0);
-    \\    // Pass texture coordinate to fragment shader
-    \\    Texcoord = texcoord;
-    \\ }
+    \\    Texcoord = texcoord; // Pass texture coordinate to fragment shader
+    \\}
 ;
 
 pub const TexPixelShader: ShaderCode =
-    \\ #version 330 core
-    \\ in vec2 Texcoord; // Received from vertex shader
-    \\ uniform sampler2D tex; // Texture sampler
-    \\ out vec4 fragColor;
-    \\ void main() {
-    \\   // Sample the texture at the given coordinates
-    \\   fragColor = texture(tex, Texcoord); 
-    \\ }
+    \\#version 300 es
+    \\precision mediump float;
+    \\
+    \\in vec2 Texcoord; // Received from vertex shader
+    \\uniform sampler2D tex; // Texture sampler
+    \\out vec4 fragColor;
+    \\
+    \\void main() {
+    \\    fragColor = texture(tex, Texcoord); // Sample the texture at the given coordinates
+    \\}
 ;
 
 pub const ColorVertexShader: ShaderCode =
-    \\ #version 330 core
-    \\ layout(location = 0) in vec2 coord3d;
-    \\ layout(location = 1) in vec4 color;
-    \\ // Pass texture coordinate to fragment shader
-    \\ out vec4 Col;
-    \\ 
-    \\ uniform mat4 projectionMatrix;
-    \\ 
-    \\ void main() {
+    \\#version 300 es
+    \\in vec2 coord3d;
+    \\in vec4 color;
+    \\out vec4 Col; // Pass color to fragment shader
+    \\
+    \\uniform mat4 projectionMatrix;
+    \\
+    \\void main() {
     \\    gl_Position = projectionMatrix * vec4(coord3d, 0.0, 1.0);
-    \\    // Pass texture coordinate to fragment shader
-    \\    Col = color;
-    \\ }
+    \\    Col = color; // Pass color to fragment shader
+    \\}
 ;
 
 pub const ColorPixelShader: ShaderCode =
-    \\ #version 330 core
-    \\ in vec4 Col; // Received from vertex shader
-    \\ out vec4 fragColor;
-    \\ void main() {
-    \\   // Sample the texture at the given coordinates
-    \\   fragColor = Col; 
-    \\ }
+    \\#version 300 es
+    \\precision mediump float;
+    \\
+    \\in vec4 Col; // Received from vertex shader
+    \\out vec4 fragColor;
+    \\
+    \\void main() {
+    \\    fragColor = Col; // Output the color
+    \\}
 ;
+
+// pub const TexVertexShader: ShaderCode =
+//     \\ #version 330 core
+//     \\ layout(location = 0) in vec2 coord3d;
+//     \\ layout(location = 1) in vec2 texcoord;
+//     \\ // Pass texture coordinate to fragment shader
+//     \\ out vec2 Texcoord;
+//     \\ 
+//     \\ uniform mat4 projectionMatrix;
+//     \\ 
+//     \\ void main() {
+//     \\    gl_Position = projectionMatrix * vec4(coord3d, 0.0, 1.0);
+//     \\    // Pass texture coordinate to fragment shader
+//     \\    Texcoord = texcoord;
+//     \\ }
+// ;
+
+// pub const TexPixelShader: ShaderCode =
+//     \\ #version 330 core
+//     \\ in vec2 Texcoord; // Received from vertex shader
+//     \\ uniform sampler2D tex; // Texture sampler
+//     \\ out vec4 fragColor;
+//     \\ void main() {
+//     \\   // Sample the texture at the given coordinates
+//     \\   fragColor = texture(tex, Texcoord); 
+//     \\ }
+// ;
+
+// pub const ColorVertexShader: ShaderCode =
+//     \\ #version 330 core
+//     \\ layout(location = 0) in vec2 coord3d;
+//     \\ layout(location = 1) in vec4 color;
+//     \\ // Pass texture coordinate to fragment shader
+//     \\ out vec4 Col;
+//     \\ 
+//     \\ uniform mat4 projectionMatrix;
+//     \\ 
+//     \\ void main() {
+//     \\    gl_Position = projectionMatrix * vec4(coord3d, 0.0, 1.0);
+//     \\    // Pass texture coordinate to fragment shader
+//     \\    Col = color;
+//     \\ }
+// ;
+
+// pub const ColorPixelShader: ShaderCode =
+//     \\ #version 330 core
+//     \\ in vec4 Col; // Received from vertex shader
+//     \\ out vec4 fragColor;
+//     \\ void main() {
+//     \\   // Sample the texture at the given coordinates
+//     \\   fragColor = Col; 
+//     \\ }
+// ;
 
 
 pub const Shader = struct {
@@ -80,6 +133,11 @@ pub const Shader = struct {
         var compileOk: c_int = gl.FALSE;
         gl.getShaderiv(res, gl.COMPILE_STATUS, &compileOk);
         if (compileOk == gl.FALSE) {
+            var logBuffer: [1024]u8 = undefined; // Adjust size as needed
+            var length: c_int = 0;
+            gl.getShaderInfoLog(res, 1024, &length, &logBuffer);
+            std.log.err("Error compiling shader: {s}", .{logBuffer[0..@intCast(length)]});
+
             return error.BadShader;
         }
 

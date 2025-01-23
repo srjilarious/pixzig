@@ -246,8 +246,10 @@ pub fn example(b: *std.Build,
                 // "-pthread",
                 // "-sPTHREAD_POOL_SIZE=4",
 
+                "-sMIN_WEBGL_VERSION=2",
                 "-sINITIAL_MEMORY=167772160",
                 "-sALLOW_MEMORY_GROWTH=1",
+                "-sMALLOC=emmalloc",
                 "--export=_mainLoop",
                 "-sEXPORTED_FUNCTIONS=_mainLoop,_main",
                 //"-sEXPORTED_FUNCTIONS=_main,__builtin_return_address",
@@ -256,6 +258,15 @@ pub fn example(b: *std.Build,
                 // std.mem.Allocator interface
                 "-sUSE_OFFSET_CONVERTER",
                 "-sERROR_ON_UNDEFINED_SYMBOLS=0",
+
+                // Test embedding some graphics
+                "--preload-file", "assets/mario_grassish2.png",
+                // "--preload-file assets/digcraft_sprites.png",
+                // "--embed-file assets/digcraft_sprites.json",
+                "--preload-file", "assets/digconf.lua",
+                // "--embed-file assets/mario_grassish2.png",
+                // "--embed-file assets/level1.tmx",
+
                 "--shell-file",
                 b.path("src/shell.html").getPath(b),
             });
@@ -297,10 +308,10 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
 
-    _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig");
+    // _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig");
+    _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig");
     // if(target.result.os.tag != .emscripten) {
     //     _ = example(b, target, optimize, "game_state_test", "examples/game_state_test.zig");
-    //     _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig");
     //     _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig");
     //     _ = example(b, target, optimize, "a_star_path", "examples/a_star_path.zig");
     //     _ = example(b, target, optimize, "console_test", "examples/console_test.zig");

@@ -21,17 +21,18 @@ const Shader = shaders.Shader;
 const MaxSprites = 1000;
 
 
-
+const NumVerts = 2 * 4 * MaxSprites;
+const NumIndices = 6 * MaxSprites;
 pub const SpriteBatchQueue = struct {
-    shader: *Shader = undefined,
+    shader: *Shader,
     vao: u32 = 0,
     vboVertices: u32 = 0,
     vboTexCoords: u32 = 0,
     vboIndices: u32 = 0,
-    vertices: [2 * 4 * MaxSprites]f32 = undefined,
-    texCoords: [2 * 4 * MaxSprites]f32 = undefined,
-    indices: [6 * MaxSprites]u16 = undefined,
-    allocator: std.mem.Allocator = undefined,
+    vertices: []f32 = undefined,
+    texCoords: []f32 = undefined,
+    indices: []u16 = undefined,
+    allocator: std.mem.Allocator,
 
     attrCoord: c_uint = 0,
     attrTexCoord: c_uint = 0,
@@ -42,38 +43,53 @@ pub const SpriteBatchQueue = struct {
     currIdx: usize = 0,
     currNumSprites: usize = 0,
 
-    mvpArr: [16]f32 = undefined,
+    mvpArr: [16]f32 = .{0} ** 16,
     texture: ?*Texture = null,
     begun: bool = false,
 
     pub fn init(alloc: std.mem.Allocator, shader: *Shader) !SpriteBatchQueue {
     
+        std.log.debug("SpriteBatchQueue.init\n", .{});
         var batch = SpriteBatchQueue{
             .allocator = alloc,
             .shader = shader
         };
 
+        batch.vertices = try alloc.alloc(f32, NumVerts);
+        batch.texCoords = try alloc.alloc(f32, NumVerts);
+        batch.indices = try alloc.alloc(u16, NumIndices);
+
+        std.log.debug("batch a: {p}", .{gl.genVertexArrays});
         gl.genVertexArrays(1, &batch.vao);
+        std.log.debug("batch aa.", .{});
         gl.bindVertexArray(batch.vao);
 
+        std.log.debug("batch b.", .{});
         gl.genBuffers(1, &batch.vboVertices);
         gl.bindBuffer(gl.ARRAY_BUFFER, batch.vboVertices);
-        gl.bufferData(gl.ARRAY_BUFFER, 2 * 4 * MaxSprites, &batch.vertices, gl.DYNAMIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, 2 * 4 * MaxSprites, &batch.vertices[0], gl.DYNAMIC_DRAW);
 
+        std.log.debug("batch c.", .{});
         gl.genBuffers(1, &batch.vboTexCoords);
         gl.bindBuffer(gl.ARRAY_BUFFER, batch.vboTexCoords);
-        gl.bufferData(gl.ARRAY_BUFFER, 2 * 4 * MaxSprites, &batch.texCoords, gl.DYNAMIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, 2 * 4 * MaxSprites, &batch.texCoords[0], gl.DYNAMIC_DRAW);
 
+        std.log.debug("batch d.", .{});
         gl.genBuffers(1, &batch.vboIndices);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, batch.vboIndices);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, 6 * MaxSprites, &batch.indices, gl.DYNAMIC_DRAW);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, 6 * MaxSprites, &batch.indices[0], gl.DYNAMIC_DRAW);
 
+        std.log.debug("batch e.", .{});
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-        gl.enable(gl.TEXTURE_2D);
+
+        // gl.enable(gl.TEXTURE_2D);
         
+        std.log.debug("batch f.", .{});
         batch.attrCoord = @intCast(gl.getAttribLocation(batch.shader.program, "coord3d"));
+        std.log.debug("batch g.", .{});
         batch.attrTexCoord = @intCast(gl.getAttribLocation(batch.shader.program, "texcoord"));
+        std.log.debug("batch h.", .{});
         batch.uniformMVP = @intCast(gl.getUniformLocation(batch.shader.program, "projectionMatrix"));
 
         return batch;
@@ -83,6 +99,9 @@ pub const SpriteBatchQueue = struct {
         gl.deleteBuffers(1, &self.vboVertices);
         gl.deleteBuffers(1, &self.vboTexCoords);
         gl.deleteBuffers(1, &self.vboIndices);
+        self.allocator.free(self.vertices);
+        self.allocator.free(self.texCoords);
+        self.allocator.free(self.indices);
     }
 
     pub fn begin(self: *SpriteBatchQueue, mvp: zmath.Mat) void {
@@ -245,7 +264,7 @@ pub const SpriteBatchQueue = struct {
         gl.enableVertexAttribArray(self.attrCoord);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, self.vboVertices); 
-        gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * self.currNumSprites), &self.vertices, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * self.currNumSprites), &self.vertices[0], gl.STATIC_DRAW);
         gl.vertexAttribPointer(
             self.attrCoord,
             2, // Num elems per vertex
@@ -257,7 +276,7 @@ pub const SpriteBatchQueue = struct {
 
         gl.enableVertexAttribArray(self.attrTexCoord);
         gl.bindBuffer(gl.ARRAY_BUFFER, self.vboTexCoords); 
-        gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * self.currNumSprites), &self.texCoords, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * self.currNumSprites), &self.texCoords[0], gl.STATIC_DRAW);
         gl.vertexAttribPointer(
             self.attrTexCoord,
             2, // Num elems per vertex
@@ -268,7 +287,7 @@ pub const SpriteBatchQueue = struct {
         );
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.vboIndices);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * @sizeOf(u16) * self.currNumSprites), &self.indices, gl.STATIC_DRAW);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * @sizeOf(u16) * self.currNumSprites), &self.indices[0], gl.STATIC_DRAW);
 
         gl.drawElements(gl.TRIANGLES, @intCast(6 * self.currNumSprites), gl.UNSIGNED_SHORT, null);
         gl.disableVertexAttribArray(self.attrCoord);
@@ -284,15 +303,17 @@ pub const SpriteBatchQueue = struct {
     }
 };
 
+const NumColorCoords = 4 * 4 * MaxSprites;
+
 pub const ShapeBatchQueue = struct {
     shader: *Shader = undefined,
     vao: u32 = 0,
     vboVertices: u32 = 0,
     vboColorCoords: u32 = 0,
     vboIndices: u32 = 0,
-    vertices: [2 * 4 * MaxSprites]f32 = undefined,
-    colorCoords: [4 * 4 * MaxSprites]f32 = undefined,
-    indices: [6 * MaxSprites]u16 = undefined,
+    vertices: []f32 = undefined,
+    colorCoords: []f32 = undefined,
+    indices: []u16 = undefined,
     allocator: std.mem.Allocator = undefined,
 
     attrCoord: c_uint = 0,
@@ -313,20 +334,24 @@ pub const ShapeBatchQueue = struct {
             .shader = shader,
         };
 
+        batch.vertices = try alloc.alloc(f32, NumVerts);
+        batch.colorCoords = try alloc.alloc(f32, NumColorCoords);
+        batch.indices = try alloc.alloc(u16, NumIndices);
+
         gl.genVertexArrays(1, &batch.vao);
         gl.bindVertexArray(batch.vao);
 
         gl.genBuffers(1, &batch.vboVertices);
         gl.bindBuffer(gl.ARRAY_BUFFER, batch.vboVertices);
-        gl.bufferData(gl.ARRAY_BUFFER, 2 * 4 * MaxSprites, &batch.vertices, gl.DYNAMIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, @sizeOf(f32) * NumVerts, &batch.vertices[0], gl.DYNAMIC_DRAW);
 
         gl.genBuffers(1, &batch.vboColorCoords);
         gl.bindBuffer(gl.ARRAY_BUFFER, batch.vboColorCoords);
-        gl.bufferData(gl.ARRAY_BUFFER, 4 * 4 * MaxSprites, &batch.colorCoords, gl.DYNAMIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, @sizeOf(f32)*NumColorCoords, &batch.colorCoords[0], gl.DYNAMIC_DRAW);
 
         gl.genBuffers(1, &batch.vboIndices);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, batch.vboIndices);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, 6 * MaxSprites, &batch.indices, gl.DYNAMIC_DRAW);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, NumIndices * @sizeOf(u16), &batch.indices[0], gl.DYNAMIC_DRAW);
 
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -343,6 +368,9 @@ pub const ShapeBatchQueue = struct {
         gl.deleteBuffers(1, &self.vboVertices);
         gl.deleteBuffers(1, &self.vboColorCoords);
         gl.deleteBuffers(1, &self.vboIndices);
+        self.allocator.free(self.vertices);
+        self.allocator.free(self.colorCoords);
+        self.allocator.free(self.indices);
     }
 
     pub fn begin(self: *ShapeBatchQueue, mvp: zmath.Mat) void {
@@ -509,7 +537,7 @@ pub const ShapeBatchQueue = struct {
         gl.enableVertexAttribArray(self.attrCoord);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, self.vboVertices); 
-        gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * self.currNumSprites), &self.vertices, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * self.currNumSprites), &self.vertices[0], gl.STATIC_DRAW);
         gl.vertexAttribPointer(
             self.attrCoord,
             2, // Num elems per vertex
@@ -521,7 +549,7 @@ pub const ShapeBatchQueue = struct {
 
         gl.enableVertexAttribArray(self.attrColor);
         gl.bindBuffer(gl.ARRAY_BUFFER, self.vboColorCoords); 
-        gl.bufferData(gl.ARRAY_BUFFER, @intCast(4 * 4 * @sizeOf(f32) * self.currNumSprites), &self.colorCoords, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, @intCast(4 * 4 * @sizeOf(f32) * self.currNumSprites), &self.colorCoords[0], gl.STATIC_DRAW);
         gl.vertexAttribPointer(
             self.attrColor,
             4, // Num elems per vertex
@@ -532,7 +560,7 @@ pub const ShapeBatchQueue = struct {
         );
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.vboIndices);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * @sizeOf(u16) * self.currNumSprites), &self.indices, gl.STATIC_DRAW);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * @sizeOf(u16) * self.currNumSprites), &self.indices[0], gl.STATIC_DRAW);
 
         gl.drawElements(gl.TRIANGLES, @intCast(6 * self.currNumSprites), gl.UNSIGNED_SHORT, null);
         gl.disableVertexAttribArray(self.attrCoord);
@@ -742,25 +770,36 @@ pub fn Renderer(opts: RendererOptions) type {
         pub fn init(alloc: std.mem.Allocator, initOpts: RendererInitOpts) !@This() {
             var rend = try alloc.create(Impl);
 
+            std.log.info("Setting up basic texture shaders for sprites.\n", .{});
             rend.texShader = try Shader.init(
                 &shaders.TexVertexShader,
                 &shaders.TexPixelShader
             );
 
+            std.log.info("Setting up {} sprite batch queues.", .{opts.numSpriteTextures});
             for(0..opts.numSpriteTextures) |idx| {
-                rend.batches[idx] = try SpriteBatchQueue.init(alloc, &rend.texShader);
+                std.log.debug("SpriteBatchQueue creating: {}", .{idx});
+                const sbq = try SpriteBatchQueue.init(alloc, &rend.texShader);
+                std.log.debug("SpriteBatchQueue created.", .{});
+                rend.batches[idx] = sbq;
             }
 
             if(opts.shapeRendering) {
+                std.log.info("Setting up shaders for shape renderering.\n", .{});
                 rend.colorShader = try shaders.Shader.init(
                     &shaders.ColorVertexShader,
                     &shaders.ColorPixelShader
                 );
-
+                std.log.debug("ShapeQueue dummy create", .{});
+                const t = ShapeBatchQueue{};
+                _ = t;
+                std.log.debug("ShapeQueue init call.", .{});
                 rend.shapes = try ShapeBatchQueue.init(alloc, &rend.colorShader);
             }
 
+
             if(opts.textRenderering) {
+                std.log.info("Setting up text renderering.\n", .{});
                 std.debug.assert(initOpts.fontFace != null);
                 rend.text = try TextRenderer.init(initOpts.fontFace.?, alloc);
             }

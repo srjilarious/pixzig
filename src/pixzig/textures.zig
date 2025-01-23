@@ -216,31 +216,25 @@ pub const TextureManager = struct {
     // TODO: Add error handler.
     pub fn loadTexture(self: *TextureManager, name: []const u8, file_path: []const u8) !*Texture 
     {
-        std.debug.print("Loading image '{s}' from '{s}'\n", .{name, file_path});
+        std.log.info("Loading image '{s}' from '{s}'\n", .{name, file_path});
 
         // Convert our string slice to a null terminated string
-        std.debug.print("allocing.\n", .{});
         var nt_str = self.allocator.alloc(u8, file_path.len + 1) catch |err| {
-            std.debug.print("Caught error! {}", .{err});
+            std.log.err("Caught error! {}", .{err});
             return err;
         };
 
         defer self.allocator.free(nt_str);
-        std.debug.print("About to copy..\n", .{});
 
         @memcpy(nt_str[0..file_path.len], file_path);
-        std.debug.print("copied..\n", .{});
         nt_str[file_path.len] = 0;
-        std.debug.print("nulled..\n", .{});
         const nt_file_path = nt_str[0..file_path.len :0];
-        std.debug.print("nt slice made...\n", .{});
 
         // Try to load an image
-        std.debug.print("stbi image loading...\n", .{});
         var image = try stbi.Image.loadFromFile(nt_file_path, 0);
         defer image.deinit();
 
-        std.debug.print("Loaded image '{s}', width={}, height={}\n", .{ name, image.width, image.height });
+        std.log.info("Loaded image '{s}', width={}, height={}\n", .{ name, image.width, image.height });
 
         return try self.loadTextureFromBuffer(name, image.width, image.height, image.data);
     }

@@ -16,7 +16,6 @@ const EngOptions = pixzig.PixzigEngineOptions;
 const FpsCounter = pixzig.utils.FpsCounter;
 
 pub const panic = pixzig.panic;
-
 pub const std_options = std.Options{
     .logFn = pixzig.log,
 };

@@ -1,5 +1,6 @@
 // zig fmt: off
 const std = @import("std");
+const builtin = @import("builtin");
 const zgui = @import("zgui");
 const glfw = @import("zglfw");
 const gl = @import("zopengl").bindings;
@@ -21,6 +22,12 @@ const FpsCounter = pixzig.utils.FpsCounter;
 
 const Renderer = pixzig.renderer.Renderer(.{});
 
+pub const panic = pixzig.panic;
+pub const std_options = std.Options{
+    .logFn = pixzig.log,
+};
+
+
 pub const App = struct {
     allocator: std.mem.Allocator,
     projMat: zmath.Mat,
@@ -37,6 +44,10 @@ pub const App = struct {
     pub fn init(eng: *pixzig.PixzigEngine, alloc: std.mem.Allocator) !App {
         // Orthographic projection matrix
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
+
+        const tst = try alloc.alloc(u8, 100);
+        @memset(tst, 123);
+        std.log.info("filled buffer", .{});
 
         std.debug.print("Loading texture...\n", .{});
         const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
@@ -114,7 +125,9 @@ pub const App = struct {
 
     pub fn render(self: *App, eng: *pixzig.PixzigEngine) void {
         _ = eng;
-        gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
+        // gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
+        gl.clearColor(0, 0, 0.2, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
         self.fps.renderTick();
        
         self.renderer.begin(self.projMat);
@@ -140,29 +153,47 @@ pub const App = struct {
     }
 };
 
+const AppRunner =  pixzig.PixzigApp(App);
+var g_AppRunner = AppRunner{};
+var g_Eng: pixzig.PixzigEngine = undefined;
+var g_App: App = undefined;
+
+export fn mainLoop() void {
+    _ = g_AppRunner.gameLoopCore(&g_App, &g_Eng);
+}
+
 pub fn main() !void {
 
     std.log.info("Pixzig Sprite and Shape test!", .{});
 
-    var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
-    defer _ = gpa_state.deinit();
-    const gpa = gpa_state.allocator();
+    // var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
+    // const gpa = gpa_state.allocator();
 
-    var eng = try pixzig.PixzigEngine.init("Pixzig: Tile Render Test.", gpa, EngOptions{});
-    std.debug.print("Pixzig engine initialized..\n", .{});
+    g_Eng = try pixzig.PixzigEngine.init("Pixzig: Tile Render Test.", std.heap.c_allocator, EngOptions{});
+    std.log.info("Pixzig engine initialized..\n", .{});
 
-    defer eng.deinit();
+    const f = std.fs.cwd().openFile("assets/digconf.lua", .{}) catch |err| {
+        std.log.err("ERROR: {}", .{err});
+        return;
+    };
+    defer f.close();
 
-    const AppRunner = pixzig.PixzigApp(App);
     std.debug.print("Initializing app.\n", .{});
-    var app = try App.init(&eng, gpa);
+    g_App = try App.init(&g_Eng, std.heap.c_allocator);
 
     glfw.swapInterval(0);
 
     std.debug.print("Starting main loop...\n", .{});
-    AppRunner.gameLoop(&app, &eng);
-
-    std.debug.print("Cleaning up...\n", .{});
-    app.deinit();
+    if(builtin.target.os.tag == .emscripten) {
+        pixzig.setMainLoop(mainLoop, null, false);
+        std.log.debug("Set main loop.\n", .{});
+    }
+    else {
+        g_AppRunner.gameLoop(&g_App, &g_Eng);
+        std.log.info("Cleaning up...\n", .{});
+        g_Eng.deinit();
+        g_App.deinit();
+        // _ = gpa_state.deinit();
+    }
 }
 

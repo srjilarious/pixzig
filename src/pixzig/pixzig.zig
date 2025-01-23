@@ -6,6 +6,7 @@ const glfw = @import("zglfw");
 const stbi = @import("zstbi");
 
 const zopengl = @import("zopengl");
+const gl = zopengl.bindings;
 
 const zgui = @import("zgui");
 
@@ -202,11 +203,17 @@ pub const PixzigEngine = struct {
 
         if(builtin.target.os.tag == .emscripten) {
             try zopengl.loadEsProfile(glfw.getProcAddress, gl_major, gl_minor);
+            try zopengl.loadEsExtension(glfw.getProcAddress, .OES_vertex_array_object);
         } else {
             try zopengl.loadCoreProfile(glfw.getProcAddress, gl_major, gl_minor);
         }
         
-        
+        const glVersion = gl.getString(gl.VERSION);
+        const glslVersion = gl.getString(gl.SHADING_LANGUAGE_VERSION);
+
+        std.log.info("GL Version: {s}", .{glVersion});
+        std.log.info("GLSL Version: {s}", .{glslVersion});
+
         const scale_factor = scale_factor: {
             const scale = window.getContentScale();
             break :scale_factor @max(scale[0], scale[1]);
