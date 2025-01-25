@@ -42,6 +42,7 @@ pub const App = struct {
     colorRects: [3]Color,
 
     pub fn init(eng: *pixzig.PixzigEngine, alloc: std.mem.Allocator) !App {
+        std.log.info("GLFW Sprites init w/ vendored lua!!", .{});
         // Orthographic projection matrix
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
 
@@ -49,12 +50,11 @@ pub const App = struct {
         @memset(tst, 123);
         std.log.info("filled buffer", .{});
 
-        std.debug.print("Loading texture...\n", .{});
+        std.log.debug("Loading texture...\n", .{});
         const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
 
-        std.debug.print("Creating renderer.\n", .{});
+        std.log.debug("Creating renderer.\n", .{});
         const renderer = try Renderer.init(alloc, .{});
-        std.debug.print("Done creating tile renderering data.\n", .{});
 
         return .{
             .allocator = alloc,
@@ -96,14 +96,14 @@ pub const App = struct {
 
     pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {
         if(self.fps.update(delta)) {
-            std.debug.print("FPS: {}\n", .{self.fps.fps()});
+            std.log.debug("FPS: {}\n", .{self.fps.fps()});
         }
 
         eng.keyboard.update();
 
-        if (eng.keyboard.pressed(.one)) std.debug.print("one!\n", .{});
-        if (eng.keyboard.pressed(.two)) std.debug.print("two!\n", .{});
-        if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
+        if (eng.keyboard.pressed(.one)) std.log.info("one!\n", .{});
+        if (eng.keyboard.pressed(.two)) std.log.info("two!\n", .{});
+        if (eng.keyboard.pressed(.three)) std.log.info("three!\n", .{});
         const ScrollAmount = 3;
         if (eng.keyboard.down(.left)) {
             self.scrollOffset.x += ScrollAmount;

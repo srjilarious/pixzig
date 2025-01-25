@@ -19,7 +19,7 @@ pub const Console = struct {
     scriptEng: *ScriptEngine,
     history: std.ArrayList([]u8),
     historyIndex: i32,
-    log: std.ArrayList([]u8),
+    logBuffer: std.ArrayList([]u8),
     opts: ConsoleOpts,
     enabled: bool,
     shouldFocus: bool,
@@ -33,7 +33,7 @@ pub const Console = struct {
             .scriptEng = scriptEng,
             .history = std.ArrayList([]u8).init(alloc),
             .historyIndex = -1,
-            .log = std.ArrayList([]u8).init(alloc),
+            .logBuffer = std.ArrayList([]u8).init(alloc),
             .opts = opts,
             .enabled = true,
             .shouldFocus = true,
@@ -78,12 +78,12 @@ pub const Console = struct {
 
         self.history.deinit();
 
-        for (self.log.items) |entry| {
+        for (self.logBuffer.items) |entry| {
             // Free the log entries we allocated in our log func.
             self.alloc.free(entry);
         }
 
-        self.log.deinit();
+        self.logBuffer.deinit();
         self.alloc.free(self.inputBuffer);
         self.alloc.free(self.storedCommandBuffer);
         self.alloc.destroy(self);
@@ -121,7 +121,7 @@ pub const Console = struct {
             @memcpy(new_msg, msg);
         }
 
-        try self.log.append(new_msg);
+        try self.logBuffer.append(new_msg);
     }
 
     fn log(lua: *Lua) i32 {
@@ -188,9 +188,9 @@ pub const Console = struct {
                 .window_flags = .{ .always_vertical_scrollbar = true }
             });
             
-            for(0..self.log.items.len) |idx| {
+            for(0..self.logBuffer.items.len) |idx| {
                 zgui.pushIntId(@intCast(idx));
-                zgui.textWrapped("{s}", .{self.log.items[idx]});
+                zgui.textWrapped("{s}", .{self.logBuffer.items[idx]});
                 zgui.popId();
             }
 

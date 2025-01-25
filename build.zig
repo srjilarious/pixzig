@@ -23,7 +23,7 @@ fn addArchIncludes(b: *std.Build,
 
             var dir = std.fs.openDirAbsolute(cache_include, std.fs.Dir.OpenDirOptions{ .access_sub_paths = true, .no_follow = true }) catch @panic("No emscripten cache. Generate it!");
             dir.close();
-            dep.addAfterIncludePath(.{ .cwd_relative = cache_include });
+            dep.addIncludePath(.{ .cwd_relative = cache_include });
         },
         else => {}
     }
@@ -57,18 +57,12 @@ pub fn example(b: *std.Build,
     try addArchIncludes(b, target, optimize, exe);
 
     // Build it
-    // const system_sdk_pkg = system_sdk.package(b, target, optimize, .{});
     const zglfw = b.dependency("zglfw", .{ .target = target });
-    const glfw_dep = zglfw.artifact("glfw");
-    try addArchIncludes(b, target, optimize, glfw_dep);
+    const zopengl = b.dependency("zopengl", .{ .target = target });
 
     const zflecs = b.dependency("zflecs", .{ .target = target });
     const flecs_dep = zflecs.artifact("flecs");
     try addArchIncludes(b, target, optimize, flecs_dep);
-
-    const zopengl = b.dependency("zopengl", .{ .target = target });
-    // const opengl_dep = zopengl.artifact("opengl");
-    // try addArchIncludes(b, target, optimize, opengl_dep);
 
     const zstbi = b.dependency("zstbi", .{ .target = target });
     const stbi_dep = zstbi.artifact("zstbi");
@@ -100,8 +94,11 @@ pub fn example(b: *std.Build,
 
     const ziglua = b.dependency("ziglua", .{
         .target = target,
-        .optimize = optimize,
+        .optimize = optimize
     });
+    ziglua.module("ziglua").addIncludePath(.{.cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include"});
+    // ziglua.module("ziglua-c").addIncludePath(.{.cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include"});
+
     const lua_dep = ziglua.artifact("lua");
     try addArchIncludes(b, target, optimize, lua_dep);
 
@@ -130,7 +127,8 @@ pub fn example(b: *std.Build,
         // Link with your app
     
         exe.linkLibrary(flecs_dep);
-        exe.linkLibrary(glfw_dep);
+        // exe.linkLibrary(glfw_dep);
+        exe.linkLibrary(lua_dep);
         exe.linkLibrary(gui_dep);
         exe.linkLibrary(stbi_dep);
         exe.linkLibrary(freetype_dep);
@@ -186,6 +184,11 @@ pub fn example(b: *std.Build,
 
     exe.root_module.addImport("pixzig", pixeng);
 
+    std.debug.print("Steps: {}\n", .{exe.step.dependencies.items.len});
+    for(exe.step.dependencies.items, 0..) |step, idx| {
+        std.debug.print("Step {}: {s}\n", .{idx, step.name});
+    }
+        
     const install_content_step = b.addInstallDirectory(.{
         .source_dir = b.path(assets_dir),
         .install_dir = .{ .custom = "" },

@@ -9,7 +9,7 @@ const Vec2F = common.Vec2F;
 const NumKeys = comp.numEnumFields(glfw.Key);
 
 fn getIndexForKey(key: glfw.Key) usize {
-   const enumTypeInfo = @typeInfo(glfw.Key).Enum;
+   const enumTypeInfo = @typeInfo(glfw.Key).@"enum";
     comptime var keyIdx: usize = 0;
     inline for (enumTypeInfo.fields) |field| {
         const fieldKey = @field(glfw.Key, field.name);
@@ -85,7 +85,7 @@ pub const Keyboard = struct {
        
 
         // Update the current keys
-        const enumTypeInfo = @typeInfo(glfw.Key).Enum;
+        const enumTypeInfo = @typeInfo(glfw.Key).@"enum";
         comptime var keyIdx = 0;
         inline for (enumTypeInfo.fields) |field| {
             const enumValue = @field(glfw.Key, field.name);
