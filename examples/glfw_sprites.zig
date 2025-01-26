@@ -22,11 +22,10 @@ const FpsCounter = pixzig.utils.FpsCounter;
 
 const Renderer = pixzig.renderer.Renderer(.{});
 
-pub const panic = pixzig.panic;
+pub const panic = pixzig.web.panic;
 pub const std_options = std.Options{
-    .logFn = pixzig.log,
+    .logFn = pixzig.web.log,
 };
-
 
 pub const App = struct {
     allocator: std.mem.Allocator,
@@ -185,14 +184,14 @@ pub fn main() !void {
 
     std.debug.print("Starting main loop...\n", .{});
     if(builtin.target.os.tag == .emscripten) {
-        pixzig.setMainLoop(mainLoop, null, false);
+        pixzig.web.setMainLoop(mainLoop, null, false);
         std.log.debug("Set main loop.\n", .{});
     }
     else {
         g_AppRunner.gameLoop(&g_App, &g_Eng);
         std.log.info("Cleaning up...\n", .{});
-        g_Eng.deinit();
         g_App.deinit();
+        g_Eng.deinit();
         // _ = gpa_state.deinit();
     }
 }

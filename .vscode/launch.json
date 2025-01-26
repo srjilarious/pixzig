@@ -21,6 +21,16 @@
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal"
     },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug GLFW Sprites",
+      "program": "${workspaceFolder}/zig-out/bin/glfw_sprites",
+      "preLaunchTask": "build",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
     // {
     //   "type": "zig",
     //   "request": "launch",

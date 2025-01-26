@@ -39,58 +39,7 @@ pub const PixzigEngineOptions = struct {
     windowSize: Vec2I = .{ .x = 800, .y = 600 },
 };
 
-extern fn emscripten_err([*c]const u8) void;
-extern fn emscripten_console_error([*c]const u8) void;
-extern fn emscripten_console_warn([*c]const u8) void;
-extern fn emscripten_console_log([*c]const u8) void;
-
-pub const MainLoopCallback = *const fn () callconv(.C) void;
-extern fn emscripten_set_main_loop(MainLoopCallback, c_int, c_int) void;
-pub fn setMainLoop(cb: MainLoopCallback, maybe_fps: ?i16, simulate_infinite_loop: bool) void {
-    std.debug.print("Setting main loop internal.\n", .{});
-    emscripten_set_main_loop(cb, if (maybe_fps) |fps| fps else -1, @intFromBool(simulate_infinite_loop));
-}
-
-/// std.panic impl
-pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_addr: ?usize) noreturn {
-    _ = error_return_trace;
-    _ = ret_addr;
-
-    var buf: [1024]u8 = undefined;
-    const error_msg: [:0]u8 = std.fmt.bufPrintZ(&buf, "PANIC! {s}", .{msg}) catch unreachable;
-    emscripten_err(error_msg.ptr);
-
-    while (true) {
-        @breakpoint();
-    }
-}
-
-/// std.log impl
-pub fn log(
-    comptime level: std.log.Level,
-    comptime scope: @TypeOf(.EnumLiteral),
-    comptime format: []const u8,
-    args: anytype,
-) void {
-    const level_txt = comptime level.asText();
-    const prefix2 = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
-    const prefix = level_txt ++ prefix2;
-
-    var buf: [1024]u8 = undefined;
-    const msg = std.fmt.bufPrintZ(buf[0 .. buf.len - 1], prefix ++ format, args) catch |err| {
-        switch (err) {
-            error.NoSpaceLeft => {
-                emscripten_console_error("log message too long, skipped.");
-                return;
-            },
-        }
-    };
-    switch (level) {
-        .err => emscripten_console_error(@ptrCast(msg.ptr)),
-        .warn => emscripten_console_warn(@ptrCast(msg.ptr)),
-        else => emscripten_console_log(@ptrCast(msg.ptr)),
-    }
-}
+pub const web = if(builtin.os.tag == .emscripten) @import("./web.zig") else {};
 
 pub fn PixzigApp(comptime T: type) type {
     const AppStruct = struct {
@@ -163,19 +112,18 @@ pub const PixzigEngine = struct {
 
         std.debug.print("GLFW initialized.\n", .{});
 
-        const gl_minor = 0;
-        const gl_major = blk: {
+        const gl_major, const gl_minor = blk: {
             if(builtin.target.os.tag == .emscripten) {
-                break :blk 2;
+                break :blk .{2, 0};
             }
             else {
-                break :blk 4;
+                break :blk .{4, 5};
             }
         };
 
         glfw.windowHint(.context_version_major, gl_major);
         glfw.windowHint(.context_version_minor, gl_minor);
-
+        
         glfw.windowHint(.opengl_profile, .opengl_core_profile);
         glfw.windowHint(.opengl_forward_compat, true);
         glfw.windowHint(.client_api, .opengl_api);

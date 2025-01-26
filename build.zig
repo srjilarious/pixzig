@@ -58,6 +58,7 @@ pub fn example(b: *std.Build,
 
     // Build it
     const zglfw = b.dependency("zglfw", .{ .target = target });
+    
     const zopengl = b.dependency("zopengl", .{ .target = target });
 
     const zflecs = b.dependency("zflecs", .{ .target = target });
@@ -109,36 +110,36 @@ pub fn example(b: *std.Build,
     });
 
     if(target.result.os.tag != .emscripten) {
+        const glfw_dep = zglfw.artifact("glfw");
+        
         // Use mach-freetype
-        const freetype = b.dependency("freetype", .{ 
-                .target = target, 
-                .optimize = optimize, 
-                .enable_brotli=false
-            });
-        const freetype_dep = freetype.artifact("freetype");
-        try addArchIncludes(b, target, optimize, freetype_dep);
+        // const freetype = b.dependency("freetype", .{ 
+        //         .target = target, 
+        //         .optimize = optimize, 
+        //         .enable_brotli=false
+        //     });
+        // const freetype_dep = freetype.artifact("freetype");
+        // try addArchIncludes(b, target, optimize, freetype_dep);
 
-        const mach_freetype = b.dependency("mach_freetype", .{
-            .target = target,
-            .optimize = optimize,
-            .enable_brotli = false,
-        });
+        // const mach_freetype = b.dependency("mach_freetype", .{
+        //     .target = target,
+        //     .optimize = optimize,
+        //     .enable_brotli = false,
+        // });
     
         // Link with your app
     
         exe.linkLibrary(flecs_dep);
-        // exe.linkLibrary(glfw_dep);
+        exe.linkLibrary(glfw_dep);
         exe.linkLibrary(lua_dep);
         exe.linkLibrary(gui_dep);
         exe.linkLibrary(stbi_dep);
-        exe.linkLibrary(freetype_dep);
+        // exe.linkLibrary(freetype_dep);
 
-        const freetype_mod = mach_freetype.module("mach-freetype");
-        exe.root_module.addImport("freetype",freetype_mod);
-        pixeng.addImport("freetype", freetype_mod);
+        // const freetype_mod = mach_freetype.module("mach-freetype");
+        // exe.root_module.addImport("freetype",freetype_mod);
+        // pixeng.addImport("freetype", freetype_mod);
     }
-
-    
 
 
     // Use GLFW for GL context, windowing, input, etc.

@@ -14,10 +14,10 @@
         // .freetype = .{
         //     .path = "libs/freetype",
         // },
-        .mach_freetype = .{
-            .url = "https://github.com/hexops/mach-freetype/archive/30795dccf1c7b6d37c59a90e8c1847474c3fb33b.tar.gz",
-            .hash = "12209b2055d213076fa0476de11c5eae1ad5b6fb91789e6bf218686b8f5f4a4114de",
-        },
+        // .mach_freetype = .{
+        //     .url = "https://github.com/hexops/mach-freetype/archive/30795dccf1c7b6d37c59a90e8c1847474c3fb33b.tar.gz",
+        //     .hash = "12209b2055d213076fa0476de11c5eae1ad5b6fb91789e6bf218686b8f5f4a4114de",
+        // },
         // Using a random commit with a fix for latest zig version 0.14.0-dev.2596
         .ziglua = .{
             .path = "libs/ziglua",
