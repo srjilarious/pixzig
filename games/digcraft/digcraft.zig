@@ -99,7 +99,7 @@ pub const App = struct {
         try map.tilesets.append(tileset);
         map.layers.items[0].tileset = &map.tilesets.items[0];
 
-        var mapRender = try tile.TileMapRenderer.init(std.heap.page_allocator, texShader);
+        var mapRender = try tile.TileMapRenderer.init(alloc, texShader);
 
         // Create some tiles for the tile set
         const DirtIdx = 0;

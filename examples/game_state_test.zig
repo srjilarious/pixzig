@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const zgui = @import("zgui");
 const glfw = @import("zglfw");
 const gl = @import("zopengl").bindings;
@@ -111,26 +112,43 @@ pub const MyApp = struct {
     }
 };
 
+const AppRunner = pixzig.PixzigApp(MyApp);
+var g_AppRunner = AppRunner{};
+var g_Eng: pixzig.PixzigEngine = undefined;
+var g_App: MyApp = undefined;
+
+export fn mainLoop() void {
+    _ = g_AppRunner.gameLoopCore(&g_App, &g_Eng);
+}
+
 pub fn main() !void {
-    var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa_state.deinit();
-    const gpa = gpa_state.allocator();
+    std.log.info("Pixzig Sprite and Shape test!", .{});
 
-    var eng = try pixzig.PixzigEngine.init("Glfw Eng Test.", gpa, EngOptions{});
-    defer eng.deinit();
+    // var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
+    // const gpa = gpa_state.allocator();
 
-    const AppRunner = pixzig.PixzigApp(MyApp);
+    g_Eng = try pixzig.PixzigEngine.init("Pixzig: Tile Render Test.", std.heap.c_allocator, EngOptions{});
+    std.log.info("Pixzig engine initialized..\n", .{});
+
+    std.debug.print("Initializing app.\n", .{});
 
     var StateAInst = StateA{};
     var ParamStateInst = ParamState{};
     var statesArr = [_]*anyopaque{ &StateAInst, &ParamStateInst };
     const states: []*anyopaque = statesArr[0..2];
-    var app = MyApp.init(states);
+    g_App = MyApp.init(states);
 
-    glfw.swapInterval(50);
+    glfw.swapInterval(0);
 
     std.debug.print("Starting main loop...\n", .{});
-    AppRunner.gameLoop(&app, &eng);
-
-    std.debug.print("Cleaning up...\n", .{});
+    if (builtin.target.os.tag == .emscripten) {
+        pixzig.web.setMainLoop(mainLoop, null, false);
+        std.log.debug("Set main loop.\n", .{});
+    } else {
+        g_AppRunner.gameLoop(&g_App, &g_Eng);
+        std.log.info("Cleaning up...\n", .{});
+        // g_App.deinit();
+        g_Eng.deinit();
+        // _ = gpa_state.deinit();
+    }
 }

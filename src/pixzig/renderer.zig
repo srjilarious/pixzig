@@ -49,7 +49,6 @@ pub const SpriteBatchQueue = struct {
 
     pub fn init(alloc: std.mem.Allocator, shader: *Shader) !SpriteBatchQueue {
     
-        std.log.debug("SpriteBatchQueue.init\n", .{});
         var batch = SpriteBatchQueue{
             .allocator = alloc,
             .shader = shader
@@ -59,37 +58,28 @@ pub const SpriteBatchQueue = struct {
         batch.texCoords = try alloc.alloc(f32, NumVerts);
         batch.indices = try alloc.alloc(u16, NumIndices);
 
-        std.log.debug("batch a: {p}", .{gl.genVertexArrays});
         gl.genVertexArrays(1, &batch.vao);
-        std.log.debug("batch aa.", .{});
         gl.bindVertexArray(batch.vao);
 
-        std.log.debug("batch b.", .{});
         gl.genBuffers(1, &batch.vboVertices);
         gl.bindBuffer(gl.ARRAY_BUFFER, batch.vboVertices);
         gl.bufferData(gl.ARRAY_BUFFER, 2 * 4 * MaxSprites, &batch.vertices[0], gl.DYNAMIC_DRAW);
 
-        std.log.debug("batch c.", .{});
         gl.genBuffers(1, &batch.vboTexCoords);
         gl.bindBuffer(gl.ARRAY_BUFFER, batch.vboTexCoords);
         gl.bufferData(gl.ARRAY_BUFFER, 2 * 4 * MaxSprites, &batch.texCoords[0], gl.DYNAMIC_DRAW);
 
-        std.log.debug("batch d.", .{});
         gl.genBuffers(1, &batch.vboIndices);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, batch.vboIndices);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, 6 * MaxSprites, &batch.indices[0], gl.DYNAMIC_DRAW);
 
-        std.log.debug("batch e.", .{});
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-        // gl.enable(gl.TEXTURE_2D);
+        gl.enable(gl.TEXTURE_2D);
         
-        std.log.debug("batch f.", .{});
         batch.attrCoord = @intCast(gl.getAttribLocation(batch.shader.program, "coord3d"));
-        std.log.debug("batch g.", .{});
         batch.attrTexCoord = @intCast(gl.getAttribLocation(batch.shader.program, "texcoord"));
-        std.log.debug("batch h.", .{});
         batch.uniformMVP = @intCast(gl.getUniformLocation(batch.shader.program, "projectionMatrix"));
 
         return batch;
@@ -770,7 +760,6 @@ pub fn Renderer(opts: RendererOptions) type {
         pub fn init(alloc: std.mem.Allocator, initOpts: RendererInitOpts) !@This() {
             var rend = try alloc.create(Impl);
 
-            std.log.info("Setting up basic texture shaders for sprites.\n", .{});
             rend.texShader = try Shader.init(
                 &shaders.TexVertexShader,
                 &shaders.TexPixelShader
@@ -780,20 +769,16 @@ pub fn Renderer(opts: RendererOptions) type {
             for(0..opts.numSpriteTextures) |idx| {
                 std.log.debug("SpriteBatchQueue creating: {}", .{idx});
                 const sbq = try SpriteBatchQueue.init(alloc, &rend.texShader);
-                std.log.debug("SpriteBatchQueue created.", .{});
                 rend.batches[idx] = sbq;
             }
 
             if(opts.shapeRendering) {
-                std.log.info("Setting up shaders for shape renderering.\n", .{});
+                std.log.info("Setting up shaders for shape renderering.", .{});
                 rend.colorShader = try shaders.Shader.init(
                     &shaders.ColorVertexShader,
                     &shaders.ColorPixelShader
                 );
-                std.log.debug("ShapeQueue dummy create", .{});
-                const t = ShapeBatchQueue{};
-                _ = t;
-                std.log.debug("ShapeQueue init call.", .{});
+                
                 rend.shapes = try ShapeBatchQueue.init(alloc, &rend.colorShader);
             }
 

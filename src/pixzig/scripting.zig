@@ -7,7 +7,7 @@ const LuaFunc = fn (*Lua) i32;
 pub const ScriptEngine = struct {
     lua: *Lua,
 
-    pub fn init(allocator: *const std.mem.Allocator) !ScriptEngine {
+    pub fn init(allocator: std.mem.Allocator) !ScriptEngine {
         var lua = try Lua.init(allocator);
         lua.openLibs();
         return .{ .lua = lua };

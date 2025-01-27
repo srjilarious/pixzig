@@ -22,10 +22,10 @@ const FpsCounter = pixzig.utils.FpsCounter;
 
 const Renderer = pixzig.renderer.Renderer(.{});
 
-pub const panic = pixzig.web.panic;
-pub const std_options = std.Options{
-    .logFn = pixzig.web.log,
-};
+// pub const panic = pixzig.web.panic;
+// pub const std_options = std.Options{
+//     .logFn = pixzig.web.log,
+// };
 
 pub const App = struct {
     allocator: std.mem.Allocator,
@@ -170,12 +170,6 @@ pub fn main() !void {
 
     g_Eng = try pixzig.PixzigEngine.init("Pixzig: Tile Render Test.", std.heap.c_allocator, EngOptions{});
     std.log.info("Pixzig engine initialized..\n", .{});
-
-    const f = std.fs.cwd().openFile("assets/digconf.lua", .{}) catch |err| {
-        std.log.err("ERROR: {}", .{err});
-        return;
-    };
-    defer f.close();
 
     std.debug.print("Initializing app.\n", .{});
     g_App = try App.init(&g_Eng, std.heap.c_allocator);

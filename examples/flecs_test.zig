@@ -1,5 +1,7 @@
 // zig fmt: off
 const std = @import("std");
+const builtin = @import("builtin");
+
 const zgui = @import("zgui");
 const glfw = @import("zglfw");
 const gl = @import("zopengl").bindings;
@@ -20,6 +22,12 @@ const Frame = pixzig.sprites.Frame;
 const Vec2F = pixzig.common.Vec2F;
 const FpsCounter = pixzig.utils.FpsCounter;
 const Sprite = pixzig.sprites.Sprite;
+
+pub const panic = pixzig.web.panic;
+pub const std_options = std.Options{
+    .logFn = pixzig.web.log,
+};
+
 
 pub const Player = struct{
     alive: bool
@@ -53,7 +61,7 @@ pub const App = struct {
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
         const bigtex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
        
-        const tex = try eng.textures.addSubTexture(bigtex, "guy", RectF.fromCoords(32, 32, 32, 32, 512, 512));
+        const tex = try eng.textures.addSubTexture(bigtex, "guy", RectF.fromCoords(192, 64, 32, 32, 512, 512));
         const renderer = try Renderer.init(alloc, .{});
 
         const world = flecs.init();
@@ -64,20 +72,16 @@ pub const App = struct {
         flecs.COMPONENT(world, DebugOutline);
 
         const update_query = try flecs.query_init(world, &.{
-            .filter = .{
                 .terms = [_]flecs.term_t{
                     .{ .id = flecs.id(Sprite) },
                     .{ .id = flecs.id(Velocity) },
-                } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 2),
-            },
+                } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_COUNT_MAX - 2),
         });
 
         const query = try flecs.query_init(world, &.{
-            .filter = .{
-                .terms = [_]flecs.term_t{
-                    .{ .id = flecs.id(Sprite) },
-                } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 1),
-            },
+            .terms = [_]flecs.term_t{
+                .{ .id = flecs.id(Sprite) },
+            } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_COUNT_MAX - 1),
         });
 
 
@@ -94,10 +98,12 @@ pub const App = struct {
             .draw_query = query,
         };
 
-        app.spawn(1, 10, 50, true);
-        app.spawn(6, 300, 210, false);
-        app.spawn(11, 15, 320, false);
-        app.spawn(23, 150, 480, true);
+        for(0..50) |_| {
+            app.spawn(1, 10, 50, true);
+        }
+        // app.spawn(6, 300, 210, false);
+        // app.spawn(11, 15, 320, false);
+        // app.spawn(23, 150, 480, true);
 
         return app;
     }
@@ -122,7 +128,7 @@ pub const App = struct {
         spr.setPos(x, y);
         _ = flecs.set(self.world, ent, Sprite, spr);
 
-        var prng = std.rand.DefaultPrng.init(blk: {
+        var prng = std.Random.DefaultPrng.init(blk: {
             var seed: u64 = undefined;
             std.posix.getrandom(std.mem.asBytes(&seed)) catch unreachable;
             break :blk seed;
@@ -173,8 +179,8 @@ pub const App = struct {
         if(!self.paused) {
             var it = flecs.query_iter(self.world, self.update_query);
             while (flecs.query_next(&it)) {
-                const spr = flecs.field(&it, Sprite, 1).?;
-                const vel = flecs.field(&it, Velocity, 2).?;
+                const spr = flecs.field(&it, Sprite, 0).?;
+                const vel = flecs.field(&it, Velocity, 1).?;
 
                 //const entities = it.entities();
                 for (0..it.count()) |idx| {
@@ -218,7 +224,7 @@ pub const App = struct {
 
         var it = flecs.query_iter(self.world, self.draw_query);
         while (flecs.query_next(&it)) {
-            const spr = flecs.field(&it, Sprite, 1).?;
+            const spr = flecs.field(&it, Sprite, 0).?;
             //const debug = flecs.field(&it, DebugOutline, 2).?;
 
             const entities = it.entities();
@@ -238,35 +244,64 @@ pub const App = struct {
     }
 };
 
+
+const AppRunner =  pixzig.PixzigApp(App);
+var g_AppRunner = AppRunner{};
+var g_Eng: pixzig.PixzigEngine = undefined;
+var g_App: App = undefined;
+
+export fn mainLoop() void {
+    _ = g_AppRunner.gameLoopCore(&g_App, &g_Eng);
+}
+
 pub fn main() !void {
 
     std.log.info("Pixzig Flecs test!", .{});
 
-    var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa_state.deinit();
-    const gpa = gpa_state.allocator();
+    // var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
+    // const gpa = gpa_state.allocator();
 
-    var eng = try pixzig.PixzigEngine.init("Pixzig: Flecs Test.", gpa, EngOptions{});
-    defer eng.deinit();
+    g_Eng = try pixzig.PixzigEngine.init("Pixzig: Flecs Test.", std.heap.c_allocator, EngOptions{});
+    std.log.info("Pixzig engine initialized..\n", .{});
 
-    const AppRunner = pixzig.PixzigApp(App);
-    var app = try App.init(&eng, gpa);
+    std.debug.print("Initializing app.\n", .{});
+    g_App = try App.init(&g_Eng, std.heap.c_allocator);
 
-    //glfw.swapInterval(0);
+    glfw.swapInterval(0);
 
     std.debug.print("Starting main loop...\n", .{});
-    AppRunner.gameLoop(&app, &eng);
-
-    std.debug.print("Cleaning up...\n", .{});
-    app.deinit();
+    if(builtin.target.os.tag == .emscripten) {
+        pixzig.web.setMainLoop(mainLoop, null, false);
+        std.log.debug("Set main loop.\n", .{});
+    }
+    else {
+        g_AppRunner.gameLoop(&g_App, &g_Eng);
+        std.log.info("Cleaning up...\n", .{});
+        g_App.deinit();
+        g_Eng.deinit();
+        // _ = gpa_state.deinit();
+    }
 }
 
+// pub fn main() !void {
 
+//     std.log.info("Pixzig Flecs test!", .{});
 
+//     var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
+//     defer _ = gpa_state.deinit();
+//     const gpa = gpa_state.allocator();
 
+//     var eng = try pixzig.PixzigEngine.init("Pixzig: Flecs Test.", gpa, EngOptions{});
+//     defer eng.deinit();
 
-    // gl.enable(gl.BLEND);
-    // gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    // gl.enable(gl.TEXTURE_2D);
+//     const AppRunner = pixzig.PixzigApp(App);
+//     var app = try App.init(&eng, gpa);
 
+//     //glfw.swapInterval(0);
 
+//     std.debug.print("Starting main loop...\n", .{});
+//     AppRunner.gameLoop(&app, &eng);
+
+//     std.debug.print("Cleaning up...\n", .{});
+//     app.deinit();
+// }

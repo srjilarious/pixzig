@@ -1,5 +1,6 @@
 // zig fmt: off
 const std = @import("std");
+const builtin = @import("builtin");
 const zgui = @import("zgui");
 const glfw = @import("zglfw");
 const gl = @import("zopengl").bindings;
@@ -18,6 +19,11 @@ const Flip = pixzig.sprites.Flip;
 const Frame = pixzig.sprites.Frame;
 const Vec2F = pixzig.common.Vec2F;
 const FpsCounter = pixzig.utils.FpsCounter;
+
+pub const panic = pixzig.web.panic;
+pub const std_options = std.Options{
+    .logFn = pixzig.web.log,
+};
 
 pub const App = struct {
     allocator: std.mem.Allocator,
@@ -42,12 +48,15 @@ pub const App = struct {
         );
 
         const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
+
+        std.log.info("Loading tile map", .{});
         const map = try tile.TileMap.initFromFile("assets/level1a.tmx", alloc);
 
         const tData = map.layers.items[1].tile(0, 0);
         std.debug.print("Tile 0,0 data: {any}\n", .{tData});
 
-        var mapRender = try tile.TileMapRenderer.init(std.heap.page_allocator, texShader);
+        std.log.info("Initializing map renderer.", .{});
+        var mapRender = try tile.TileMapRenderer.init(alloc, texShader);
     
         std.debug.print("Creating tile renderering data.\n", .{});
         try mapRender.recreateVertices(&map.tilesets.items[0], &map.layers.items[1]);
@@ -129,7 +138,10 @@ pub const App = struct {
 
     pub fn render(self: *App, eng: *pixzig.PixzigEngine) void {
         _ = eng;
-        gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
+        
+        gl.clearColor(0, 0, 0.2, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
         self.fps.renderTick();
         const mvp = zmath.mul(zmath.translation(self.scrollOffset.x, self.scrollOffset.y, 0.0), self.projMat);
         try self.mapRenderer.draw(self.tex, &self.map.layers.items[1], mvp);
@@ -141,26 +153,64 @@ pub const App = struct {
     }
 };
 
+const AppRunner =  pixzig.PixzigApp(App);
+var g_AppRunner = AppRunner{};
+var g_Eng: pixzig.PixzigEngine = undefined;
+var g_App: App = undefined;
+
+export fn mainLoop() void {
+    _ = g_AppRunner.gameLoopCore(&g_App, &g_Eng);
+}
+
 pub fn main() !void {
 
-    std.log.info("Pixzig Tilemap test!", .{});
+    std.log.info("Pixzig Tilemap test", .{});
 
-    var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa_state.deinit();
-    const gpa = gpa_state.allocator();
+    // var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
+    // const gpa = gpa_state.allocator();
 
-    var eng = try pixzig.PixzigEngine.init("Pixzig: Tile Render Test.", gpa, EngOptions{});
-    defer eng.deinit();
+    g_Eng = try pixzig.PixzigEngine.init("Pixzig: Tile Render Test.", std.heap.c_allocator, EngOptions{});
+    std.log.info("Pixzig engine initialized..\n", .{});
 
-    const AppRunner = pixzig.PixzigApp(App);
-    var app = try App.init(&eng, gpa);
+    std.debug.print("Initializing app.\n", .{});
+    g_App = try App.init(&g_Eng, std.heap.c_allocator);
 
     glfw.swapInterval(0);
 
     std.debug.print("Starting main loop...\n", .{});
-    AppRunner.gameLoop(&app, &eng);
-
-    std.debug.print("Cleaning up...\n", .{});
-    app.deinit();
+    if(builtin.target.os.tag == .emscripten) {
+        pixzig.web.setMainLoop(mainLoop, null, false);
+        std.log.debug("Set main loop.\n", .{});
+    }
+    else {
+        g_AppRunner.gameLoop(&g_App, &g_Eng);
+        std.log.info("Cleaning up...\n", .{});
+        g_App.deinit();
+        g_Eng.deinit();
+        // _ = gpa_state.deinit();
+    }
 }
+
+// pub fn main() !void {
+
+//     std.log.info("Pixzig Tilemap test!", .{});
+
+//     var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
+//     defer _ = gpa_state.deinit();
+//     const gpa = gpa_state.allocator();
+
+//     var eng = try pixzig.PixzigEngine.init("Pixzig: Tile Render Test.", gpa, EngOptions{});
+//     defer eng.deinit();
+
+//     const AppRunner = pixzig.PixzigApp(App);
+//     var app = try App.init(&eng, gpa);
+
+//     glfw.swapInterval(0);
+
+//     std.debug.print("Starting main loop...\n", .{});
+//     AppRunner.gameLoop(&app, &eng);
+
+//     std.debug.print("Cleaning up...\n", .{});
+//     app.deinit();
+// }
 

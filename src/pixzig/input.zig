@@ -123,7 +123,7 @@ pub const Keyboard = struct {
 const NumMouseButtons = comp.numEnumFields(glfw.MouseButton);
 
 fn getIndexForMouseButton(key: glfw.MouseButton) usize {
-   const enumTypeInfo = @typeInfo(glfw.MouseButton).Enum;
+   const enumTypeInfo = @typeInfo(glfw.MouseButton).@"enum";
     comptime var keyIdx: usize = 0;
     inline for (enumTypeInfo.fields) |field| {
         const fieldKey = @field(glfw.MouseButton, field.name);
@@ -197,7 +197,7 @@ pub const Mouse = struct {
         // curr.keys.setRangeValue(.{.start=0, .end=NumKeys}, false);
        
         // Update the current keys
-        const enumTypeInfo = @typeInfo(glfw.MouseButton).Enum;
+        const enumTypeInfo = @typeInfo(glfw.MouseButton).@"enum";
         comptime var btnIdx = 0;
         inline for (enumTypeInfo.fields) |field| {
             const enumValue = @field(glfw.MouseButton, field.name);

@@ -82,7 +82,7 @@ pub const Tile = struct {
 
             const newName = try self.alloc.dupe(u8, name);
             const newValue = try self.alloc.dupe(u8, value);
-            const newProp = .{ .name = newName, .value = newValue };
+            const newProp: Property = .{ .name = newName, .value = newValue };
             try self.properties.?.append(newProp);
         }
     }
@@ -368,7 +368,8 @@ pub const TileMap = struct {
 
         //std.debug.print("\nContents:\n\n-------\n{s}\n--------\n\n", .{fileContents});
 
-        const doc = try xml.parse(std.heap.page_allocator, fileContents);
+        std.log.debug("Loaded tile map file contents.", .{});
+        const doc = try xml.parse(alloc, fileContents);
         var elems = doc.root.elements();
         while (elems.next()) |elem| {
             std.debug.print("Element: {s}\n", .{elem.tag});

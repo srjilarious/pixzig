@@ -111,7 +111,7 @@ pub fn example(b: *std.Build,
 
     if(target.result.os.tag != .emscripten) {
         const glfw_dep = zglfw.artifact("glfw");
-        
+
         // Use mach-freetype
         // const freetype = b.dependency("freetype", .{ 
         //         .target = target, 
@@ -268,8 +268,7 @@ pub fn example(b: *std.Build,
                 // "--preload-file assets/digcraft_sprites.png",
                 // "--embed-file assets/digcraft_sprites.json",
                 "--preload-file", "assets/digconf.lua",
-                // "--embed-file assets/mario_grassish2.png",
-                // "--embed-file assets/level1.tmx",
+                "--preload-file", "assets/level1a.tmx",
 
                 "--shell-file",
                 b.path("src/shell.html").getPath(b),
@@ -312,37 +311,37 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
 
-    // _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig");
-    _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig");
-    // if(target.result.os.tag != .emscripten) {
-    //     _ = example(b, target, optimize, "game_state_test", "examples/game_state_test.zig");
-    //     _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig");
-    //     _ = example(b, target, optimize, "a_star_path", "examples/a_star_path.zig");
-    //     _ = example(b, target, optimize, "console_test", "examples/console_test.zig");
-    //     _ = example(b, target, optimize, "collision_test", "examples/collision_test.zig");
-    //     _ = example(b, target, optimize, "create_texture", "examples/create_texture.zig");
-    //     _ = example(b, target, optimize, "tile_load_test", "examples/tile_load_test.zig");
-    //     _ = example(b, target, optimize, "flecs_test", "examples/flecs_test.zig");
-    //     _ = example(b, target, optimize, "glfw_test", "examples/glfw_test.zig");
-    //     _ = example(b, target, optimize, "grid_render", "examples/grid_render.zig");
-    //     _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
-    //     _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig");
+        _ = example(b, target, optimize, "tile_load_test", "examples/tile_load_test.zig");
+    if(target.result.os.tag != .emscripten) {
+        _ = example(b, target, optimize, "flecs_test", "examples/flecs_test.zig");
+        _ = example(b, target, optimize, "game_state_test", "examples/game_state_test.zig");
+        // _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig");
+        _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig");
+        // _ = example(b, target, optimize, "a_star_path", "examples/a_star_path.zig");
+        // _ = example(b, target, optimize, "console_test", "examples/console_test.zig");
+        _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig");
+        _ = example(b, target, optimize, "collision_test", "examples/collision_test.zig");
+        _ = example(b, target, optimize, "create_texture", "examples/create_texture.zig");
+        _ = example(b, target, optimize, "glfw_test", "examples/glfw_test.zig");
+        // _ = example(b, target, optimize, "grid_render", "examples/grid_render.zig");
+        // _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
+        _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig");
     //     _ = example(b, target, optimize, "text_rendering", "examples/text_rendering.zig");
 
-    //     _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig");
-    //     _ = example(b, target, optimize, "digcraft", "games/digcraft/digcraft.zig");
+        // _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig");
+        // _ = example(b, target, optimize, "digcraft", "games/digcraft/digcraft.zig");
 
-    //     const spack = example(b, target, optimize, "spack", "tools/spack/spack.zig");
-    //     const zargs = b.dependency("zargunaught", .{});
-    //     spack.root_module.addImport("zargunaught", zargs.module("zargunaught"));
+        // const spack = example(b, target, optimize, "spack", "tools/spack/spack.zig");
+        // const zargs = b.dependency("zargunaught", .{});
+        // spack.root_module.addImport("zargunaught", zargs.module("zargunaught"));
 
-    //     const zstbi = b.dependency("zstbi", .{ .target = target });
-    //     spack.root_module.addImport("zstbi", zstbi.module("root"));
+        // const zstbi = b.dependency("zstbi", .{ .target = target });
+        // spack.root_module.addImport("zstbi", zstbi.module("root"));
 
     //     const tests = example(b, target, optimize, "tests", "tests/main.zig");
     //     const testzMod = b.dependency("testz", .{});
     //     tests.root_module.addImport("testz", testzMod.module("testz"));
-    // }
+    }
 }
 
 inline fn thisDir() []const u8 {

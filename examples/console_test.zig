@@ -33,7 +33,7 @@ pub fn main() !void {
     defer eng.deinit();
 
     // Initialize the Lua vm
-    var script = try scripting.ScriptEngine.init(&gpa);
+    var script = try scripting.ScriptEngine.init(gpa);
     defer script.deinit();
 
     const cons = try console.Console.init(gpa, &script, .{});

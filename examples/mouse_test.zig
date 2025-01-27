@@ -1,5 +1,6 @@
 // zig fmt: off
 const std = @import("std");
+const builtin = @import("builtin");
 const zgui = @import("zgui");
 const zmath = @import("zmath"); 
 const glfw = @import("zglfw");
@@ -17,7 +18,7 @@ const EngOptions = pixzig.PixzigEngineOptions;
 const FpsCounter = pixzig.utils.FpsCounter;
 const PixzigEngine = pixzig.PixzigEngine;
 
-pub const MyApp = struct {
+pub const App = struct {
     fps: FpsCounter,
     alloc: std.mem.Allocator,
     projMat: zmath.Mat,
@@ -27,7 +28,7 @@ pub const MyApp = struct {
     pointer: pixzig.sprites.Sprite,
     texShader: pixzig.shaders.Shader,
 
-    pub fn init(eng: *PixzigEngine, alloc: std.mem.Allocator) !MyApp {
+    pub fn init(eng: *PixzigEngine, alloc: std.mem.Allocator) !App {
 
         // Orthographic projection matrix
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
@@ -55,7 +56,7 @@ pub const MyApp = struct {
         };
     }
 
-    pub fn update(self: *MyApp, eng: *pixzig.PixzigEngine, delta: f64) bool {
+    pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {
         if(self.fps.update(delta)) {
             std.debug.print("FPS: {}\n", .{self.fps.fps()});
         }
@@ -80,7 +81,7 @@ pub const MyApp = struct {
         return true;
     }
 
-    pub fn render(self: *MyApp, eng: *pixzig.PixzigEngine) void {
+    pub fn render(self: *App, eng: *pixzig.PixzigEngine) void {
         _ = eng;
         gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
         self.fps.renderTick();
@@ -92,26 +93,63 @@ pub const MyApp = struct {
 };
 
 
+const AppRunner =  pixzig.PixzigApp(App);
+var g_AppRunner = AppRunner{};
+var g_Eng: pixzig.PixzigEngine = undefined;
+var g_App: App = undefined;
+
+export fn mainLoop() void {
+    _ = g_AppRunner.gameLoopCore(&g_App, &g_Eng);
+}
 
 pub fn main() !void {
 
-    var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa_state.deinit();
-    const gpa = gpa_state.allocator();
+    std.log.info("Pixzig Mouse test!", .{});
 
-    var eng = try pixzig.PixzigEngine.init("Glfw Eng Mouse Test.", gpa, EngOptions{});
-    defer eng.deinit();
+    // var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
+    // const gpa = gpa_state.allocator();
 
-    const AppRunner = pixzig.PixzigApp(MyApp);
+    g_Eng = try pixzig.PixzigEngine.init("Pixzig: Mouse Test.", std.heap.c_allocator, EngOptions{});
+    std.log.info("Pixzig engine initialized..\n", .{});
 
-    var app = try MyApp.init(&eng, gpa);
+    std.debug.print("Initializing app.\n", .{});
+    g_App = try App.init(&g_Eng, std.heap.c_allocator);
 
-    eng.window.setInputMode(.cursor, .hidden);
     glfw.swapInterval(0);
 
     std.debug.print("Starting main loop...\n", .{});
-    AppRunner.gameLoop(&app, &eng);
-
-    std.debug.print("Cleaning up...\n", .{});
+    if(builtin.target.os.tag == .emscripten) {
+        pixzig.web.setMainLoop(mainLoop, null, false);
+        std.log.debug("Set main loop.\n", .{});
+    }
+    else {
+        g_AppRunner.gameLoop(&g_App, &g_Eng);
+        std.log.info("Cleaning up...\n", .{});
+        // g_App.deinit();
+        g_Eng.deinit();
+        // _ = gpa_state.deinit();
+    }
 }
+
+// pub fn main() !void {
+
+//     var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
+//     defer _ = gpa_state.deinit();
+//     const gpa = gpa_state.allocator();
+
+//     var eng = try pixzig.PixzigEngine.init("Glfw Eng Mouse Test.", gpa, EngOptions{});
+//     defer eng.deinit();
+
+//     const AppRunner = pixzig.PixzigApp(MyApp);
+
+//     var app = try MyApp.init(&eng, gpa);
+
+//     eng.window.setInputMode(.cursor, .hidden);
+//     glfw.swapInterval(0);
+
+//     std.debug.print("Starting main loop...\n", .{});
+//     AppRunner.gameLoop(&app, &eng);
+
+//     std.debug.print("Cleaning up...\n", .{});
+// }
 

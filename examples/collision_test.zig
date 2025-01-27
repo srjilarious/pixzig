@@ -1,5 +1,6 @@
 // zig fmt: off
 const std = @import("std");
+const builtin = @import("builtin");
 const zgui = @import("zgui");
 const glfw = @import("zglfw");
 const gl = @import("zopengl").bindings;
@@ -71,20 +72,16 @@ pub const App = struct {
         // flecs.COMPONENT(world, DebugOutline);
 
         const update_query = try flecs.query_init(world, &.{
-            .filter = .{
-                .terms = [_]flecs.term_t{
-                    .{ .id = flecs.id(Sprite) },
-                    // .{ .id = flecs.id(Velocity) },
-                } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 1),
-            },
+            .terms = [_]flecs.term_t{
+                .{ .id = flecs.id(Sprite) },
+                // .{ .id = flecs.id(Velocity) },
+            } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_COUNT_MAX - 1),
         });
 
         const query = try flecs.query_init(world, &.{
-            .filter = .{
-                .terms = [_]flecs.term_t{
-                    .{ .id = flecs.id(Sprite) },
-                } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 1),
-            },
+            .terms = [_]flecs.term_t{
+                .{ .id = flecs.id(Sprite) },
+            } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_COUNT_MAX - 1),
         });
 
 
@@ -199,7 +196,7 @@ pub const App = struct {
         if(!self.paused) {
             var it = flecs.query_iter(self.world, self.update_query);
             while (flecs.query_next(&it)) {
-                const spr = flecs.field(&it, Sprite, 1).?;
+                const spr = flecs.field(&it, Sprite, 0).?;
                 // const vel = flecs.field(&it, Velocity, 2).?;
 
                 //const entities = it.entities();
@@ -255,7 +252,7 @@ pub const App = struct {
 
         var it = flecs.query_iter(self.world, self.draw_query);
         while (flecs.query_next(&it)) {
-            const spr = flecs.field(&it, Sprite, 1).?;
+            const spr = flecs.field(&it, Sprite, 0).?;
             //const debug = flecs.field(&it, DebugOutline, 2).?;
 
             // const entities = it.entities();
@@ -274,26 +271,65 @@ pub const App = struct {
     }
 };
 
+
+const AppRunner =  pixzig.PixzigApp(App);
+var g_AppRunner = AppRunner{};
+var g_Eng: pixzig.PixzigEngine = undefined;
+var g_App: App = undefined;
+
+export fn mainLoop() void {
+    _ = g_AppRunner.gameLoopCore(&g_App, &g_Eng);
+}
+
 pub fn main() !void {
+    std.log.info("Pixzig: Collision Grid Test.", .{});
 
-    std.log.info("Pixzig collision grid test!", .{});
+    // var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
+    // const gpa = gpa_state.allocator();
 
-    var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa_state.deinit();
-    const gpa = gpa_state.allocator();
+    g_Eng = try pixzig.PixzigEngine.init("Pixzig: Collision Grid Test.", std.heap.c_allocator, EngOptions{});
+    std.log.info("Pixzig engine initialized..\n", .{});
 
-    var eng = try pixzig.PixzigEngine.init("Pixzig: Collision Grid Test.", gpa, EngOptions{});
-    defer eng.deinit();
+    std.debug.print("Initializing app.\n", .{});
+    g_App = try App.init(&g_Eng, std.heap.c_allocator);
 
-    const AppRunner = pixzig.PixzigApp(App);
-    var app = try App.init(&eng, gpa);
-
-    //glfw.swapInterval(0);
+    glfw.swapInterval(0);
 
     std.debug.print("Starting main loop...\n", .{});
-    AppRunner.gameLoop(&app, &eng);
-
-    std.debug.print("Cleaning up...\n", .{});
-    app.deinit();
+    if(builtin.target.os.tag == .emscripten) {
+        pixzig.web.setMainLoop(mainLoop, null, false);
+        std.log.debug("Set main loop.\n", .{});
+    }
+    else {
+        g_AppRunner.gameLoop(&g_App, &g_Eng);
+        std.log.info("Cleaning up...\n", .{});
+        g_App.deinit();
+        g_Eng.deinit();
+        // _ = gpa_state.deinit();
+    }
 }
+
+
+// pub fn main() !void {
+
+//     std.log.info("Pixzig collision grid test!", .{});
+
+//     var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
+//     defer _ = gpa_state.deinit();
+//     const gpa = gpa_state.allocator();
+
+//     var eng = try pixzig.PixzigEngine.init("Pixzig: Collision Grid Test.", gpa, EngOptions{});
+//     defer eng.deinit();
+
+//     const AppRunner = pixzig.PixzigApp(App);
+//     var app = try App.init(&eng, gpa);
+
+//     //glfw.swapInterval(0);
+
+//     std.debug.print("Starting main loop...\n", .{});
+//     AppRunner.gameLoop(&app, &eng);
+
+//     std.debug.print("Cleaning up...\n", .{});
+//     app.deinit();
+// }
 
