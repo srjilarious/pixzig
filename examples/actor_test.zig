@@ -1,7 +1,6 @@
 const std = @import("std");
 const gl = @import("zopengl").bindings;
 const glfw = @import("zglfw");
-// const sdl = @import("zsdl");
 const stbi = @import("zstbi");
 
 const math = @import("zmath");
@@ -98,58 +97,6 @@ pub fn main() !void {
             // actor.setState("right");
         }
 
-        // const fb_size = eng.window.getFramebufferSize();
-        //
-        // zgui.backend.newFrame(@intCast(fb_size[0]), @intCast(fb_size[1]));
-        //
-        // // Set the starting window position and size to custom values
-        // zgui.setNextWindowPos(.{ .x = 20.0, .y = 20.0, .cond = .first_use_ever });
-        // zgui.setNextWindowSize(.{ .w = -1.0, .h = -1.0, .cond = .first_use_ever });
-        //
-        // if (zgui.begin("My window", .{})) {
-        //     if (zgui.button("Press me!", .{ .w = 200.0 })) {
-        //         std.debug.print("Button pressed\n", .{});
-        //     }
-        // }
-        // zgui.end();
-        //
-        // zgui.backend.draw();
-
         eng.window.swapBuffers();
     }
-
-    // main_loop: while (true) {
-    //     var event: sdl.Event = undefined;
-    //     // eng.keyboard.update();
-    //     while (sdl.pollEvent(&event)) {
-    //         if (event.type == .quit) {
-    //             break :main_loop;
-    //         } else if (event.type == .keydown or event.type == .keyup) {
-    //             // eng.keyboard.keyEvent(event.key.keysym.scancode, event.type == .keydown);
-    //         }
-    //     }
-    //
-    //     // if (eng.keyboard.down(.escape)) break :main_loop;
-    //     // if (eng.keyboard.pressed(.@"1")) fr1.apply(&spr);
-    //     // if (eng.keyboard.pressed(.@"2")) fr2.apply(&spr);
-    //     // if (eng.keyboard.pressed(.@"3")) fr3.apply(&spr);
-    //     // if (eng.keyboard.pressed(.left)) {
-    //     //     std.debug.print("Left!\n", .{});
-    //     //     actor.setState("left");
-    //     // }
-    //     // if (eng.keyboard.pressed(.right)) {
-    //     //     std.debug.print("Right!\n", .{});
-    //     //     actor.setState("right");
-    //     // }
-    //
-    //     try renderer.setDrawColorRGB(32, 32, 100);
-    //     try renderer.clear();
-    //
-    //     try renderer.setDrawColorRGB(128, 10, 10);
-    //     try renderer.fillRect(.{ .x = 50, .y = 50, .w = 300, .h = 300 });
-    //
-    //     actor.update(30, &spr);
-    //     try spr.draw(renderer);
-    //     renderer.present();
-    // }
 }
