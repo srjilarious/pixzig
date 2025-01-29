@@ -1,11 +1,10 @@
-// zig fmt: off
 const std = @import("std");
 const builtin = @import("builtin");
 const zgui = @import("zgui");
 const glfw = @import("zglfw");
 const gl = @import("zopengl").bindings;
-const stbi = @import ("zstbi");
-const zmath = @import("zmath"); 
+const stbi = @import("zstbi");
+const zmath = @import("zmath");
 const pixzig = @import("pixzig");
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
@@ -22,10 +21,9 @@ const FpsCounter = pixzig.utils.FpsCounter;
 
 const Renderer = pixzig.renderer.Renderer(.{});
 
-// pub const panic = pixzig.web.panic;
-// pub const std_options = std.Options{
-//     .logFn = pixzig.web.log,
-// };
+// Sets up the panic handler and log handler depending on the OS target.
+pub const panic = pixzig.system.panic;
+pub const std_options = pixzig.system.std_options;
 
 pub const App = struct {
     allocator: std.mem.Allocator,
@@ -58,7 +56,7 @@ pub const App = struct {
         return .{
             .allocator = alloc,
             .projMat = projMat,
-            .scrollOffset = .{ .x = 0, .y = 0}, 
+            .scrollOffset = .{ .x = 0, .y = 0 },
             .tex = tex,
             .renderer = renderer,
             .fps = FpsCounter.init(),
@@ -85,7 +83,6 @@ pub const App = struct {
                 Color.from(100, 255, 200, 200),
                 Color.from(25, 100, 255, 128),
             },
-
         };
     }
 
@@ -94,7 +91,7 @@ pub const App = struct {
     }
 
     pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {
-        if(self.fps.update(delta)) {
+        if (self.fps.update(delta)) {
             std.log.debug("FPS: {}\n", .{self.fps.fps()});
         }
 
@@ -116,7 +113,7 @@ pub const App = struct {
         if (eng.keyboard.down(.down)) {
             self.scrollOffset.y -= ScrollAmount;
         }
-        if(eng.keyboard.pressed(.escape)) {
+        if (eng.keyboard.pressed(.escape)) {
             return false;
         }
         return true;
@@ -128,31 +125,29 @@ pub const App = struct {
         gl.clearColor(0, 0, 0.2, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
         self.fps.renderTick();
-       
+
         self.renderer.begin(self.projMat);
-        
-        for(0..3) |idx| {
+
+        for (0..3) |idx| {
             self.renderer.draw(self.tex, self.dest[idx], self.srcCoords[idx]);
         }
-        
-        
+
         // Draw sprite outlines.
-        for(0..3) |idx| {
-            self.renderer.drawRect(self.dest[idx], Color.from(255,255,0,200), 2);
+        for (0..3) |idx| {
+            self.renderer.drawRect(self.dest[idx], Color.from(255, 255, 0, 200), 2);
         }
-        for(0..3) |idx| {
-            self.renderer.drawEnclosingRect(self.dest[idx], Color.from(255,0,255,200), 2);
+        for (0..3) |idx| {
+            self.renderer.drawEnclosingRect(self.dest[idx], Color.from(255, 0, 255, 200), 2);
         }
-        for(0..3) |idx| {
+        for (0..3) |idx| {
             self.renderer.drawFilledRect(self.destRects[idx], self.colorRects[idx]);
         }
 
         self.renderer.end();
- 
     }
 };
 
-const AppRunner =  pixzig.PixzigApp(App);
+const AppRunner = pixzig.PixzigApp(App);
 var g_AppRunner = AppRunner{};
 var g_Eng: pixzig.PixzigEngine = undefined;
 var g_App: App = undefined;
@@ -162,26 +157,25 @@ export fn mainLoop() void {
 }
 
 pub fn main() !void {
-
     std.log.info("Pixzig Sprite and Shape test!", .{});
 
     // var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
     // const gpa = gpa_state.allocator();
 
-    g_Eng = try pixzig.PixzigEngine.init("Pixzig: Tile Render Test.", std.heap.c_allocator, EngOptions{});
+    const alloc = std.heap.c_allocator;
+    g_Eng = try pixzig.PixzigEngine.init("Pixzig: Tile Render Test.", alloc, EngOptions{});
     std.log.info("Pixzig engine initialized..\n", .{});
 
     std.debug.print("Initializing app.\n", .{});
-    g_App = try App.init(&g_Eng, std.heap.c_allocator);
+    g_App = try App.init(&g_Eng, alloc);
 
     glfw.swapInterval(0);
 
     std.debug.print("Starting main loop...\n", .{});
-    if(builtin.target.os.tag == .emscripten) {
+    if (builtin.target.os.tag == .emscripten) {
         pixzig.web.setMainLoop(mainLoop, null, false);
         std.log.debug("Set main loop.\n", .{});
-    }
-    else {
+    } else {
         g_AppRunner.gameLoop(&g_App, &g_Eng);
         std.log.info("Cleaning up...\n", .{});
         g_App.deinit();
@@ -189,4 +183,3 @@ pub fn main() !void {
         // _ = gpa_state.deinit();
     }
 }
-

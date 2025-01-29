@@ -1,11 +1,10 @@
-// zig fmt: off
 const std = @import("std");
 const builtin = @import("builtin");
 const zgui = @import("zgui");
 const glfw = @import("zglfw");
 const gl = @import("zopengl").bindings;
-const stbi = @import ("zstbi");
-const zmath = @import("zmath"); 
+const stbi = @import("zstbi");
+const zmath = @import("zmath");
 const pixzig = @import("pixzig");
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
@@ -20,10 +19,9 @@ const Frame = pixzig.sprites.Frame;
 const Vec2F = pixzig.common.Vec2F;
 const FpsCounter = pixzig.utils.FpsCounter;
 
-pub const panic = pixzig.web.panic;
-pub const std_options = std.Options{
-    .logFn = pixzig.web.log,
-};
+// Sets up the panic handler and log handler depending on the OS target.
+pub const panic = pixzig.system.panic;
+pub const std_options = pixzig.system.std_options;
 
 pub const App = struct {
     allocator: std.mem.Allocator,
@@ -44,7 +42,7 @@ pub const App = struct {
 
         const texShader = try pixzig.shaders.Shader.init(
             &pixzig.shaders.TexVertexShader,
-            &pixzig.shaders.TexPixelShader
+            &pixzig.shaders.TexPixelShader,
         );
 
         const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
@@ -53,35 +51,35 @@ pub const App = struct {
         const map = try tile.TileMap.initFromFile("assets/level1a.tmx", alloc);
 
         const tData = map.layers.items[1].tile(0, 0);
-        std.debug.print("Tile 0,0 data: {any}\n", .{tData});
+        std.log.info("Tile 0,0 data: {any}", .{tData});
 
         std.log.info("Initializing map renderer.", .{});
         var mapRender = try tile.TileMapRenderer.init(alloc, texShader);
-    
-        std.debug.print("Creating tile renderering data.\n", .{});
+
+        std.log.info("Creating tile renderering data.", .{});
         try mapRender.recreateVertices(&map.tilesets.items[0], &map.layers.items[1]);
 
-        std.debug.print("Done creating tile renderering data.\n", .{});
+        std.log.info("Done creating tile renderering data.", .{});
 
         var colorShader = try pixzig.shaders.Shader.init(
-                &pixzig.shaders.ColorVertexShader,
-                &pixzig.shaders.ColorPixelShader
-            );
+            &pixzig.shaders.ColorVertexShader,
+            &pixzig.shaders.ColorPixelShader,
+        );
 
         const shapeBatch = try pixzig.renderer.ShapeBatchQueue.init(alloc, &colorShader);
 
         return .{
             .allocator = alloc,
             .projMat = projMat,
-            .scrollOffset = .{ .x = 0, .y = 0}, 
+            .scrollOffset = .{ .x = 0, .y = 0 },
             .mapRenderer = mapRender,
             .map = map,
             .tex = tex,
             .texShader = texShader,
             .colorShader = colorShader,
             .shapeBatch = shapeBatch,
-            .guy = RectF.fromPosSize(33,33,32,32),
-            .fps = FpsCounter.init() 
+            .guy = RectF.fromPosSize(33, 33, 32, 32),
+            .fps = FpsCounter.init(),
         };
     }
 
@@ -94,15 +92,15 @@ pub const App = struct {
     }
 
     pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {
-        if(self.fps.update(delta)) {
-            std.debug.print("FPS: {}\n", .{self.fps.fps()});
+        if (self.fps.update(delta)) {
+            std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
         eng.keyboard.update();
 
-        if (eng.keyboard.pressed(.one)) std.debug.print("one!\n", .{});
-        if (eng.keyboard.pressed(.two)) std.debug.print("two!\n", .{});
-        if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
+        if (eng.keyboard.pressed(.one)) std.log.info("one!", .{});
+        if (eng.keyboard.pressed(.two)) std.log.info("two!", .{});
+        if (eng.keyboard.pressed(.three)) std.log.info("three!", .{});
         const ScrollAmount = 3;
         if (eng.keyboard.down(.a)) {
             self.scrollOffset.x += ScrollAmount;
@@ -116,29 +114,49 @@ pub const App = struct {
         if (eng.keyboard.down(.s)) {
             self.scrollOffset.y -= ScrollAmount;
         }
-        if(eng.keyboard.pressed(.escape)) {
+        if (eng.keyboard.pressed(.escape)) {
             return false;
         }
 
         // Handle guy movement.
         if (eng.keyboard.down(.left)) {
-            _ = pixzig.tile.Mover.moveLeft(&self.guy, ScrollAmount, &self.map.layers.items[1], pixzig.tile.BlocksAll);
+            _ = pixzig.tile.Mover.moveLeft(
+                &self.guy,
+                ScrollAmount,
+                &self.map.layers.items[1],
+                pixzig.tile.BlocksAll,
+            );
         }
         if (eng.keyboard.down(.right)) {
-            _ = pixzig.tile.Mover.moveRight(&self.guy, ScrollAmount, &self.map.layers.items[1], pixzig.tile.BlocksAll);
+            _ = pixzig.tile.Mover.moveRight(
+                &self.guy,
+                ScrollAmount,
+                &self.map.layers.items[1],
+                pixzig.tile.BlocksAll,
+            );
         }
         if (eng.keyboard.down(.up)) {
-            _ = pixzig.tile.Mover.moveUp(&self.guy, ScrollAmount, &self.map.layers.items[1], pixzig.tile.BlocksAll);
+            _ = pixzig.tile.Mover.moveUp(
+                &self.guy,
+                ScrollAmount,
+                &self.map.layers.items[1],
+                pixzig.tile.BlocksAll,
+            );
         }
         if (eng.keyboard.down(.down)) {
-            _ = pixzig.tile.Mover.moveDown(&self.guy, ScrollAmount, &self.map.layers.items[1], pixzig.tile.BlocksAll);
+            _ = pixzig.tile.Mover.moveDown(
+                &self.guy,
+                ScrollAmount,
+                &self.map.layers.items[1],
+                pixzig.tile.BlocksAll,
+            );
         }
         return true;
     }
 
     pub fn render(self: *App, eng: *pixzig.PixzigEngine) void {
         _ = eng;
-        
+
         gl.clearColor(0, 0, 0.2, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -148,12 +166,12 @@ pub const App = struct {
 
         // Draw outline.
         self.shapeBatch.begin(mvp);
-        self.shapeBatch.drawRect(self.guy, Color.from(255,255,0,200), 2);
+        self.shapeBatch.drawRect(self.guy, Color.from(255, 255, 0, 200), 2);
         self.shapeBatch.end();
     }
 };
 
-const AppRunner =  pixzig.PixzigApp(App);
+const AppRunner = pixzig.PixzigApp(App);
 var g_AppRunner = AppRunner{};
 var g_Eng: pixzig.PixzigEngine = undefined;
 var g_App: App = undefined;
@@ -163,54 +181,28 @@ export fn mainLoop() void {
 }
 
 pub fn main() !void {
-
     std.log.info("Pixzig Tilemap test", .{});
 
     // var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
     // const gpa = gpa_state.allocator();
 
-    g_Eng = try pixzig.PixzigEngine.init("Pixzig: Tile Render Test.", std.heap.c_allocator, EngOptions{});
+    const alloc = std.heap.c_allocator;
+    g_Eng = try pixzig.PixzigEngine.init("Pixzig: Tile Render Test.", alloc, EngOptions{});
     std.log.info("Pixzig engine initialized..\n", .{});
 
-    std.debug.print("Initializing app.\n", .{});
-    g_App = try App.init(&g_Eng, std.heap.c_allocator);
+    std.log.info("Initializing app.\n", .{});
+    g_App = try App.init(&g_Eng, alloc);
 
     glfw.swapInterval(0);
 
-    std.debug.print("Starting main loop...\n", .{});
-    if(builtin.target.os.tag == .emscripten) {
+    std.log.info("Starting main loop...\n", .{});
+    if (builtin.target.os.tag == .emscripten) {
         pixzig.web.setMainLoop(mainLoop, null, false);
         std.log.debug("Set main loop.\n", .{});
-    }
-    else {
+    } else {
         g_AppRunner.gameLoop(&g_App, &g_Eng);
         std.log.info("Cleaning up...\n", .{});
         g_App.deinit();
         g_Eng.deinit();
-        // _ = gpa_state.deinit();
     }
 }
-
-// pub fn main() !void {
-
-//     std.log.info("Pixzig Tilemap test!", .{});
-
-//     var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
-//     defer _ = gpa_state.deinit();
-//     const gpa = gpa_state.allocator();
-
-//     var eng = try pixzig.PixzigEngine.init("Pixzig: Tile Render Test.", gpa, EngOptions{});
-//     defer eng.deinit();
-
-//     const AppRunner = pixzig.PixzigApp(App);
-//     var app = try App.init(&eng, gpa);
-
-//     glfw.swapInterval(0);
-
-//     std.debug.print("Starting main loop...\n", .{});
-//     AppRunner.gameLoop(&app, &eng);
-
-//     std.debug.print("Cleaning up...\n", .{});
-//     app.deinit();
-// }
-

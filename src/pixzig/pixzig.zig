@@ -23,6 +23,7 @@ pub const scripting = @import("./scripting.zig");
 pub const console = @import("./console.zig");
 pub const collision = @import("./collision.zig");
 pub const a_star = @import("./a_star.zig");
+pub const system = @import("./system.zig");
 
 pub const Texture = textures.Texture;
 const TextureManager = textures.TextureManager;
