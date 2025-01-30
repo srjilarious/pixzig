@@ -19,12 +19,10 @@ pub const Gravity = struct {
         return .{
             .world = world,
             .query = try flecs.query_init(world, &.{
-                .filter = .{
                     .terms = [_]flecs.term_t{
                         .{ .id = flecs.id(Sprite) },
                         .{ .id = flecs.id(Mover) },
-                    } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 2),
-                },
+                    } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_COUNT_MAX - 2),
             }),
         };
     }
@@ -36,8 +34,8 @@ pub const Gravity = struct {
     pub fn update(self: *@This(), map: *TileLayer) void {
         var it = flecs.query_iter(self.world, self.query);
         while (flecs.query_next(&it)) {
-            const spr = flecs.field(&it, Sprite, 1).?;
-            const vel = flecs.field(&it, Mover, 2).?;
+            const spr = flecs.field(&it, Sprite, 0).?;
+            const vel = flecs.field(&it, Mover, 1).?;
 
             for (0..it.count()) |idx| {
                 var v: *Mover = &vel[idx];

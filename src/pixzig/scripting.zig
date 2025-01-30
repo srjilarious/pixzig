@@ -8,8 +8,11 @@ pub const ScriptEngine = struct {
     lua: *Lua,
 
     pub fn init(allocator: std.mem.Allocator) !ScriptEngine {
+        std.log.debug("init a", .{});
         var lua = try Lua.init(allocator);
+        std.log.debug("init b", .{});
         lua.openLibs();
+        std.log.debug("init c", .{});
         return .{ .lua = lua };
     }
 
@@ -35,7 +38,7 @@ pub const ScriptEngine = struct {
         };
 
         // Execute a line of Lua code
-        self.lua.protectedCall(0, 0, 0) catch {
+        self.lua.protectedCall(.{ .args = 0, .results = 0, .msg_handler = 0 }) catch {
             // Error handling here is the same as above.
             std.debug.print("{s}\n", .{self.lua.toString(-1) catch unreachable});
             self.lua.pop(1);
@@ -64,7 +67,7 @@ pub const ScriptEngine = struct {
 
         var myStruct: T = .{};
         // Iterate over fields of the struct at comptime
-        inline for (@typeInfo(T).Struct.fields) |field| {
+        inline for (@typeInfo(T).@"struct".fields) |field| {
             const field_name = field.name;
 
             // Get the value from Lua
@@ -73,7 +76,7 @@ pub const ScriptEngine = struct {
             // Match the field type and retrieve the value
             switch (@typeInfo(field.type)) {
                 // Handle booleans
-                .Bool => {
+                .bool => {
                     if (!self.lua.isBoolean(-1)) {
                         self.lua.pop(2); // Pop the value and table
                         return error.InvalidFieldType;
@@ -81,14 +84,14 @@ pub const ScriptEngine = struct {
                     @field(myStruct, field_name) = self.lua.toBoolean(-1);
                 },
                 // Handle integers
-                .Int, .Float => {
+                .int, .float => {
                     if (!self.lua.isInteger(-1)) {
                         self.lua.pop(2); // Pop the value and table
                         return error.InvalidFieldType;
                     }
                     @field(myStruct, field_name) = @intCast(try self.lua.toInteger(-1));
                 },
-                .Optional => |opt| {
+                .optional => |opt| {
                     switch (@typeInfo(opt.child)) {
                         .Pointer => |ptr_info| switch (ptr_info.size) {
                             .Slice => {

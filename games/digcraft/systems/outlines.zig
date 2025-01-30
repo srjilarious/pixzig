@@ -60,11 +60,9 @@ pub const Outlines = struct {
             .eng = eng,
             // .camera = cam,
             .query = try flecs.query_init(world, &.{
-                .filter = .{
                     .terms = [_]flecs.term_t{
                         .{ .id = flecs.id(Sprite) },
-                    } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 1),
-                },
+                    } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_COUNT_MAX - 1),
             }),
             .enabled = false,
             .colorShader = colorShader,
@@ -94,7 +92,7 @@ pub const Outlines = struct {
         if(self.enabled) {
             var it = flecs.query_iter(self.world, self.query);
             while (flecs.query_next(&it)) {
-                const spr = flecs.field(&it, Sprite, 1).?;
+                const spr = flecs.field(&it, Sprite, 0).?;
                 for (0..it.count()) |idx| {
                     renderer.drawEnclosingRect(spr[idx].dest, Color.from(100, 100, 255, 255), 1);
                 }

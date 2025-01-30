@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 const web = @import("./web.zig");
 
 // Either the default panic handler or an emscripten capable one.
-pub const panic = if (builtin.os.tag == .emscripten) web.panic else std.debug.panic;
+pub const panic = if (builtin.os.tag == .emscripten) web.panic else std.debug.defaultPanic;
 
 // Standard options for setting up logging to either use an emscripten log handler, or the default one.
 pub const std_options = blk: {

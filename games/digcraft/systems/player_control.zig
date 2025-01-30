@@ -33,13 +33,11 @@ pub const PlayerControl = struct {
             .mouse = mouse,
             .camera = camera,
             .query = try flecs.query_init(world, &.{
-                .filter = .{
                     .terms = [_]flecs.term_t{
                         .{ .id = flecs.id(Sprite) },
                         .{ .id = flecs.id(Mover) },
                         .{ .id = flecs.id(HumanController) },
-                    } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 3),
-                },
+                    } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_COUNT_MAX - 3),
             }),
         };
     }
@@ -76,9 +74,9 @@ pub const PlayerControl = struct {
     pub fn update(self: *@This(), map: *TileLayer, mapRenderer: *TileMapRenderer) !void {
         var it = flecs.query_iter(self.world, self.query);
         while (flecs.query_next(&it)) {
-            const spr = flecs.field(&it, Sprite, 1).?;
-            const vel = flecs.field(&it, Mover, 2).?;
-            const humCtrl = flecs.field(&it, HumanController, 3).?;
+            const spr = flecs.field(&it, Sprite, 0).?;
+            const vel = flecs.field(&it, Mover, 1).?;
+            const humCtrl = flecs.field(&it, HumanController, 2).?;
 
             for (0..it.count()) |idx| {
                 var v: *Mover = &vel[idx];

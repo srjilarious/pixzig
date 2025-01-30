@@ -20,12 +20,12 @@ local function print_table(tbl, indent)
 end
 
 -- Assuming my_console is already defined as a global variable by your Zig code
-if my_console then
-    print("my_console exists.")
-    print_table(my_console)
+if con then
+    print("con exists.")
+    print_table(con)
 else
-    print("my_console does not exist.")
+    print("con does not exist.")
 end
 
 print("Calling console log from script...")
-my_console:log('testing from script file.')
+con:log('testing from script file.')

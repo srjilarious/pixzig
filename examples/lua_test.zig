@@ -2,8 +2,13 @@ const std = @import("std");
 
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
-const scripting = @import("pixzig").scripting;
-const console = @import("pixzig").console;
+const pixzig = @import("pixzig");
+const scripting = pixzig.scripting;
+const console = pixzig.console;
+
+// Sets up the panic handler and log handler depending on the OS target.
+pub const panic = pixzig.system.panic;
+pub const std_options = pixzig.system.std_options;
 
 fn myFunc(lua: *Lua) i32 {
     _ = lua;
@@ -20,32 +25,41 @@ fn log(lua: *Lua) i32 {
     return 0;
 }
 
-pub fn main() anyerror!void {
+pub fn main() !void {
+    std.log.info("Lua test starting.", .{});
+
     // Create an allocator
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
-    defer _ = gpa.deinit();
+    const alloc = std.heap.c_allocator;
 
     // Initialize the Lua vm
-    var script = try scripting.ScriptEngine.init(&allocator);
+    std.log.debug("a", .{});
+    var script = try scripting.ScriptEngine.init(alloc);
     defer script.deinit();
 
+    std.log.debug("b", .{});
     try script.registerFunc("test", myFunc);
+    std.log.debug("c", .{});
     try script.registerFunc("log", log);
 
+    std.log.debug("d", .{});
     try script.run("test()");
+    std.log.debug("e", .{});
     try script.run("log('My message here!')");
 
-    const cons = try console.Console.init(allocator, &script, .{});
+    std.log.debug("f", .{});
+    const cons = try console.Console.init(alloc, &script, .{});
     defer cons.deinit();
 
+    std.log.debug("g", .{});
     try script.run("con:log('test from example inline run.')");
 
+    std.log.debug("h", .{});
     try script.runScript("assets/test.lua");
 
-    std.debug.print("Console entries:\n", .{});
+    std.log.debug("i", .{});
+    std.log.debug("Console entries:\n", .{});
     for (cons.history.items) |entry| {
-        std.debug.print("{s}\n", .{entry});
+        std.log.debug("{s}\n", .{entry});
     }
 
     // Add an integer to the Lua stack and retrieve it

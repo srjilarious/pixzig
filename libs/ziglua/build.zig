@@ -64,27 +64,48 @@ pub fn build(b: *Build) void {
     ziglua.linkLibrary(lib);
 
     // lib must expose all headers included by these root headers
-    // const c_header_path = switch (lang) {
-    //     .luajit => b.path("include/luajit_all.h"),
-    //     .luau => b.path("include/luau_all.h"),
-    //     else => b.path("include/lua_all.h"),
-    // };
-    // const c_headers = b.addTranslateC(.{
-    //     .root_source_file = c_header_path,
-    //     .target = target,
-    //     .optimize = optimize,
-    // });
-    // c_headers.addIncludePath(lib.getEmittedIncludeTree());
-    // c_headers.step.dependOn(&install_lib.step);
+    const c_header_path = switch (lang) {
+        .luajit => b.path("include/luajit_all.h"),
+        .luau => b.path("include/luau_all.h"),
+        else => b.path("include/lua_all.h"),
+    };
+    const c_headers = b.addTranslateC(.{
+        .root_source_file = c_header_path,
+        .target = target,
+        .optimize = optimize,
+    });
 
-    // const ziglua_c = b.addModule("ziglua-c", .{
-    //     .root_source_file = c_headers.getOutput(),
-    //     .target = c_headers.target,
-    //     .optimize = c_headers.optimize,
-    //     .link_libc = c_headers.link_libc,
-    // });
+    // PIXZIG addition for emscripten
+    // Need to figure out how to access TranslateC step from top-level build.zig.
+    switch (target.result.os.tag) {
+        .emscripten => {
+            if (b.sysroot == null) {
+                @panic("Pass '--sysroot \"~/.cache/emscripten/sysroot\"'");
+            }
 
-    // ziglua.addImport("c", ziglua_c);
+            // const cache_include = std.fs.path.join(b.allocator, &.{ "/home/jeffdw/.cache/emscripten/sysroot", "include" }) catch @panic("Out of memory");
+            const cache_include = std.fs.path.join(b.allocator, &.{ b.sysroot.?, "include" }) catch @panic("Out of memory");
+            defer b.allocator.free(cache_include);
+
+            var dir = std.fs.openDirAbsolute(cache_include, std.fs.Dir.OpenDirOptions{ .access_sub_paths = true, .no_follow = true }) catch @panic("No emscripten cache. Generate it!");
+            dir.close();
+            c_headers.addIncludePath(.{ .cwd_relative = cache_include });
+        },
+        else => {},
+    }
+    // END PIXZIG
+
+    c_headers.addIncludePath(lib.getEmittedIncludeTree());
+    c_headers.step.dependOn(&install_lib.step);
+
+    const ziglua_c = b.addModule("ziglua-c", .{
+        .root_source_file = c_headers.getOutput(),
+        .target = c_headers.target,
+        .optimize = c_headers.optimize,
+        .link_libc = c_headers.link_libc,
+    });
+
+    ziglua.addImport("c", ziglua_c);
 
     // Tests
     const tests = b.addTest(.{

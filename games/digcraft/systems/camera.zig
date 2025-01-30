@@ -37,11 +37,9 @@ pub const CameraSystem = struct {
             .baseMat = baseMat,
             .currCamera = currCamera,
             .query = try flecs.query_init(world, &.{
-                .filter = .{
                     .terms = [_]flecs.term_t{
                         .{ .id = flecs.id(Camera) },
-                    } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_DESC_MAX - 1),
-                },
+                    } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_COUNT_MAX - 1),
             }),
         };
     }
@@ -63,7 +61,7 @@ pub const CameraSystem = struct {
     pub fn update(self: *Self) void {
         var it = flecs.query_iter(self.world, self.query);
         while (flecs.query_next(&it)) {
-            const cams = flecs.field(&it, Camera, 1).?;
+            const cams = flecs.field(&it, Camera, 0).?;
 
             for (0..it.count()) |idx| {
                 var cam: *Camera = &cams[idx];

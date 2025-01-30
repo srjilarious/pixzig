@@ -58,7 +58,6 @@ pub fn example(b: *std.Build,
 
     // Build it
     const zglfw = b.dependency("zglfw", .{ .target = target });
-    
     const zopengl = b.dependency("zopengl", .{ .target = target });
 
     const zflecs = b.dependency("zflecs", .{ .target = target });
@@ -98,10 +97,13 @@ pub fn example(b: *std.Build,
         .optimize = optimize
     });
     ziglua.module("ziglua").addIncludePath(.{.cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include"});
-    // ziglua.module("ziglua-c").addIncludePath(.{.cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include"});
+    ziglua.module("ziglua-c").addIncludePath(.{.cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include"});
 
     const lua_dep = ziglua.artifact("lua");
     try addArchIncludes(b, target, optimize, lua_dep);
+
+    exe.linkLibrary(lua_dep);
+    exe.linkLibrary(flecs_dep);
 
     exe.linkLibC();
 
@@ -129,9 +131,9 @@ pub fn example(b: *std.Build,
     
         // Link with your app
     
-        exe.linkLibrary(flecs_dep);
+        
         exe.linkLibrary(glfw_dep);
-        exe.linkLibrary(lua_dep);
+        
         exe.linkLibrary(gui_dep);
         exe.linkLibrary(stbi_dep);
         // exe.linkLibrary(freetype_dep);
@@ -152,27 +154,27 @@ pub fn example(b: *std.Build,
     exe.root_module.addImport("zopengl", gl_mod);
     pixeng.addImport("zopengl", gl_mod);
     
-    // // GUI support
+    // GUI support
     const zgui_mod = zgui.module("root");
     exe.root_module.addImport("zgui",zgui_mod );
     pixeng.addImport("zgui", zgui_mod);
     // std.debug.print("zgui mod has {} include dirs.\n", .{zgui_mod.include_dirs.items.len});
     
-    // // STBI for image loading.
+    // STBI for image loading.
     const zstbi_mod = zstbi.module("root");
     pixeng.addImport("zstbi", zstbi_mod);
     
-    // // Math library
+    // Math library
     const math_mod = zmath.module("root");
     pixeng.addImport("zmath", math_mod);
     exe.root_module.addImport("zmath", math_mod);
     
-    // // ECS library.
+    // ECS library.
     const zflecs_mod = zflecs.module("root");
     exe.root_module.addImport("zflecs", zflecs_mod);
     pixeng.addImport("zflecs", zflecs_mod);
 
-    //  // XML for tilemap loading.
+    // XML for tilemap loading.
     const xml = b.addModule("xml", .{ .root_source_file = b.path("libs/xml.zig")});
     pixeng.addImport("xml", xml);
     
@@ -181,7 +183,8 @@ pub fn example(b: *std.Build,
     // add the ziglua module and lua artifact
     const ziglua_mod = ziglua.module("ziglua");
     exe.root_module.addImport("ziglua", ziglua_mod);
-    pixeng.addImport("ziglua", ziglua.module("ziglua"));
+    // exe.root_module.addImport("ziglua-c", ziglua.module("ziglua-c"));
+    pixeng.addImport("ziglua", ziglua_mod);
 
     exe.root_module.addImport("pixzig", pixeng);
 
@@ -254,8 +257,8 @@ pub fn example(b: *std.Build,
                 "-sINITIAL_MEMORY=167772160",
                 "-sALLOW_MEMORY_GROWTH=1",
                 "-sMALLOC=emmalloc",
-                "--export=_mainLoop",
-                "-sEXPORTED_FUNCTIONS=_mainLoop,_main",
+                //"--export=_mainLoop",
+                // "-sEXPORTED_FUNCTIONS=_mainLoop,_main",
                 //"-sEXPORTED_FUNCTIONS=_main,__builtin_return_address",
 
                 // USE_OFFSET_CONVERTER required for @returnAddress used in
@@ -267,6 +270,7 @@ pub fn example(b: *std.Build,
                 "--preload-file", "assets/mario_grassish2.png",
                 // "--preload-file assets/digcraft_sprites.png",
                 // "--embed-file assets/digcraft_sprites.json",
+                "--preload-file", "assets/test.lua",
                 "--preload-file", "assets/digconf.lua",
                 "--preload-file", "assets/level1a.tmx",
 
@@ -277,6 +281,7 @@ pub fn example(b: *std.Build,
             const link_items: []const *std.Build.Step.Compile = &.{
                 stbi_dep,
                 gui_dep,
+                lua_dep,
                 //freetype_dep,
                 flecs_dep,
                 exe,
@@ -311,24 +316,24 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
 
-    _ = example(b, target, optimize, "grid_render", "examples/grid_render.zig");
+    // _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
+    _ = example(b, target, optimize, "tile_load_test", "examples/tile_load_test.zig");
     if(target.result.os.tag != .emscripten) {
         _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig");
         _ = example(b, target, optimize, "collision_test", "examples/collision_test.zig");
         _ = example(b, target, optimize, "create_texture", "examples/create_texture.zig");
         _ = example(b, target, optimize, "flecs_test", "examples/flecs_test.zig");
+        _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig");
         _ = example(b, target, optimize, "game_state_test", "examples/game_state_test.zig");
         _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig");
+        _ = example(b, target, optimize, "grid_render", "examples/grid_render.zig");
         _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig");
-        _ = example(b, target, optimize, "tile_load_test", "examples/tile_load_test.zig");
-        // _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig");
-        // _ = example(b, target, optimize, "a_star_path", "examples/a_star_path.zig");
+        // // _ = example(b, target, optimize, "a_star_path", "examples/a_star_path.zig");
         // _ = example(b, target, optimize, "console_test", "examples/console_test.zig");
-        // _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
     //     _ = example(b, target, optimize, "text_rendering", "examples/text_rendering.zig");
 
         // _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig");
-        // _ = example(b, target, optimize, "digcraft", "games/digcraft/digcraft.zig");
+        _ = example(b, target, optimize, "digcraft", "games/digcraft/digcraft.zig");
 
         // const spack = example(b, target, optimize, "spack", "tools/spack/spack.zig");
         // const zargs = b.dependency("zargunaught", .{});
