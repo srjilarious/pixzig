@@ -29,7 +29,7 @@ pub fn main() !void {
     defer _ = gpa_state.deinit();
     const gpa = gpa_state.allocator();
 
-    var eng = try pixzig.PixzigEngine.init("Console GUI test", gpa, EngOptions{});
+    var eng = try pixzig.PixzigEngine.init("Console GUI test", gpa, EngOptions{ .withGui = true });
     defer eng.deinit();
 
     // Initialize the Lua vm
@@ -52,7 +52,7 @@ pub fn main() !void {
         gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0, 0, 0.1, 1.0 });
 
         const fb_size = eng.window.getFramebufferSize();
-
+        // zgui.backend
         zgui.backend.newFrame(@intCast(fb_size[0]), @intCast(fb_size[1]));
 
         // Set the starting window position and size to custom values

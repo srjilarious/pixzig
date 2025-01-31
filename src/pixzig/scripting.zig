@@ -93,7 +93,7 @@ pub const ScriptEngine = struct {
                 },
                 .optional => |opt| {
                     switch (@typeInfo(opt.child)) {
-                        .Pointer => |ptr_info| switch (ptr_info.size) {
+                        .pointer => |ptr_info| switch (ptr_info.size) {
                             .Slice => {
                                 if (ptr_info.child != u8) {
                                     return error.UnsupportedFieldType;

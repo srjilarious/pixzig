@@ -29,7 +29,7 @@ const configLuaScript =
 ;
 
 pub fn structFromLuaLoading() !void {
-    var eng = try ScriptEngine.init(&std.heap.page_allocator);
+    var eng = try ScriptEngine.init(std.heap.page_allocator);
     // Define the global config table in lua.
     try eng.run(configLuaScript);
 

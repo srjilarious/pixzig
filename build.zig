@@ -329,22 +329,22 @@ pub fn build(b: *std.Build) void {
         _ = example(b, target, optimize, "grid_render", "examples/grid_render.zig");
         _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig");
         // // _ = example(b, target, optimize, "a_star_path", "examples/a_star_path.zig");
-        // _ = example(b, target, optimize, "console_test", "examples/console_test.zig");
+        _ = example(b, target, optimize, "console_test", "examples/console_test.zig");
     //     _ = example(b, target, optimize, "text_rendering", "examples/text_rendering.zig");
 
         // _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig");
         _ = example(b, target, optimize, "digcraft", "games/digcraft/digcraft.zig");
 
-        // const spack = example(b, target, optimize, "spack", "tools/spack/spack.zig");
-        // const zargs = b.dependency("zargunaught", .{});
-        // spack.root_module.addImport("zargunaught", zargs.module("zargunaught"));
+        const spack = example(b, target, optimize, "spack", "tools/spack/spack.zig");
+        const zargs = b.dependency("zargunaught", .{});
+        spack.root_module.addImport("zargunaught", zargs.module("zargunaught"));
 
-        // const zstbi = b.dependency("zstbi", .{ .target = target });
-        // spack.root_module.addImport("zstbi", zstbi.module("root"));
+        const zstbi = b.dependency("zstbi", .{ .target = target });
+        spack.root_module.addImport("zstbi", zstbi.module("root"));
 
-    //     const tests = example(b, target, optimize, "tests", "tests/main.zig");
-    //     const testzMod = b.dependency("testz", .{});
-    //     tests.root_module.addImport("testz", testzMod.module("testz"));
+        const tests = example(b, target, optimize, "tests", "tests/main.zig");
+        const testzMod = b.dependency("testz", .{});
+        tests.root_module.addImport("testz", testzMod.module("testz"));
     }
 }
 
