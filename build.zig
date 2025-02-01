@@ -317,7 +317,7 @@ pub fn build(b: *std.Build) void {
 
 
     // _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
-    _ = example(b, target, optimize, "tile_load_test", "examples/tile_load_test.zig");
+    _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig");
     if(target.result.os.tag != .emscripten) {
         _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig");
         _ = example(b, target, optimize, "collision_test", "examples/collision_test.zig");
@@ -328,11 +328,11 @@ pub fn build(b: *std.Build) void {
         _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig");
         _ = example(b, target, optimize, "grid_render", "examples/grid_render.zig");
         _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig");
+        _ = example(b, target, optimize, "tile_load_test", "examples/tile_load_test.zig");
         // // _ = example(b, target, optimize, "a_star_path", "examples/a_star_path.zig");
         _ = example(b, target, optimize, "console_test", "examples/console_test.zig");
     //     _ = example(b, target, optimize, "text_rendering", "examples/text_rendering.zig");
 
-        // _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig");
         _ = example(b, target, optimize, "digcraft", "games/digcraft/digcraft.zig");
 
         const spack = example(b, target, optimize, "spack", "tools/spack/spack.zig");
