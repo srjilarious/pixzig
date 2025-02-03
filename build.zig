@@ -94,7 +94,8 @@ pub fn example(b: *std.Build,
 
     const ziglua = b.dependency("ziglua", .{
         .target = target,
-        .optimize = optimize
+        .optimize = optimize,
+        .lang = .lua53
     });
     ziglua.module("ziglua").addIncludePath(.{.cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include"});
     ziglua.module("ziglua-c").addIncludePath(.{.cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include"});
@@ -178,20 +179,15 @@ pub fn example(b: *std.Build,
     const xml = b.addModule("xml", .{ .root_source_file = b.path("libs/xml.zig")});
     pixeng.addImport("xml", xml);
     
-    
 
     // add the ziglua module and lua artifact
     const ziglua_mod = ziglua.module("ziglua");
     exe.root_module.addImport("ziglua", ziglua_mod);
-    // exe.root_module.addImport("ziglua-c", ziglua.module("ziglua-c"));
+    exe.root_module.addImport("ziglua-c", ziglua.module("ziglua-c"));
     pixeng.addImport("ziglua", ziglua_mod);
 
     exe.root_module.addImport("pixzig", pixeng);
 
-    std.debug.print("Steps: {}\n", .{exe.step.dependencies.items.len});
-    for(exe.step.dependencies.items, 0..) |step, idx| {
-        std.debug.print("Step {}: {s}\n", .{idx, step.name});
-    }
         
     const install_content_step = b.addInstallDirectory(.{
         .source_dir = b.path(assets_dir),
@@ -236,7 +232,7 @@ pub fn example(b: *std.Build,
 
     switch (target.result.os.tag) {
         .emscripten => {
-            const emcc_exe_path = "/usr/lib/emscripten/emcc";
+            const emcc_exe_path = "/usr/lib/emscripten/em++";
             const emcc_command = b.addSystemCommand(&[_][]const u8{emcc_exe_path});
             emcc_command.addArgs(&[_][]const u8{
                 "-o",
@@ -264,7 +260,8 @@ pub fn example(b: *std.Build,
                 // USE_OFFSET_CONVERTER required for @returnAddress used in
                 // std.mem.Allocator interface
                 "-sUSE_OFFSET_CONVERTER",
-                "-sERROR_ON_UNDEFINED_SYMBOLS=0",
+                "-sSUPPORT_LONGJMP=1",
+                "-sERROR_ON_UNDEFINED_SYMBOLS=1",
 
                 // Test embedding some graphics
                 "--preload-file", "assets/mario_grassish2.png",
@@ -316,8 +313,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
 
-    // _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
-    _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig");
+    _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
     if(target.result.os.tag != .emscripten) {
         _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig");
         _ = example(b, target, optimize, "collision_test", "examples/collision_test.zig");
@@ -333,6 +329,7 @@ pub fn build(b: *std.Build) void {
         _ = example(b, target, optimize, "console_test", "examples/console_test.zig");
     //     _ = example(b, target, optimize, "text_rendering", "examples/text_rendering.zig");
 
+        _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig");
         _ = example(b, target, optimize, "digcraft", "games/digcraft/digcraft.zig");
 
         const spack = example(b, target, optimize, "spack", "tools/spack/spack.zig");
