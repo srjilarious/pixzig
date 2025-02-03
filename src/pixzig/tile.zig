@@ -754,11 +754,15 @@ pub const TileMapRenderer = struct {
         self.mapSize = .{ .x=@intCast(layerWidth), .y=@intCast(layerHeight) };
         const mapSize: i32 = @intCast(layerWidth*layerHeight);
         _ = mapSize;
-        self.vertices = try self.alloc.alloc(f32, @intCast(2*4*layerWidth*layerHeight));
-        self.texCoords = try self.alloc.alloc(f32, @intCast(2*4*layerWidth*layerHeight));
-        self.indices = try self.alloc.alloc(u16, @intCast(6*layerWidth*layerHeight));
+        const numVerts: usize = @intCast(2*4*layerWidth*layerHeight);
+        const numIndices: usize = @intCast(6*layerWidth*layerHeight);
+
+        std.log.debug("Creating map render data: verts={}, texCoords={}, indices={}", .{numVerts, numVerts, numIndices});
+        self.vertices = try self.alloc.alloc(f32, numVerts);
+        self.texCoords = try self.alloc.alloc(f32, numVerts);
+        self.indices = try self.alloc.alloc(u16, numIndices);
         
-        std.debug.print("Creating {} vertices\n", .{self.vertices.len});
+        std.log.debug("Creating {} vertices\n", .{self.vertices.len});
         // self.tileIndexMap.clearRetainingCapacity();
         var buffIdx: usize = 0;
         var idx: usize = 0;
@@ -787,6 +791,7 @@ pub const TileMapRenderer = struct {
 
         self.numActualIndices = indicesIdx;
         self.numBuffVals = buffIdx;
+        std.log.info("TileMapRenderer.recreateVertices finished.", .{});
     }
 
     pub fn draw(self: *TileMapRenderer, 

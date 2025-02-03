@@ -262,11 +262,12 @@ pub fn example(b: *std.Build,
                 "-sUSE_OFFSET_CONVERTER",
                 "-sSUPPORT_LONGJMP=1",
                 "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+                "-sSTACK_SIZE=2mb",
 
                 // Test embedding some graphics
                 "--preload-file", "assets/mario_grassish2.png",
-                // "--preload-file assets/digcraft_sprites.png",
-                // "--embed-file assets/digcraft_sprites.json",
+                "--preload-file", "assets/digcraft_sprites.png",
+                "--preload-file", "assets/digcraft_sprites.json",
                 "--preload-file", "assets/test.lua",
                 "--preload-file", "assets/digconf.lua",
                 "--preload-file", "assets/level1a.tmx",
@@ -313,7 +314,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
 
-    _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
+    _ = example(b, target, optimize, "digcraft", "games/digcraft/digcraft.zig");
     if(target.result.os.tag != .emscripten) {
         _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig");
         _ = example(b, target, optimize, "collision_test", "examples/collision_test.zig");
@@ -323,6 +324,7 @@ pub fn build(b: *std.Build) void {
         _ = example(b, target, optimize, "game_state_test", "examples/game_state_test.zig");
         _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig");
         _ = example(b, target, optimize, "grid_render", "examples/grid_render.zig");
+        _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig");
         _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig");
         _ = example(b, target, optimize, "tile_load_test", "examples/tile_load_test.zig");
         // // _ = example(b, target, optimize, "a_star_path", "examples/a_star_path.zig");
@@ -330,7 +332,6 @@ pub fn build(b: *std.Build) void {
     //     _ = example(b, target, optimize, "text_rendering", "examples/text_rendering.zig");
 
         _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig");
-        _ = example(b, target, optimize, "digcraft", "games/digcraft/digcraft.zig");
 
         const spack = example(b, target, optimize, "spack", "tools/spack/spack.zig");
         const zargs = b.dependency("zargunaught", .{});

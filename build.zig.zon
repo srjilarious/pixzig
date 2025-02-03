@@ -52,8 +52,9 @@
         // .zphysics = .{ .path = "libs/zphysics" },
         // .zaudio = .{ .path = "libs/zig-gamedev/libs/zaudio" },
         .zflecs = .{
-            .url = "https://github.com/zig-gamedev/zflecs/archive/fcde2da35ea43c289bc731c9a244417c176192d0.tar.gz",
-            .hash = "12201bcd78d8301929e3f1a029c6f418340b4f540b885c685fde51e4b34ead27a4a5",
+            .path = "libs/zflecs",
+            // .url = "https://github.com/zig-gamedev/zflecs/archive/fcde2da35ea43c289bc731c9a244417c176192d0.tar.gz",
+            // .hash = "12201bcd78d8301929e3f1a029c6f418340b4f540b885c685fde51e4b34ead27a4a5",
         },
         // .system_sdk = .{ .path = "libs/zig-gamedev/libs/system-sdk" },
     },

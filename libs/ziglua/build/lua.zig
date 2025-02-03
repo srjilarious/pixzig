@@ -41,6 +41,7 @@ pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.
     const flags = [_][]const u8{
         // Standard version used in Lua Makefile
         "-std=gnu99",
+        // "-DLUA_COMPAT_5_2",
 
         // Define target-specific macro
         switch (target.result.os.tag) {
@@ -63,14 +64,14 @@ pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.
     };
 
     if (target.result.os.tag != .emscripten) {
-    lib.addCSourceFiles(.{
-        .root = .{ .dependency = .{
-            .dependency = upstream,
-            .sub_path = "",
-        } },
-        .files = lua_source_files,
-        .flags = &flags,
-    });
+        lib.addCSourceFiles(.{
+            .root = .{ .dependency = .{
+                .dependency = upstream,
+                .sub_path = "",
+            } },
+            .files = lua_source_files,
+            .flags = &flags,
+        });
     } else {
         for (lua_source_files) |file| {
             const compile_lua = emCompileStep(

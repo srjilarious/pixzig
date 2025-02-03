@@ -85,10 +85,11 @@ pub const App = struct {
 
         const atlasName = "assets/digcraft_sprites";
         const numSprites = try eng.textures.loadAtlas(atlasName);
-        std.debug.print("Loaded {} sprites from '{s}' atlas", .{ numSprites, atlasName });
+        std.log.debug("Loaded {} sprites from '{s}' atlas\n", .{ numSprites, atlasName });
         const tex = eng.textures.getTexture("digcraft_sprites") catch unreachable;
 
         // Create base map and renderer
+        std.log.info("Creating base map and renderer.", .{});
         const texShader = try pixzig.shaders.Shader.init(&pixzig.shaders.TexVertexShader, &pixzig.shaders.TexPixelShader);
 
         var map = try tile.TileMap.init(alloc);
@@ -100,6 +101,7 @@ pub const App = struct {
 
         var mapRender = try tile.TileMapRenderer.init(alloc, texShader);
 
+        std.log.info("Creating tiles.", .{});
         // Create some tiles for the tile set
         const DirtIdx = 0;
         const GrassIdx = 1;
@@ -121,10 +123,21 @@ pub const App = struct {
             map.layers.items[0].tiles.items[(C.MapHeight - 1) * C.MapWidth + idx] = GrassIdx;
         }
 
+        std.log.info("Recreating map renderer vertices.", .{});
         try mapRender.recreateVertices(&map.tilesets.items[0], &map.layers.items[0]);
 
+        std.log.info("Dumping tile layer data..", .{});
+        map.layers.items[0].dumpLayer();
+
+        std.log.info("Setting up mouse.", .{});
+        const mouse = try alloc.create(pixzig.input.Mouse);
+        mouse.* = pixzig.input.Mouse.init(eng.window, eng.allocator);
+
+        std.log.info("Initializing ECS world.", .{});
         // Setup world and entities
         const world = flecs.init();
+        std.log.debug("For world from flecs.init: {}", .{world});
+        std.log.info("Setting up entities.", .{});
         entities.setupEntities(world);
 
         const draw_query = try flecs.query_init(world, &.{
@@ -139,13 +152,10 @@ pub const App = struct {
             } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_COUNT_MAX - 1),
         });
 
+        std.log.info("Getting player texture.", .{});
         const playerTex = eng.textures.getTexture("remi") catch unreachable;
         const playerId = entities.spawn(world, .Player, playerTex, 8);
 
-        map.layers.items[0].dumpLayer();
-
-        const mouse = try alloc.create(pixzig.input.Mouse);
-        mouse.* = pixzig.input.Mouse.init(eng.window, eng.allocator);
         // Create application.
         var app = App{
             .allocator = alloc,
@@ -164,13 +174,17 @@ pub const App = struct {
             .cursor_draw_query = cursor_draw_query,
         };
 
+        std.log.info("Setting up gravity.", .{});
         app.gravity = try Gravity.init(world);
 
+        std.log.info("Setting up camera.", .{});
         app.cameras = try CameraSystem.init(world, eng, projMat);
         var mainCamera = flecs.get_mut(world, app.cameras.currCamera.?, entities.Camera).?;
         mainCamera.tracked = playerId;
 
+        std.log.info("Setting up player control.", .{});
         app.playerControl = try PlayerControl.init(world, eng, app.mouse, app.cameras.currCamera.?);
+        std.log.info("Setting up outline support.", .{});
         app.outlines = try Outlines.init(alloc, world, eng);
         return app;
     }
@@ -214,7 +228,10 @@ pub const App = struct {
 
     pub fn render(self: *App, eng: *pixzig.PixzigEngine) void {
         _ = eng;
-        gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
+        // gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
+        gl.clearColor(0, 0, 0.2, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
         self.fps.renderTick();
 
         const mvp = self.cameras.currCameraMat();

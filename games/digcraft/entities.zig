@@ -44,6 +44,7 @@ pub const Camera = struct {
 };
 
 pub fn setupEntities(world: *flecs.world_t) void {
+    std.log.info("Setting up entities!\n", .{});
     flecs.COMPONENT(world, Player);
     flecs.COMPONENT(world, Mover);
     flecs.COMPONENT(world, Sprite);

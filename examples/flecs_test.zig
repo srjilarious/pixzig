@@ -57,11 +57,13 @@ pub const App = struct {
 
         const world = flecs.init();
 
+        std.log.info("Finished world init.", .{});
         flecs.COMPONENT(world, Player);
         flecs.COMPONENT(world, Sprite);
         flecs.COMPONENT(world, Velocity);
         flecs.COMPONENT(world, DebugOutline);
 
+        std.log.info("Created components", .{});
         const update_query = try flecs.query_init(world, &.{
             .terms = [_]flecs.term_t{
                 .{ .id = flecs.id(Sprite) },
@@ -75,6 +77,7 @@ pub const App = struct {
             } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_COUNT_MAX - 1),
         });
 
+        std.log.info("Created queries.", .{});
         var app = App{
             .allocator = alloc,
             .projMat = projMat,
@@ -88,10 +91,12 @@ pub const App = struct {
             .draw_query = query,
         };
 
+        std.log.info("Spawning 50 entities...", .{});
         for (0..50) |_| {
             app.spawn(1, 10, 50, true);
         }
 
+        std.log.info("Done initializing the app.", .{});
         return app;
     }
 
@@ -103,26 +108,32 @@ pub const App = struct {
     }
 
     pub fn spawn(self: *App, which: usize, x: i32, y: i32, val: bool) void {
+        std.log.info("Creating entity", .{});
         const ent = flecs.new_id(self.world);
         _ = which;
         // const srcX: i32 = @intCast(32*@rem(which, 16));
         // const srcY:i32 = @intCast(32*@divTrunc(which, 16));
+        std.log.info("  - Creating sprite", .{});
         var spr = Sprite.create(self.tex, .{ .x = 32, .y = 32 });
 
         spr.setPos(x, y);
+        std.log.info("  - Setting sprite", .{});
         _ = flecs.set(self.world, ent, Sprite, spr);
 
+        std.log.info("  - Creating prng", .{});
         var prng = std.Random.DefaultPrng.init(blk: {
             var seed: u64 = undefined;
             std.posix.getrandom(std.mem.asBytes(&seed)) catch unreachable;
             break :blk seed;
         });
 
+        std.log.info("  - Creating velocity component", .{});
         const vel = Velocity{ .speed = .{ .x = 2 * prng.random().floatNorm(f32), .y = 2 * prng.random().floatNorm(f32) } };
 
         _ = flecs.set(self.world, ent, Velocity, vel);
 
         if (val) {
+            std.log.info("  - Setting debug outline.", .{});
             _ = flecs.set(self.world, ent, DebugOutline, .{ .color = Color.from(100, 255, 200, 220) });
         }
     }
@@ -197,7 +208,10 @@ pub const App = struct {
 
     pub fn render(self: *App, eng: *pixzig.PixzigEngine) void {
         _ = eng;
-        gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
+
+        gl.clearColor(0, 0, 0.2, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
         self.fps.renderTick();
 
         self.renderer.begin(self.projMat);

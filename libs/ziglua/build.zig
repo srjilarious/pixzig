@@ -73,6 +73,7 @@ pub fn build(b: *Build) void {
         .root_source_file = c_header_path,
         .target = target,
         .optimize = optimize,
+        //.link_libc = true,
     });
 
     // PIXZIG addition for emscripten
@@ -83,12 +84,12 @@ pub fn build(b: *Build) void {
                 @panic("Pass '--sysroot \"~/.cache/emscripten/sysroot\"'");
             }
 
-            // const cache_include = std.fs.path.join(b.allocator, &.{ "/home/jeffdw/.cache/emscripten/sysroot", "include" }) catch @panic("Out of memory");
             const cache_include = std.fs.path.join(b.allocator, &.{ b.sysroot.?, "include" }) catch @panic("Out of memory");
             defer b.allocator.free(cache_include);
 
             var dir = std.fs.openDirAbsolute(cache_include, std.fs.Dir.OpenDirOptions{ .access_sub_paths = true, .no_follow = true }) catch @panic("No emscripten cache. Generate it!");
             dir.close();
+            //lib.addIncludePath(.{ .cwd_relative = cache_include });
             c_headers.addIncludePath(.{ .cwd_relative = cache_include });
         },
         else => {},
