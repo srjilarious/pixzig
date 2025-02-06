@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = std.builtin;
 
-const assets_dir = "assets/";
+const assets_dir = "assets";
 
 fn addArchIncludes(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, dep: *std.Build.Step.Compile) !void {
     _ = optimize;
@@ -31,9 +31,9 @@ pub fn example(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
-    comptime name: []const u8,
-    comptime root_src_path: []const u8,
-    comptime assets: []const []const u8,
+    name: []const u8,
+    root_src_path: []const u8,
+    assets: []const []const u8,
 ) *std.Build.Step.Compile {
     const exe = blk: {
         if (target.result.os.tag == .emscripten) {
@@ -179,41 +179,6 @@ pub fn example(
 
     exe.root_module.addImport("pixzig", pixeng);
 
-    const install_content_step = b.addInstallDirectory(.{
-        .source_dir = b.path(assets_dir),
-        .install_dir = .{ .custom = "" },
-        .install_subdir = "bin/" ++ assets_dir,
-    });
-    exe.step.dependOn(&install_content_step.step);
-
-    // This declares intent for the executable to be installed into the
-    // standard location when the user invokes the "install" step (the default
-    // step when running `zig build`).
-    b.installArtifact(exe);
-
-    // This *creates* a Run step in the build graph, to be executed when another
-    // step is evaluated that depends on it. The next line below will establish
-    // such a dependency.
-    const run_cmd = b.addRunArtifact(exe);
-
-    // By making the run step depend on the install step, it will be run from the
-    // installation directory rather than directly from within the cache directory.
-    // This is not necessary, however, if the application depends on other installed
-    // files, this ensures they will be present and in the expected location.
-    run_cmd.step.dependOn(b.getInstallStep());
-
-    // This allows the user to pass arguments to the application in the build
-    // command itself, like this: `zig build run -- arg1 arg2 etc`
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
-
-    // This creates a build step. It will be visible in the `zig build --help` menu,
-    // and can be selected like this: `zig build run`
-    // This will evaluate the `run` step rather than the default, which is "install".
-    const run_step = b.step(name, "Run example");
-    run_step.dependOn(&run_cmd.step);
-
     // const emcc_exe = switch (builtin.os.tag) { // TODO bundle emcc as a build dependency
     //     .windows => "emcc.bat",
     //     else => "emcc",
@@ -221,16 +186,18 @@ pub fn example(
 
     switch (target.result.os.tag) {
         .emscripten => {
-            const path = std.fmt.allocPrint(b.allocator, "{s}/web/{s}", .{ b.install_prefix, name }) catch unreachable;
-            defer b.allocator.free(path);
+            const path = b.pathJoin(&.{ b.install_prefix, "web", name });
+            // std.fmt.allocPrint(b.allocator, "{s}/web/{s}", .{ b.install_prefix, name }) catch unreachable;
+            // defer b.allocator.free(path);
 
             std.debug.print("Installing to: {s}\n", .{path});
 
-            const index_path = std.fmt.allocPrint(b.allocator, "{s}/index.html", .{path}) catch unreachable;
-            defer b.allocator.free(index_path);
+            const index_path = b.pathJoin(&.{ path, "index.html" });
+            // std.fmt.allocPrint(b.allocator, "{s}/index.html", .{path}) catch unreachable;
+            // defer b.allocator.free(index_path);
 
             const mkdir_command = b.addSystemCommand(&[_][]const u8{"mkdir"});
-            mkdir_command.addArg(path);
+            mkdir_command.addArgs(&.{ "-p", path });
 
             const emcc_exe_path = "/usr/lib/emscripten/em++";
             const emcc_command = b.addSystemCommand(&[_][]const u8{emcc_exe_path});
@@ -282,7 +249,7 @@ pub fn example(
 
             // Add all of the specified assets.
             for (assets) |asset| {
-                emcc_command.addArgs(&[_][]const u8{ "--preload-file", asset });
+                emcc_command.addArgs(&[_][]const u8{ "--preload-file", b.pathJoin(&.{ assets_dir, asset }) });
             }
 
             const link_items: []const *std.Build.Step.Compile = &.{
@@ -301,7 +268,44 @@ pub fn example(
             const install = emcc_command;
             b.default_step.dependOn(&install.step);
         },
-        else => {},
+        else => {
+            const path = b.pathJoin(&.{ "bin", name });
+
+            const install_content_step = b.addInstallDirectory(.{
+                .source_dir = b.path(assets_dir),
+                .install_dir = .{ .custom = path },
+                .install_subdir = "assets",
+                .include_extensions = assets,
+            });
+            exe.step.dependOn(&install_content_step.step);
+
+            b.getInstallStep().dependOn(&b.addInstallArtifact(exe, .{ .dest_dir = .{ .override = .{ .custom = path } } }).step);
+
+            // This *creates* a Run step in the build graph, to be executed when another
+            // step is evaluated that depends on it. The next line below will establish
+            // such a dependency.
+            const run_cmd = b.addRunArtifact(exe);
+
+            run_cmd.setCwd(.{ .cwd_relative = b.pathJoin(&.{ b.install_prefix, path }) });
+
+            // By making the run step depend on the install step, it will be run from the
+            // installation directory rather than directly from within the cache directory.
+            // This is not necessary, however, if the application depends on other installed
+            // files, this ensures they will be present and in the expected location.
+            run_cmd.step.dependOn(b.getInstallStep());
+
+            // This allows the user to pass arguments to the application in the build
+            // command itself, like this: `zig build run -- arg1 arg2 etc`
+            if (b.args) |args| {
+                run_cmd.addArgs(args);
+            }
+
+            // This creates a build step. It will be visible in the `zig build --help` menu,
+            // and can be selected like this: `zig build run`
+            // This will evaluate the `run` step rather than the default, which is "install".
+            const run_step = b.step(name, "Run example");
+            run_step.dependOn(&run_cmd.step);
+        },
     }
 
     return exe;
@@ -328,11 +332,10 @@ pub fn build(b: *std.Build) void {
         "digcraft",
         "games/digcraft/digcraft.zig",
         &.{
-            "assets/mario_grassish2.png",
-            "assets/digcraft_sprites.png",
-            "assets/digcraft_sprites.json",
-            "assets/digconf.lua",
-            "assets/level1a.tmx",
+            "digcraft_sprites.png",
+            "digcraft_sprites.json",
+            "digconf.lua",
+            "level1a.tmx",
         },
     );
 
@@ -344,8 +347,8 @@ pub fn build(b: *std.Build) void {
         "tile_load_test",
         "examples/tile_load_test.zig",
         &.{
-            "assets/mario_grassish2.png",
-            "assets/level1a.tmx",
+            "mario_grassish2.png",
+            "level1a.tmx",
         },
     );
 
@@ -353,27 +356,27 @@ pub fn build(b: *std.Build) void {
 
     if (target.result.os.tag != .emscripten) {
         _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig", &.{
-            "assets/mario_grassish2.png",
+            "mario_grassish2.png",
         });
         _ = example(b, target, optimize, "collision_test", "examples/collision_test.zig", &.{
-            "assets/mario_grassish2.png",
-            "assets/level1a.tmx",
+            "mario_grassish2.png",
+            "level1a.tmx",
         });
         _ = example(b, target, optimize, "create_texture", "examples/create_texture.zig", &.{});
         _ = example(b, target, optimize, "flecs_test", "examples/flecs_test.zig", &.{
-            "assets/mario_grassish2.png",
+            "mario_grassish2.png",
         });
         _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig", &.{});
         _ = example(b, target, optimize, "game_state_test", "examples/game_state_test.zig", &.{});
         _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig", &.{
-            "assets/mario_grassish2.png",
+            "mario_grassish2.png",
         });
         _ = example(b, target, optimize, "grid_render", "examples/grid_render.zig", &.{});
         _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig", &.{
-            "assets/test.lua",
+            "test.lua",
         });
         _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig", &.{
-            "assets/mario_grassish2.png",
+            "mario_grassish2.png",
         });
         // // _ = example(b, target, optimize, "a_star_path", "examples/a_star_path.zig");
         _ = example(b, target, optimize, "console_test", "examples/console_test.zig", &.{});
