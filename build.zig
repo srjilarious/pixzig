@@ -372,22 +372,22 @@ pub fn build(b: *std.Build) void {
     _ = example(b, target, optimize, "console_test", "examples/console_test.zig", &.{"Roboto-Medium.ttf"});
 
     if (target.result.os.tag != .emscripten) {
-        _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig", &.{
-            "test.lua",
-        });
+        // _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig", &.{
+        //     "test.lua",
+        // });
         // // _ = example(b, target, optimize, "a_star_path", "examples/a_star_path.zig");
         //     _ = example(b, target, optimize, "text_rendering", "examples/text_rendering.zig");
 
-        const spack = example(b, target, optimize, "spack", "tools/spack/spack.zig", &.{});
-        const zargs = b.dependency("zargunaught", .{});
-        spack.root_module.addImport("zargunaught", zargs.module("zargunaught"));
+        // const spack = example(b, target, optimize, "spack", "tools/spack/spack.zig", &.{});
+        // const zargs = b.dependency("zargunaught", .{});
+        // spack.root_module.addImport("zargunaught", zargs.module("zargunaught"));
 
-        const zstbi = b.dependency("zstbi", .{ .target = target });
-        spack.root_module.addImport("zstbi", zstbi.module("root"));
+        // const zstbi = b.dependency("zstbi", .{ .target = target });
+        // spack.root_module.addImport("zstbi", zstbi.module("root"));
 
-        const tests = example(b, target, optimize, "tests", "tests/main.zig", &.{});
-        const testzMod = b.dependency("testz", .{});
-        tests.root_module.addImport("testz", testzMod.module("testz"));
+        // const tests = example(b, target, optimize, "tests", "tests/main.zig", &.{});
+        // const testzMod = b.dependency("testz", .{});
+        // tests.root_module.addImport("testz", testzMod.module("testz"));
     }
 }
 

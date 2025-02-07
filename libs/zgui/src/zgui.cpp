@@ -1159,7 +1159,6 @@ extern "C"
 
     ZGUI_API ImDrawData *zguiGetDrawData(void)
     {
-        printf("Getting draw data!");
         return ImGui::GetDrawData();
     }
 

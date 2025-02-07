@@ -122,20 +122,6 @@ pub fn build(b: *std.Build) void {
         imgui.linkLibC();
         if (target.result.abi != .msvc)
             imgui.linkLibCpp();
-    } else {
-        // PIXZIG addition for emscripten
-        if (b.sysroot == null) {
-            @panic("Pass '--sysroot \"~/.cache/emscripten/sysroot\"'");
-        }
-
-        const cache_include = std.fs.path.join(b.allocator, &.{ b.sysroot.?, "include" }) catch @panic("Out of memory");
-        defer b.allocator.free(cache_include);
-
-        var dir = std.fs.openDirAbsolute(cache_include, std.fs.Dir.OpenDirOptions{ .access_sub_paths = true, .no_follow = true }) catch @panic("No emscripten cache. Generate it!");
-        dir.close();
-        //lib.addIncludePath(.{ .cwd_relative = cache_include });
-        imgui.addIncludePath(.{ .cwd_relative = cache_include });
-        // END PIXZIG
     }
 
     imgui.addCSourceFile(.{

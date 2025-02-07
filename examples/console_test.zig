@@ -24,13 +24,15 @@ const console = @import("pixzig").console;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
+const AppRunner = pixzig.PixzigAppRunner(App, EngOptions{ .withGui = true });
+
 pub const App = struct {
     fps: FpsCounter,
     script: *scripting.ScriptEngine,
     cons: *console.Console,
     delay: Delay = .{ .max = 120 },
 
-    pub fn init(alloc: std.mem.Allocator, eng: *pixzig.PixzigEngine) !App {
+    pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.PixEng) !App {
 
         _ = zgui.io.addFontFromFile("assets/Roboto-Medium.ttf",
             std.math.floor(16.0 * eng.scaleFactor),
@@ -45,7 +47,7 @@ pub const App = struct {
         };
     }
 
-    pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.PixEng, delta: f64) bool {
         if(self.fps.update(delta)) {
             std.log.debug("FPS: {}\n", .{self.fps.fps()});
         }
@@ -59,7 +61,7 @@ pub const App = struct {
         return true;
     }
 
-    pub fn render(self: *App, eng: *pixzig.PixzigEngine) void {
+    pub fn render(self: *App, eng: *AppRunner.PixEng) void {
         gl.clearColor(0, 0, 1, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -73,7 +75,7 @@ pub const App = struct {
 
         if (zgui.begin("My window", .{})) {
             if (zgui.button("Press me!", .{ .w = 200.0 })) {
-                std.debug.print("Button pressed\n", .{});
+                std.log.debug("Button pressed\n", .{});
             }
         }
         zgui.end();
@@ -88,23 +90,22 @@ pub const App = struct {
     }
 };
 
-const AppRunner = pixzig.PixzigApp(App);
-var g_AppRunner = AppRunner{};
-var g_Eng: pixzig.PixzigEngine = undefined;
+
+var g_AppRunner: *AppRunner = undefined;
 var g_App: App = undefined;
 
 export fn mainLoop() void {
-    _ = g_AppRunner.gameLoopCore(&g_App, &g_Eng);
+    _ = g_AppRunner.gameLoopCore(&g_App);
 }
 
 pub fn main() !void {
-    std.log.info("Pixzig Grid Render Example", .{});
+    std.log.info("Pixzig Console Test Example", .{});
 
     const alloc = std.heap.c_allocator;
-    g_Eng = try pixzig.PixzigEngine.init("Pixzig: Grid Render Example.", alloc, EngOptions{ .withGui = true });
+    g_AppRunner = try AppRunner.init("Pixzig: Console Test Example.", alloc, .{});
 
     std.log.info("Initializing app.\n", .{});
-    g_App = try App.init(alloc, &g_Eng);
+    g_App = try App.init(alloc, &g_AppRunner.engine);
 
     glfw.swapInterval(0);
 
@@ -112,8 +113,8 @@ pub fn main() !void {
     if (builtin.target.os.tag == .emscripten) {
         pixzig.web.setMainLoop(mainLoop, null, false);
     } else {
-        g_AppRunner.gameLoop(&g_App, &g_Eng);
-        g_Eng.deinit();
+        g_AppRunner.gameLoop(&g_App);
+        g_AppRunner.deinit();
     }
 }
 
