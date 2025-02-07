@@ -70,21 +70,21 @@ pub fn example(
     const zmath = b.dependency("zmath", .{ .target = target });
 
     const zgui = blk: {
-        if (target.result.os.tag == .emscripten) {
-            break :blk b.dependency("zgui", .{
-                .target = target,
-                .backend = .glfw, // emscripten
-                // .shared = false,
-                // .with_implot = true,
-            });
-        } else {
-            break :blk b.dependency("zgui", .{
-                .target = target,
-                .backend = .glfw_opengl3,
-                // .shared = false,
-                // .with_implot = true,
-            });
-        }
+        // if (target.result.os.tag == .emscripten) {
+        //     break :blk b.dependency("zgui", .{
+        //         .target = target,
+        //         .backend = .glfw, // emscripten
+        //         // .shared = false,
+        //         // .with_implot = true,
+        //     });
+        // } else {
+        break :blk b.dependency("zgui", .{
+            .target = target,
+            .backend = .glfw_opengl3,
+            // .shared = false,
+            // .with_implot = true,
+        });
+        // }
     };
 
     const gui_dep = zgui.artifact("imgui");
@@ -204,13 +204,13 @@ pub fn example(
 
             // We need our web subdirectory to exist for em++ to be able to run.
             emcc_command.step.dependOn(&mkdir_command.step);
-
             emcc_command.addArgs(&[_][]const u8{
                 "-o",
                 index_path,
                 "-sFULL-ES3=1",
                 "-sUSE_GLFW=3",
                 "-O3",
+                "-g",
 
                 // "-sAUDIO_WORKLET=1",
                 // "-sWASM_WORKERS=1",
@@ -221,6 +221,7 @@ pub fn example(
                 // "-sPTHREAD_POOL_SIZE=4",
 
                 "-sMIN_WEBGL_VERSION=2",
+                // "-DIMGUI_IMPL_OPENGL_ES3=1",
                 "-sINITIAL_MEMORY=167772160",
                 "-sALLOW_MEMORY_GROWTH=1",
                 "-sMALLOC=emmalloc",
@@ -234,14 +235,6 @@ pub fn example(
                 "-sSUPPORT_LONGJMP=1",
                 "-sERROR_ON_UNDEFINED_SYMBOLS=1",
                 "-sSTACK_SIZE=2mb",
-
-                // Test embedding some graphics
-                // "--preload-file", "assets/mario_grassish2.png",
-                // "--preload-file", "assets/digcraft_sprites.png",
-                // "--preload-file", "assets/digcraft_sprites.json",
-                // "--preload-file", "assets/test.lua",
-                // "--preload-file", "assets/digconf.lua",
-                // "--preload-file", "assets/level1a.tmx",
 
                 "--shell-file",
                 b.path("src/shell.html").getPath(b),
@@ -325,61 +318,64 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     // Digcraft.
-    _ = example(
-        b,
-        target,
-        optimize,
-        "digcraft",
-        "games/digcraft/digcraft.zig",
-        &.{
-            "digcraft_sprites.png",
-            "digcraft_sprites.json",
-            "digconf.lua",
-            "level1a.tmx",
-        },
-    );
+    // _ = example(
+    //     b,
+    //     target,
+    //     optimize,
+    //     "digcraft",
+    //     "games/digcraft/digcraft.zig",
+    //     &.{
+    //         "digcraft_sprites.png",
+    //         "digcraft_sprites.json",
+    //         "digconf.lua",
+    //         "level1a.tmx",
+    //     },
+    // );
 
-    // Tile map test.
-    _ = example(
-        b,
-        target,
-        optimize,
-        "tile_load_test",
-        "examples/tile_load_test.zig",
-        &.{
-            "mario_grassish2.png",
-            "level1a.tmx",
-        },
-    );
+    // // Tile map test.
+    // _ = example(
+    //     b,
+    //     target,
+    //     optimize,
+    //     "tile_load_test",
+    //     "examples/tile_load_test.zig",
+    //     &.{
+    //         "mario_grassish2.png",
+    //         "level1a.tmx",
+    //     },
+    // );
 
-    _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig", &.{});
+    // _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig", &.{});
+
+    // _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig", &.{
+    //     "mario_grassish2.png",
+    // });
+    // _ = example(b, target, optimize, "collision_test", "examples/collision_test.zig", &.{
+    //     "mario_grassish2.png",
+    //     "level1a.tmx",
+    // });
+    // _ = example(b, target, optimize, "create_texture", "examples/create_texture.zig", &.{});
+    // _ = example(b, target, optimize, "flecs_test", "examples/flecs_test.zig", &.{
+    //     "mario_grassish2.png",
+    // });
+    // _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig", &.{});
+    // _ = example(b, target, optimize, "game_state_test", "examples/game_state_test.zig", &.{});
+    // _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig", &.{
+    //     "mario_grassish2.png",
+    // });
+    // _ = example(b, target, optimize, "grid_render", "examples/grid_render.zig", &.{});
+
+    // _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig", &.{
+    //     "mario_grassish2.png",
+    // });
+
+    _ = example(b, target, optimize, "console_test", "examples/console_test.zig", &.{"Roboto-Medium.ttf"});
 
     if (target.result.os.tag != .emscripten) {
-        _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig", &.{
-            "mario_grassish2.png",
-        });
-        _ = example(b, target, optimize, "collision_test", "examples/collision_test.zig", &.{
-            "mario_grassish2.png",
-            "level1a.tmx",
-        });
-        _ = example(b, target, optimize, "create_texture", "examples/create_texture.zig", &.{});
-        _ = example(b, target, optimize, "flecs_test", "examples/flecs_test.zig", &.{
-            "mario_grassish2.png",
-        });
-        _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig", &.{});
-        _ = example(b, target, optimize, "game_state_test", "examples/game_state_test.zig", &.{});
-        _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig", &.{
-            "mario_grassish2.png",
-        });
-        _ = example(b, target, optimize, "grid_render", "examples/grid_render.zig", &.{});
         _ = example(b, target, optimize, "lua_test", "examples/lua_test.zig", &.{
             "test.lua",
         });
-        _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig", &.{
-            "mario_grassish2.png",
-        });
         // // _ = example(b, target, optimize, "a_star_path", "examples/a_star_path.zig");
-        _ = example(b, target, optimize, "console_test", "examples/console_test.zig", &.{});
         //     _ = example(b, target, optimize, "text_rendering", "examples/text_rendering.zig");
 
         const spack = example(b, target, optimize, "spack", "tools/spack/spack.zig", &.{});

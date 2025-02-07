@@ -26,6 +26,7 @@
 
         },
         .zopengl = .{
+            //.path = "libs/zopengl",
             .url = "https://github.com/zig-gamedev/zopengl/archive/c9c293a9af388478bca0ad52007a72372ef71747.tar.gz",
             .hash = "1220c030f5e33e09bd80fe7a7b064b65e1fc02e9bbf603ba04716866c9f1ca16f8ce",
         },
@@ -44,8 +45,9 @@
         // .common = .{ .path = "libs/zig-gamedev/libs/common" },
         // .zbullet = .{ .path = "libs/zbullet" },
         .zgui = .{
-            .url = "https://github.com/zig-gamedev/zgui/archive/c16629e67e7bc1bca9a5c67d5123874c75f5374d.tar.gz",
-            .hash = "12202063c813c1b95affa57d83a6a4817d9a4114bd9db052f87740f81b1843ceca09",
+            .path = "libs/zgui",
+            // .url = "https://github.com/zig-gamedev/zgui/archive/c16629e67e7bc1bca9a5c67d5123874c75f5374d.tar.gz",
+            // .hash = "12202063c813c1b95affa57d83a6a4817d9a4114bd9db052f87740f81b1843ceca09",
         },
         // .zgpu = .{ .path = "libs/zig-gamedev/libs/zgpu" },
         // .ztracy = .{ .path = "libs/ztracy" },

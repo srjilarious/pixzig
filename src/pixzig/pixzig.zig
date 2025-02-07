@@ -169,8 +169,11 @@ pub const PixzigEngine = struct {
         };
 
         if(options.withGui) {
+            std.log.info("Init gui 1", .{});
             zgui.init(allocator);
+            std.log.info("Init gui 2", .{});
             zgui.getStyle().scaleAllSizes(scale_factor);
+            std.log.info("Init gui 3", .{});
             zgui.backend.init(window);
         }
 
