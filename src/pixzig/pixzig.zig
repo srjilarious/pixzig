@@ -46,6 +46,10 @@ pub const PixzigEngineInitOptions = struct {
 
 pub const web = if(builtin.os.tag == .emscripten) @import("./web.zig") else {};
 
+// Globals used by AppRunner main loop in emscripten for web builds.
+var g_EmscriptenRunnerRef: ?*anyopaque = null;
+var g_EmscriptenAppRef: ?*anyopaque = null;
+
 pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOptions) type {
 
     const AppStruct = struct {
@@ -107,6 +111,25 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
                 if(!self.gameLoopCore(app)) return;
             }
         }
+
+        export fn mainLoop() void {
+            const appRunner: *Self = @ptrCast(@alignCast(g_EmscriptenRunnerRef.?));
+            const app: *AppData = @ptrCast(@alignCast(g_EmscriptenAppRef.?));
+            _ = appRunner.gameLoopCore(app);
+        }
+
+        pub fn run(self: *Self, app: *AppData) void {
+            std.log.info("Starting main loop...\n", .{});
+            if (builtin.target.os.tag == .emscripten) {
+                g_EmscriptenRunnerRef = @constCast(self);
+                g_EmscriptenAppRef = @constCast(app);
+                web.setMainLoop(mainLoop, null, false);
+            } else {
+                self.gameLoop(app);
+                app.deinit();
+                self.deinit();
+            }
+        } 
     };
 
     return AppStruct;

@@ -635,16 +635,13 @@ pub const Lua = opaque {
     pub fn init(a: Allocator) !*Lua {
         if (lang == .luau) zig_registerAssertionHandler();
 
-        std.log.debug("lua alloc setup!", .{});
         // the userdata passed to alloc needs to be a pointer with a consistent address
         // so we allocate an Allocator struct to hold a copy of the allocator's data
         const allocator_ptr = try a.create(Allocator);
         allocator_ptr.* = a;
 
-        std.log.debug("lua_newstate!", .{});
         // @constCast() is safe here because Lua does not mutate the pointer internally
         if (c.lua_newstate(alloc, allocator_ptr)) |state| {
-            std.log.debug("Created state!", .{});
             return @ptrCast(state);
         } else return error.OutOfMemory;
     }

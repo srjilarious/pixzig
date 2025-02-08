@@ -9,7 +9,6 @@ extern fn emscripten_console_log([*c]const u8) void;
 pub const MainLoopCallback = *const fn () callconv(.C) void;
 extern fn emscripten_set_main_loop(MainLoopCallback, c_int, c_int) void;
 pub fn setMainLoop(cb: MainLoopCallback, maybe_fps: ?i16, simulate_infinite_loop: bool) void {
-    std.debug.print("Setting main loop internal.\n", .{});
     emscripten_set_main_loop(cb, if (maybe_fps) |fps| fps else -1, @intFromBool(simulate_infinite_loop));
 }
 

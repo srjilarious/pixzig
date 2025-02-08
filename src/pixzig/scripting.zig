@@ -8,11 +8,8 @@ pub const ScriptEngine = struct {
     lua: *Lua,
 
     pub fn init(allocator: std.mem.Allocator) !ScriptEngine {
-        std.log.debug("init a", .{});
         var lua = try Lua.init(allocator);
-        std.log.debug("init b", .{});
         lua.openLibs();
-        std.log.debug("init c", .{});
         return .{ .lua = lua };
     }
 
