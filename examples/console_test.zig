@@ -32,7 +32,7 @@ pub const App = struct {
     cons: *console.Console,
     delay: Delay = .{ .max = 120 },
 
-    pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.PixEng) !*App {
+    pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app: *App = try alloc.create(App);
 
         _ = zgui.io.addFontFromFile(
@@ -62,7 +62,7 @@ pub const App = struct {
         self.alloc.destroy(self);
     }
 
-    pub fn update(self: *App, eng: *AppRunner.PixEng, delta: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if (self.fps.update(delta)) {
             std.log.debug("FPS: {}\n", .{self.fps.fps()});
         }
@@ -76,7 +76,7 @@ pub const App = struct {
         return true;
     }
 
-    pub fn render(self: *App, eng: *AppRunner.PixEng) void {
+    pub fn render(self: *App, eng: *AppRunner.Engine) void {
         gl.clearColor(0, 0, 1, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -107,7 +107,7 @@ pub fn main() !void {
     std.log.info("Pixzig Console Test Example", .{});
 
     const alloc = std.heap.c_allocator;
-    const appRunner: *AppRunner = try AppRunner.init("Pixzig: Console Test Example.", alloc, .{});
+    const appRunner = try AppRunner.init("Pixzig: Console Test Example.", alloc, .{});
 
     std.log.info("Initializing app.\n", .{});
     const app: *App = try App.init(alloc, &appRunner.engine);

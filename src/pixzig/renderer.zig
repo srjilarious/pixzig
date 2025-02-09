@@ -767,7 +767,6 @@ pub fn Renderer(opts: RendererOptions) type {
 
             std.log.info("Setting up {} sprite batch queues.", .{opts.numSpriteTextures});
             for(0..opts.numSpriteTextures) |idx| {
-                std.log.debug("SpriteBatchQueue creating: {}", .{idx});
                 const sbq = try SpriteBatchQueue.init(alloc, &rend.texShader);
                 rend.batches[idx] = sbq;
             }

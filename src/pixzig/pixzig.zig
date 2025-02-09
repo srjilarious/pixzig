@@ -53,13 +53,13 @@ var g_EmscriptenAppRef: ?*anyopaque = null;
 pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOptions) type {
 
     const AppStruct = struct {
-        pub const PixEng = PixzigEngine(engOpts);
+        pub const Engine = PixzigEngine(engOpts);
         const AppUpdateFunc = fn (*AppData, *PixzigEngine, f64) bool;
         const AppRenderFunc = fn (*AppData, *PixzigEngine) void;
         
         const UpdateStepUs: f64 = 1.0 / 120.0;
 
-        engine: PixEng,
+        engine: Engine,
         alloc: std.mem.Allocator,
         lag: f64 = 0,
         currTime: f64 = 0,
@@ -72,7 +72,7 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
             engInitOpts: PixzigEngineInitOptions,
         ) !*Self {
             var appRunner = try alloc.create(Self);
-            appRunner.engine = try PixEng.init(title, alloc, engInitOpts);
+            appRunner.engine = try Engine.init(title, alloc, engInitOpts);
             appRunner.alloc = alloc;
             appRunner.currTime = glfw.getTime();
             return appRunner;
