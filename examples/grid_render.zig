@@ -29,20 +29,18 @@ const GridRenderer = tile.GridRenderer;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
+const AppRunner = pixzig.PixzigAppRunner(App, .{});
+
 pub const App = struct {
-    allocator: std.mem.Allocator,
+    alloc: std.mem.Allocator,
     projMat: zmath.Mat,
-    renderer: Renderer,
     fps: FpsCounter,
     grid: GridRenderer,
 
-    pub fn init(eng: *pixzig.PixzigEngine, alloc: std.mem.Allocator) !App {
+    pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         _ = eng;
         // Orthographic projection matrix
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
-
-        const renderer = try Renderer.init(alloc, .{});
-
         const shader = try Shader.init(&shaders.ColorVertexShader, &shaders.ColorPixelShader);
         const grid = try GridRenderer.init(
             alloc,
@@ -52,21 +50,24 @@ pub const App = struct {
             1,
             Color{ .r = 1, .g = 0, .b = 1, .a = 1 },
         );
-        return .{
-            .allocator = alloc,
+
+        const app = try alloc.create(App);
+        app.* = .{
+            .alloc = alloc,
             .projMat = projMat,
-            .renderer = renderer,
             .fps = FpsCounter.init(),
             .grid = grid,
         };
+
+        return app;
     }
 
     pub fn deinit(self: *App) void {
-        self.renderer.deinit();
         self.grid.deinit();
+        self.alloc.destroy(self);
     }
 
-    pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if (self.fps.update(delta)) {
             std.log.debug("FPS: {}\n", .{self.fps.fps()});
         }
@@ -83,7 +84,7 @@ pub const App = struct {
         return true;
     }
 
-    pub fn render(self: *App, eng: *pixzig.PixzigEngine) void {
+    pub fn render(self: *App, eng: *AppRunner.Engine) void {
         _ = eng;
 
         gl.clearColor(0, 0, 0.2, 1);
@@ -95,38 +96,15 @@ pub const App = struct {
     }
 };
 
-const AppRunner = pixzig.PixzigApp(App);
-var g_AppRunner = AppRunner{};
-var g_Eng: pixzig.PixzigEngine = undefined;
-var g_App: App = undefined;
-
-export fn mainLoop() void {
-    _ = g_AppRunner.gameLoopCore(&g_App, &g_Eng);
-}
-
 pub fn main() !void {
     std.log.info("Pixzig Grid Render Example", .{});
 
-    // var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
-    // const gpa = gpa_state.allocator();
-
     const alloc = std.heap.c_allocator;
-    g_Eng = try pixzig.PixzigEngine.init("Pixzig: Grid Render Example.", alloc, EngOptions{});
-    std.log.info("Pixzig engine initialized..\n", .{});
+    const appRunner = try AppRunner.init("Pixzig: Grid Render Example.", alloc, .{});
 
     std.log.info("Initializing app.\n", .{});
-    g_App = try App.init(&g_Eng, alloc);
+    const app: *App = try App.init(alloc, &appRunner.engine);
 
     glfw.swapInterval(0);
-
-    std.log.info("Starting main loop...\n", .{});
-    if (builtin.target.os.tag == .emscripten) {
-        pixzig.web.setMainLoop(mainLoop, null, false);
-        std.log.debug("Set main loop.\n", .{});
-    } else {
-        g_AppRunner.gameLoop(&g_App, &g_Eng);
-        std.log.info("Cleaning up...\n", .{});
-        g_App.deinit();
-        g_Eng.deinit();
-    }
+    appRunner.run(app);
 }

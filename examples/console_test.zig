@@ -23,7 +23,7 @@ const console = @import("pixzig").console;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, EngOptions{ .withGui = true });
+const AppRunner = pixzig.PixzigAppRunner(App, .{ .withGui = true });
 
 pub const App = struct {
     fps: FpsCounter,

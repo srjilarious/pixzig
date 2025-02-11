@@ -332,38 +332,39 @@ pub fn build(b: *std.Build) void {
     //     },
     // );
 
-    // // Tile map test.
-    // _ = example(
-    //     b,
-    //     target,
-    //     optimize,
-    //     "tile_load_test",
-    //     "examples/tile_load_test.zig",
-    //     &.{
-    //         "mario_grassish2.png",
-    //         "level1a.tmx",
-    //     },
-    // );
+    // Tile map test.
+    _ = example(
+        b,
+        target,
+        optimize,
+        "tile_load_test",
+        "examples/tile_load_test.zig",
+        &.{
+            "mario_grassish2.png",
+            "level1a.tmx",
+        },
+    );
 
     // _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig", &.{});
 
     // _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig", &.{
     //     "mario_grassish2.png",
     // });
-    // _ = example(b, target, optimize, "collision_test", "examples/collision_test.zig", &.{
-    //     "mario_grassish2.png",
-    //     "level1a.tmx",
-    // });
+    _ = example(b, target, optimize, "collision_test", "examples/collision_test.zig", &.{
+        "mario_grassish2.png",
+        "level1a.tmx",
+        "pac-tiles.png",
+    });
     // _ = example(b, target, optimize, "create_texture", "examples/create_texture.zig", &.{});
-    // _ = example(b, target, optimize, "flecs_test", "examples/flecs_test.zig", &.{
-    //     "mario_grassish2.png",
-    // });
+    _ = example(b, target, optimize, "flecs_test", "examples/flecs_test.zig", &.{
+        "mario_grassish2.png",
+    });
     _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig", &.{});
     _ = example(b, target, optimize, "game_state_test", "examples/game_state_test.zig", &.{});
     _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig", &.{
         "mario_grassish2.png",
     });
-    // _ = example(b, target, optimize, "grid_render", "examples/grid_render.zig", &.{});
+    _ = example(b, target, optimize, "grid_render", "examples/grid_render.zig", &.{});
 
     // _ = example(b, target, optimize, "mouse_test", "examples/mouse_test.zig", &.{
     //     "mario_grassish2.png",

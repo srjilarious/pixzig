@@ -34,9 +34,10 @@ pub const Velocity = struct { speed: Vec2F };
 pub const Dot = struct {};
 
 pub const Renderer = pixzig.renderer.Renderer(.{});
+const AppRunner = pixzig.PixzigAppRunner(App, .{});
 
 pub const App = struct {
-    allocator: std.mem.Allocator,
+    alloc: std.mem.Allocator,
     projMat: zmath.Mat,
     scrollOffset: Vec2F,
     tex: *pixzig.Texture,
@@ -47,7 +48,7 @@ pub const App = struct {
     update_query: *flecs.query_t,
     draw_query: *flecs.query_t,
 
-    pub fn init(eng: *pixzig.PixzigEngine, alloc: std.mem.Allocator) !App {
+    pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         // Orthographic projection matrix
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
         const bigtex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
@@ -78,8 +79,10 @@ pub const App = struct {
         });
 
         std.log.info("Created queries.", .{});
-        var app = App{
-            .allocator = alloc,
+
+        var app = try alloc.create(App);
+        app.* = App{
+            .alloc = alloc,
             .projMat = projMat,
             .scrollOffset = .{ .x = 0, .y = 0 },
             .paused = false,
@@ -105,6 +108,7 @@ pub const App = struct {
 
         flecs.query_fini(self.draw_query);
         _ = flecs.fini(self.world);
+        self.alloc.destroy(self);
     }
 
     pub fn spawn(self: *App, which: usize, x: i32, y: i32, val: bool) void {
@@ -138,7 +142,7 @@ pub const App = struct {
         }
     }
 
-    pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if (self.fps.update(delta)) {
             std.debug.print("FPS: {}\n", .{self.fps.fps()});
         }
@@ -190,15 +194,6 @@ pub const App = struct {
                     }
 
                     sp.dest.ensureSize(@as(i32, @intFromFloat(sp.size.x)), @as(i32, @intFromFloat(sp.size.y)));
-
-                    //spr[idx].draw(&self.spriteBatch) catch {};
-
-                    //const e = entities[idx];
-
-                    // const outline = flecs.get(self.world, e, DebugOutline);
-                    // if(outline != null) {
-                    //     self.shapeBatch.drawEnclosingRect(spr[idx].dest, outline.?.color, 2);
-                    // }
                 }
             }
         }
@@ -206,7 +201,7 @@ pub const App = struct {
         return true;
     }
 
-    pub fn render(self: *App, eng: *pixzig.PixzigEngine) void {
+    pub fn render(self: *App, eng: *AppRunner.Engine) void {
         _ = eng;
 
         gl.clearColor(0, 0, 0.2, 1);
@@ -219,14 +214,13 @@ pub const App = struct {
         var it = flecs.query_iter(self.world, self.draw_query);
         while (flecs.query_next(&it)) {
             const spr = flecs.field(&it, Sprite, 0).?;
-            //const debug = flecs.field(&it, DebugOutline, 2).?;
 
             const entities = it.entities();
             for (0..it.count()) |idx| {
                 self.renderer.drawSprite(&spr[idx]);
-                // spr[idx].draw(&self.spriteBatch) catch {};
                 const e = entities[idx];
 
+                // Check for a DebugOutline component on the entity.
                 const outline = flecs.get(self.world, e, DebugOutline);
                 if (outline != null) {
                     self.renderer.drawEnclosingRect(spr[idx].dest, outline.?.color, 2);
@@ -238,38 +232,15 @@ pub const App = struct {
     }
 };
 
-const AppRunner = pixzig.PixzigApp(App);
-var g_AppRunner = AppRunner{};
-var g_Eng: pixzig.PixzigEngine = undefined;
-var g_App: App = undefined;
-
-export fn mainLoop() void {
-    _ = g_AppRunner.gameLoopCore(&g_App, &g_Eng);
-}
-
 pub fn main() !void {
-    std.log.info("Pixzig Flecs test!", .{});
-
-    // var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
-    // const gpa = gpa_state.allocator();
+    std.log.info("Pixzig: Flecs Example", .{});
 
     const alloc = std.heap.c_allocator;
-    g_Eng = try pixzig.PixzigEngine.init("Pixzig: Flecs Test.", alloc, EngOptions{});
-    std.log.info("Pixzig engine initialized..\n", .{});
+    const appRunner = try AppRunner.init("Pixzig: Flecs Example.", alloc, .{});
 
-    std.debug.print("Initializing app.\n", .{});
-    g_App = try App.init(&g_Eng, alloc);
+    std.log.info("Initializing app.\n", .{});
+    const app: *App = try App.init(alloc, &appRunner.engine);
 
     glfw.swapInterval(0);
-
-    std.debug.print("Starting main loop...\n", .{});
-    if (builtin.target.os.tag == .emscripten) {
-        pixzig.web.setMainLoop(mainLoop, null, false);
-        std.log.debug("Set main loop.\n", .{});
-    } else {
-        g_AppRunner.gameLoop(&g_App, &g_Eng);
-        std.log.info("Cleaning up...\n", .{});
-        g_App.deinit();
-        g_Eng.deinit();
-    }
+    appRunner.run(app);
 }
