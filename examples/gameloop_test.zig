@@ -19,6 +19,8 @@ const FpsCounter = pixzig.utils.FpsCounter;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
+const AppRunner = pixzig.PixzigAppRunner(App, .{});
+
 pub const App = struct {
     testVal: i32,
     fps: FpsCounter,
@@ -31,7 +33,11 @@ pub const App = struct {
         };
     }
 
-    pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {
+    pub fn deinit(self: *App) void {
+        _ = self;
+    }
+
+    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if(self.fps.update(delta)) {
             std.debug.print("FPS: {}\n", .{self.fps.fps()});
         }
@@ -60,11 +66,8 @@ pub const App = struct {
         return true;
     }
 
-    pub fn render(self: *App, eng: *pixzig.PixzigEngine) void {
+    pub fn render(self: *App, eng: *AppRunner.Engine) void {
         _ = eng;
-        if(self.delay.update(1)) {
-            std.debug.print("render tick!\n", .{});
-        }
 
         gl.clearColor(0, 0, 1, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
@@ -72,38 +75,15 @@ pub const App = struct {
     }
 };
 
-const AppRunner = pixzig.PixzigApp(App);
-var g_AppRunner = AppRunner{};
-var g_Eng: pixzig.PixzigEngine = undefined;
-var g_App: App = undefined;
-
-export fn mainLoop() void {
-    _ = g_AppRunner.gameLoopCore(&g_App, &g_Eng);
-}
-
 pub fn main() !void {
-    std.log.info("Pixzig Grid Render Example", .{});
-
-    // var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
-    // const gpa = gpa_state.allocator();
+    std.log.info("Pixzig Game Loop Example", .{});
 
     const alloc = std.heap.c_allocator;
-    g_Eng = try pixzig.PixzigEngine.init("Pixzig: Grid Render Example.", alloc, EngOptions{});
-    std.log.info("Pixzig engine initialized..\n", .{});
-
-    std.log.info("Initializing app.\n", .{});
-    g_App = App.init(123);
+    
+    const appRunner = try AppRunner.init("Pixzig Game Loop Example.", alloc, .{});
+    var app = App.init(123);
 
     glfw.swapInterval(0);
-
-    std.log.info("Starting main loop...\n", .{});
-    if (builtin.target.os.tag == .emscripten) {
-        pixzig.web.setMainLoop(mainLoop, null, false);
-        std.log.debug("Set main loop.\n", .{});
-    } else {
-        g_AppRunner.gameLoop(&g_App, &g_Eng);
-        std.log.info("Cleaning up...\n", .{});
-        g_Eng.deinit();
-    }
+    appRunner.run(&app);
 }
 

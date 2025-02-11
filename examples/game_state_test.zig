@@ -15,7 +15,6 @@ const GameStateMgr = pixzig.gamestate.GameStateMgr;
 const math = @import("zmath");
 const EngOptions = pixzig.PixzigEngineOptions;
 const FpsCounter = pixzig.utils.FpsCounter;
-const PixzigEngine = pixzig.PixzigEngine;
 
 const States = enum {
     StateA,
@@ -23,23 +22,21 @@ const States = enum {
     //StateC
 };
 
-const StateA = struct {
-    delay: Delay = .{ .max = 100 },
+const AppRunner = pixzig.PixzigAppRunner(App, .{});
 
-    pub fn update(self: *StateA, eng: *PixzigEngine, delta: f64) bool {
+const StateA = struct {
+    pub fn update(self: *StateA, eng: *AppRunner.Engine, delta: f64) bool {
         _ = delta;
         _ = eng;
         _ = self;
         return true;
     }
 
-    pub fn render(self: *StateA, eng: *PixzigEngine) void {
+    pub fn render(self: *StateA, eng: *AppRunner.Engine) void {
         _ = eng;
-        if (self.delay.update(1)) {
-            std.debug.print("Rendering StateA.\n", .{});
-        }
-        //gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 1.0, 0.0, 1.0 });
-
+        _ = self;
+        gl.clearColor(0, 1, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
     }
 
     pub fn activate(self: *StateA) void {
@@ -54,35 +51,44 @@ const StateA = struct {
 };
 
 const ParamState = struct {
-    pub fn update(self: *ParamState, eng: *PixzigEngine, delta: f64) bool {
+    pub fn update(self: *ParamState, eng: *AppRunner.Engine, delta: f64) bool {
         _ = delta;
         _ = eng;
         _ = self;
         return true;
     }
 
-    pub fn render(self: *ParamState, eng: *PixzigEngine) void {
+    pub fn render(self: *ParamState, eng: *AppRunner.Engine) void {
         _ = eng;
         _ = self;
-        std.debug.print("Rendering ParamState.\n", .{});
-        //gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 1.0, 0.0, 0.0, 1.0 });
+
+        gl.clearColor(1, 0, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
     }
 };
 
-const AppStateMgr = GameStateMgr(States, &[_]type{ StateA, ParamState });
+const AppStateMgr = GameStateMgr(AppRunner.Engine, States, &[_]type{ StateA, ParamState });
 
-pub const MyApp = struct {
+pub const App = struct {
+    alloc: std.mem.Allocator,
     fps: FpsCounter,
     states: AppStateMgr,
 
-    pub fn init(appStates: []*anyopaque) MyApp {
-        return .{
+    pub fn init(alloc: std.mem.Allocator, appStates: []*anyopaque) !*App {
+        const app = try alloc.create(App);
+        app.* = .{
+            .alloc = alloc,
             .fps = FpsCounter.init(),
             .states = AppStateMgr.init(appStates),
         };
+        return app;
     }
 
-    pub fn update(self: *MyApp, eng: *pixzig.PixzigEngine, delta: f64) bool {
+    pub fn deinit(self: *App) void {
+        self.alloc.destroy(self);
+    }
+
+    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if (self.fps.update(delta)) {
             std.debug.print("FPS: {}\n", .{self.fps.fps()});
         }
@@ -106,49 +112,25 @@ pub const MyApp = struct {
         return self.states.update(eng, delta);
     }
 
-    pub fn render(self: *MyApp, eng: *pixzig.PixzigEngine) void {
+    pub fn render(self: *App, eng: *AppRunner.Engine) void {
         self.states.render(eng);
         self.fps.renderTick();
     }
 };
 
-const AppRunner = pixzig.PixzigApp(MyApp);
-var g_AppRunner = AppRunner{};
-var g_Eng: pixzig.PixzigEngine = undefined;
-var g_App: MyApp = undefined;
-
-export fn mainLoop() void {
-    _ = g_AppRunner.gameLoopCore(&g_App, &g_Eng);
-}
-
 pub fn main() !void {
-    std.log.info("Pixzig Sprite and Shape test!", .{});
+    std.log.info("Pixzig Game State test!", .{});
 
-    // var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
-    // const gpa = gpa_state.allocator();
+    const appRunner = try AppRunner.init("Pixzig: Tile Render Test.", std.heap.c_allocator, .{});
 
-    g_Eng = try pixzig.PixzigEngine.init("Pixzig: Tile Render Test.", std.heap.c_allocator, EngOptions{});
-    std.log.info("Pixzig engine initialized..\n", .{});
-
-    std.debug.print("Initializing app.\n", .{});
+    std.log.debug("Initializing app.\n", .{});
 
     var StateAInst = StateA{};
     var ParamStateInst = ParamState{};
     var statesArr = [_]*anyopaque{ &StateAInst, &ParamStateInst };
     const states: []*anyopaque = statesArr[0..2];
-    g_App = MyApp.init(states);
+    const app = try App.init(std.heap.c_allocator, states);
 
     glfw.swapInterval(0);
-
-    std.debug.print("Starting main loop...\n", .{});
-    if (builtin.target.os.tag == .emscripten) {
-        pixzig.web.setMainLoop(mainLoop, null, false);
-        std.log.debug("Set main loop.\n", .{});
-    } else {
-        g_AppRunner.gameLoop(&g_App, &g_Eng);
-        std.log.info("Cleaning up...\n", .{});
-        // g_App.deinit();
-        g_Eng.deinit();
-        // _ = gpa_state.deinit();
-    }
+    appRunner.run(app);
 }

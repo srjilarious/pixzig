@@ -358,8 +358,8 @@ pub fn build(b: *std.Build) void {
     // _ = example(b, target, optimize, "flecs_test", "examples/flecs_test.zig", &.{
     //     "mario_grassish2.png",
     // });
-    // _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig", &.{});
-    // _ = example(b, target, optimize, "game_state_test", "examples/game_state_test.zig", &.{});
+    _ = example(b, target, optimize, "gameloop_test", "examples/gameloop_test.zig", &.{});
+    _ = example(b, target, optimize, "game_state_test", "examples/game_state_test.zig", &.{});
     _ = example(b, target, optimize, "glfw_sprites", "examples/glfw_sprites.zig", &.{
         "mario_grassish2.png",
     });

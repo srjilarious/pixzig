@@ -1,9 +1,9 @@
 // zig fmt: off
 const std = @import("std");
-const PixzigEngine = @import("./pixzig.zig").PixzigEngine;
+//const PixzigEngine = @import("./pixzig.zig").PixzigEngine;
 const comp = @import("comp.zig");
 
-pub fn GameStateMgr(comptime StateKeysType: type, comptime States: []const type) type {
+pub fn GameStateMgr(comptime Engine: type, comptime StateKeysType: type, comptime States: []const type) type {
 
 
     // Contrain the state enum keys to be the same size as the provided states.
@@ -14,66 +14,68 @@ pub fn GameStateMgr(comptime StateKeysType: type, comptime States: []const type)
 
     // Generate the GameState Manager
     return struct {
-        currState: StateKeysType,
+        currStateIdx: usize,
         states: []*anyopaque,
+
+        const Self = @This();
 
         pub fn init(states: []*anyopaque) @This() {
             
             // const enumTypeInfo = @typeInfo(StateKeysType);
 
             return .{
-                .currState = @enumFromInt(0),
+                .currStateIdx = 0,
                 .states = states
             };
         }
 
-        pub fn setCurrState(self: *@This(), state: StateKeysType) void {
-            const oldState = self.currState;
-            self.currState = state;
+        pub fn setCurrState(self: *Self, state: StateKeysType) void {
+            const oldState = self.currStateIdx;
+            self.currStateIdx = @intFromEnum(state);
            
+            std.log.debug("oldState = {}, currState = {}", .{oldState, self.currStateIdx});
+
             // Check to deactivate the old state.
-            const oldStateIdx = @intFromEnum(oldState);
             inline for(0..States.len) |idx| {
-                if(oldStateIdx == idx) {
+                if(oldState == idx) {
                     const stateType = States[idx];
+                    std.log.debug("Deactivating state: {}", .{idx});
                     if(@hasDecl(stateType, "deactivate")) {
-                        const statePtr: *stateType = @alignCast(@ptrCast(self.states[oldStateIdx]));
+                        const statePtr: *stateType = @alignCast(@ptrCast(self.states[oldState]));
                         statePtr.deactivate();
                     }
                 }
             }
 
             // Check to activate the new state.
-            const stateIdx = @intFromEnum(self.currState);
             inline for(0..States.len) |idx| {
-                if(stateIdx == idx) {
+                if(self.currStateIdx == idx) {
                     const stateType = States[idx];
+                    std.log.debug("Activating state: {}", .{idx});
                     if(@hasDecl(stateType, "activate")) {
-                        const statePtr: *stateType = @alignCast(@ptrCast(self.states[stateIdx]));
+                        const statePtr: *stateType = @alignCast(@ptrCast(self.states[self.currStateIdx]));
                         statePtr.activate();
                     }
                 }
             }
         }
 
-        pub fn update(self: *@This(), eng: *PixzigEngine, deltaUs: f64) bool {
-            const stateIdx = @intFromEnum(self.currState);
+        pub fn update(self: *Self, eng: *Engine, deltaUs: f64) bool {
             inline for(0..States.len) |idx| {
-                if(stateIdx == idx) {
+                if(self.currStateIdx == idx) {
                     const stateType = States[idx];
-                    const statePtr: *stateType = @alignCast(@ptrCast(self.states[stateIdx]));
+                    const statePtr: *stateType = @alignCast(@ptrCast(self.states[idx]));
                     return statePtr.update(eng, deltaUs);
                 }
             }
             return false;
         }
 
-        pub fn render(self: *@This(), eng: *PixzigEngine) void {
-            const stateIdx = @intFromEnum(self.currState);
+        pub fn render(self: *Self, eng: *Engine) void {
             inline for(0..States.len) |idx| {
-                if(stateIdx == idx) {
+                if(self.currStateIdx == idx) {
                     const stateType = States[idx];
-                    const statePtr: *stateType = @alignCast(@ptrCast(self.states[stateIdx]));
+                    const statePtr: *stateType = @alignCast(@ptrCast(self.states[idx]));
                     return statePtr.render(eng);
                 }
             }
