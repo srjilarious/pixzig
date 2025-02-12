@@ -58,6 +58,8 @@ pub const DigcraftConfig = struct {
     fullscreen: bool = false,
 };
 
+const AppRunner = pixzig.PixzigAppRunner(App, .{});
+
 pub const App = struct {
     allocator: std.mem.Allocator,
     projMat: zmath.Mat,
@@ -77,7 +79,9 @@ pub const App = struct {
     cameras: CameraSystem = undefined,
     outlines: Outlines = undefined,
 
-    pub fn init(eng: *pixzig.PixzigEngine, scripts: *ScriptEngine, alloc: std.mem.Allocator) !App {
+    pub fn init(eng: *AppRunner.Engine, scripts: *ScriptEngine, alloc: std.mem.Allocator) !*App {
+        const app = try alloc.create(App);
+
         // Orthographic projection matrix
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
 
@@ -157,7 +161,7 @@ pub const App = struct {
         const playerId = entities.spawn(world, .Player, playerTex, 8);
 
         // Create application.
-        var app = App{
+        app.* = App{
             .allocator = alloc,
             .projMat = projMat,
             // .scrollOffset = .{ .x = 0, .y = 0},
@@ -201,9 +205,10 @@ pub const App = struct {
         flecs.query_fini(self.draw_query);
         flecs.query_fini(self.cursor_draw_query);
         _ = flecs.fini(self.world);
+        self.allocator.destroy(self);
     }
 
-    pub fn update(self: *App, eng: *pixzig.PixzigEngine, delta: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         //_ = delta;
         if (self.fps.update(delta)) {
             std.debug.print("FPS: {}\n", .{self.fps.fps()});
@@ -226,7 +231,7 @@ pub const App = struct {
         return true;
     }
 
-    pub fn render(self: *App, eng: *pixzig.PixzigEngine) void {
+    pub fn render(self: *App, eng: *AppRunner.Engine) void {
         _ = eng;
         // gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
         gl.clearColor(0, 0, 0.2, 1);
@@ -263,54 +268,71 @@ pub const App = struct {
     }
 };
 
-const AppRunner = pixzig.PixzigApp(App);
-var g_AppRunner = AppRunner{};
-var g_Eng: pixzig.PixzigEngine = undefined;
-var g_App: App = undefined;
-var g_ScriptEng: ScriptEngine = undefined;
-
-export fn mainLoop() void {
-    _ = g_AppRunner.gameLoopCore(&g_App, &g_Eng);
-}
-
 pub fn main() !void {
     std.log.info("Pixzig - DigCraft", .{});
 
-    // var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
-    // const gpa = gpa_state.allocator();
-
     const alloc = std.heap.c_allocator;
+    var scriptEng = try ScriptEngine.init(alloc);
 
-    // Load our config file.
-    g_ScriptEng = try ScriptEngine.init(alloc);
+    try scriptEng.runScript("assets/digconf.lua");
+    const conf = try scriptEng.loadStruct(DigcraftConfig, "config");
 
-    try g_ScriptEng.runScript("assets/digconf.lua");
-    const conf = try g_ScriptEng.loadStruct(DigcraftConfig, "config");
+    const appRunner = try AppRunner.init("Pixzig: Tile Collision Example.", alloc, .{ .fullscreen = conf.fullscreen });
 
-    g_Eng = try pixzig.PixzigEngine.init(
-        "Pixzig: DigCraft",
-        alloc,
-        EngOptions{ .fullscreen = conf.fullscreen },
-    );
-    std.log.info("Pixzig engine initialized..\n", .{});
-
-    std.debug.print("Initializing app.\n", .{});
-    g_App = try App.init(&g_Eng, &g_ScriptEng, alloc);
+    std.log.info("Initializing app.\n", .{});
+    const app: *App = try App.init(&appRunner.engine, &scriptEng, alloc);
 
     glfw.swapInterval(0);
-
-    std.debug.print("Starting main loop...\n", .{});
-    if (builtin.target.os.tag == .emscripten) {
-        pixzig.web.setMainLoop(mainLoop, null, false);
-        std.log.debug("Set main loop.\n", .{});
-    } else {
-        g_AppRunner.gameLoop(&g_App, &g_Eng);
-        std.log.info("Cleaning up...\n", .{});
-        g_App.deinit();
-        g_Eng.deinit();
-        g_ScriptEng.deinit();
-    }
+    appRunner.run(app);
 }
+
+// const AppRunner = pixzig.PixzigApp(App);
+// var g_AppRunner = AppRunner{};
+// var g_Eng: pixzig.PixzigEngine = undefined;
+// var g_App: App = undefined;
+// var g_ScriptEng: ScriptEngine = undefined;
+
+// export fn mainLoop() void {
+//     _ = g_AppRunner.gameLoopCore(&g_App, &g_Eng);
+// }
+
+// pub fn main() !void {
+
+//     // var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
+//     // const gpa = gpa_state.allocator();
+
+//     const alloc = std.heap.c_allocator;
+
+//     // Load our config file.
+//     g_ScriptEng = try ScriptEngine.init(alloc);
+
+//     try g_ScriptEng.runScript("assets/digconf.lua");
+//     const conf = try g_ScriptEng.loadStruct(DigcraftConfig, "config");
+
+//     g_Eng = try pixzig.PixzigEngine.init(
+//         "Pixzig: DigCraft",
+//         alloc,
+//         EngOptions{ .fullscreen = conf.fullscreen },
+//     );
+//     std.log.info("Pixzig engine initialized..\n", .{});
+
+//     std.debug.print("Initializing app.\n", .{});
+//     g_App = try App.init(&g_Eng, &g_ScriptEng, alloc);
+
+//     glfw.swapInterval(0);
+
+//     std.debug.print("Starting main loop...\n", .{});
+//     if (builtin.target.os.tag == .emscripten) {
+//         pixzig.web.setMainLoop(mainLoop, null, false);
+//         std.log.debug("Set main loop.\n", .{});
+//     } else {
+//         g_AppRunner.gameLoop(&g_App, &g_Eng);
+//         std.log.info("Cleaning up...\n", .{});
+//         g_App.deinit();
+//         g_Eng.deinit();
+//         g_ScriptEng.deinit();
+//     }
+// }
 
 // pub fn main() !void {
 

@@ -17,16 +17,17 @@ const TileLayer = pixzig.tile.TileLayer;
 const TileMapRenderer = pixzig.tile.TileMapRenderer;
 
 const C = @import("../constants.zig");
+const PixzigEngine = pixzig.PixzigEngine(.{});
 
 pub const PlayerControl = struct {
     world: *flecs.world_t,
-    eng: *pixzig.PixzigEngine,
+    eng: *PixzigEngine,
     mouse: *pixzig.input.Mouse,
     query: *flecs.query_t,
     camera: ?flecs.entity_t,
     delay: pixzig.utils.Delay = .{ .max = 120*1 },
 
-    pub fn init(world: *flecs.world_t, eng: *pixzig.PixzigEngine, mouse: *pixzig.input.Mouse, camera: ?flecs.entity_t) !@This() {
+    pub fn init(world: *flecs.world_t, eng: *PixzigEngine, mouse: *pixzig.input.Mouse, camera: ?flecs.entity_t) !@This() {
         return .{
             .world = world,
             .eng = eng,

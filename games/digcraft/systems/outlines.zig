@@ -22,10 +22,12 @@ const C = @import("../constants.zig");
 
 // const Camera = @import("./camera.zig").Camera;
 
+const PixzigEngine = pixzig.PixzigEngine(.{});
+
 pub const Outlines = struct {
     alloc: std.mem.Allocator,
     world: *flecs.world_t,
-    eng: *pixzig.PixzigEngine,
+    eng: *PixzigEngine,
     // camera: ?flecs.entity_t,
     query: *flecs.query_t,
     colorShader: pixzig.shaders.Shader,
@@ -37,7 +39,7 @@ pub const Outlines = struct {
 
     pub fn init(alloc: std.mem.Allocator, 
                 world: *flecs.world_t, 
-                eng: *pixzig.PixzigEngine
+                eng: *PixzigEngine
         ) !Self
                 // cam: ?flecs.entity_t) !Self 
     {

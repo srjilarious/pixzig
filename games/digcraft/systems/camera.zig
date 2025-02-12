@@ -14,16 +14,18 @@ const TileLayer = pixzig.tile.TileLayer;
 const Vec2F = pixzig.common.Vec2F;
 const C = @import("../constants.zig");
 
+const PixzigEngine = pixzig.PixzigEngine(.{});
+
 pub const CameraSystem = struct {
     world: *flecs.world_t,
-    eng: *pixzig.PixzigEngine,
+    eng: *PixzigEngine,
     baseMat: math.Mat,
     currCamera: ?flecs.entity_t,
     query: *flecs.query_t,
     
     const Self = @This();
 
-    pub fn init(world: *flecs.world_t, eng: *pixzig.PixzigEngine, projMat: math.Mat) !Self {
+    pub fn init(world: *flecs.world_t, eng: *PixzigEngine, projMat: math.Mat) !Self {
         const baseMat = math.mul(math.scaling(C.Scale, C.Scale, 1.0), projMat);
 
 
