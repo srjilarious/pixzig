@@ -158,7 +158,7 @@ pub fn main() !void {
 
     const alloc = std.heap.c_allocator;
     const appRunner = try AppRunner.init("Pixzig Sprites Example.", alloc, .{});
-    const app = try App.init(alloc, &appRunner.engine);
+    const app = try App.init(alloc, appRunner.engine);
 
     glfw.swapInterval(0);
     appRunner.run(app);

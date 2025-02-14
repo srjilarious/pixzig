@@ -281,7 +281,7 @@ pub fn main() !void {
     const appRunner = try AppRunner.init("Pixzig: Tile Collision Example.", alloc, .{});
 
     std.log.info("Initializing app.\n", .{});
-    const app: *App = try App.init(alloc, &appRunner.engine);
+    const app: *App = try App.init(alloc, appRunner.engine);
 
     glfw.swapInterval(0);
     appRunner.run(app);

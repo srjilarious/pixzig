@@ -36,12 +36,13 @@ pub const Color8 = common.Color8;
 
 pub const PixzigEngineOptions = struct {
     withGui: bool = false,
-    withRenderer: bool = true,
+    rendererOpts: renderer.RendererOptions = .{}
 };
 
 pub const PixzigEngineInitOptions = struct {
     fullscreen: bool = false,
     windowSize: Vec2I = .{ .x = 800, .y = 600 },
+    renderInitOpts: renderer.RendererInitOpts = .{},
 };
 
 pub const web = if(builtin.os.tag == .emscripten) @import("./web.zig") else {};
@@ -59,7 +60,7 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
         
         const UpdateStepUs: f64 = 1.0 / 120.0;
 
-        engine: Engine,
+        engine: *Engine,
         alloc: std.mem.Allocator,
         lag: f64 = 0,
         currTime: f64 = 0,
@@ -95,12 +96,12 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
             while(self.lag > UpdateStepUs) {
                 self.lag -= UpdateStepUs;
 
-                if(!app.update(&self.engine, UpdateStepUs)) {
+                if(!app.update(self.engine, UpdateStepUs)) {
                     return false;
                 }
             }
 
-            app.render(&self.engine);
+            app.render(self.engine);
             self.engine.window.swapBuffers();
             return true;
         }
@@ -143,12 +144,14 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         allocator: std.mem.Allocator,
         textures: TextureManager,
         keyboard: input.Keyboard,
+        renderer: EngRenderer,
 
         const Self = @This();
+        const EngRenderer = renderer.Renderer(engOpts.rendererOpts);
 
         pub fn init(title: [:0]const u8, 
                     allocator: std.mem.Allocator,
-                    options: PixzigEngineInitOptions) !Self {
+                    options: PixzigEngineInitOptions) !*Self {
             try glfw.init();
 
             std.log.debug("GLFW initialized.\n", .{});
@@ -221,14 +224,17 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
 
             std.log.info("Pixzig Engine Initialized.", .{});
 
-            return .{
+            const eng = try allocator.create(Self);
+            eng.* = .{
                 .window = window,
                 .options = options,
                 .scaleFactor = scale_factor,
                 .allocator = allocator,
                 .textures = TextureManager.init(allocator),
                 .keyboard = input.Keyboard.init(window, allocator),
+                .renderer = try EngRenderer.init(allocator, options.renderInitOpts),
             };
+            return eng;
         }
 
         pub fn deinit(self: *Self) void {
@@ -242,7 +248,8 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
 
             self.window.destroy();
             glfw.terminate();
-            
+
+            self.allocator.destroy(self);
         }
     };
 }

@@ -503,7 +503,7 @@ pub fn main() !void {
     const appRunner = try AppRunner.init("Natetris", alloc, .{});
 
     std.log.info("Initializing app.\n", .{});
-    const app = try Natetris.init(alloc, &appRunner.engine);
+    const app = try Natetris.init(alloc, appRunner.engine);
 
     glfw.swapInterval(0);
     appRunner.run(app);
