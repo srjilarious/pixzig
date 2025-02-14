@@ -95,14 +95,17 @@ const BaseX: i32 = 100;
 const BaseY: i32 = 40;
 
 
+const AppRunner =  pixzig.PixzigAppRunner(Natetris, .{});
+
 pub const Natetris = struct {
+    alloc: std.mem.Allocator,
     fps: FpsCounter,
     tex: *pixzig.Texture,
     lockedTex: *pixzig.Texture,
     wallTex: *pixzig.Texture,
+    texShader: pixzig.shaders.Shader,
     spriteBatch: pixzig.renderer.SpriteBatchQueue,
     projMat: zmath.Mat,
-    alloc: std.mem.Allocator,
     currIdx: usize,
     shape: []u8,
     shapePos: Vec2I,
@@ -111,7 +114,10 @@ pub const Natetris = struct {
 
     // states: AppStateMgr,
 
-    pub fn init(eng: *PixzigEngine) !Natetris {
+    pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*Natetris {
+
+        const app = try alloc.create(Natetris);
+
         const blockChars =
         \\=------=
         \\-..####-
@@ -161,18 +167,16 @@ pub const Natetris = struct {
             .{ .char = ' ', .color = Color8.from(0, 0, 0, 0) },
         });
 
-        std.debug.print("Created texture from characters.\n", .{});
+        std.log.debug("Created texture from characters.\n", .{});
 
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
 
-        var texShader = try pixzig.shaders.Shader.init(
+        app.texShader = try pixzig.shaders.Shader.init(
             &pixzig.shaders.TexVertexShader, 
             &pixzig.shaders.TexPixelShader
         );
 
-        const alloc = eng.allocator;
-
-        const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &texShader);
+        const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &app.texShader);
 
         var board = try alloc.alloc(BoardSpace, BoardWidth*BoardHeight);
         for(0..BoardHeight) |bh| {
@@ -195,15 +199,17 @@ pub const Natetris = struct {
             }
         }
 
-        var app: Natetris = .{ 
+        
+        app.* = .{ 
+            .alloc = alloc,
             .fps = FpsCounter.init(),
             // .states = AppStateMgr.init(appStates),
             .tex = tex,
             .lockedTex = lockedTex,
             .wallTex = wallTex,
+            .texShader = app.texShader,
             .spriteBatch = spriteBatch,
             .projMat = projMat,
-            .alloc = alloc,
             .currIdx = 0,
             .shape = try alloc.alloc(u8, ShapeWidth*ShapeHeight),
             .shapePos = .{ .x = 1, .y = 0 },
@@ -223,11 +229,12 @@ pub const Natetris = struct {
         self.spriteBatch.deinit();
         self.alloc.free(self.shape);
         self.alloc.free(self.board);
+        self.alloc.destroy(self);
     }
 
-    pub fn update(self: *Natetris, eng: *pixzig.PixzigEngine, delta: f64) bool {
+    pub fn update(self: *Natetris, eng: *AppRunner.Engine, delta: f64) bool {
         if(self.fps.update(delta)) {
-            std.debug.print("FPS: {}\n", .{self.fps.fps()});
+            std.log.debug("FPS: {}\n", .{self.fps.fps()});
         }
 
         eng.keyboard.update();
@@ -289,7 +296,7 @@ pub const Natetris = struct {
         return true;
     }
 
-    pub fn render(self: *Natetris, eng: *pixzig.PixzigEngine) void {
+    pub fn render(self: *Natetris, eng: *AppRunner.Engine) void {
         _ = eng;
         // gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0, 0, 0.1, 1.0 });
         gl.clearColor(0, 0, 0.1, 1);
@@ -489,56 +496,15 @@ pub const Natetris = struct {
     }
 };
 
-const AppRunner = pixzig.PixzigApp(Natetris);
-var g_AppRunner = AppRunner{};
-var g_Eng: pixzig.PixzigEngine = undefined;
-var g_App: Natetris = undefined;
-
-export fn mainLoop() void {
-    _ = g_AppRunner.gameLoopCore(&g_App, &g_Eng);
-}
-
 pub fn main() !void {
-    std.log.info("Pixzig Flecs test!", .{});
-
-    // var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
-    // const gpa = gpa_state.allocator();
+    std.log.info("Starting Natetris", .{});
 
     const alloc = std.heap.c_allocator;
-    g_Eng = try pixzig.PixzigEngine.init("Natetris", alloc, EngOptions{});
-    std.log.info("Pixzig engine initialized..\n", .{});
+    const appRunner = try AppRunner.init("Natetris", alloc, .{});
 
-    std.debug.print("Initializing game.\n", .{});
-    g_App = try Natetris.init(&g_Eng);
+    std.log.info("Initializing app.\n", .{});
+    const app = try Natetris.init(alloc, &appRunner.engine);
 
     glfw.swapInterval(0);
-
-    std.debug.print("Starting main loop...\n", .{});
-    if (builtin.target.os.tag == .emscripten) {
-        pixzig.web.setMainLoop(mainLoop, null, false);
-        std.log.debug("Set main loop.\n", .{});
-    } else {
-        g_AppRunner.gameLoop(&g_App, &g_Eng);
-        std.log.info("Cleaning up...\n", .{});
-        g_App.deinit();
-        g_Eng.deinit();
-    }
+    appRunner.run(app);
 }
-
-
-
-// pub fn main() !void {
-//     var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
-//     defer _ = gpa_state.deinit();
-//     const gpa = gpa_state.allocator();
-
-//     var eng = try pixzig.PixzigEngine.init("Natetris", gpa, EngOptions{});
-//     defer eng.deinit();
-
-//     var app = try Natetris.init(&eng);
-//     defer app.deinit();
-//     std.debug.print("Game initialized.\n", .{});
-
-//     const AppRunner = pixzig.PixzigApp(Natetris);
-//     AppRunner.gameLoop(&app, &eng);
-// }
