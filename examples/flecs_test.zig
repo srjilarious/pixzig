@@ -33,7 +33,6 @@ pub const Velocity = struct { speed: Vec2F };
 
 pub const Dot = struct {};
 
-pub const Renderer = pixzig.renderer.Renderer(.{});
 const AppRunner = pixzig.PixzigAppRunner(App, .{});
 
 pub const App = struct {
@@ -41,7 +40,6 @@ pub const App = struct {
     projMat: zmath.Mat,
     scrollOffset: Vec2F,
     tex: *pixzig.Texture,
-    renderer: Renderer,
     fps: FpsCounter,
     paused: bool,
     world: *flecs.world_t,
@@ -54,7 +52,6 @@ pub const App = struct {
         const bigtex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
 
         const tex = try eng.textures.addSubTexture(bigtex, "guy", RectF.fromCoords(192, 64, 32, 32, 512, 512));
-        const renderer = try Renderer.init(alloc, .{});
 
         const world = flecs.init();
 
@@ -86,7 +83,6 @@ pub const App = struct {
             .projMat = projMat,
             .scrollOffset = .{ .x = 0, .y = 0 },
             .paused = false,
-            .renderer = renderer,
             .tex = tex,
             .fps = FpsCounter.init(),
             .world = world,
@@ -104,8 +100,6 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        self.renderer.deinit();
-
         flecs.query_fini(self.draw_query);
         _ = flecs.fini(self.world);
         self.alloc.destroy(self);
@@ -202,14 +196,12 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        _ = eng;
-
         gl.clearColor(0, 0, 0.2, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
 
         self.fps.renderTick();
 
-        self.renderer.begin(self.projMat);
+        eng.renderer.begin(self.projMat);
 
         var it = flecs.query_iter(self.world, self.draw_query);
         while (flecs.query_next(&it)) {
@@ -217,18 +209,18 @@ pub const App = struct {
 
             const entities = it.entities();
             for (0..it.count()) |idx| {
-                self.renderer.drawSprite(&spr[idx]);
+                eng.renderer.drawSprite(&spr[idx]);
                 const e = entities[idx];
 
                 // Check for a DebugOutline component on the entity.
                 const outline = flecs.get(self.world, e, DebugOutline);
                 if (outline != null) {
-                    self.renderer.drawEnclosingRect(spr[idx].dest, outline.?.color, 2);
+                    eng.renderer.drawEnclosingRect(spr[idx].dest, outline.?.color, 2);
                 }
             }
         }
 
-        self.renderer.end();
+        eng.renderer.end();
     }
 };
 

@@ -19,8 +19,6 @@ const Frame = pixzig.sprites.Frame;
 const Vec2F = pixzig.common.Vec2F;
 const FpsCounter = pixzig.utils.FpsCounter;
 
-const Renderer = pixzig.renderer.Renderer(.{});
-
 // Sets up the panic handler and log handler depending on the OS target.
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
@@ -32,7 +30,6 @@ pub const App = struct {
     projMat: zmath.Mat,
     scrollOffset: Vec2F,
     tex: *pixzig.Texture,
-    renderer: Renderer,
     fps: FpsCounter,
 
     dest: [3]RectF,
@@ -52,15 +49,11 @@ pub const App = struct {
         std.log.debug("Loading texture...\n", .{});
         const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
 
-        std.log.debug("Creating renderer.\n", .{});
-        const renderer = try Renderer.init(alloc, .{});
-
         app.* = .{
             .alloc = alloc,
             .projMat = projMat,
             .scrollOffset = .{ .x = 0, .y = 0 },
             .tex = tex,
-            .renderer = renderer,
             .fps = FpsCounter.init(),
             .dest = [_]RectF{
                 RectF.fromPosSize(10, 10, 32, 32),
@@ -92,7 +85,6 @@ pub const App = struct {
 
     pub fn deinit(self: *App) void {
         std.log.info("Deiniting application..", .{});
-        self.renderer.deinit();
         self.alloc.destroy(self);
     }
 
@@ -126,30 +118,29 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        _ = eng;
         // gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
         gl.clearColor(0, 0, 0.2, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
         self.fps.renderTick();
 
-        self.renderer.begin(self.projMat);
+        eng.renderer.begin(self.projMat);
 
         for (0..3) |idx| {
-            self.renderer.draw(self.tex, self.dest[idx], self.srcCoords[idx]);
+            eng.renderer.draw(self.tex, self.dest[idx], self.srcCoords[idx]);
         }
 
         // Draw sprite outlines.
         for (0..3) |idx| {
-            self.renderer.drawRect(self.dest[idx], Color.from(255, 255, 0, 200), 2);
+            eng.renderer.drawRect(self.dest[idx], Color.from(255, 255, 0, 200), 2);
         }
         for (0..3) |idx| {
-            self.renderer.drawEnclosingRect(self.dest[idx], Color.from(255, 0, 255, 200), 2);
+            eng.renderer.drawEnclosingRect(self.dest[idx], Color.from(255, 0, 255, 200), 2);
         }
         for (0..3) |idx| {
-            self.renderer.drawFilledRect(self.destRects[idx], self.colorRects[idx]);
+            eng.renderer.drawFilledRect(self.destRects[idx], self.colorRects[idx]);
         }
 
-        self.renderer.end();
+        eng.renderer.end();
     }
 };
 

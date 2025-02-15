@@ -22,7 +22,6 @@ const Frame = pixzig.sprites.Frame;
 const Vec2F = pixzig.common.Vec2F;
 const FpsCounter = pixzig.utils.FpsCounter;
 
-const Renderer = pixzig.renderer.Renderer(.{});
 const GridRenderer = tile.GridRenderer;
 
 // Sets up the panic handler and log handler depending on the OS target.
