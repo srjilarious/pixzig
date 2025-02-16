@@ -297,18 +297,17 @@ pub const Natetris = struct {
     }
 
     pub fn render(self: *Natetris, eng: *AppRunner.Engine) void {
-        _ = eng;
         // gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0, 0, 0.1, 1.0 });
         gl.clearColor(0, 0, 0.1, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
 
         // const fb_size = eng.window.getFramebufferSize();
-        self.spriteBatch.begin(self.projMat);
+        eng.renderer.begin(self.projMat);
         
-        self.drawBoard(.{ .x = 32, .y = 32});
-        self.drawShape(self.shapePos, .{ .x = 32, .y = 32}, self.shape);
+        self.drawBoard(eng, .{ .x = 32, .y = 32});
+        self.drawShape(eng, self.shapePos, .{ .x = 32, .y = 32}, self.shape);
 
-        self.spriteBatch.end();
+        eng.renderer.end();
         self.fps.renderTick();
     }
 
@@ -433,7 +432,7 @@ pub const Natetris = struct {
         }
     }
 
-    fn drawBoard(self: *Natetris, size: Vec2I) void {
+    fn drawBoard(self: *Natetris, eng: *AppRunner.Engine, size: Vec2I) void {
         
         const source =  RectF.fromCoords(0, 0, 8, 8, 8, 8);
 
@@ -463,7 +462,7 @@ pub const Natetris = struct {
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
                     gl.enable(gl.BLEND);
                     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-                    self.spriteBatch.draw(tex, dest, source, .none);
+                    eng.renderer.drawTexture(tex, dest, source);
 
                 }
             }
@@ -472,6 +471,7 @@ pub const Natetris = struct {
 
     fn drawShape(
             self: *Natetris,
+            eng: *AppRunner.Engine,
             pos: Vec2I, 
             size: Vec2I,
             shape: []const u8) void 
@@ -488,7 +488,7 @@ pub const Natetris = struct {
                         BaseX+(pos.x+w)*size.x, 
                         BaseY+(pos.y+h)*size.y, 
                         size.x, size.y);
-                    self.spriteBatch.draw(self.tex, dest, source, .none);
+                    eng.renderer.drawTexture(self.tex, dest, source);
                     
                 }
             }

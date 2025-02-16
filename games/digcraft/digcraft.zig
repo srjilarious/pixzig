@@ -33,7 +33,6 @@ const Vec2F = pixzig.common.Vec2F;
 const Vec2U = pixzig.common.Vec2U;
 const FpsCounter = pixzig.utils.FpsCounter;
 
-const Renderer = pixzig.renderer.Renderer(.{});
 const GridRenderer = tile.GridRenderer;
 const CharToColor = pixzig.textures.CharToColor;
 const Color8 = pixzig.Color8;
@@ -63,7 +62,6 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{});
 pub const App = struct {
     allocator: std.mem.Allocator,
     projMat: zmath.Mat,
-    renderer: Renderer,
     fps: FpsCounter,
     mouse: *pixzig.input.Mouse,
     tex: *Texture,
@@ -84,8 +82,6 @@ pub const App = struct {
 
         // Orthographic projection matrix
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
-
-        const renderer = try Renderer.init(alloc, .{});
 
         const atlasName = "assets/digcraft_sprites";
         const numSprites = try eng.textures.loadAtlas(atlasName);
@@ -165,7 +161,6 @@ pub const App = struct {
             .allocator = alloc,
             .projMat = projMat,
             // .scrollOffset = .{ .x = 0, .y = 0},
-            .renderer = renderer,
             .fps = FpsCounter.init(),
             .mouse = mouse,
             .tex = tex,
@@ -194,7 +189,6 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        self.renderer.deinit();
         self.map.deinit();
         self.mapRenderer.deinit();
         self.texShader.deinit();
@@ -232,8 +226,6 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        _ = eng;
-        // gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
         gl.clearColor(0, 0, 0.2, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -243,13 +235,13 @@ pub const App = struct {
         try self.mapRenderer.draw(self.tex, &self.map.layers.items[0], mvp);
 
         try self.outlines.drawMapGrid(mvp);
-        self.renderer.begin(mvp);
+        eng.renderer.begin(mvp);
 
         var it = flecs.query_iter(self.world, self.draw_query);
         while (flecs.query_next(&it)) {
             const spr = flecs.field(&it, Sprite, 0).?;
             for (0..it.count()) |idx| {
-                self.renderer.drawSprite(&spr[idx]);
+                eng.renderer.drawSprite(&spr[idx]);
             }
         }
 
@@ -258,13 +250,13 @@ pub const App = struct {
             const humCtrls = flecs.field(&cit, entities.HumanController, 0).?;
             for (0..it.count()) |idx| {
                 const hum = &humCtrls[idx];
-                self.renderer.drawEnclosingRect(hum.cursorLoc, hum.cursorColor, 1);
+                eng.renderer.drawEnclosingRect(hum.cursorLoc, hum.cursorColor, 1);
             }
         }
 
-        try self.outlines.drawSpriteOutlines(&self.renderer);
+        try self.outlines.drawSpriteOutlines(&eng.renderer);
 
-        self.renderer.end();
+        eng.renderer.end();
     }
 };
 
@@ -285,82 +277,3 @@ pub fn main() !void {
     glfw.swapInterval(0);
     appRunner.run(app);
 }
-
-// const AppRunner = pixzig.PixzigApp(App);
-// var g_AppRunner = AppRunner{};
-// var g_Eng: pixzig.PixzigEngine = undefined;
-// var g_App: App = undefined;
-// var g_ScriptEng: ScriptEngine = undefined;
-
-// export fn mainLoop() void {
-//     _ = g_AppRunner.gameLoopCore(&g_App, &g_Eng);
-// }
-
-// pub fn main() !void {
-
-//     // var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
-//     // const gpa = gpa_state.allocator();
-
-//     const alloc = std.heap.c_allocator;
-
-//     // Load our config file.
-//     g_ScriptEng = try ScriptEngine.init(alloc);
-
-//     try g_ScriptEng.runScript("assets/digconf.lua");
-//     const conf = try g_ScriptEng.loadStruct(DigcraftConfig, "config");
-
-//     g_Eng = try pixzig.PixzigEngine.init(
-//         "Pixzig: DigCraft",
-//         alloc,
-//         EngOptions{ .fullscreen = conf.fullscreen },
-//     );
-//     std.log.info("Pixzig engine initialized..\n", .{});
-
-//     std.debug.print("Initializing app.\n", .{});
-//     g_App = try App.init(&g_Eng, &g_ScriptEng, alloc);
-
-//     glfw.swapInterval(0);
-
-//     std.debug.print("Starting main loop...\n", .{});
-//     if (builtin.target.os.tag == .emscripten) {
-//         pixzig.web.setMainLoop(mainLoop, null, false);
-//         std.log.debug("Set main loop.\n", .{});
-//     } else {
-//         g_AppRunner.gameLoop(&g_App, &g_Eng);
-//         std.log.info("Cleaning up...\n", .{});
-//         g_App.deinit();
-//         g_Eng.deinit();
-//         g_ScriptEng.deinit();
-//     }
-// }
-
-// pub fn main() !void {
-
-//     std.log.info("Pixzig - DigCraft", .{});
-
-//     var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
-//     defer _ = gpa_state.deinit();
-//     const gpa = gpa_state.allocator();
-
-//     var scripts = try ScriptEngine.init(gpa);
-//     defer scripts.deinit();
-
-//     try scripts.runScript("assets/digconf.lua");
-//     const conf = try scripts.loadStruct(DigcraftConfig, "config");
-
-//     var eng = try pixzig.PixzigEngine.init(
-//         "Pixzig: DigCraft", gpa,
-//         EngOptions{ .fullscreen = conf.fullscreen });
-//     defer eng.deinit();
-
-//     const AppRunner = pixzig.PixzigApp(App);
-//     var app = try App.init(&eng, &scripts, gpa);
-
-//     glfw.swapInterval(0);
-
-//     std.debug.print("Starting main loop...\n", .{});
-//     AppRunner.gameLoop(&app, &eng);
-
-//     std.debug.print("Cleaning up...\n", .{});
-//     app.deinit();
-// }
