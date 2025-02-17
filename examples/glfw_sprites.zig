@@ -118,9 +118,7 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        // gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
-        gl.clearColor(0, 0, 0.2, 1);
-        gl.clear(gl.COLOR_BUFFER_BIT);
+        eng.renderer.clear(0, 0, 0.2, 1);
         self.fps.renderTick();
 
         eng.renderer.begin(self.projMat);

@@ -743,6 +743,8 @@ pub const RendererInitOpts = struct {
 pub fn Renderer(opts: RendererOptions) type {
 
     return struct {
+        const Self = @This();
+
         alloc: std.mem.Allocator,
         impl: *Impl,
 
@@ -802,7 +804,7 @@ pub fn Renderer(opts: RendererOptions) type {
             };
         }
 
-        pub fn deinit(self: *@This()) void {
+        pub fn deinit(self: *Self) void {
             for(0..self.impl.batches.len) |idx| {
                 self.impl.batches[idx].deinit();
             }
@@ -821,7 +823,7 @@ pub fn Renderer(opts: RendererOptions) type {
             self.alloc.destroy(self.impl);
         }
 
-        pub fn begin(self: *@This(), mvp: zmath.Mat) void {
+        pub fn begin(self: *Self, mvp: zmath.Mat) void {
             for(0..self.impl.batches.len) |idx| {
                 self.impl.batches[idx].begin(mvp);
             }
@@ -835,7 +837,7 @@ pub fn Renderer(opts: RendererOptions) type {
             }
         }
 
-        pub fn end(self: *@This()) void {
+        pub fn end(self: *Self) void {
             for(0..self.impl.batches.len) |idx| {
                 self.impl.batches[idx].end();
             }
@@ -849,22 +851,28 @@ pub fn Renderer(opts: RendererOptions) type {
             }
         }
         
-        pub fn draw(self: *@This(), texture: *Texture, dest: RectF, srcCoords: RectF) void {
+        pub fn clear(self: *const Self, r: f32, g: f32, b: f32, a:f32) void {
+            _ = self;
+            gl.clearColor(r, g, b, a);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+        }
+
+        pub fn draw(self: *Self, texture: *Texture, dest: RectF, srcCoords: RectF) void {
             // TODO: Handle multiple batches
             self.impl.batches[0].draw(texture, dest, srcCoords, .none);
         }
 
-        pub fn drawSprite(self: *@This(), sprite: *Sprite) void
+        pub fn drawSprite(self: *Self, sprite: *Sprite) void
         {
             // TODO: Handle batches
             self.impl.batches[0].drawSprite(sprite);
         }
 
-        pub fn drawTexture(self: *@This(), texture: *Texture, dest: RectF, srcCoords: RectF) void {
+        pub fn drawTexture(self: *Self, texture: *Texture, dest: RectF, srcCoords: RectF) void {
              self.impl.batches[0].draw(texture, dest, srcCoords, .none);
         }
 
-        pub fn drawFullTexture(self: *@This(), texture: *Texture, pos: Vec2I, scale: f32) void {
+        pub fn drawFullTexture(self: *Self, texture: *Texture, pos: Vec2I, scale: f32) void {
             const tsx = @as(f32, @floatFromInt(texture.size.x))*scale;
             const tsy = @as(f32, @floatFromInt(texture.size.y))*scale;
             self.impl.batches[0].draw(
@@ -875,24 +883,23 @@ pub fn Renderer(opts: RendererOptions) type {
             );
         }
 
-        pub fn drawFilledRect(self: *@This(), dest: RectF, color: Color) void {
+        pub fn drawFilledRect(self: *Self, dest: RectF, color: Color) void {
             std.debug.assert(opts.shapeRendering);
-
             self.impl.shapes.drawFilledRect(dest, color);
         }
 
-        pub fn drawRect(self: *@This(), dest: RectF, color: Color, lineWidth: u8) void {
+        pub fn drawRect(self: *Self, dest: RectF, color: Color, lineWidth: u8) void {
             std.debug.assert(opts.shapeRendering);
             self.impl.shapes.drawRect(dest, color, lineWidth);
         }
 
         // This moves the outline of the rect to enclose the dest by lineWidth.
-        pub fn drawEnclosingRect(self: *@This(), dest: RectF, color: Color, lineWidth: u8) void {
+        pub fn drawEnclosingRect(self: *Self, dest: RectF, color: Color, lineWidth: u8) void {
             std.debug.assert(opts.shapeRendering);
             self.impl.shapes.drawEnclosingRect(dest, color, lineWidth);
         }
 
-        pub fn drawString(self: *@This(), text: []const u8, pos: Vec2I) Vec2I {
+        pub fn drawString(self: *Self, text: []const u8, pos: Vec2I) Vec2I {
             std.debug.assert(opts.textRenderering);
             return self.impl.text.drawString(text, pos);
         }

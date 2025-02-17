@@ -103,8 +103,6 @@ pub const Natetris = struct {
     tex: *pixzig.Texture,
     lockedTex: *pixzig.Texture,
     wallTex: *pixzig.Texture,
-    texShader: pixzig.shaders.Shader,
-    spriteBatch: pixzig.renderer.SpriteBatchQueue,
     projMat: zmath.Mat,
     currIdx: usize,
     shape: []u8,
@@ -171,13 +169,6 @@ pub const Natetris = struct {
 
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
 
-        app.texShader = try pixzig.shaders.Shader.init(
-            &pixzig.shaders.TexVertexShader, 
-            &pixzig.shaders.TexPixelShader
-        );
-
-        const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &app.texShader);
-
         var board = try alloc.alloc(BoardSpace, BoardWidth*BoardHeight);
         for(0..BoardHeight) |bh| {
             for(0..BoardWidth) |bw| {
@@ -207,8 +198,6 @@ pub const Natetris = struct {
             .tex = tex,
             .lockedTex = lockedTex,
             .wallTex = wallTex,
-            .texShader = app.texShader,
-            .spriteBatch = spriteBatch,
             .projMat = projMat,
             .currIdx = 0,
             .shape = try alloc.alloc(u8, ShapeWidth*ShapeHeight),
@@ -226,7 +215,6 @@ pub const Natetris = struct {
     }
 
     pub fn deinit(self: *Natetris) void {
-        self.spriteBatch.deinit();
         self.alloc.free(self.shape);
         self.alloc.free(self.board);
         self.alloc.destroy(self);

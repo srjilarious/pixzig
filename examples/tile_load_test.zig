@@ -160,10 +160,7 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        _ = eng;
-
-        gl.clearColor(0, 0, 0.2, 1);
-        gl.clear(gl.COLOR_BUFFER_BIT);
+        eng.renderer.clear(0, 0, 0.2, 1);
 
         self.fps.renderTick();
         const mvp = zmath.mul(zmath.translation(self.scrollOffset.x, self.scrollOffset.y, 0.0), self.projMat);
@@ -188,38 +185,3 @@ pub fn main() !void {
     glfw.swapInterval(0);
     appRunner.run(app);
 }
-
-// var g_AppRunner = AppRunner{};
-// var g_Eng: pixzig.PixzigEngine = undefined;
-// var g_App: App = undefined;
-
-// export fn mainLoop() void {
-//     _ = g_AppRunner.gameLoopCore(&g_App, &g_Eng);
-// }
-
-// pub fn main() !void {
-//     std.log.info("Pixzig Tilemap test", .{});
-
-//     // var gpa_state = std.heap.GeneralPurposeAllocator(.{.thread_safe=true}){};
-//     // const gpa = gpa_state.allocator();
-
-//     const alloc = std.heap.c_allocator;
-//     g_Eng = try pixzig.PixzigEngine.init("Pixzig: Tile Render Test.", alloc, EngOptions{});
-//     std.log.info("Pixzig engine initialized..\n", .{});
-
-//     std.log.info("Initializing app.\n", .{});
-//     g_App = try App.init(&g_Eng, alloc);
-
-//     glfw.swapInterval(0);
-
-//     std.log.info("Starting main loop...\n", .{});
-//     if (builtin.target.os.tag == .emscripten) {
-//         pixzig.web.setMainLoop(mainLoop, null, false);
-//         std.log.debug("Set main loop.\n", .{});
-//     } else {
-//         g_AppRunner.gameLoop(&g_App, &g_Eng);
-//         std.log.info("Cleaning up...\n", .{});
-//         g_App.deinit();
-//         g_Eng.deinit();
-//     }
-// }

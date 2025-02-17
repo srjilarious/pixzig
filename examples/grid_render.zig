@@ -84,13 +84,8 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        _ = eng;
-
-        gl.clearColor(0, 0, 0.2, 1);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-
+        eng.renderer.clear(0, 0, 0.2, 1);
         self.fps.renderTick();
-
         try self.grid.draw(self.projMat);
     }
 };

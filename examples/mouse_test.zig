@@ -82,8 +82,7 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *pixzig.PixzigEngine) void {
-        _ = eng;
-        gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.2, 1.0 });
+        eng.clear(.{ 0, 0, 0.2, 1 });
         self.fps.renderTick();
 
         self.spriteBatch.begin(self.projMat);

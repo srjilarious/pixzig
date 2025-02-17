@@ -33,10 +33,8 @@ const StateA = struct {
     }
 
     pub fn render(self: *StateA, eng: *AppRunner.Engine) void {
-        _ = eng;
         _ = self;
-        gl.clearColor(0, 1, 0, 1);
-        gl.clear(gl.COLOR_BUFFER_BIT);
+        eng.renderer.clear(0, 1, 0, 1);
     }
 
     pub fn activate(self: *StateA) void {
@@ -59,11 +57,8 @@ const ParamState = struct {
     }
 
     pub fn render(self: *ParamState, eng: *AppRunner.Engine) void {
-        _ = eng;
         _ = self;
-
-        gl.clearColor(1, 0, 0, 1);
-        gl.clear(gl.COLOR_BUFFER_BIT);
+        eng.renderer.clear(1, 0, 0, 1);
     }
 };
 
