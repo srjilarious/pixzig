@@ -347,9 +347,10 @@ pub fn build(b: *std.Build) void {
 
     _ = example(b, target, optimize, "natetris", "games/natetris/natetris.zig", &.{});
 
-    // _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig", &.{
-    //     "mario_grassish2.png",
-    // });
+    _ = example(b, target, optimize, "actor_test", "examples/actor_test.zig", &.{
+        "pac-tiles.png",
+    });
+
     _ = example(b, target, optimize, "collision_test", "examples/collision_test.zig", &.{
         "mario_grassish2.png",
         "level1a.tmx",
