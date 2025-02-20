@@ -34,17 +34,15 @@ pub const App = struct {
         var app = try alloc.create(App);
 
         const tex = try eng.textures.loadTexture("pacman_sprites", "assets/pac-tiles.png");
+
         const fr1: Frame = .{ .coords = RectF.fromCoords(96, 48, 16, 16, 128, 128), .frameTimeUs = 300, .flip = .none };
         const fr2: Frame = .{ .coords = RectF.fromCoords(112, 48, 16, 16, 128, 128), .frameTimeUs = 300, .flip = .none };
         const fr3: Frame = .{ .coords = RectF.fromCoords(96, 64, 16, 16, 128, 128), .frameTimeUs = 300, .flip = .none };
-
         const frseq = try pixzig.sprites.FrameSequence.init("test", alloc, &[_]Frame{ fr1, fr2, fr3 });
-        // defer frseq.deinit();
 
         const fr1_2: Frame = .{ .coords = RectF.fromCoords(96, 48, 16, 16, 128, 128), .frameTimeUs = 300, .flip = .horz };
         const fr2_2: Frame = .{ .coords = RectF.fromCoords(112, 48, 16, 16, 128, 128), .frameTimeUs = 300, .flip = .horz };
         const fr3_2: Frame = .{ .coords = RectF.fromCoords(96, 64, 16, 16, 128, 128), .frameTimeUs = 300, .flip = .horz };
-
         const frseq_2 = try pixzig.sprites.FrameSequence.init("test_left", alloc, &[_]Frame{ fr1_2, fr2_2, fr3_2 });
 
         app.* = .{
