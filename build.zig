@@ -133,15 +133,6 @@ pub fn engine(
         //     .enable_brotli = false,
         // });
 
-        // Link with your app
-
-        // engData.deps.append(glfw_dep);
-        // engData.deps.append(gui_dep);
-        // engData.deps.append(stbi_dep);
-        // exe.linkLibrary(glfw_dep);
-
-        // exe.linkLibrary(gui_dep);
-        // exe.linkLibrary(stbi_dep);
         // exe.linkLibrary(freetype_dep);
 
         // const freetype_mod = mach_freetype.module("mach-freetype");

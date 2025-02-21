@@ -80,13 +80,19 @@ pub const ScriptEngine = struct {
                     }
                     @field(myStruct, field_name) = self.lua.toBoolean(-1);
                 },
-                // Handle integers
-                .int, .float => {
+                .int => {
                     if (!self.lua.isInteger(-1)) {
                         self.lua.pop(2); // Pop the value and table
                         return error.InvalidFieldType;
                     }
                     @field(myStruct, field_name) = @intCast(try self.lua.toInteger(-1));
+                },
+                .float => {
+                    if (!self.lua.isNumber(-1)) {
+                        self.lua.pop(2); // Pop the value and table
+                        return error.InvalidFieldType;
+                    }
+                    @field(myStruct, field_name) = @floatCast(try self.lua.toNumber(-1));
                 },
                 .optional => |opt| {
                     switch (@typeInfo(opt.child)) {
