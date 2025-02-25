@@ -43,9 +43,6 @@ pub const App = struct {
         // Orthographic projection matrix
         const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
 
-        const tst = try alloc.alloc(u8, 100);
-        @memset(tst, 123);
-
         std.log.debug("Loading texture...\n", .{});
         const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
 

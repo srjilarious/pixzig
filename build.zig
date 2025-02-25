@@ -375,6 +375,7 @@ pub fn build(b: *std.Build) void {
     _ = example(b, target, optimize, &engData, "flecs_test", "examples/flecs_test.zig", &.{
         "mario_grassish2.png",
     });
+    _ = example(b, target, optimize, &engData, "a_star_path", "examples/a_star_path.zig", &.{});
     _ = example(b, target, optimize, &engData, "gameloop_test", "examples/gameloop_test.zig", &.{});
     _ = example(b, target, optimize, &engData, "game_state_test", "examples/game_state_test.zig", &.{});
     _ = example(b, target, optimize, &engData, "glfw_sprites", "examples/glfw_sprites.zig", &.{
