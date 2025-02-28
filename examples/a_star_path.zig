@@ -19,6 +19,7 @@ const Flip = pixzig.sprites.Flip;
 const Frame = pixzig.sprites.Frame;
 const Vec2F = pixzig.common.Vec2F;
 const Vec2U = pixzig.common.Vec2U;
+const Vec2I = pixzig.common.Vec2I;
 const FpsCounter = pixzig.utils.FpsCounter;
 
 const GridRenderer = tile.GridRenderer;
@@ -62,6 +63,9 @@ pub const App = struct {
     checker: BasicTileMapPathChecker,
     pathFinder: AStarPathFinder(BasicTileMapPathChecker),
     tex: *Texture,
+    cursorPos: Vec2I = .{ .x = 0, .y = 0 },
+    startPos: Vec2I = .{ .x = 2, .y = 2 },
+    endPos: Vec2I = .{ .x = 6, .y = 8 },
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app = try alloc.create(App);
@@ -314,16 +318,31 @@ pub const App = struct {
                 (next.isAbove(curr) and prev.isLeftOf(curr)))
             {
                 // Top left bend
-                self.layer.setTileData(curr.x, curr.y, 7);
+                self.layer.setTileData(curr.x, curr.y, 6);
             } else if ((prev.isBelow(curr) and next.isRightOf(curr)) or
                 (next.isBelow(curr) and prev.isRightOf(curr)))
             {
                 // Bottom Right bend
-                self.layer.setTileData(curr.x, curr.y, 6);
+                self.layer.setTileData(curr.x, curr.y, 7);
             }
         }
 
         try self.pathLayerRenderer.recreateVertices(&self.tileSet, &self.layer);
+    }
+
+    fn refreshPath(self: *App) void {
+        self.pathFinder.findPath(
+            .{ .x = self.startPos.x, .y = self.startPos.y },
+            .{ .x = self.endPos.x, .y = self.endPos.y },
+            &self.path,
+        ) catch {
+            std.log.err("Unable to calculate the path!", .{});
+        };
+
+        self.updatePathOnMap() catch {
+            std.log.err("Unable to render the path!", .{});
+        };
+        std.log.info("Path is {} nodes long", .{self.path.items.len});
     }
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
@@ -333,14 +352,43 @@ pub const App = struct {
 
         eng.keyboard.update();
         if (eng.keyboard.pressed(.space)) {
-            self.pathFinder.findPath(.{ .x = 2, .y = 2 }, .{ .x = 6, .y = 8 }, &self.path) catch {
-                std.log.err("Unable to calculate the path!", .{});
-            };
+            self.refreshPath();
+        }
 
-            self.updatePathOnMap() catch {
-                std.log.err("Unable to render the path!", .{});
-            };
-            std.log.info("Path is {} nodes long", .{self.path.items.len});
+        if (eng.keyboard.pressed(.s)) {
+            self.startPos = self.cursorPos;
+            self.refreshPath();
+        }
+
+        if (eng.keyboard.pressed(.e)) {
+            self.endPos = self.cursorPos;
+            self.refreshPath();
+        }
+
+        if (eng.keyboard.pressed(.x)) {
+            self.layer.setTileData(self.cursorPos.x, self.cursorPos.y, 1);
+            self.refreshPath();
+        }
+
+        if (eng.keyboard.pressed(.left)) {
+            if (self.cursorPos.x > 0) {
+                self.cursorPos.x -= 1;
+            }
+        }
+        if (eng.keyboard.pressed(.right)) {
+            if (self.cursorPos.x < MapWidth - 1) {
+                self.cursorPos.x += 1;
+            }
+        }
+        if (eng.keyboard.pressed(.up)) {
+            if (self.cursorPos.y > 0) {
+                self.cursorPos.y -= 1;
+            }
+        }
+        if (eng.keyboard.pressed(.down)) {
+            if (self.cursorPos.x < MapHeight - 1) {
+                self.cursorPos.y += 1;
+            }
         }
 
         if (eng.keyboard.pressed(.escape)) {
@@ -357,7 +405,10 @@ pub const App = struct {
         eng.renderer.clear(0.0, 0.0, 0.2, 1.0);
         //eng.renderer.drawFullTexture(self.tex, .{ .x = 0, .y = 0 }, 8);
 
-        eng.renderer.drawFilledRect()
+        eng.renderer.drawFilledRect(
+            RectF.fromPosSize(self.cursorPos.x * TileWidth, self.cursorPos.y * TileHeight, TileWidth, TileHeight),
+            Color.from(255, 255, 0, 255),
+        );
         eng.renderer.end();
 
         try self.pathLayerRenderer.draw(self.tex, &self.layer, self.projMat);
