@@ -125,29 +125,29 @@ pub const App = struct {
             \\  #..#  
         ;
 
-        const topRightChars =
+        const bottomLeftChars =
             \\        
             \\        
             \\#####   
             \\.....#  
             \\.....#  
             \\###..#  
-            \\  #..#  
-            \\  #..#  
-        ;
-
-        const topLeftChars =
-            \\        
-            \\        
-            \\   #####
-            \\  #.....
-            \\  #.....
-            \\  #..###
             \\  #..#  
             \\  #..#  
         ;
 
         const bottomRightChars =
+            \\        
+            \\        
+            \\   #####
+            \\  #.....
+            \\  #.....
+            \\  #..###
+            \\  #..#  
+            \\  #..#  
+        ;
+
+        const topLeftChars =
             \\  #..#  
             \\  #..#  
             \\###..#  
@@ -158,7 +158,7 @@ pub const App = struct {
             \\        
         ;
 
-        const bottomLeftChars =
+        const topRightChars =
             \\  #..#  
             \\  #..#  
             \\  #..###
@@ -166,6 +166,28 @@ pub const App = struct {
             \\  #.....
             \\   #####
             \\        
+            \\        
+        ;
+
+        const startChars =
+            \\        
+            \\   ###  
+            \\  #..#  
+            \\  #..#  
+            \\  #..#  
+            \\  #..#  
+            \\   ##   
+            \\        
+        ;
+
+        const endChars =
+            \\        
+            \\#      #
+            \\ #    # 
+            \\  ####  
+            \\  ####  
+            \\ #    # 
+            \\#      #
             \\        
         ;
 
@@ -178,10 +200,12 @@ pub const App = struct {
         pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, lockedChars, .{ .x = TileWidth, .y = TileHeight }, .{ .x = 8, .y = 0 }, colorMap);
         pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, horzChars, .{ .x = TileWidth, .y = TileHeight }, .{ .x = 16, .y = 0 }, colorMap);
         pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, vertChars, .{ .x = TileWidth, .y = TileHeight }, .{ .x = 24, .y = 0 }, colorMap);
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, topLeftChars, .{ .x = TileWidth, .y = TileHeight }, .{ .x = 0, .y = 8 }, colorMap);
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, bottomLeftChars, .{ .x = TileWidth, .y = TileHeight }, .{ .x = 0, .y = 8 }, colorMap);
         pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, topRightChars, .{ .x = TileWidth, .y = TileHeight }, .{ .x = 8, .y = 8 }, colorMap);
-        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, bottomLeftChars, .{ .x = TileWidth, .y = TileHeight }, .{ .x = 16, .y = 8 }, colorMap);
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, topLeftChars, .{ .x = TileWidth, .y = TileHeight }, .{ .x = 16, .y = 8 }, colorMap);
         pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, bottomRightChars, .{ .x = TileWidth, .y = TileHeight }, .{ .x = 24, .y = 8 }, colorMap);
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, startChars, .{ .x = TileWidth, .y = TileHeight }, .{ .x = 0, .y = 16 }, colorMap);
+        pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, endChars, .{ .x = TileWidth, .y = TileHeight }, .{ .x = 8, .y = 16 }, colorMap);
         // const wallTex = try eng.textures.createTextureFromChars("wall", 8, 8, lockedChars, );
 
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
@@ -205,7 +229,7 @@ pub const App = struct {
             .pathFinder = undefined,
         };
 
-        app.tileSet = try TileSet.initEmpty(alloc, .{ .x = 8, .y = 8 }, .{ .x = 32, .y = 32 }, 8);
+        app.tileSet = try TileSet.initEmpty(alloc, .{ .x = 8, .y = 8 }, .{ .x = 32, .y = 32 }, 10);
         app.tileSet.tile(0).?.* = Tile{ .core = pixzig.tile.Clear, .properties = null, .alloc = alloc };
         app.tileSet.tile(1).?.* = Tile{ .core = pixzig.tile.BlocksAll, .properties = null, .alloc = alloc };
 
@@ -237,6 +261,71 @@ pub const App = struct {
         self.alloc.destroy(self);
     }
 
+    fn updatePathOnMap(self: *App) !void {
+
+        // Clear out the old path tiles.
+        for (0..MapHeight) |yu| {
+            for (0..MapWidth) |xu| {
+                const x: i32 = @intCast(xu);
+                const y: i32 = @intCast(yu);
+                // 1 is the wall tile, higher are path tiles.
+                if (self.layer.tileData(x, y) > 1) {
+                    self.layer.setTileData(x, y, 0);
+                }
+            }
+        }
+
+        if (self.path.items.len > 0) {
+            const first = self.path.items[0];
+            self.layer.setTileData(first.x, first.y, 8);
+        }
+
+        if (self.path.items.len > 1) {
+            const end = self.path.items[self.path.items.len - 1];
+            self.layer.setTileData(end.x, end.y, 9);
+        }
+
+        for (1..self.path.items.len - 1) |i| {
+            const prev = self.path.items[i - 1];
+            const curr = self.path.items[i];
+            const next = self.path.items[i + 1];
+
+            if (curr.x < 0 or curr.y < 0) {
+                break;
+            }
+
+            if (prev.x == curr.x and curr.x == next.x) {
+                // Vertical line
+                self.layer.setTileData(curr.x, curr.y, 3);
+            } else if (prev.y == curr.y and curr.y == next.y) {
+                // Horizontal line
+                self.layer.setTileData(curr.x, curr.y, 2);
+            } else if ((prev.isAbove(curr) and next.isRightOf(curr)) or
+                (next.isAbove(curr) and prev.isRightOf(curr)))
+            {
+                // Top right bend
+                self.layer.setTileData(curr.x, curr.y, 5);
+            } else if ((prev.isLeftOf(curr) and next.isBelow(curr)) or
+                (next.isLeftOf(curr) and prev.isBelow(curr)))
+            {
+                // Bottom left bend
+                self.layer.setTileData(curr.x, curr.y, 4);
+            } else if ((prev.isAbove(curr) and next.isLeftOf(curr)) or
+                (next.isAbove(curr) and prev.isLeftOf(curr)))
+            {
+                // Top left bend
+                self.layer.setTileData(curr.x, curr.y, 7);
+            } else if ((prev.isBelow(curr) and next.isRightOf(curr)) or
+                (next.isBelow(curr) and prev.isRightOf(curr)))
+            {
+                // Bottom Right bend
+                self.layer.setTileData(curr.x, curr.y, 6);
+            }
+        }
+
+        try self.pathLayerRenderer.recreateVertices(&self.tileSet, &self.layer);
+    }
+
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if (self.fps.update(delta)) {
             std.debug.print("FPS: {}\n", .{self.fps.fps()});
@@ -244,8 +333,12 @@ pub const App = struct {
 
         eng.keyboard.update();
         if (eng.keyboard.pressed(.space)) {
-            self.pathFinder.findPath(.{ .x = 0, .y = 0 }, .{ .x = 2, .y = 0 }, &self.path) catch {
+            self.pathFinder.findPath(.{ .x = 2, .y = 2 }, .{ .x = 6, .y = 8 }, &self.path) catch {
                 std.log.err("Unable to calculate the path!", .{});
+            };
+
+            self.updatePathOnMap() catch {
+                std.log.err("Unable to render the path!", .{});
             };
             std.log.info("Path is {} nodes long", .{self.path.items.len});
         }
@@ -264,6 +357,7 @@ pub const App = struct {
         eng.renderer.clear(0.0, 0.0, 0.2, 1.0);
         //eng.renderer.drawFullTexture(self.tex, .{ .x = 0, .y = 0 }, 8);
 
+        eng.renderer.drawFilledRect()
         eng.renderer.end();
 
         try self.pathLayerRenderer.draw(self.tex, &self.layer, self.projMat);
