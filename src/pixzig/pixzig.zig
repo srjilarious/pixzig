@@ -1,14 +1,14 @@
 // zig fmt: off
 const std = @import("std");
 const builtin = @import("builtin");
-const sdl = @import("zsdl");
-const glfw = @import("zglfw");
-const stbi = @import("zstbi");
+// const sdl = @import("zsdl");
+pub const glfw = @import("zglfw");
+pub const stbi = @import("zstbi");
 
 const zopengl = @import("zopengl");
-const gl = zopengl.bindings;
-
-const zgui = @import("zgui");
+pub const gl = zopengl.bindings;
+pub const zmath = @import("zmath");
+pub const zgui = @import("zgui");
 
 pub const common = @import("./common.zig");
 pub const sprites = @import("./sprites.zig");

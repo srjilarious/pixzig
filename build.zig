@@ -248,14 +248,6 @@ pub fn example(
                 emcc_command.addArgs(&[_][]const u8{ "--preload-file", b.pathJoin(&.{ assets_dir, asset }) });
             }
 
-            // const link_items: []const *std.Build.Step.Compile = &.{
-            //     stbi_dep,
-            //     gui_dep,
-            //     lua_dep,
-            //     //freetype_dep,
-            //     flecs_dep,
-            //     exe,
-            // };
             for (engData.deps.items) |item| {
                 emcc_command.addFileArg(item.getEmittedBin());
                 emcc_command.step.dependOn(&item.step);
@@ -403,6 +395,9 @@ pub fn build(b: *std.Build) void {
 
         const zstbi = b.dependency("zstbi", .{ .target = target });
         spack.root_module.addImport("zstbi", zstbi.module("root"));
+
+        // Spritez - sprite editor tool
+        _ = example(b, target, optimize, &engData, "spritez", "tools/spritez/spritez.zig", &.{});
 
         // Unit tests
         const tests = example(b, target, optimize, &engData, "tests", "tests/main.zig", &.{});
