@@ -1,7 +1,5 @@
-// zig fmt: off
 const std = @import("std");
 const builtin = @import("builtin");
-// const sdl = @import("zsdl");
 pub const glfw = @import("zglfw");
 pub const stbi = @import("zstbi");
 
@@ -15,7 +13,7 @@ pub const sprites = @import("./sprites.zig");
 pub const input = @import("./input.zig");
 pub const tile = @import("./tile.zig");
 pub const shaders = @import("./shaders.zig");
-pub const textures= @import("./textures.zig");
+pub const textures = @import("./textures.zig");
 pub const renderer = @import("./renderer.zig");
 pub const utils = @import("./utils.zig");
 pub const gamestate = @import("./gamestate.zig");
@@ -33,10 +31,9 @@ pub const RectF = common.RectF;
 pub const Color = common.Color;
 pub const Color8 = common.Color8;
 
-
 pub const PixzigEngineOptions = struct {
     withGui: bool = false,
-    rendererOpts: renderer.RendererOptions = .{}
+    rendererOpts: renderer.RendererOptions = .{},
 };
 
 pub const PixzigEngineInitOptions = struct {
@@ -45,19 +42,16 @@ pub const PixzigEngineInitOptions = struct {
     renderInitOpts: renderer.RendererInitOpts = .{},
 };
 
-pub const web = if(builtin.os.tag == .emscripten) @import("./web.zig") else {};
+pub const web = if (builtin.os.tag == .emscripten) @import("./web.zig") else {};
 
 // Globals used by AppRunner main loop in emscripten for web builds.
 var g_EmscriptenRunnerRef: ?*anyopaque = null;
 var g_EmscriptenAppRef: ?*anyopaque = null;
 
 pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOptions) type {
-
     const AppStruct = struct {
         pub const Engine = PixzigEngine(engOpts);
-        const AppUpdateFunc = fn (*AppData, *PixzigEngine, f64) bool;
-        const AppRenderFunc = fn (*AppData, *PixzigEngine) void;
-        
+
         const UpdateStepUs: f64 = 1.0 / 120.0;
 
         engine: *Engine,
@@ -68,7 +62,7 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
         const Self = @This();
 
         pub fn init(
-            title: [:0]const u8, 
+            title: [:0]const u8,
             alloc: std.mem.Allocator,
             engInitOpts: PixzigEngineInitOptions,
         ) !*Self {
@@ -92,11 +86,10 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
 
             glfw.pollEvents();
 
-
-            while(self.lag > UpdateStepUs) {
+            while (self.lag > UpdateStepUs) {
                 self.lag -= UpdateStepUs;
 
-                if(!app.update(self.engine, UpdateStepUs)) {
+                if (!app.update(self.engine, UpdateStepUs)) {
                     return false;
                 }
             }
@@ -109,7 +102,7 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
         pub fn gameLoop(self: *Self, app: *AppData) void {
             // Main loop
             while (!self.engine.window.shouldClose()) {
-                if(!self.gameLoopCore(app)) return;
+                if (!self.gameLoopCore(app)) return;
             }
         }
 
@@ -130,7 +123,7 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
                 app.deinit();
                 self.deinit();
             }
-        } 
+        }
     };
 
     return AppStruct;
@@ -149,25 +142,22 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         const Self = @This();
         const EngRenderer = renderer.Renderer(engOpts.rendererOpts);
 
-        pub fn init(title: [:0]const u8, 
-                    allocator: std.mem.Allocator,
-                    options: PixzigEngineInitOptions) !*Self {
+        pub fn init(title: [:0]const u8, allocator: std.mem.Allocator, options: PixzigEngineInitOptions) !*Self {
             try glfw.init();
 
             std.log.debug("GLFW initialized.\n", .{});
 
             const gl_major, const gl_minor = blk: {
-                if(builtin.target.os.tag == .emscripten) {
-                    break :blk .{2, 0};
-                }
-                else {
-                    break :blk .{4, 5};
+                if (builtin.target.os.tag == .emscripten) {
+                    break :blk .{ 2, 0 };
+                } else {
+                    break :blk .{ 4, 5 };
                 }
             };
 
             glfw.windowHint(.context_version_major, gl_major);
             glfw.windowHint(.context_version_minor, gl_minor);
-            
+
             glfw.windowHint(.opengl_profile, .opengl_core_profile);
             glfw.windowHint(.opengl_forward_compat, true);
             glfw.windowHint(.client_api, .opengl_api);
@@ -175,32 +165,26 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             glfw.windowHint(.resizable, false);
 
             const monitor = blk: {
-                if(options.fullscreen) {
+                if (options.fullscreen) {
                     break :blk glfw.Monitor.getPrimary();
-                }
-                else {
-                    break :blk  null;
+                } else {
+                    break :blk null;
                 }
             };
-            const window = try glfw.Window.create(
-                    options.windowSize.x,
-                    options.windowSize.y,
-                    title,
-                    monitor
-                );
+            const window = try glfw.Window.create(options.windowSize.x, options.windowSize.y, title, monitor);
             window.setSizeLimits(400, 400, -1, -1);
 
             glfw.makeContextCurrent(window);
             glfw.swapInterval(1);
 
             std.log.info("Loading OpenGL profile.", .{});
-            if(builtin.target.os.tag == .emscripten) {
+            if (builtin.target.os.tag == .emscripten) {
                 try zopengl.loadEsProfile(glfw.getProcAddress, gl_major, gl_minor);
                 try zopengl.loadEsExtension(glfw.getProcAddress, .OES_vertex_array_object);
             } else {
                 try zopengl.loadCoreProfile(glfw.getProcAddress, gl_major, gl_minor);
             }
-            
+
             const glVersion = gl.getString(gl.VERSION);
             const glslVersion = gl.getString(gl.SHADING_LANGUAGE_VERSION);
 
@@ -212,7 +196,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 break :scale_factor @max(scale[0], scale[1]);
             };
 
-            if(engOpts.withGui) {
+            if (engOpts.withGui) {
                 std.log.info("Initializing GUI system.", .{});
                 zgui.init(allocator);
                 zgui.getStyle().scaleAllSizes(scale_factor);
@@ -241,7 +225,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             stbi.deinit();
             self.textures.destroy();
 
-            if(engOpts.withGui) {
+            if (engOpts.withGui) {
                 zgui.backend.deinit();
                 zgui.deinit();
             }

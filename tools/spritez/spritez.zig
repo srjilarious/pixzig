@@ -13,56 +13,17 @@ const Delay = pixzig.utils.Delay;
 const GameStateMgr = pixzig.gamestate.GameStateMgr;
 
 const math = @import("zmath");
-const EngOptions = pixzig.PixzigEngineOptions;
+
+const core = @import("./core.zig");
+
 const FpsCounter = pixzig.utils.FpsCounter;
 
-const States = enum {
-    StateA,
-    StateB,
-    //StateC
-};
+const AppRunner = pixzig.PixzigAppRunner(App, core.EngOptions);
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AtlasState = @import("./atlas_state.zig").AtlasState;
+const AnimationState = @import("./animation_state.zig").AnimationState;
 
-const StateA = struct {
-    pub fn update(self: *StateA, eng: *AppRunner.Engine, delta: f64) bool {
-        _ = delta;
-        _ = eng;
-        _ = self;
-        return true;
-    }
-
-    pub fn render(self: *StateA, eng: *AppRunner.Engine) void {
-        _ = self;
-        eng.renderer.clear(0, 1, 0, 1);
-    }
-
-    pub fn activate(self: *StateA) void {
-        _ = self;
-        std.debug.print("State A activated!\n", .{});
-    }
-
-    pub fn deactivate(self: *StateA) void {
-        _ = self;
-        std.debug.print("State A deactivated!\n", .{});
-    }
-};
-
-const ParamState = struct {
-    pub fn update(self: *ParamState, eng: *AppRunner.Engine, delta: f64) bool {
-        _ = delta;
-        _ = eng;
-        _ = self;
-        return true;
-    }
-
-    pub fn render(self: *ParamState, eng: *AppRunner.Engine) void {
-        _ = self;
-        eng.renderer.clear(1, 0, 0, 1);
-    }
-};
-
-const AppStateMgr = GameStateMgr(AppRunner.Engine, States, &[_]type{ StateA, ParamState });
+const AppStateMgr = GameStateMgr(AppRunner.Engine, core.AppStates, &[_]type{ AtlasState, AnimationState });
 
 pub const App = struct {
     alloc: std.mem.Allocator,
@@ -92,11 +53,11 @@ pub const App = struct {
 
         if (eng.keyboard.pressed(.one)) {
             std.debug.print("one!\n", .{});
-            self.states.setCurrState(.StateA);
+            self.states.setCurrState(.AtlasState);
         }
         if (eng.keyboard.pressed(.two)) {
             std.debug.print("two!\n", .{});
-            self.states.setCurrState(.StateB);
+            self.states.setCurrState(.AnimationState);
         }
         if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
 
@@ -120,9 +81,9 @@ pub fn main() !void {
 
     std.log.debug("Initializing app.\n", .{});
 
-    var StateAInst = StateA{};
-    var ParamStateInst = ParamState{};
-    var statesArr = [_]*anyopaque{ &StateAInst, &ParamStateInst };
+    var AtlasStateInst = AtlasState{};
+    var AnimStateInst = AnimationState{};
+    var statesArr = [_]*anyopaque{ &AtlasStateInst, &AnimStateInst };
     const states: []*anyopaque = statesArr[0..2];
     const app = try App.init(std.heap.c_allocator, states);
 
