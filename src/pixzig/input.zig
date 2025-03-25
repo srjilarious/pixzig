@@ -229,8 +229,6 @@ const InitialRepeatRate: i64 = 1e5;
 const DownRepeatRate: i64 = 2e4;
 
 pub const KeyChordPiece = struct {
-    // GLFW keys go up to 348, so we use the lower 24 bits for the key
-    // and the top 8 bits for the modifiers.
     key: glfw.Key,
     mod: KeyModifier,
 
@@ -300,18 +298,18 @@ pub const KeyChord = struct {
     // The script func to call, can be straight lua code.
     func: ?[]const u8, // Change to ArrayList of context/func.
     piece: KeyChordPiece,
-    children: std.AutoHashMap(KeyChordPiece, KeyChord),
+    children: std.AutoHashMap(KeyChordPiece, *KeyChord),
 
     pub fn init(alloc: std.mem.Allocator, piece: KeyChordPiece, func: ?[]const u8) !KeyChord {
         var fnc: ?[]const u8 = null;
-        if (fnc != null) {
+        if (func != null) {
             fnc = try alloc.dupe(u8, func.?);
         }
         return .{
             .alloc = alloc,
             .func = fnc,
             .piece = piece,
-            .children = std.AutoHashMap(KeyChordPiece, KeyChord).init(alloc),
+            .children = std.AutoHashMap(KeyChordPiece, *KeyChord).init(alloc),
         };
     }
 
@@ -327,7 +325,7 @@ pub const KeyChord = struct {
         var len: usize = 0;
         if (self.func != null) {
             len = try self.piece.print(buff);
-            const sl = try std.fmt.bufPrint(buff[len..], ": {s}\n", .{self.func.?});
+            const sl = try std.fmt.bufPrint(buff[len..], ": {s}", .{self.func.?});
             len += sl.len;
         }
 
@@ -337,8 +335,8 @@ pub const KeyChord = struct {
             _ = try std.fmt.bufPrint(buff[len..], ", ", .{});
             len += 2;
 
-            len += try k.print(buff[len..]);
-            len += try self.children.getPtr(k.*).?.print(buff[len..]);
+            // len += try k.print(buff[len..]);
+            len += try self.children.getPtr(k.*).?.*.print(buff[len..]);
         }
 
         return len;
@@ -406,12 +404,14 @@ pub const KeyMap = struct {
     }
 
     pub fn addKeyChord(self: *KeyMap, mods: KeyModifier, key: glfw.Key, func: []const u8, context: ?[]const u8) !bool {
-        _ = self;
         _ = context;
-        _ = func;
-        _ = key;
-        _ = mods;
-        return false;
+        const kcp = KeyChordPiece.from(mods, key);
+        if (self.chords.rootChord.children.contains(kcp)) return false;
+
+        const chord = try self.alloc.create(KeyChord);
+        chord.* = try KeyChord.init(self.alloc, kcp, func);
+        try self.chords.rootChord.children.put(kcp, chord);
+        return true;
     }
 
     pub fn addTwoKeyChord(self: *KeyMap, mods: KeyModifier, key1: glfw.Key, key2: glfw.Key, func: []const u8, context: ?[]const u8) !bool {
