@@ -1,11 +1,8 @@
 // zig fmt: off
 const std = @import("std");
 const builtin = @import("builtin");
-const zgui = @import("zgui");
-const glfw = @import("zglfw");
-const gl = @import("zopengl").bindings;
-const stbi = @import ("zstbi");
 const pixzig = @import("pixzig");
+const glfw = pixzig.glfw;
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;

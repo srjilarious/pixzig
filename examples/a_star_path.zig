@@ -1,17 +1,14 @@
 const std = @import("std");
-const zgui = @import("zgui");
-const glfw = @import("zglfw");
-const gl = @import("zopengl").bindings;
-const stbi = @import("zstbi");
-const zmath = @import("zmath");
 const pixzig = @import("pixzig");
+const gl = pixzig.gl;
+const glfw = pixzig.glfw;
+const zmath = pixzig.zmath;
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
 const shaders = pixzig.shaders;
 const Shader = shaders.Shader;
 
-const math = @import("zmath");
 const EngOptions = pixzig.PixzigEngineOptions;
 
 const tile = pixzig.tile;
@@ -71,7 +68,7 @@ pub const App = struct {
         const app = try alloc.create(App);
 
         // Orthographic projection matrix
-        const projMat = math.orthographicOffCenterLhGl(0, 200, 0, 150, -0.1, 1000);
+        const projMat = zmath.orthographicOffCenterLhGl(0, 200, 0, 150, -0.1, 1000);
 
         const shader = try Shader.init(&shaders.ColorVertexShader, &shaders.ColorPixelShader);
         const grid = try GridRenderer.init(alloc, shader, .{ .x = MapWidth, .y = MapHeight }, .{ .x = TileWidth, .y = TileHeight }, 1, Color{ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 });

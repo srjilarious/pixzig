@@ -1,10 +1,7 @@
 const std = @import("std");
-const gl = @import("zopengl").bindings;
-const glfw = @import("zglfw");
-const stbi = @import("zstbi");
-
-const zmath = @import("zmath");
 const pixzig = @import("pixzig");
+const glfw = pixzig.glfw;
+const zmath = pixzig.zmath;
 const shaders = pixzig.shaders;
 
 const SpriteBatchQueue = pixzig.renderer.SpriteBatchQueue;

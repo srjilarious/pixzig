@@ -1,8 +1,8 @@
 // zig fmt: off
 const std = @import("std");
 const pixzig = @import("pixzig");
-const flecs = @import("zflecs"); 
-const math = @import("zmath");
+const flecs = pixzig.flecs;
+const math = pixzig.zmath;
 
 const RectF = pixzig.common.RectF;
 

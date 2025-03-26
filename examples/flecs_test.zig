@@ -1,18 +1,14 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const zgui = @import("zgui");
-const glfw = @import("zglfw");
-const gl = @import("zopengl").bindings;
-const stbi = @import("zstbi");
-const zmath = @import("zmath");
-const flecs = @import("zflecs");
 const pixzig = @import("pixzig");
+const glfw = pixzig.glfw;
+const zmath = pixzig.zmath;
+const flecs = pixzig.flecs;
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
 
-const math = @import("zmath");
 const EngOptions = pixzig.PixzigEngineOptions;
 
 const tile = pixzig.tile;
@@ -48,7 +44,7 @@ pub const App = struct {
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         // Orthographic projection matrix
-        const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
+        const projMat = zmath.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
         const bigtex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
 
         const tex = try eng.textures.addSubTexture(bigtex, "guy", RectF.fromCoords(192, 64, 32, 32, 512, 512));

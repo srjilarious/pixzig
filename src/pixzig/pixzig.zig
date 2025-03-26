@@ -7,6 +7,7 @@ const zopengl = @import("zopengl");
 pub const gl = zopengl.bindings;
 pub const zmath = @import("zmath");
 pub const zgui = @import("zgui");
+pub const flecs = @import("zflecs");
 
 pub const common = @import("./common.zig");
 pub const sprites = @import("./sprites.zig");

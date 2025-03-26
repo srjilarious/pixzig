@@ -1,13 +1,10 @@
 // zig fmt: off
 const std = @import("std");
 const builtin = @import("builtin");
-const zgui = @import("zgui");
-const glfw = @import("zglfw");
-const gl = @import("zopengl").bindings;
-const stbi = @import ("zstbi");
-const zmath = @import("zmath"); 
-const flecs = @import("zflecs"); 
 const pixzig = @import("pixzig");
+const glfw = pixzig.glfw;
+const zmath = pixzig.zmath;
+const flecs = pixzig.flecs;
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
@@ -46,7 +43,7 @@ pub const App = struct {
  
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         // Orthographic projection matrix
-        const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
+        const projMat = zmath.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
 
         var texShader = try pixzig.shaders.Shader.init(
             &pixzig.shaders.TexVertexShader,
