@@ -1,10 +1,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const zgui = @import("zgui");
-const glfw = @import("zglfw");
-const gl = @import("zopengl").bindings;
-const stbi = @import("zstbi");
 const pixzig = @import("pixzig");
+const glfw = pixzig.glfw;
+const zmath = pixzig.zmath;
+const zgui = pixzig.zgui;
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
@@ -14,10 +13,8 @@ const math = @import("zmath");
 const EngOptions = pixzig.PixzigEngineOptions;
 const FpsCounter = pixzig.utils.FpsCounter;
 
-const ziglua = @import("ziglua");
-const Lua = ziglua.Lua;
-const scripting = @import("pixzig").scripting;
-const console = @import("pixzig").console;
+const scripting = pixzig.scripting;
+const console = pixzig.console;
 
 // Sets up the panic handler and log handler depending on the OS target.
 pub const panic = pixzig.system.panic;

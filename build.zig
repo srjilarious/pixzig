@@ -448,7 +448,7 @@ pub fn build(b: *std.Build) void {
             "mario_grassish2.png",
             "level1a.tmx",
         } },
-        // .{ .name = "natetris", .path = "games/natetris/natetris.zig", .assets = &.{} },
+        .{ .name = "natetris", .path = "games/natetris/natetris.zig", .assets = &.{} },
         .{ .name = "actor_test", .path = "examples/actor_test.zig", .assets = &.{
             "pac-tiles.png",
         } },
@@ -466,10 +466,10 @@ pub fn build(b: *std.Build) void {
         .{ .name = "glfw_sprites", .path = "examples/glfw_sprites.zig", .assets = &.{
             "mario_grassish2.png",
         } },
-        // .{ .name = "grid_render", .path = "examples/grid_render.zig", .assets = &.{} },
-        // .{ .name = "console_test", .path = "examples/console_test.zig", .assets = &.{
-        //     "Roboto-Medium.ttf",
-        // } },
+        .{ .name = "grid_render", .path = "examples/grid_render.zig", .assets = &.{} },
+        .{ .name = "console_test", .path = "examples/console_test.zig", .assets = &.{
+            "Roboto-Medium.ttf",
+        } },
     };
 
     // Create a "build-all" option that builds everything
@@ -482,13 +482,13 @@ pub fn build(b: *std.Build) void {
         // Create a step for this specific example
         //const example_step = b.step(b.fmt("{s}_exe", .{example_info.name}), b.fmt("Build the {s} example", .{example_info.name}));
 
-        if (target.result.os.tag == .emscripten) {
-            //example_step.dependOn(&exe.step);
-        } else {
-            const install_exe = b.addInstallArtifact(exe, .{ .dest_dir = .{ .override = .{ .custom = b.pathJoin(&.{ "bin", example_info.name }) } } });
-            build_all_step.dependOn(&install_exe.step); //example_step);
-            //example_step.dependOn(&install_exe.step);
-        }
+        // if (target.result.os.tag == .emscripten) {
+        //     //example_step.dependOn(&exe.step);
+        // } else {
+        const install_exe = b.addInstallArtifact(exe, .{ .dest_dir = .{ .override = .{ .custom = b.pathJoin(&.{ "bin", example_info.name }) } } });
+        build_all_step.dependOn(&install_exe.step); //example_step);
+        //example_step.dependOn(&install_exe.step);
+        // }
 
         // Add to build-all step
     }

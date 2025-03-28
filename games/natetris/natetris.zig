@@ -4,13 +4,10 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const zgui = @import("zgui");
-const glfw = @import("zglfw");
-const gl = @import("zopengl").bindings;
-const stbi = @import ("zstbi");
-const zmath = @import("zmath"); 
-const flecs = @import("zflecs"); 
 const pixzig = @import("pixzig");
+const gl = pixzig.gl;
+const glfw = pixzig.glfw;
+const zmath = pixzig.zmath;
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
@@ -167,7 +164,7 @@ pub const Natetris = struct {
 
         std.log.debug("Created texture from characters.\n", .{});
 
-        const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
+        const projMat = zmath.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
 
         var board = try alloc.alloc(BoardSpace, BoardWidth*BoardHeight);
         for(0..BoardHeight) |bh| {
@@ -285,10 +282,8 @@ pub const Natetris = struct {
     }
 
     pub fn render(self: *Natetris, eng: *AppRunner.Engine) void {
-        // gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0, 0, 0.1, 1.0 });
-        gl.clearColor(0, 0, 0.1, 1);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-
+        eng.renderer.clear(0, 0, 0.1, 1);
+        
         // const fb_size = eng.window.getFramebufferSize();
         eng.renderer.begin(self.projMat);
         
