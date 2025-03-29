@@ -493,10 +493,19 @@ pub fn build(b: *std.Build) void {
         // Add to build-all step
     }
 
-    // Non-emscripten only examples and tools
     if (target.result.os.tag != .emscripten) {
-        // Add tools like spack, spritez, and tests here
-        // Similar to the example pattern above
+        // Sprite packer tool
+        const spack = buildExample(b, target, optimize, engDat.engine_lib, engDat.pixeng_mod, "spack", "tools/spack/spack.zig", &.{});
+        const zargs = b.dependency("zargunaught", .{});
+        spack.root_module.addImport("zargunaught", zargs.module("zargunaught"));
+
+        const zstbi = b.dependency("zstbi", .{ .target = target });
+        spack.root_module.addImport("zstbi", zstbi.module("root"));
+
+        // Unit tests
+        const tests = buildExample(b, target, optimize, engDat.engine_lib, engDat.pixeng_mod, "tests", "tests/main.zig", &.{});
+        const testzMod = b.dependency("testz", .{});
+        tests.root_module.addImport("testz", testzMod.module("testz"));
     }
 
     // Make build-all the default step
@@ -693,11 +702,12 @@ fn buildExample(
             });
             exe.step.dependOn(&install_content_step.step);
 
-            //b.getInstallStep().dependOn(&b.addInstallArtifact(exe, .{ .dest_dir = .{ .override = .{ .custom = path } } }).step);
+            const install_ex = b.addInstallArtifact(exe, .{ .dest_dir = .{ .override = .{ .custom = path } } });
+            //b.getInstallStep().dependOn(&.step);
 
             const run_cmd = b.addRunArtifact(exe);
             run_cmd.setCwd(.{ .cwd_relative = b.pathJoin(&.{ b.install_prefix, path }) });
-            run_cmd.step.dependOn(b.getInstallStep());
+            run_cmd.step.dependOn(&install_ex.step);
 
             if (b.args) |args| {
                 run_cmd.addArgs(args);
