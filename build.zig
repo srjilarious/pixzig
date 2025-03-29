@@ -500,7 +500,7 @@ pub fn build(b: *std.Build) void {
     }
 
     // Make build-all the default step
-    b.default_step.dependOn(build_all_step);
+    //b.default_step.dependOn(build_all_step);
 }
 
 fn buildEngine(
