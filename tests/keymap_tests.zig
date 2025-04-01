@@ -70,9 +70,18 @@ pub fn simpleChordTreeUpdateTest() !void {
     var kmap = try KeyMap.init(std.heap.page_allocator);
     defer kmap.deinit();
 
-    _ = try kmap.addKeyChord(.{ .ctrl = true }, .a, "test", null);
+    _ = try kmap.addKeyChord(.{ .ctrl = true }, .a, "testThing", null);
     var kbState = KeyboardState.init();
     kbState.set(.a, true);
-    const res = kmap.update(&kbState, 1000);
-    try testz.expectEqual(res, input.ChordUpdateResult.none);
+    {
+        const res = kmap.update(&kbState, 1000);
+        try testz.expectEqual(res, input.ChordUpdateResult.none);
+    }
+
+    kbState.set(.right_control, true);
+    {
+        const res = kmap.update(&kbState, 1000);
+        const func = res.triggered.func;
+        try testz.expectEqualStr(func.?, "testThing");
+    }
 }

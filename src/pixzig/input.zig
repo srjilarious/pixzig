@@ -246,9 +246,9 @@ pub const KeyModifier = struct {
     super: bool = false,
 };
 
-const DefaultChordTimeoutUs: i64 = 2e6;
-const InitialRepeatRate: i64 = 1e5;
-const DownRepeatRate: i64 = 2e4;
+const DefaultChordTimeoutUs: f64 = 2e6;
+const InitialRepeatRate: f64 = 1e5;
+const DownRepeatRate: f64 = 2e4;
 
 pub const KeyChordPiece = struct {
     key: glfw.Key,
@@ -372,9 +372,9 @@ pub const ChordTree = struct {
     context: ?[]const u8,
     downKey: glfw.Key,
     currChord: ?*KeyChord,
-    rootChord: KeyChord,
-    elapsedUsCounter: i64,
-    repeatCounter: i64,
+    rootChord: *KeyChord,
+    elapsedUsCounter: f64,
+    repeatCounter: f64,
 
     pub fn init(alloc: std.mem.Allocator, context: ?[]const u8) !ChordTree {
         var ctxt: ?[]const u8 = null;
@@ -382,12 +382,15 @@ pub const ChordTree = struct {
             ctxt = try alloc.dupe(u8, context.?);
         }
 
+        const root = try alloc.create(KeyChord);
+        root.* = try KeyChord.init(alloc, KeyChordPiece.from(.{}, .unknown), null);
+
         return .{
             .alloc = alloc,
             .context = ctxt,
             .downKey = .unknown,
-            .currChord = null,
-            .rootChord = try KeyChord.init(alloc, KeyChordPiece.from(.{}, .unknown), null),
+            .currChord = root,
+            .rootChord = root,
             .elapsedUsCounter = 0,
             .repeatCounter = 0,
         };
@@ -402,7 +405,7 @@ pub const ChordTree = struct {
     }
 
     pub fn reset(self: *ChordTree) void {
-        self.currChord = &self.rootChord;
+        self.currChord = self.rootChord;
         self.elapsedUsCounter = 0;
         self.downKey = .unknown;
     }
@@ -414,12 +417,38 @@ pub const ChordTree = struct {
             chordMods.super == kbMods.super;
     }
 
-    pub fn update(self: *ChordTree, kbState: *const KeyboardState, elapsedUs: u64) ChordUpdateResult {
-        _ = elapsedUs;
+    pub fn update(self: *ChordTree, kbState: *const KeyboardState, elapsedUs: f64) ChordUpdateResult {
         if (self.downKey != .unknown) {
             if (!checkExpectedModsDown(self.currChord.?.piece.mod, kbState.modifiers()) or kbState.up(self.downKey)) {
                 self.reset();
                 return .reset;
+            } else {
+                self.repeatCounter -= elapsedUs;
+                if (self.repeatCounter <= 0) {
+                    self.repeatCounter = DownRepeatRate;
+                    return .{ .triggered = self.currChord.? };
+                }
+            }
+        } else {
+            self.elapsedUsCounter += elapsedUs;
+            if (self.elapsedUsCounter > DefaultChordTimeoutUs) {
+                self.reset();
+                return .reset;
+            }
+
+            var it = self.currChord.?.children.keyIterator();
+            while (it.next()) |k| {
+                if (kbState.down(k.key)) {
+                    if (checkExpectedModsDown(k.mod, kbState.modifiers())) {
+                        self.elapsedUsCounter = 0.0;
+                        self.currChord = self.currChord.?.children.get(k.*).?;
+                        if (self.currChord.?.children.count() == 0) {
+                            self.downKey = k.key;
+                            self.repeatCounter = InitialRepeatRate;
+                            return .{ .triggered = self.currChord.? };
+                        }
+                    }
+                }
             }
         }
         return .none;
@@ -475,7 +504,7 @@ pub const KeyMap = struct {
         return false;
     }
 
-    pub fn update(self: *KeyMap, kbState: *const KeyboardState, elapsedUs: u64) ChordUpdateResult {
+    pub fn update(self: *KeyMap, kbState: *const KeyboardState, elapsedUs: f64) ChordUpdateResult {
         return self.chords.update(kbState, elapsedUs);
     }
 
