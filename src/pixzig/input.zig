@@ -27,17 +27,41 @@ pub const KeyboardState = struct {
         return .{ .keys = keys };
     }
 
-    pub fn down(self: *KeyboardState, keyIdx: usize) bool {
+    pub fn up(self: *const KeyboardState, key: glfw.Key) bool {
+        const keyIdx = getIndexForKey(key);
+        return !self.keys.isSet(keyIdx);
+    }
+
+    pub fn down(self: *const KeyboardState, key: glfw.Key) bool {
+        const keyIdx = getIndexForKey(key);
+        return self.keys.isSet(keyIdx);
+    }
+
+    pub fn downIdx(self: *const KeyboardState, keyIdx: usize) bool {
         const res = self.keys.isSet(keyIdx);
         return res;
     }
 
-    pub fn set(self: *KeyboardState, keyIdx: usize, val: bool) void {
+    pub fn set(self: *KeyboardState, key: glfw.Key, val: bool) void {
+        const keyIdx = getIndexForKey(key);
+        self.setIdx(keyIdx, val);
+    }
+
+    pub fn setIdx(self: *KeyboardState, keyIdx: usize, val: bool) void {
         if (val) {
             self.keys.set(keyIdx);
         } else {
             self.keys.unset(keyIdx);
         }
+    }
+
+    pub fn modifiers(self: *const KeyboardState) KeyModifier {
+        return .{
+            .alt = self.down(.left_alt) or self.down(.right_alt),
+            .ctrl = self.down(.left_control) or self.down(.right_control),
+            .shift = self.down(.left_shift) or self.down(.right_shift),
+            .super = self.down(.left_super) or self.down(.right_super),
+        };
     }
 };
 
@@ -75,7 +99,7 @@ pub const Keyboard = struct {
         comptime var keyIdx = 0;
         inline for (enumTypeInfo.fields) |field| {
             const enumValue = @field(glfw.Key, field.name);
-            curr.set(keyIdx, self.window.getKey(enumValue) == .press);
+            curr.setIdx(keyIdx, self.window.getKey(enumValue) == .press);
             keyIdx += 1;
         }
 
@@ -83,23 +107,21 @@ pub const Keyboard = struct {
     }
 
     pub fn up(self: *Keyboard, key: glfw.Key) bool {
-        const keyIdx = getIndexForKey(key);
-        return self.currKeys().down(keyIdx) == false;
+        return self.currKeys().up(key) == false;
     }
 
     pub fn down(self: *Keyboard, key: glfw.Key) bool {
-        const keyIdx = getIndexForKey(key);
-        return self.currKeys().down(keyIdx);
+        return self.currKeys().down(key);
     }
 
     pub fn pressed(self: *Keyboard, key: glfw.Key) bool {
         const keyIdx = getIndexForKey(key);
-        return (self.currKeys().down(keyIdx) and !self.prevKeys().down(keyIdx));
+        return (self.currKeys().downIdx(keyIdx) and !self.prevKeys().downIdx(keyIdx));
     }
 
     pub fn released(self: *Keyboard, key: glfw.Key) bool {
         const keyIdx = getIndexForKey(key);
-        return (!self.currKeys().down(keyIdx) and self.prevKeys().down(keyIdx));
+        return (!self.currKeys().downIdx(keyIdx) and self.prevKeys().downIdx(keyIdx));
     }
 };
 
@@ -343,7 +365,9 @@ pub const KeyChord = struct {
     }
 };
 
-const ChordTree = struct {
+pub const ChordUpdateResult = union(enum) { none: void, reset: void, triggered: *KeyChord };
+
+pub const ChordTree = struct {
     alloc: std.mem.Allocator,
     context: ?[]const u8,
     downKey: glfw.Key,
@@ -381,6 +405,24 @@ const ChordTree = struct {
         self.currChord = &self.rootChord;
         self.elapsedUsCounter = 0;
         self.downKey = .unknown;
+    }
+
+    fn checkExpectedModsDown(chordMods: KeyModifier, kbMods: KeyModifier) bool {
+        return chordMods.alt == kbMods.alt and
+            chordMods.ctrl == kbMods.ctrl and
+            chordMods.shift == kbMods.shift and
+            chordMods.super == kbMods.super;
+    }
+
+    pub fn update(self: *ChordTree, kbState: *const KeyboardState, elapsedUs: u64) ChordUpdateResult {
+        _ = elapsedUs;
+        if (self.downKey != .unknown) {
+            if (!checkExpectedModsDown(self.currChord.?.piece.mod, kbState.modifiers()) or kbState.up(self.downKey)) {
+                self.reset();
+                return .reset;
+            }
+        }
+        return .none;
     }
 };
 
@@ -431,6 +473,10 @@ pub const KeyMap = struct {
         _ = func;
         _ = kp2;
         return false;
+    }
+
+    pub fn update(self: *KeyMap, kbState: *const KeyboardState, elapsedUs: u64) ChordUpdateResult {
+        return self.chords.update(kbState, elapsedUs);
     }
 
     // pub fn printKeyMap(self: *KeyMap) void {
