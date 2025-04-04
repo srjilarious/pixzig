@@ -85,3 +85,35 @@ pub fn simpleChordTreeUpdateTest() !void {
         try testz.expectEqualStr(func.?, "testThing");
     }
 }
+
+pub fn twoKeyChordUpdateTest() !void {
+    var kmap = try KeyMap.init(std.heap.page_allocator);
+    defer kmap.deinit();
+
+    _ = try kmap.addTwoKeyChord(.{ .ctrl = true }, .k, .l, "testThing", null);
+    var kbState = KeyboardState.init();
+    kbState.set(.k, true);
+    {
+        const res = kmap.update(&kbState, 1000);
+        try testz.expectEqual(res, input.ChordUpdateResult.none);
+    }
+
+    kbState.set(.right_control, true);
+    {
+        const res = kmap.update(&kbState, 1000);
+        try testz.expectEqual(res, input.ChordUpdateResult.none);
+    }
+
+    kbState.set(.k, false);
+    {
+        const res = kmap.update(&kbState, 1000);
+        try testz.expectEqual(res, input.ChordUpdateResult.none);
+    }
+
+    kbState.set(.l, true);
+    {
+        const res = kmap.update(&kbState, 1000);
+        const func = res.triggered.func;
+        try testz.expectEqualStr(func.?, "testThing");
+    }
+}
