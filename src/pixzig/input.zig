@@ -246,9 +246,9 @@ pub const KeyModifier = struct {
     super: bool = false,
 };
 
-const DefaultChordTimeoutUs: f64 = 2e6;
-const InitialRepeatRate: f64 = 1e5;
-const DownRepeatRate: f64 = 2e4;
+pub const DefaultChordTimeoutUs: f64 = 2e6;
+pub const InitialRepeatRate: f64 = 1e5;
+pub const DownRepeatRate: f64 = 2e4;
 
 pub const KeyChordPiece = struct {
     key: glfw.Key,
