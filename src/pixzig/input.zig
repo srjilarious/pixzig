@@ -508,13 +508,24 @@ pub const KeyMap = struct {
         return true;
     }
 
-    pub fn addComplexChord(self: *KeyMap, pkp1: KeyChordPiece, kp2: KeyChordPiece, func: []const u8, context: ?[]const u8) !bool {
-        _ = pkp1;
-        _ = self;
+    pub fn addComplexChord(self: *KeyMap, kcp1: KeyChordPiece, kcp2: KeyChordPiece, func: []const u8, context: ?[]const u8) !bool {
         _ = context;
-        _ = func;
-        _ = kp2;
-        return false;
+        var chord1: *KeyChord = undefined;
+        if (!self.chords.rootChord.children.contains(kcp1)) {
+            chord1 = try self.alloc.create(KeyChord);
+            chord1.* = try KeyChord.init(self.alloc, kcp1, "");
+            try self.chords.rootChord.children.put(kcp1, chord1);
+        } else {
+            chord1 = self.chords.rootChord.children.get(kcp1).?;
+        }
+
+        // Second key portion.
+        if (chord1.children.contains(kcp2)) return false;
+
+        const chord2 = try self.alloc.create(KeyChord);
+        chord2.* = try KeyChord.init(self.alloc, kcp2, func);
+        try chord1.children.put(kcp2, chord2);
+        return true;
     }
 
     pub fn update(self: *KeyMap, kbState: *const KeyboardState, elapsedUs: f64) ChordUpdateResult {

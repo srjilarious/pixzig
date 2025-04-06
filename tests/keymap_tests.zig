@@ -118,6 +118,57 @@ pub fn twoKeyChordUpdateTest() !void {
     }
 }
 
+// Test that a complex chord with different modifiers triggers as expected.
+pub fn twoKeyChordUpdateDifferentModsTest() !void {
+    var kmap = try KeyMap.init(std.heap.page_allocator);
+    defer kmap.deinit();
+
+    try testz.expectTrue(try kmap.addComplexChord(
+        .{ .mod = .{ .ctrl = true }, .key = .k },
+        .{ .mod = .{ .super = true }, .key = .F1 },
+        "testThing",
+        null,
+    ));
+
+    var kbState = KeyboardState.init();
+    kbState.set(.k, true);
+    {
+        const res = kmap.update(&kbState, 1000);
+        try testz.expectEqual(res, input.ChordUpdateResult.none);
+    }
+
+    kbState.set(.right_control, true);
+    {
+        const res = kmap.update(&kbState, 1000);
+        try testz.expectEqual(res, input.ChordUpdateResult.none);
+    }
+
+    kbState.set(.k, false);
+    {
+        const res = kmap.update(&kbState, 1000);
+        try testz.expectEqual(res, input.ChordUpdateResult.none);
+    }
+
+    kbState.set(.left_super, true);
+    {
+        const res = kmap.update(&kbState, 1000);
+        try testz.expectEqual(res, input.ChordUpdateResult.none);
+    }
+
+    kbState.set(.right_control, false);
+    {
+        const res = kmap.update(&kbState, 1000);
+        try testz.expectEqual(res, input.ChordUpdateResult.none);
+    }
+
+    kbState.set(.F1, true);
+    {
+        const res = kmap.update(&kbState, 1000);
+        const func = res.triggered.func;
+        try testz.expectEqualStr(func.?, "testThing");
+    }
+}
+
 pub fn repeatKeyChordTrigger() !void {
     var kmap = try KeyMap.init(std.heap.page_allocator);
     defer kmap.deinit();
