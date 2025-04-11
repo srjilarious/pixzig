@@ -29,6 +29,10 @@ pub fn GameStateMgr(comptime Engine: type, comptime StateKeysType: type, comptim
             };
         }
 
+        pub fn deinit(self: *Self) void {
+            _ = self;
+        }
+
         pub fn setCurrState(self: *Self, state: StateKeysType) void {
             const oldState = self.currStateIdx;
             self.currStateIdx = @intFromEnum(state);

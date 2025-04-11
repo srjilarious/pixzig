@@ -25,9 +25,12 @@ pub const a_star = @import("./a_star.zig");
 pub const system = @import("./system.zig");
 
 pub const Texture = textures.Texture;
+pub const TextureImage = textures.TextureImage;
+
 const TextureManager = textures.TextureManager;
 
 pub const Vec2I = common.Vec2I;
+pub const RectI = common.RectI;
 pub const RectF = common.RectF;
 pub const Color = common.Color;
 pub const Color8 = common.Color8;

@@ -78,10 +78,11 @@ pub const Keyboard = struct {
         return res;
     }
 
-    fn currKeys(self: *Keyboard) *KeyboardState {
+    pub fn currKeys(self: *Keyboard) *KeyboardState {
         return &self.keyBuffers[self.currIdx];
     }
-    fn prevKeys(self: *Keyboard) *KeyboardState {
+
+    pub fn prevKeys(self: *Keyboard) *KeyboardState {
         return &self.keyBuffers[self.prevIdx];
     }
 
