@@ -20,3 +20,29 @@ pub fn tiledObjLoadTest() !void {
     try testz.expectEqualStr(obj.class.?, "dot");
     try testz.expectEqual(obj.name, null);
 }
+
+pub fn tiledObjWithPropsLoadTest() !void {
+    const alloc = std.heap.page_allocator;
+    const xmlStr =
+        \\  <object id="1567" class="ghost" gid="33" x="30" y="112" width="8" height="8">
+        \\   <properties>
+        \\    <property name="ghostType" value="red"/>
+        \\   </properties>
+        \\  </object>
+    ;
+    const doc = try xml.parse(alloc, xmlStr);
+    const obj = try tile.Object.initFromElement(alloc, doc.root);
+    try testz.expectEqual(obj.id, 1567);
+    try testz.expectEqual(obj.gid, 33);
+    try testz.expectEqual(obj.pos.x, 30);
+    try testz.expectEqual(obj.pos.y, 112);
+    try testz.expectEqual(obj.size.x, 8);
+    try testz.expectEqual(obj.size.y, 8);
+    try testz.expectEqualStr(obj.class.?, "ghost");
+    try testz.expectEqual(obj.name, null);
+
+    try testz.expectEqual(obj.properties.?.items.len, 1);
+    const prop = obj.properties.?.items[0];
+    try testz.expectEqualStr(prop.name, "ghostType");
+    try testz.expectEqualStr(prop.value, "red");
+}
