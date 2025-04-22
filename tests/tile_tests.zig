@@ -1,6 +1,22 @@
 const std = @import("std");
 const testz = @import("testz");
+const pixzig = @import("pixzig");
+const tile = pixzig.tile;
+const xml = pixzig.xml;
 
-pub fn myTest() !void {
-    // std.debug.print("testing..", .{});
+pub fn tiledObjLoadTest() !void {
+    const alloc = std.heap.page_allocator;
+    const xmlStr =
+        \\<object id="662" class="dot" gid="17" x="224" y="24" width="8" height="8"/>
+    ;
+    const doc = try xml.parse(alloc, xmlStr);
+    const obj = try tile.Object.initFromElement(alloc, doc.root);
+    try testz.expectEqual(obj.id, 662);
+    try testz.expectEqual(obj.gid, 17);
+    try testz.expectEqual(obj.pos.x, 224);
+    try testz.expectEqual(obj.pos.y, 24);
+    try testz.expectEqual(obj.size.x, 8);
+    try testz.expectEqual(obj.size.y, 8);
+    try testz.expectEqualStr(obj.class.?, "dot");
+    try testz.expectEqual(obj.name, null);
 }

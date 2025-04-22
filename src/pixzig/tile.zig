@@ -99,6 +99,69 @@ pub const Tile = struct {
     }
 };
 
+pub const Object = struct {
+    alloc: std.mem.Allocator,
+    id: i32 = -1,
+    gid: i32 = -1,
+    pos: Vec2I = .{ .x = -1, .y = -1},
+    size: Vec2I = .{ .x = 0, .y = 0},
+    name: ?[]const u8 = null,
+    class: ?[]const u8 = null,
+    properties: ?PropertyList = null,
+
+    const Self = @This();
+
+    pub fn init(alloc: std.mem.Allocator) !Self {
+        return .{ .alloc = alloc };
+    }
+
+    pub fn initFromElement(alloc: std.mem.Allocator, node: *xml.Element) !Self {
+        var obj = try Object.init(alloc);
+
+        if (!std.mem.eql(u8, node.tag, "object")) return error.BadNodeTag;
+
+        obj.id = try std.fmt.parseInt(i32, node.getAttribute("id").?, 0);
+        obj.gid = try std.fmt.parseInt(i32, node.getAttribute("gid").?, 0);
+        obj.pos = .{
+            .x = try std.fmt.parseInt(i32, node.getAttribute("x").?, 0),
+            .y = try std.fmt.parseInt(i32, node.getAttribute("y").?, 0),
+        };
+        obj.size = .{
+            .x = try std.fmt.parseInt(i32, node.getAttribute("width").?, 0),
+            .y = try std.fmt.parseInt(i32, node.getAttribute("height").?, 0),
+        };
+        
+        const classOpt = node.getAttribute("class");
+        if(classOpt != null) {
+            obj.class = try alloc.dupe(u8, classOpt.?);
+        }
+
+        // Get any props from the object.
+        const propsNodeOpt = node.findChildByTag("properties");
+
+        if(propsNodeOpt ) |propsNode| {
+            var propsChildren = propsNode.elements();
+            while (propsChildren.next()) |prop| {
+                const name = prop.getAttribute("name").?;
+                const value = prop.getAttribute("value").?;
+
+                // Lazy init string/value property list.
+                if (obj.properties == null) {
+                    obj.properties = PropertyList.init(alloc);
+                }
+
+                const newProp: Property = .{ 
+                    .name = try alloc.dupe(u8, name), 
+                    .value = try alloc.dupe(u8, value), 
+                };
+                try obj.properties.?.append(newProp);
+            }
+        }
+
+        return obj;
+    }
+};
+
 pub const TileSet = struct {
     //tileTexture: *Texture,
 
@@ -626,7 +689,7 @@ pub const TileMapRenderer = struct {
         const tileIdx: usize = @intCast(loc.y*@as(i32, @intCast(layerWidth))+loc.x);
 
         // Check for a tile add/change
-        if(tile > 0) {
+        if(tile >= 0) {
             // if location exists in map
             if(self.tileIndexMap.getBuffIndex(tileIdx)) |buffIdx| {
                 // Update buffer data
