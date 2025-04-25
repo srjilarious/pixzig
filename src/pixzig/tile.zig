@@ -99,6 +99,15 @@ pub const Tile = struct {
     }
 };
 
+fn intFromFloatAttr(node: *xml.Element, attr: []const u8) !i32 {
+    const str = node.getAttribute(attr);
+    if(str == null) return error.NoAttribute;
+   
+    const f = try std.fmt.parseFloat(f32, str.?);
+    const val: i32 = @intFromFloat(f);
+    return val;
+}
+
 pub const Object = struct {
     alloc: std.mem.Allocator,
     id: i32 = -1,
@@ -123,12 +132,12 @@ pub const Object = struct {
         obj.id = try std.fmt.parseInt(i32, node.getAttribute("id").?, 0);
         obj.gid = try std.fmt.parseInt(i32, node.getAttribute("gid").?, 0);
         obj.pos = .{
-            .x = try std.fmt.parseInt(i32, node.getAttribute("x").?, 0),
-            .y = try std.fmt.parseInt(i32, node.getAttribute("y").?, 0),
+            .x = try intFromFloatAttr(node,"x"),
+            .y = try intFromFloatAttr(node,"y"),
         };
         obj.size = .{
-            .x = try std.fmt.parseInt(i32, node.getAttribute("width").?, 0),
-            .y = try std.fmt.parseInt(i32, node.getAttribute("height").?, 0),
+            .x = try intFromFloatAttr(node,"width"),
+            .y = try intFromFloatAttr(node,"height"),
         };
         
         const classOpt = node.getAttribute("class");
