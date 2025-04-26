@@ -65,3 +65,41 @@ pub fn tiledObjWithFloatsLoadTest() !void {
     try testz.expectEqual(obj.name, null);
     try testz.expectEqual(obj.name, null);
 }
+
+pub fn tiledObjGroupLoadTest() !void {
+    const alloc = std.heap.page_allocator;
+    const xmlStr =
+        \\<objectgroup id="2" name="dots">
+        \\  <properties>
+        \\    <property name="layer_type" value="entities"/>
+        \\  </properties>
+        \\  <object id="662" class="dot" gid="17" x="224" y="24" width="8" height="8"/>
+        \\  <object id="669" class="dot" gid="17" x="64" y="24" width="8" height="8"/>
+        \\  <object id="671" class="dot" gid="17" x="248" y="24" width="8" height="8"/>
+        \\</objectgroup>
+    ;
+    const doc = try xml.parse(alloc, xmlStr);
+    const objGroup = tile.ObjectGroup.initFromElement(alloc, doc.root) catch |err| {
+        try testz.failWith(err);
+        return;
+    };
+    try testz.expectEqual(objGroup.id, 2);
+    try testz.expectEqualStr(objGroup.name.?, "dots");
+
+    try testz.expectEqual(objGroup.properties.items.len, 1);
+
+    const prop = &objGroup.properties.items[0];
+    try testz.expectEqualStr(prop.name, "layer_type");
+    try testz.expectEqualStr(prop.value, "entities");
+
+    try testz.expectEqual(objGroup.objects.items.len, 3);
+
+    try testz.expectEqual(objGroup.objects.items[0].id, 662);
+    try testz.expectEqualStr(objGroup.objects.items[0].class.?, "dot");
+
+    try testz.expectEqual(objGroup.objects.items[1].id, 669);
+    try testz.expectEqualStr(objGroup.objects.items[1].class.?, "dot");
+
+    try testz.expectEqual(objGroup.objects.items[2].id, 671);
+    try testz.expectEqualStr(objGroup.objects.items[2].class.?, "dot");
+}

@@ -169,6 +169,24 @@ pub const Object = struct {
 
         return obj;
     }
+
+    pub fn deinit(self: *Self) void {
+        if(self.name != null) {
+            self.alloc.free(self.name.?);
+        }
+
+        if(self.class != null) {
+            self.alloc.free(self.class.?);
+        }
+
+        if(self.properties != null) {
+            for (0..self.properties.?.items.len) |idx| {
+                const prop = &self.properties.?.items[idx];
+                self.alloc.free(prop.name);
+                self.alloc.free(prop.value);
+            }
+        }
+    }
 };
 
 pub const TileSet = struct {
@@ -275,6 +293,93 @@ pub const TileSet = struct {
     }
 };
 
+pub const ObjectGroup = struct {
+    objects: std.ArrayList(Object),
+    properties: PropertyList,
+    id: i32,
+    name: ?[]const u8,
+    alloc: std.mem.Allocator,
+
+    const Self = @This();
+
+    pub fn init(alloc: std.mem.Allocator) !Self {
+        return .{
+            .objects = std.ArrayList(Object).init(alloc),
+            .properties = PropertyList.init(alloc),
+            .id = 0,
+            .name = null,
+            .alloc = alloc
+        };
+    }
+
+    pub fn initFromElement(alloc: std.mem.Allocator, node: *xml.Element) !Self {
+        var layer = try init(alloc);
+
+        const nameAttr = node.getAttribute("name");
+        if (nameAttr != null) {
+            layer.name = try alloc.dupe(u8, nameAttr.?);
+        }
+
+        layer.id = try std.fmt.parseInt(i32, node.getAttribute("id").?, 0);
+
+        var elems = node.elements();
+        while (elems.next()) |elem| {
+            if (std.mem.eql(u8, elem.tag, "properties")) {
+                var props = elem.elements();
+                while (props.next()) |prop| {
+                    if(!std.mem.eql(u8, prop.tag, "property")) {
+                        return error.UnexpectedElement;
+                    }
+
+                    const name = prop.getAttribute("name").?;
+                    const value = prop.getAttribute("value").?;
+                    const newProp: Property = .{ 
+                        .name = try alloc.dupe(u8, name), 
+                        .value = try alloc.dupe(u8, value), 
+                    };
+
+                    try layer.properties.append(newProp);
+                }
+            }
+            else if(std.mem.eql(u8, elem.tag, "object")) {
+                const newObj = try Object.initFromElement(alloc, elem);
+                try layer.objects.append(newObj);
+            }
+        }
+
+        return layer;
+    }
+
+    pub fn deinit(self: *Self) void {
+        if(self.name != null) {
+            self.alloc.free(self.name.?);
+            self.name = null;
+        }
+
+        for(0..self.objects.items.len) |idx| {
+            const obj = &self.objects.items[idx];
+            obj.deinit();
+        }
+        self.objects.deinit();
+
+        for (0..self.properties.items.len) |idx| {
+            const prop = &self.properties.items[idx];
+            self.alloc.free(prop.name);
+            self.alloc.free(prop.value);
+        }
+
+        self.properties.deinit();
+    }
+
+    // pub fn dumpLayer(self: *const Self) void {
+    //     for(0..@intCast(self.size.y)) |yy| {
+    //         for(0..@intCast(self.size.x)) |xx| {
+    //             std.debug.print("{} ", .{self.tileData(@intCast(xx), @intCast(yy))});
+    //         }
+    //         std.debug.print("\n", .{});
+    //     }
+    // }
+};
 
 pub const TileLayer = struct {
     tiles: std.ArrayList(i32),
