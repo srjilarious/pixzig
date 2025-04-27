@@ -527,12 +527,14 @@ pub const TileLayer = struct {
 pub const TileMap = struct {
     tilesets: std.ArrayList(TileSet),
     layers: std.ArrayList(TileLayer),
+    objectGroups: std.ArrayList(ObjectGroup),
     alloc: std.mem.Allocator,
 
     pub fn init(alloc: std.mem.Allocator) !TileMap {
         return .{
             .tilesets = std.ArrayList(TileSet).init(alloc),
             .layers = std.ArrayList(TileLayer).init(alloc),
+            .objectGroups = std.ArrayList(ObjectGroup).init(alloc),
             .alloc = alloc
         };
     }
@@ -566,15 +568,11 @@ pub const TileMap = struct {
                 const newLayer = try TileLayer.initFromElement(alloc, elem);
                 std.debug.print("Loaded a tile layer: '{?s}'", .{newLayer.name});
                 try map.layers.append(newLayer);
-
-                // for(0..@intCast(newLayer.size.y)) |y| {
-                //     const lineOffs = y*@as(usize, @intCast(newLayer.size.x));
-                //     for(0..@intCast(newLayer.size.x)) |x| {
-                //         const ti = newLayer.tiles.items[lineOffs + x];
-                //         std.debug.print("{: >3} ", .{ti});
-                //     }
-                //     std.debug.print("\n", .{});
-                // }
+            }
+            else if(std.mem.eql(u8, elem.tag, "objectgroup")) {
+                const newObjGroup = try ObjectGroup.initFromElement(alloc, elem);
+                std.log.debug("Loaded object group: '{?s}'", .{ newObjGroup.name});
+                try map.objectGroups.append(newObjGroup);
             }
         }
 
