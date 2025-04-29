@@ -302,6 +302,8 @@ pub const ObjectGroup = struct {
 
     const Self = @This();
 
+    
+
     pub fn init(alloc: std.mem.Allocator) !Self {
         return .{
             .objects = std.ArrayList(Object).init(alloc),
@@ -369,6 +371,50 @@ pub const ObjectGroup = struct {
         }
 
         self.properties.deinit();
+    }
+
+    const ObjectGroupIterator = struct {
+        parent: *const ObjectGroup,
+        class: ?[]const u8 = null,
+        index: usize = 0,
+
+        pub fn init(parent: *const ObjectGroup, class: ?[]const u8) ObjectGroupIterator {
+            return .{ .parent = parent, .class = class };
+        }
+
+        pub fn next(self: *ObjectGroupIterator) ?*Object {
+            
+            while(self.index < self.parent.objects.items.len) {
+                const currItem = &self.parent.objects.items[self.index];
+
+                // Handle the iterator filtering by class name.
+                if(self.class) |classStr| {
+                    if(currItem.class) |itemClassStr| {
+                        if(std.mem.eql(u8, classStr, itemClassStr)) {
+                            self.index += 1;
+                            return currItem;
+                        } 
+                        else {
+                            self.index += 1;
+                        }
+                    }
+                    else {
+                        self.index += 1;
+                    }
+                }
+                else {
+                    // Case where we aren't filtering by class name.
+                    self.index += 1;
+                    return currItem;
+                }
+            }
+
+            return null;
+        }
+    };
+
+    pub fn iterator(self: *const ObjectGroup, class: ?[]const u8) ObjectGroupIterator {
+        return ObjectGroupIterator.init(self, class);
     }
 
     // pub fn dumpLayer(self: *const Self) void {
@@ -551,10 +597,9 @@ pub const TileMap = struct {
         const doc = try xml.parse(alloc, fileContents);
         var elems = doc.root.elements();
         while (elems.next()) |elem| {
-            std.debug.print("Element: {s}\n", .{elem.tag});
             if (std.mem.eql(u8, elem.tag, "tileset")) {
                 const newTileset = try TileSet.initFromElement(alloc, elem);
-                std.debug.print("Loaded a tileset '{s}', with {} tiles, {}x{} tile size, {} columns\n", .{
+                std.log.debug("Loaded a tileset '{s}', with {} tiles, {}x{} tile size, {} columns\n", .{
                     newTileset.name.?, 
                     newTileset.tiles.items.len, 
                     newTileset.tileSize.x, 
@@ -566,7 +611,7 @@ pub const TileMap = struct {
             }
             else if(std.mem.eql(u8, elem.tag, "layer")) {
                 const newLayer = try TileLayer.initFromElement(alloc, elem);
-                std.debug.print("Loaded a tile layer: '{?s}'", .{newLayer.name});
+                std.log.debug("Loaded a tile layer: '{?s}'", .{newLayer.name});
                 try map.layers.append(newLayer);
             }
             else if(std.mem.eql(u8, elem.tag, "objectgroup")) {
@@ -577,7 +622,7 @@ pub const TileMap = struct {
         }
 
         if(map.tilesets.items.len == 0) {
-            std.debug.print("WARNING: No tileset found in map!\n", .{});
+            std.log.warn("No tileset found in map!\n", .{});
         }
 
         for (0..map.layers.items.len) |idx| {

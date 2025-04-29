@@ -103,3 +103,33 @@ pub fn tiledObjGroupLoadTest() !void {
     try testz.expectEqual(objGroup.objects.items[2].id, 671);
     try testz.expectEqualStr(objGroup.objects.items[2].class.?, "dot");
 }
+
+pub fn tiledObjGroupIteratorTest() !void {
+    const alloc = std.heap.page_allocator;
+    const xmlStr =
+        \\<objectgroup id="2" name="dots">
+        \\  <properties>
+        \\    <property name="layer_type" value="entities"/>
+        \\  </properties>
+        \\  <object id="662" class="dot" gid="17" x="224" y="24" width="8" height="8"/>
+        \\  <object id="669" class="power_dot" gid="17" x="64" y="24" width="8" height="8"/>
+        \\  <object id="671" class="dot" gid="17" x="248" y="24" width="8" height="8"/>
+        \\</objectgroup>
+    ;
+    const doc = try xml.parse(alloc, xmlStr);
+    const objGroup = tile.ObjectGroup.initFromElement(alloc, doc.root) catch |err| {
+        try testz.failWith(err);
+        return;
+    };
+
+    var it = objGroup.iterator("dot");
+    const obj0 = it.next().?;
+    try testz.expectEqual(obj0.id, 662);
+    try testz.expectEqualStr(obj0.class.?, "dot");
+
+    const obj1 = it.next().?;
+    try testz.expectEqual(obj1.id, 671);
+    try testz.expectEqualStr(obj1.class.?, "dot");
+
+    try testz.expectEqual(it.next(), null);
+}
