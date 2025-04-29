@@ -586,16 +586,17 @@ pub const TileMap = struct {
     }
 
     pub fn initFromFile(filename: []const u8, alloc: std.mem.Allocator) !TileMap {
-        var map = try init(alloc);
-
         const fileContents = try std.fs.cwd().readFileAlloc(alloc, filename, MaxFilesize);
         defer alloc.free(fileContents);
 
-        //std.debug.print("\nContents:\n\n-------\n{s}\n--------\n\n", .{fileContents});
-
         std.log.debug("Loaded tile map file contents.", .{});
         const doc = try xml.parse(alloc, fileContents);
-        var elems = doc.root.elements();
+        return initFromElement(doc.root, alloc);
+    }
+
+    pub fn initFromElement(node: *xml.Element, alloc: std.mem.Allocator) !TileMap {
+        var map = try init(alloc);
+        var elems = node.elements();
         while (elems.next()) |elem| {
             if (std.mem.eql(u8, elem.tag, "tileset")) {
                 const newTileset = try TileSet.initFromElement(alloc, elem);
@@ -635,6 +636,36 @@ pub const TileMap = struct {
         }
 
         return map;
+    }
+
+    pub fn layerByIndex(self: *const TileMap, idx: usize) ?*TileLayer {
+        if(idx >= self.layers.items.len) return null;
+        return &self.layers.items[idx];
+    }
+
+    pub fn objectGroupByIndex(self: *const TileMap, idx: usize) ?*ObjectGroup {
+        if(idx >= self.objectGroups.items.len) return null;
+        return &self.objectGroups.items[idx];
+    }
+
+    pub fn layerByName(self: *const TileMap, name: []const u8) ?*TileLayer {
+        for(0..self.layers.items.len) |idx| {
+            const layer = & self.layers.items[idx];
+            if(layer.name != null and std.mem.eql(u8, layer.name.?, name)) {
+                return layer;
+            }
+        }
+        return null;
+    }
+
+    pub fn objectGroupByName(self: *const TileMap, name: []const u8) ?*ObjectGroup {
+        for(0..self.objectGroups.items.len) |idx| {
+            const objGroup = & self.objectGroups.items[idx];
+            if(objGroup.name != null and std.mem.eql(u8, objGroup.name.?, name)) {
+                return objGroup;
+            }
+        }
+        return null;
     }
 
     pub fn deinit(self: *TileMap) void {

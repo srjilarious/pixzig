@@ -133,3 +133,47 @@ pub fn tiledObjGroupIteratorTest() !void {
 
     try testz.expectEqual(it.next(), null);
 }
+
+pub fn getLayerAndObjGroupTest() !void {
+    const alloc = std.heap.page_allocator;
+    const xmlStr =
+        \\<map version="1.9" tiledversion="1.9.2" orientation="orthogonal" renderorder="right-down" width="2" height="2" tilewidth="8" tileheight="8">
+        \\ <tileset firstgid="1" name="tiles" tilewidth="8" tileheight="8" tilecount="256" columns="16">
+        \\   <image source="sprites.png" width="128" height="128"/>
+        \\ </tileset>
+        \\ <layer id="1" name="main_layer" width="2" height="2" locked="1">
+        \\   <properties>
+        \\     <property name="layer_type" value="collide"/>
+        \\   </properties>
+        \\   <data encoding="csv">
+        \\     0,0,0,0
+        \\   </data>
+        \\ </layer>
+        \\ <objectgroup id="2" name="dots">
+        \\   <properties>
+        \\     <property name="layer_type" value="entities"/>
+        \\   </properties>
+        \\   <object id="662" class="dot" gid="17" x="224" y="24" width="8" height="8"/>
+        \\   <object id="669" class="power_dot" gid="17" x="64" y="24" width="8" height="8"/>
+        \\   <object id="671" class="dot" gid="17" x="248" y="24" width="8" height="8"/>
+        \\ </objectgroup>
+        \\</map>
+    ;
+    const doc = try xml.parse(alloc, xmlStr);
+    const map = tile.TileMap.initFromElement(doc.root, alloc) catch |err| {
+        try testz.failWith(err);
+        return;
+    };
+
+    try testz.expectNotEqual(map.layerByIndex(0), null);
+    try testz.expectEqual(map.layerByIndex(1), null);
+
+    try testz.expectNotEqual(map.objectGroupByIndex(0), null);
+    try testz.expectEqual(map.objectGroupByIndex(1), null);
+
+    try testz.expectNotEqual(map.layerByName("main_layer"), null);
+    try testz.expectEqual(map.layerByName("dots"), null);
+
+    try testz.expectNotEqual(map.objectGroupByName("dots"), null);
+    try testz.expectEqual(map.objectGroupByName("main_layer"), null);
+}
