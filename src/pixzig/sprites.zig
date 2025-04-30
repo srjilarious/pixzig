@@ -12,8 +12,6 @@ const Rotate = common.Rotate;
 
 const Texture = textures.Texture;
 
-// const SpriteBatchQueue = renderer.SpriteBatchQueue;
-
 pub const Sprite = struct {
     texture: *Texture,
     src_coords: RectF,
@@ -41,10 +39,6 @@ pub const Sprite = struct {
             @as(i32, @intFromFloat(self.size.x)), 
             @as(i32, @intFromFloat(self.size.y)));
     }
-
-    // pub fn draw(self: *Sprite, batch: *SpriteBatchQueue) !void {
-    //     batch.drawSprite(self.texture, self.dest, self.src_coords);
-    // }
 };
 
 pub const Flip = enum(u8) { 
@@ -55,37 +49,36 @@ pub const Flip = enum(u8) {
 };
 
 pub const Frame = struct { 
-    coords: RectF, 
+    tex: *Texture,
     frameTimeUs: i64, 
     flip: Flip,
 
     pub fn apply(self: *Frame, spr: *Sprite) void {
-        spr.src_coords = self.coords;
         spr.flip = self.flip;
         switch(self.flip) {
             .none => spr.src_coords = self.coords,
             .horz => {
                 spr.src_coords = .{
-                    .l = self.coords.r,
-                    .t = self.coords.t,
-                    .r = self.coords.l,
-                    .b = self.coords.b
+                    .l = self.tex.src.r,
+                    .t = self.tex.src.t,
+                    .r = self.tex.src.l,
+                    .b = self.tex.src.b
                 };
             },
             .vert => {
                 spr.src_coords = .{
-                    .l = self.coords.l,
-                    .t = self.coords.b,
-                    .r = self.coords.r,
-                    .b = self.coords.t
+                    .l = self.tex.src.l,
+                    .t = self.tex.src.b,
+                    .r = self.tex.src.r,
+                    .b = self.tex.src.t
                 };
             },
             .both => {
                 spr.src_coords = .{
-                    .l = self.coords.r,
-                    .t = self.coords.b,
-                    .r = self.coords.l,
-                    .b = self.coords.t
+                    .l = self.tex.src.r,
+                    .t = self.tex.src.b,
+                    .r = self.tex.src.l,
+                    .b = self.tex.src.t
                 };
             }
         }
@@ -103,20 +96,17 @@ pub const SpriteRenderOffset = enum {
     horzCenterBottomAligned 
 };
 
-pub const FrameSequence = struct {
-    frames: std.ArrayList(Frame),
-    alloc: std.mem.Allocator,
-    mode: AnimPlayMode,
+pub const ActorState = struct {
     name: ?[]const u8,
     nextState: ?[]const u8,
+    sequence: FrameSequence,
+};
 
-    pub fn init(name: ?[]const u8, alloc: std.mem.Allocator, framesArr: []const Frame ) !FrameSequence {
-        _ = name;
-        // var nameCopy: ?[]const u8 = null;
-        // if(name != null) {
-        //     nameCopy = try alloc.dupe(u8, name);
-        // }
+pub const FrameSequence = struct {
+    frames: std.ArrayList(Frame),
+    mode: AnimPlayMode,
 
+    pub fn init(alloc: std.mem.Allocator, framesArr: []const Frame ) !FrameSequence {
         var frames = std.ArrayList(Frame).init(alloc);
         for(framesArr) |fr| {
             try frames.append(fr);
@@ -126,18 +116,74 @@ pub const FrameSequence = struct {
             .frames = frames,
             .alloc = alloc,
             .mode = .loop, 
-            .name = null,//nameCopy, 
             .nextState = null 
         };
     }
 
     pub fn deinit(self: *FrameSequence) void {
         self.frames.deinit();
-        // if(self.name != null) {
-        //     self.alloc.free(self.name);
-        // }
     }
 
+};
+
+pub const FrameSequenceFile = struct {
+    sequences: []FileFrameSequence,
+};
+
+pub const FileFrameSequence = struct {
+    mode: AnimPlayMode,
+    name: ?[]const u8,
+};
+
+pub const FileFrame = struct {
+    frameName: []const u8,
+    frameTimeUs: i64, 
+    flip: Flip,
+};
+
+pub const FileActorState = struct {
+    name: []const u8,
+    nextStateName: []const u8,
+
+    frameSeqName: []const u8,
+    // Flip applied on top of sequence flip.
+    flip: Flip,
+};
+
+
+pub const FrameSequenceManager = struct {
+    // We expand from the file frame which uses the name of a texture
+    // and fill in the coords for the image.
+    sequences: std.StringHashMap(FrameSequence),
+    actorStates: std.StringHashMap(ActorState),
+
+    alloc: std.mem.Allocator,
+
+    const Self = FrameSequenceManager;
+
+    pub fn init(alloc: std.mem.Allocator) !Self {
+        return .{ 
+            .sequences = std.StringHashMap(FrameSequence).init(alloc),
+            .actorStates = std.StringHashMap(FrameSequence).init(alloc),
+            .alloc = alloc,
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.sequences.deinit();
+    }
+
+    pub fn loadSequenceFile(filename: []const u8) !void {
+        _ = filename;
+    }
+
+    pub fn add(self: *Self, name: []const u8, seq: FrameSequence) !void {
+        self.sequences.put(name, seq);
+    }
+
+    pub fn get(self: *Self, name: []const u8) ?*const FrameSequence {
+        return self.seqeunces.get(name);
+    }
 };
 
 pub const Actor = struct {
@@ -195,7 +241,6 @@ pub const Actor = struct {
         if(self.currState == null) return;
 
         const currSeq = self.currState.?;
-        // std.debug.print("addr=0x{x}, currFrame={}, currFrameTimeUs={}, numFrames={}\n", .{ @intFromPtr(currSeq), self.currFrame, self.currFrameTimeUs, currSeq.frames.items.len });
         const currFrame = &currSeq.frames.items[@intCast(self.currFrame)];
         self.currFrameTimeUs += deltaUs;
         if(self.currFrameTimeUs > currFrame.frameTimeUs) {
@@ -206,7 +251,6 @@ pub const Actor = struct {
                 self.currFrame = 0;
             }
 
-            // std.debug.print("Applying frame {}\n", .{ self.currFrame });
             currSeq.frames.items[@intCast(self.currFrame)].apply(spr);
         }
     }

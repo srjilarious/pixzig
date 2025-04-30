@@ -878,7 +878,7 @@ pub fn Renderer(opts: RendererOptions) type {
             self.impl.batches[0].draw(
                 texture, 
                 RectF.fromPosSize(pos.x, pos.y, @intFromFloat(tsx), @intFromFloat(tsy)),
-                .{.t=0, .l=0, .r=1, .b=1},
+                texture.src,
                 .none
             );
         }
