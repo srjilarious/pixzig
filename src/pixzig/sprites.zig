@@ -56,7 +56,7 @@ pub const Frame = struct {
     pub fn apply(self: *Frame, spr: *Sprite) void {
         spr.flip = self.flip;
         switch(self.flip) {
-            .none => spr.src_coords = self.coords,
+            .none => spr.src_coords = self.tex.src,
             .horz => {
                 spr.src_coords = .{
                     .l = self.tex.src.r,
@@ -114,9 +114,7 @@ pub const FrameSequence = struct {
 
         return .{ 
             .frames = frames,
-            .alloc = alloc,
             .mode = .loop, 
-            .nextState = null 
         };
     }
 
@@ -170,6 +168,11 @@ pub const FrameSequenceManager = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        var iterator = self.sequences.iterator();
+        while(iterator.next()) |kv| {
+            self.alloc.free(kv.key_ptr.*);
+            kv.value_ptr.deinit();
+        }
         self.sequences.deinit();
     }
 
@@ -218,10 +221,7 @@ pub const Actor = struct {
     }
 
     pub fn addState(self: *Actor, frameSequence: FrameSequence, otherName: ?[]const u8) !*Actor {
-        const keyCopy = if(otherName != null) 
-            try self.alloc.dupe(u8, otherName.?)
-        else 
-            try self.alloc.dupe(u8, frameSequence.name.?);
+        const keyCopy = try self.alloc.dupe(u8, otherName.?);
 
         try self.states.put(keyCopy, frameSequence);
         if(self.currState == null) {
