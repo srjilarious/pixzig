@@ -53,7 +53,9 @@ pub const Frame = struct {
     frameTimeUs: i64, 
     flip: Flip,
 
-    pub fn apply(self: *Frame, spr: *Sprite) void {
+    pub fn apply(self: *Frame, spr: *Sprite, extraFlip: Flip) void {
+        _ = extraFlip;
+
         spr.flip = self.flip;
         switch(self.flip) {
             .none => spr.src_coords = self.tex.src,
@@ -97,9 +99,10 @@ pub const SpriteRenderOffset = enum {
 };
 
 pub const ActorState = struct {
-    name: ?[]const u8,
-    nextState: ?[]const u8,
-    sequence: FrameSequence,
+    name: []const u8,
+    nextState: ?[]const u8 = null,
+    sequence: *const FrameSequence,
+    flip: Flip,
 };
 
 pub const FrameSequence = struct {
@@ -152,7 +155,7 @@ pub const FileActorState = struct {
 pub const FrameSequenceManager = struct {
     // We expand from the file frame which uses the name of a texture
     // and fill in the coords for the image.
-    sequences: std.StringHashMap(FrameSequence),
+    sequences: std.StringHashMap(*FrameSequence),
     actorStates: std.StringHashMap(ActorState),
 
     alloc: std.mem.Allocator,
@@ -161,8 +164,8 @@ pub const FrameSequenceManager = struct {
 
     pub fn init(alloc: std.mem.Allocator) !Self {
         return .{ 
-            .sequences = std.StringHashMap(FrameSequence).init(alloc),
-            .actorStates = std.StringHashMap(FrameSequence).init(alloc),
+            .sequences = std.StringHashMap(*FrameSequence).init(alloc),
+            .actorStates = std.StringHashMap(ActorState).init(alloc),
             .alloc = alloc,
         };
     }
@@ -172,6 +175,7 @@ pub const FrameSequenceManager = struct {
         while(iterator.next()) |kv| {
             self.alloc.free(kv.key_ptr.*);
             kv.value_ptr.deinit();
+            self.alloc.destroy(kv.value_ptr.*);
         }
         self.sequences.deinit();
     }
@@ -181,18 +185,20 @@ pub const FrameSequenceManager = struct {
     }
 
     pub fn add(self: *Self, name: []const u8, seq: FrameSequence) !void {
-        self.sequences.put(name, seq);
+        const new = try self.alloc.create(FrameSequence);
+        new.* = seq;
+        try self.sequences.put(name, new);
     }
 
     pub fn get(self: *Self, name: []const u8) ?*const FrameSequence {
-        return self.seqeunces.get(name);
+        return self.sequences.get(name);
     }
 };
 
 pub const Actor = struct {
-    states: std.StringHashMap(FrameSequence),
+    states: std.StringHashMap(*ActorState),
     alloc: std.mem.Allocator,
-    currState: ?*FrameSequence,
+    currState: ?*ActorState,
     currFrame: i32,
     currFrameTimeUs: i64,
     actorSize: Vec2I,
@@ -200,7 +206,7 @@ pub const Actor = struct {
 
     pub fn init(alloc: std.mem.Allocator) !Actor {
         return .{ 
-            .states = std.StringHashMap(FrameSequence).init(alloc), 
+            .states = std.StringHashMap(*ActorState).init(alloc), 
             .alloc = alloc,
             .currState = null, 
             .currFrame = 0, 
@@ -215,17 +221,23 @@ pub const Actor = struct {
         var iterator = self.states.iterator();
         while(iterator.next()) |kv| {
             self.alloc.free(kv.key_ptr.*);
-            kv.value_ptr.deinit();
+            self.alloc.destroy(kv.value_ptr.*);
         }
         self.states.deinit();
     }
 
-    pub fn addState(self: *Actor, frameSequence: FrameSequence, otherName: ?[]const u8) !*Actor {
-        const keyCopy = try self.alloc.dupe(u8, otherName.?);
+    pub fn addState(self: *Actor, state: ActorState) !*Actor {
+        const nameCopy = try self.alloc.dupe(u8, state.name);
+        var val = try self.alloc.create(ActorState);
+        val.* = state;
+        val.name = nameCopy;
+        if(state.nextState != null) {
+            val.nextState = try self.alloc.dupe(u8, state.nextState.?);
+        }
 
-        try self.states.put(keyCopy, frameSequence);
+        try self.states.put(nameCopy, val);
         if(self.currState == null) {
-            self.setState(keyCopy);
+            self.currState = val;
         }
 
         return self;
@@ -240,7 +252,7 @@ pub const Actor = struct {
     pub fn update(self: *Actor, deltaUs: i64, spr: *Sprite) void {
         if(self.currState == null) return;
 
-        const currSeq = self.currState.?;
+        const currSeq = self.currState.?.sequence;
         const currFrame = &currSeq.frames.items[@intCast(self.currFrame)];
         self.currFrameTimeUs += deltaUs;
         if(self.currFrameTimeUs > currFrame.frameTimeUs) {
@@ -251,7 +263,8 @@ pub const Actor = struct {
                 self.currFrame = 0;
             }
 
-            currSeq.frames.items[@intCast(self.currFrame)].apply(spr);
+            // TODO: Add in flip on sequences.
+            currSeq.frames.items[@intCast(self.currFrame)].apply(spr, .none);
         }
     }
 };

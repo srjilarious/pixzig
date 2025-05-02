@@ -8,6 +8,10 @@ const SpriteBatchQueue = pixzig.renderer.SpriteBatchQueue;
 const RectF = pixzig.common.RectF;
 const Flip = pixzig.sprites.Flip;
 const Frame = pixzig.sprites.Frame;
+const FrameSequence = pixzig.sprites.FrameSequence;
+const FrameSequenceManager = pixzig.sprites.FrameSequenceManager;
+const ActorState = pixzig.sprites.ActorState;
+
 const FpsCounter = pixzig.utils.FpsCounter;
 const Sprite = pixzig.sprites.Sprite;
 const Actor = pixzig.sprites.Actor;
@@ -22,15 +26,22 @@ pub const App = struct {
     alloc: std.mem.Allocator,
     spr: Sprite,
     actor: Actor,
-    frseq_1: pixzig.sprites.FrameSequence,
-    frseq_2: pixzig.sprites.FrameSequence,
+    seqMgr: FrameSequenceManager,
     projMat: zmath.Mat,
     fps: FpsCounter,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
-        var app = try alloc.create(App);
-
         _ = try eng.textures.loadAtlas("assets/pac-tiles");
+
+        var app = try alloc.create(App);
+        app.* = .{
+            .alloc = alloc,
+            .spr = Sprite.create(try eng.textures.getTexture("player_right_1"), .{ .x = 16, .y = 16 }),
+            .actor = try pixzig.sprites.Actor.init(alloc),
+            .seqMgr = try FrameSequenceManager.init(alloc),
+            .projMat = zmath.mul(zmath.scaling(4.0, 4.0, 1.0), zmath.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000)),
+            .fps = FpsCounter.init(),
+        };
 
         const fr1: Frame = .{
             .tex = try eng.textures.getTexture("player_right_1"),
@@ -48,6 +59,7 @@ pub const App = struct {
             .flip = .none,
         };
         const frseq = try pixzig.sprites.FrameSequence.init(alloc, &[_]Frame{ fr1, fr2, fr3 });
+        try app.seqMgr.add("player_right", frseq);
 
         const fr1_l: Frame = .{
             .tex = try eng.textures.getTexture("player_right_1"),
@@ -65,27 +77,18 @@ pub const App = struct {
             .flip = .horz,
         };
         const frseq_2 = try pixzig.sprites.FrameSequence.init(alloc, &[_]Frame{ fr1_l, fr2_l, fr3_l });
+        try app.seqMgr.add("player_left", frseq_2);
 
-        app.* = .{
-            .alloc = alloc,
-            .spr = Sprite.create(fr1.tex, .{ .x = 16, .y = 16 }),
-            .actor = try pixzig.sprites.Actor.init(alloc),
-            .frseq_1 = frseq,
-            .frseq_2 = frseq_2,
-            .projMat = zmath.mul(zmath.scaling(4.0, 4.0, 1.0), zmath.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000)),
-            .fps = FpsCounter.init(),
-        };
-
-        _ = try app.actor.addState(app.frseq_1, "right");
-        _ = try app.actor.addState(app.frseq_2, "left");
+        _ = try app.actor.addState(.{ .name = "right", .sequence = app.seqMgr.get("player_right").?, .flip = .none });
+        _ = try app.actor.addState(.{ .name = "left", .sequence = app.seqMgr.get("player_left").?, .flip = .none });
 
         return app;
     }
 
     pub fn deinit(self: *App) void {
         self.actor.deinit();
-        self.frseq_1.deinit();
-        self.frseq_2.deinit();
+        // self.frseq_1.deinit();
+        // self.frseq_2.deinit();
         self.alloc.destroy(self);
     }
 
