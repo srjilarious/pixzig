@@ -41,11 +41,11 @@ pub const Sprite = struct {
     }
 };
 
-pub const Flip = enum(u8) { 
-    none = 0, 
-    horz = 1, 
-    vert = 2, 
-    both = 3 
+pub const Flip = enum { 
+    none, 
+    horz, 
+    vert, 
+    both 
 };
 
 pub const Frame = struct { 
@@ -54,10 +54,37 @@ pub const Frame = struct {
     flip: Flip,
 
     pub fn apply(self: *Frame, spr: *Sprite, extraFlip: Flip) void {
-        _ = extraFlip;
+        const flip = blk: {
+            switch(self.flip) {
+                .none => break :blk extraFlip,
+                .horz => {
+                    switch(extraFlip) {
+                        .none => break :blk .horz,
+                        .horz => break :blk .none,
+                        .vert => break :blk .both,
+                        .both => break :blk .vert,
+                    }
+                },
+                .vert => {
+                    switch(extraFlip) {
+                        .none => break :blk .vert,
+                        .horz => break :blk .both,
+                        .vert => break :blk .none,
+                        .both => break :blk .horz,
+                    }
+                },
+                .both => {
+                    switch(extraFlip) {
+                        .none => break :blk .both,
+                        .horz => break :blk .vert,
+                        .vert => break :blk .horz,
+                        .both => break :blk .none,
+                    }
+                }
+            }
+        };
 
-        spr.flip = self.flip;
-        switch(self.flip) {
+        switch(flip) {
             .none => spr.src_coords = self.tex.src,
             .horz => {
                 spr.src_coords = .{

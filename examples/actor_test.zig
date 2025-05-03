@@ -61,26 +61,8 @@ pub const App = struct {
         const frseq = try pixzig.sprites.FrameSequence.init(alloc, &[_]Frame{ fr1, fr2, fr3 });
         try app.seqMgr.add("player_right", frseq);
 
-        const fr1_l: Frame = .{
-            .tex = try eng.textures.getTexture("player_right_1"),
-            .frameTimeUs = 300,
-            .flip = .horz,
-        };
-        const fr2_l: Frame = .{
-            .tex = try eng.textures.getTexture("player_right_2"),
-            .frameTimeUs = 300,
-            .flip = .horz,
-        };
-        const fr3_l: Frame = .{
-            .tex = try eng.textures.getTexture("player_right_3"),
-            .frameTimeUs = 300,
-            .flip = .horz,
-        };
-        const frseq_2 = try pixzig.sprites.FrameSequence.init(alloc, &[_]Frame{ fr1_l, fr2_l, fr3_l });
-        try app.seqMgr.add("player_left", frseq_2);
-
         _ = try app.actor.addState(.{ .name = "right", .sequence = app.seqMgr.get("player_right").?, .flip = .none });
-        _ = try app.actor.addState(.{ .name = "left", .sequence = app.seqMgr.get("player_left").?, .flip = .none });
+        _ = try app.actor.addState(.{ .name = "left", .sequence = app.seqMgr.get("player_right").?, .flip = .horz });
 
         return app;
     }
