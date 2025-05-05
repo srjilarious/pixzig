@@ -11,6 +11,7 @@ const RectF = common.RectF;
 const Rotate = common.Rotate;
 
 const Texture = textures.Texture;
+const TextureManager = textures.TextureManager;
 
 pub const Sprite = struct {
     texture: *Texture,
@@ -136,6 +137,15 @@ pub const FrameSequence = struct {
     frames: std.ArrayList(Frame),
     mode: AnimPlayMode,
 
+    pub fn initEmpty(alloc: std.mem.Allocator) !FrameSequence {
+        const frames = std.ArrayList(Frame).init(alloc);
+
+        return .{ 
+            .frames = frames,
+            .mode = .loop, 
+        };
+    }
+
     pub fn init(alloc: std.mem.Allocator, framesArr: []const Frame ) !FrameSequence {
         var frames = std.ArrayList(Frame).init(alloc);
         for(framesArr) |fr| {
@@ -160,13 +170,14 @@ pub const FrameSequenceFile = struct {
 
 pub const FileFrameSequence = struct {
     mode: AnimPlayMode,
-    name: ?[]const u8,
+    name: []const u8,
+    frames: []FileFrame,
 };
 
 pub const FileFrame = struct {
-    frameName: []const u8,
-    frameTimeUs: i64, 
-    flip: Flip,
+    name: []const u8,
+    us: i64, 
+    flip: ?Flip,
 };
 
 pub const FileActorState = struct {
@@ -207,14 +218,56 @@ pub const FrameSequenceManager = struct {
         self.sequences.deinit();
     }
 
-    pub fn loadSequenceFile(filename: []const u8) !void {
-        _ = filename;
+    pub fn loadSequenceFile(self: *Self, filename: []const u8, texMgr: *TextureManager) !void {
+        // Load file contents
+        const f = try std.fs.cwd().openFile(filename, .{});
+        defer f.close();
+
+        const buffered = std.io.bufferedReader(f.reader());
+        
+        // Load sequence
+        try self.loadSequence(buffered.reader(), texMgr);
+    }
+
+    pub fn loadSequence(self: *Self, reader: anytype, texMgr: *TextureManager) !void {
+        // Parse Json into File structures
+        var jsonReader = std.json.reader(self.alloc, reader);
+        defer jsonReader.deinit();
+        const parsed = try std.json.parseFromTokenSource(
+            FrameSequenceFile, 
+            self.alloc, 
+            &jsonReader, 
+            .{}
+        );
+        defer parsed.deinit();
+
+        for(parsed.value.sequences) |fileSeq| {
+            var seq = try FrameSequence.initEmpty(self.alloc);
+            for(fileSeq.frames) |fileFrame| {
+                const flip = blk: { 
+                    if(fileFrame.flip) |f| { 
+                        break :blk f; 
+                    } 
+                    else { 
+                        break :blk .none;
+                    }
+                };
+                try seq.frames.append(.{
+                    .tex = try texMgr.getTexture(fileFrame.name),
+                    .frameTimeUs = fileFrame.us,
+                    .flip = flip,
+                });
+            }
+
+            try self.add(fileSeq.name, seq);
+        }
     }
 
     pub fn add(self: *Self, name: []const u8, seq: FrameSequence) !void {
         const new = try self.alloc.create(FrameSequence);
         new.* = seq;
-        try self.sequences.put(name, new);
+        const nameCopy = try self.alloc.dupe(u8, name);
+        try self.sequences.put(nameCopy, new);
     }
 
     pub fn get(self: *Self, name: []const u8) ?*const FrameSequence {
