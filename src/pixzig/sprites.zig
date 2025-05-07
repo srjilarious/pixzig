@@ -166,6 +166,7 @@ pub const FrameSequence = struct {
 
 pub const FrameSequenceFile = struct {
     sequences: []FileFrameSequence,
+    states: []FileActorState,
 };
 
 pub const FileFrameSequence = struct {
@@ -182,7 +183,7 @@ pub const FileFrame = struct {
 
 pub const FileActorState = struct {
     name: []const u8,
-    nextStateName: []const u8,
+    nextStateName: ?[]const u8 = null,
 
     frameSeqName: []const u8,
     // Flip applied on top of sequence flip.
@@ -194,7 +195,7 @@ pub const FrameSequenceManager = struct {
     // We expand from the file frame which uses the name of a texture
     // and fill in the coords for the image.
     sequences: std.StringHashMap(*FrameSequence),
-    actorStates: std.StringHashMap(ActorState),
+    actorStates: std.StringHashMap(*ActorState),
 
     alloc: std.mem.Allocator,
 
@@ -203,12 +204,13 @@ pub const FrameSequenceManager = struct {
     pub fn init(alloc: std.mem.Allocator) !Self {
         return .{ 
             .sequences = std.StringHashMap(*FrameSequence).init(alloc),
-            .actorStates = std.StringHashMap(ActorState).init(alloc),
+            .actorStates = std.StringHashMap(*ActorState).init(alloc),
             .alloc = alloc,
         };
     }
 
     pub fn deinit(self: *Self) void {
+        // Clean up frame sequences.
         var iterator = self.sequences.iterator();
         while(iterator.next()) |kv| {
             self.alloc.free(kv.key_ptr.*);
@@ -216,6 +218,19 @@ pub const FrameSequenceManager = struct {
             self.alloc.destroy(kv.value_ptr.*);
         }
         self.sequences.deinit();
+
+        // Clean up actor states.
+        var stateIt = self.actorStates.iterator();
+        while(stateIt.next()) |kv| {
+            self.alloc.free(kv.value_ptr.*.name);
+            if(kv.value_ptr.*.nextState) |nextState| {
+                self.alloc.free(nextState);
+            }
+
+            // kv.value_ptr.deinit();
+            self.alloc.destroy(kv.value_ptr.*);
+        }
+        self.actorStates.deinit();
     }
 
     pub fn loadSequenceFile(self: *Self, filename: []const u8, texMgr: *TextureManager) !void {
@@ -241,6 +256,7 @@ pub const FrameSequenceManager = struct {
         );
         defer parsed.deinit();
 
+        // First load the frame sequences, since actor states need those for looking up.
         for(parsed.value.sequences) |fileSeq| {
             var seq = try FrameSequence.initEmpty(self.alloc);
             for(fileSeq.frames) |fileFrame| {
@@ -259,19 +275,44 @@ pub const FrameSequenceManager = struct {
                 });
             }
 
-            try self.add(fileSeq.name, seq);
+            try self.addSeq(fileSeq.name, seq);
+        }
+
+        // Next load the actor states
+        for(parsed.value.states) |fileState| {
+            var new = try self.alloc.create(ActorState);
+            new.name = try self.alloc.dupe(u8, fileState.name);
+            if(fileState.nextStateName) |nextState| {
+                new.nextState = try self.alloc.dupe(u8, nextState);
+            }
+            new.sequence = self.sequences.get(fileState.frameSeqName).?;
+            try self.actorStates.put(new.name, new);
         }
     }
 
-    pub fn add(self: *Self, name: []const u8, seq: FrameSequence) !void {
+    pub fn addSeq(self: *Self, name: []const u8, seq: FrameSequence) !void {
         const new = try self.alloc.create(FrameSequence);
         new.* = seq;
         const nameCopy = try self.alloc.dupe(u8, name);
         try self.sequences.put(nameCopy, new);
     }
 
-    pub fn get(self: *Self, name: []const u8) ?*const FrameSequence {
+    pub fn addState(self: *Self, state: ActorState) !void {
+        const new = try self.alloc.create(ActorState);
+        new.* = state;
+        new.name = try self.alloc.dupe(u8, state.name);
+        if(state.nextState) |nextState| {
+            new.nextState = try self.alloc.dupe(u8, nextState);
+        }
+        try self.actorStates.put(new.name, new);
+    }
+
+    pub fn getSeq(self: *Self, name: []const u8) ?*const FrameSequence {
         return self.sequences.get(name);
+    }
+
+    pub fn getState(self: *Self, name: []const u8) ?*const ActorState {
+        return self.actorStates.get(name);
     }
 };
 
