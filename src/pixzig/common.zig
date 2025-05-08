@@ -7,10 +7,19 @@ pub const Vec2I = struct {
 
     pub fn asVec2F(self: *const Vec2I) Vec2F {
         return .{ .x = @floatFromInt(self.x), .y = @floatFromInt(self.y) };
-    } 
+    }
+
 };
 
-pub const Vec2U = struct { x: u32, y: u32 };
+pub const Vec2U = struct { 
+    x: u32, 
+    y: u32,
+
+    pub fn asVec2I(self: *const Vec2U) Vec2I {
+        return .{ .x = @intCast(self.x), .y = @intCast(self.y) };
+    }
+};
+
 pub const Vec2F = struct { 
     x: f32, 
     y: f32,

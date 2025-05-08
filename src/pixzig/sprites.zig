@@ -238,7 +238,7 @@ pub const FrameSequenceManager = struct {
         const f = try std.fs.cwd().openFile(filename, .{});
         defer f.close();
 
-        const buffered = std.io.bufferedReader(f.reader());
+        var buffered = std.io.bufferedReader(f.reader());
         
         // Load sequence
         try self.loadSequence(buffered.reader(), texMgr);

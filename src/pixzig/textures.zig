@@ -6,6 +6,7 @@ const common = @import("./common.zig");
 const utils = @import("./utils.zig");
 
 const Vec2U = common.Vec2U;
+const Vec2I = common.Vec2I;
 const Color8 = common.Color8;
 const RectF = common.RectF;
 const RectI = common.RectI;
@@ -263,8 +264,10 @@ pub const TextureManager = struct {
 
         const spack = parsed.value;
 
+        const sz: Vec2I = texImage.size.asVec2I();
         var num: usize = 0;
         for(spack.frames) |frame| {
+            
             try self.atlas.put(
                 try self.allocator.dupe(u8, frame.name), 
                 .{
@@ -275,8 +278,8 @@ pub const TextureManager = struct {
                         frame.pos.t, 
                         frame.pos.width(), 
                         frame.pos.height(), 
-                        @intCast(texImage.size.x),
-                        @intCast(texImage.size.y)
+                        sz.x,
+                        sz.y,
                     ),
                 }
             );
