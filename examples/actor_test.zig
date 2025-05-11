@@ -3,6 +3,7 @@ const pixzig = @import("pixzig");
 const glfw = pixzig.glfw;
 const zmath = pixzig.zmath;
 const shaders = pixzig.shaders;
+const stbi = @import("zstbi");
 
 const SpriteBatchQueue = pixzig.renderer.SpriteBatchQueue;
 const RectF = pixzig.common.RectF;
@@ -59,10 +60,10 @@ pub const App = struct {
             .flip = .none,
         };
         const frseq = try pixzig.sprites.FrameSequence.init(alloc, &[_]Frame{ fr1, fr2, fr3 });
-        try app.seqMgr.add("player_right", frseq);
+        try app.seqMgr.addSeq("player_right", frseq);
 
-        _ = try app.actor.addState(.{ .name = "right", .sequence = app.seqMgr.get("player_right").?, .flip = .none });
-        _ = try app.actor.addState(.{ .name = "left", .sequence = app.seqMgr.get("player_right").?, .flip = .horz });
+        _ = try app.actor.addState(.{ .name = "right", .sequence = app.seqMgr.getSeq("player_right").?, .flip = .none });
+        _ = try app.actor.addState(.{ .name = "left", .sequence = app.seqMgr.getSeq("player_right").?, .flip = .horz });
 
         return app;
     }

@@ -40,8 +40,8 @@
             .hash = "1220fdbf17ba3351e6159874fc7b4e3cbe0513ddd8f3dae2d58b410404f9e7cddd26",
         },
         .zstbi = .{
-            .url = "https://github.com/zig-gamedev/zstbi/archive/bcbd249f3f57fb84d6d76f1bc621c7bd3bfaa4a2.tar.gz",
-            .hash = "12208b7d15a730294a7d8ee3a9d3ef145e109f94d0a68be7f0ee282e0630ede093d5",
+            .url = "https://github.com/zig-gamedev/zstbi/archive/094c4bba5cdbec167d3f6aaa98cccccd5c99145f.tar.gz",
+            .hash = "zstbi-0.11.0-dev-L0Ea_-eVBwCl8RYA98PhLDw3Fhw5k7FJOHSMDKWDOvqx",
         },
         // .common = .{ .path = "libs/zig-gamedev/libs/common" },
         // .zbullet = .{ .path = "libs/zbullet" },
