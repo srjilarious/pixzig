@@ -38,36 +38,58 @@ pub fn build(b: *std.Build) void {
     // Build the engine as a static library
     const engDat = buildEngine(b, target, optimize);
 
+    const eng_build = b.addStaticLibrary(.{
+        .name = "pixeng",
+        .root_source_file = b.path("src/pixzig/pixzig.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    b.default_step.dependOn(&eng_build.step);
+    const install_lib = b.addInstallArtifact(
+        eng_build,
+        .{
+            .dest_dir = .{
+                .override = .{
+                    .custom = b.pathJoin(&.{
+                        "bin",
+                        "pixzig",
+                    }),
+                },
+            },
+        },
+    );
+
+    b.default_step.dependOn(&install_lib.step);
     // Define examples
     const examples = [_]struct {
         name: []const u8,
         path: []const u8,
         assets: []const []const u8,
     }{
-        // .{ .name = "tile_load_test", .path = "examples/tile_load_test.zig", .assets = &.{
-        //     "mario_grassish2.png",
-        //     "level1a.tmx",
-        // } },
-        // .{ .name = "natetris", .path = "games/natetris/natetris.zig", .assets = &.{} },
-        // .{ .name = "actor_test", .path = "examples/actor_test.zig", .assets = &.{
-        //     "pac-tiles.json",
-        //     "pac-tiles.png",
-        // } },
-        // .{ .name = "collision_test", .path = "examples/collision_test.zig", .assets = &.{
-        //     "mario_grassish2.png",
-        //     "level1a.tmx",
-        //     "pac-tiles.png",
-        // } },
+        .{ .name = "tile_load_test", .path = "examples/tile_load_test.zig", .assets = &.{
+            "mario_grassish2.png",
+            "level1a.tmx",
+        } },
+        .{ .name = "natetris", .path = "games/natetris/natetris.zig", .assets = &.{} },
+        .{ .name = "actor_test", .path = "examples/actor_test.zig", .assets = &.{
+            "pac-tiles.json",
+            "pac-tiles.png",
+        } },
+        .{ .name = "collision_test", .path = "examples/collision_test.zig", .assets = &.{
+            "mario_grassish2.png",
+            "level1a.tmx",
+            "pac-tiles.png",
+        } },
         .{ .name = "flecs_test", .path = "examples/flecs_test.zig", .assets = &.{
             "mario_grassish2.png",
         } },
-        // .{ .name = "a_star_path", .path = "examples/a_star_path.zig", .assets = &.{} },
-        // .{ .name = "gameloop_test", .path = "examples/gameloop_test.zig", .assets = &.{} },
-        // .{ .name = "game_state_test", .path = "examples/game_state_test.zig", .assets = &.{} },
-        // .{ .name = "glfw_sprites", .path = "examples/glfw_sprites.zig", .assets = &.{
-        //     "mario_grassish2.png",
-        // } },
-        // .{ .name = "grid_render", .path = "examples/grid_render.zig", .assets = &.{} },
+        .{ .name = "a_star_path", .path = "examples/a_star_path.zig", .assets = &.{} },
+        .{ .name = "gameloop_test", .path = "examples/gameloop_test.zig", .assets = &.{} },
+        .{ .name = "game_state_test", .path = "examples/game_state_test.zig", .assets = &.{} },
+        .{ .name = "glfw_sprites", .path = "examples/glfw_sprites.zig", .assets = &.{
+            "mario_grassish2.png",
+        } },
+        .{ .name = "grid_render", .path = "examples/grid_render.zig", .assets = &.{} },
         // .{ .name = "console_test", .path = "examples/console_test.zig", .assets = &.{
         //     "Roboto-Medium.ttf",
         // } },
@@ -126,10 +148,22 @@ fn buildEngine(
     });
 
     // Create the engine library
-    const engine_lib = b.addStaticLibrary(.{
-        .name = "pixzig",
-        .root_module = pixeng,
-    });
+    const engine_lib = blk: {
+        if (target.result.os.tag != .emscripten) {
+            break :blk b.addStaticLibrary(.{
+                .name = "pixzig",
+                .root_module = pixeng,
+            });
+            //engine_lib.root_module.strip = false;
+        } else {
+            break :blk b.addObject(.{
+                .name = "pixzig",
+                .root_source_file = b.path("src/pixzig/pixzig.zig"),
+                .target = target,
+                .optimize = optimize,
+            });
+        }
+    };
 
     // GLFW
     const zglfw = b.dependency("zglfw", .{ .target = target });
@@ -200,10 +234,12 @@ fn addIncludesAndLink(
     }
 
     // Flecs
-    //const zflecs = b.dependency("zflecs", .{ .target = target });
-    // const flecs_dep = zflecs.artifact("flecs");
-    // addArchIncludes(b, target, optimize, flecs_dep) catch unreachable;
-    // target_lib.linkLibrary(flecs_dep);
+    const zflecs = b.dependency("zflecs", .{ .target = target });
+    target_lib.root_module.addImport("zflecs", zflecs.module("root"));
+
+    const flecs_dep = zflecs.artifact("flecs");
+    addArchIncludes(b, target, optimize, flecs_dep) catch unreachable;
+    target_lib.linkLibrary(flecs_dep);
 
     // Stbi
     const zstbi = b.dependency("zstbi", .{ .target = target });
@@ -228,7 +264,9 @@ fn addIncludesAndLink(
     target_lib.linkLibrary(lua_dep);
 
     // Install the engine library
-    b.installArtifact(target_lib);
+    if (target.result.os.tag != .emscripten) {
+        b.installArtifact(target_lib);
+    }
 }
 
 fn buildExample(
@@ -263,9 +301,8 @@ fn buildExample(
     exe.root_module.addImport("pixzig", pixeng_mod);
 
     // Link with the engine static library
-    exe.linkLibrary(engine_lib);
 
-    // addIncludesAndLink(exe, b, target, optimize);
+    //addIncludesAndLink(exe, b, target, optimize);
 
     // Handle platform-specific linking
     switch (target.result.os.tag) {
@@ -300,6 +337,7 @@ fn buildExample(
                 "-sUSE_OFFSET_CONVERTER",
                 "-sSUPPORT_LONGJMP=1",
                 "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+                // "-sEXPORTED_FUNCTIONS=_ImGui_ImplGlfw_InitForOpenGL,_ImGui_ImplGlfw_NewFrame",
                 "-sSTACK_SIZE=2mb",
                 "-sEXPORT_ALL=1",
                 "--shell-file",
@@ -312,12 +350,16 @@ fn buildExample(
             }
 
             emcc_command.addFileArg(exe.getEmittedBin());
+            emcc_command.addFileArg(engine_lib.getEmittedBin());
+            // emcc_command.addFileArg(.getEmittedBin());
             emcc_command.step.dependOn(&exe.step);
 
             const install = emcc_command;
             b.default_step.dependOn(&install.step);
         },
         else => {
+            exe.linkLibrary(engine_lib);
+
             const path = b.pathJoin(&.{ "bin", name });
 
             const install_content_step = b.addInstallDirectory(.{
