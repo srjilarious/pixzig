@@ -90,9 +90,9 @@ pub fn build(b: *std.Build) void {
             "mario_grassish2.png",
         } },
         .{ .name = "grid_render", .path = "examples/grid_render.zig", .assets = &.{} },
-        // .{ .name = "console_test", .path = "examples/console_test.zig", .assets = &.{
-        //     "Roboto-Medium.ttf",
-        // } },
+        .{ .name = "console_test", .path = "examples/console_test.zig", .assets = &.{
+            "Roboto-Medium.ttf",
+        } },
     };
 
     // Create a "build-all" option that builds everything
@@ -337,7 +337,6 @@ fn buildExample(
                 "-sUSE_OFFSET_CONVERTER",
                 "-sSUPPORT_LONGJMP=1",
                 "-sERROR_ON_UNDEFINED_SYMBOLS=1",
-                // "-sEXPORTED_FUNCTIONS=_ImGui_ImplGlfw_InitForOpenGL,_ImGui_ImplGlfw_NewFrame",
                 "-sSTACK_SIZE=2mb",
                 "-sEXPORT_ALL=1",
                 "--shell-file",
@@ -351,6 +350,19 @@ fn buildExample(
 
             emcc_command.addFileArg(exe.getEmittedBin());
             emcc_command.addFileArg(engine_lib.getEmittedBin());
+
+            const zgui = b.dependency("zgui", .{
+                .target = target,
+                .backend = .glfw_opengl3,
+            });
+            const gui_dep = zgui.artifact("imgui");
+            emcc_command.addFileArg(gui_dep.getEmittedBin());
+
+            // Lua
+            const ziglua = b.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
+            const lua_dep = ziglua.artifact("lua");
+            emcc_command.addFileArg(lua_dep.getEmittedBin());
+
             // emcc_command.addFileArg(.getEmittedBin());
             emcc_command.step.dependOn(&exe.step);
 
