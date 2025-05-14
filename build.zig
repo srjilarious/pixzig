@@ -38,61 +38,72 @@ pub fn build(b: *std.Build) void {
     // Build the engine as a static library
     const engDat = buildEngine(b, target, optimize);
 
-    const eng_build = b.addStaticLibrary(.{
-        .name = "pixeng",
-        .root_source_file = b.path("src/pixzig/pixzig.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    b.default_step.dependOn(&eng_build.step);
-    const install_lib = b.addInstallArtifact(
-        eng_build,
-        .{
-            .dest_dir = .{
-                .override = .{
-                    .custom = b.pathJoin(&.{
-                        "bin",
-                        "pixzig",
-                    }),
-                },
-            },
-        },
-    );
+    // const eng_build = b.addStaticLibrary(.{
+    //     .name = "pixeng",
+    //     .root_source_file = b.path("src/pixzig/pixzig.zig"),
+    //     .target = target,
+    //     .optimize = optimize,
+    // });
+    // b.default_step.dependOn(&eng_build.step);
+    // const install_lib = b.addInstallArtifact(
+    //     eng_build,
+    //     .{
+    //         .dest_dir = .{
+    //             .override = .{
+    //                 .custom = b.pathJoin(&.{
+    //                     "bin",
+    //                     "pixzig",
+    //                 }),
+    //             },
+    //         },
+    //     },
+    // );
 
-    b.default_step.dependOn(&install_lib.step);
+    // b.default_step.dependOn(&install_lib.step);
+
+    // var eng_build_step = b.step("build_eng", "Builds the engine.");
+    // eng_build_step.dependOn(&engDat.engine_lib.step);
+    // b.default_step.dependOn(eng_build_step);
+
+    if (target.result.os.tag == .emscripten) {
+        const engine_step = b.step("build-engine", "Build the pixzig object file for Emscripten");
+        engine_step.dependOn(&engDat.engine_lib.step);
+        b.default_step.dependOn(engine_step);
+    }
+
     // Define examples
     const examples = [_]struct {
         name: []const u8,
         path: []const u8,
         assets: []const []const u8,
     }{
-        .{ .name = "tile_load_test", .path = "examples/tile_load_test.zig", .assets = &.{
-            "mario_grassish2.png",
-            "level1a.tmx",
-        } },
-        .{ .name = "natetris", .path = "games/natetris/natetris.zig", .assets = &.{} },
-        .{ .name = "actor_test", .path = "examples/actor_test.zig", .assets = &.{
-            "pac-tiles.json",
-            "pac-tiles.png",
-        } },
-        .{ .name = "collision_test", .path = "examples/collision_test.zig", .assets = &.{
-            "mario_grassish2.png",
-            "level1a.tmx",
-            "pac-tiles.png",
-        } },
-        .{ .name = "flecs_test", .path = "examples/flecs_test.zig", .assets = &.{
-            "mario_grassish2.png",
-        } },
-        .{ .name = "a_star_path", .path = "examples/a_star_path.zig", .assets = &.{} },
-        .{ .name = "gameloop_test", .path = "examples/gameloop_test.zig", .assets = &.{} },
-        .{ .name = "game_state_test", .path = "examples/game_state_test.zig", .assets = &.{} },
-        .{ .name = "glfw_sprites", .path = "examples/glfw_sprites.zig", .assets = &.{
-            "mario_grassish2.png",
-        } },
-        .{ .name = "grid_render", .path = "examples/grid_render.zig", .assets = &.{} },
-        .{ .name = "console_test", .path = "examples/console_test.zig", .assets = &.{
-            "Roboto-Medium.ttf",
-        } },
+        // .{ .name = "tile_load_test", .path = "examples/tile_load_test.zig", .assets = &.{
+        //     "mario_grassish2.png",
+        //     "level1a.tmx",
+        // } },
+        // .{ .name = "natetris", .path = "games/natetris/natetris.zig", .assets = &.{} },
+        // .{ .name = "actor_test", .path = "examples/actor_test.zig", .assets = &.{
+        //     "pac-tiles.json",
+        //     "pac-tiles.png",
+        // } },
+        // .{ .name = "collision_test", .path = "examples/collision_test.zig", .assets = &.{
+        //     "mario_grassish2.png",
+        //     "level1a.tmx",
+        //     "pac-tiles.png",
+        // } },
+        // .{ .name = "flecs_test", .path = "examples/flecs_test.zig", .assets = &.{
+        //     "mario_grassish2.png",
+        // } },
+        // .{ .name = "a_star_path", .path = "examples/a_star_path.zig", .assets = &.{} },
+        // .{ .name = "gameloop_test", .path = "examples/gameloop_test.zig", .assets = &.{} },
+        // .{ .name = "game_state_test", .path = "examples/game_state_test.zig", .assets = &.{} },
+        // .{ .name = "glfw_sprites", .path = "examples/glfw_sprites.zig", .assets = &.{
+        //     "mario_grassish2.png",
+        // } },
+        // .{ .name = "grid_render", .path = "examples/grid_render.zig", .assets = &.{} },
+        // .{ .name = "console_test", .path = "examples/console_test.zig", .assets = &.{
+        //     "Roboto-Medium.ttf",
+        // } },
     };
 
     // Create a "build-all" option that builds everything
@@ -100,20 +111,22 @@ pub fn build(b: *std.Build) void {
 
     // Build each example
     for (examples) |example_info| {
-        const exe = buildExample(b, target, optimize, engDat.engine_lib, engDat.pixeng_mod, example_info.name, example_info.path, example_info.assets);
-
-        // Create a step for this specific example
-        //const example_step = b.step(b.fmt("{s}_exe", .{example_info.name}), b.fmt("Build the {s} example", .{example_info.name}));
-
-        // if (target.result.os.tag == .emscripten) {
-        //     //example_step.dependOn(&exe.step);
-        // } else {
-        const install_exe = b.addInstallArtifact(exe, .{ .dest_dir = .{ .override = .{ .custom = b.pathJoin(&.{ "bin", example_info.name }) } } });
-        build_all_step.dependOn(&install_exe.step); //example_step);
-        //example_step.dependOn(&install_exe.step);
-        // }
-
-        // Add to build-all step
+        const exe = buildExample(
+            b,
+            target,
+            optimize,
+            engDat.engine_lib,
+            engDat.pixeng_mod,
+            example_info.name,
+            example_info.path,
+            example_info.assets,
+        );
+        const install_exe = b.addInstallArtifact(exe, .{
+            .dest_dir = .{
+                .override = .{ .custom = b.pathJoin(&.{ "bin", example_info.name }) },
+            },
+        });
+        build_all_step.dependOn(&install_exe.step);
     }
 
     if (target.result.os.tag != .emscripten) {
@@ -150,18 +163,36 @@ fn buildEngine(
     // Create the engine library
     const engine_lib = blk: {
         if (target.result.os.tag != .emscripten) {
-            break :blk b.addStaticLibrary(.{
+            const lib = b.addStaticLibrary(.{
                 .name = "pixzig",
                 .root_module = pixeng,
             });
             //engine_lib.root_module.strip = false;
+            _ = b.addInstallArtifact(lib, .{});
+            break :blk lib;
         } else {
-            break :blk b.addObject(.{
+            const lib = b.addStaticLibrary(.{
                 .name = "pixzig",
+                .root_module = pixeng,
+            });
+            //engine_lib.root_module.strip = false;
+            const lib_inst = b.addInstallArtifact(lib, .{});
+            std.debug.print("build install prefix: {s}\n\n", .{b.install_path});
+            std.debug.print("lib inst: {s}\n\n", .{lib_inst.dest_sub_path});
+
+            std.debug.print("**** Adding object!\n\n", .{});
+            const obj = b.addObject(.{
+                .name = "pixzig_obj",
                 .root_source_file = b.path("src/pixzig/pixzig.zig"),
                 .target = target,
                 .optimize = optimize,
             });
+            const installObjStep = b.addInstallFile(obj.getEmittedBin(), "web/pixzig.o");
+            lib.step.dependOn(&installObjStep.step);
+            b.getInstallStep().dependOn(&obj.step);
+            b.getInstallStep().dependOn(&lib.step);
+
+            break :blk obj;
         }
     };
 
@@ -269,7 +300,7 @@ fn addIncludesAndLink(
     }
 }
 
-fn buildExample(
+pub fn buildExample(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
@@ -300,16 +331,9 @@ fn buildExample(
     // Add the engine module
     exe.root_module.addImport("pixzig", pixeng_mod);
 
-    // Link with the engine static library
-
-    //addIncludesAndLink(exe, b, target, optimize);
-
     // Handle platform-specific linking
     switch (target.result.os.tag) {
         .emscripten => {
-            engine_lib.root_module.strip = false;
-            engine_lib.rdynamic = true;
-
             const path = b.pathJoin(&.{ b.install_prefix, "web", name });
             std.debug.print("Installing to: {s}\n", .{path});
 
