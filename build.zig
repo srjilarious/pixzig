@@ -38,33 +38,6 @@ pub fn build(b: *std.Build) void {
     // Build the engine as a static library
     const engDat = buildEngine(b, target, optimize);
 
-    // const eng_build = b.addStaticLibrary(.{
-    //     .name = "pixeng",
-    //     .root_source_file = b.path("src/pixzig/pixzig.zig"),
-    //     .target = target,
-    //     .optimize = optimize,
-    // });
-    // b.default_step.dependOn(&eng_build.step);
-    // const install_lib = b.addInstallArtifact(
-    //     eng_build,
-    //     .{
-    //         .dest_dir = .{
-    //             .override = .{
-    //                 .custom = b.pathJoin(&.{
-    //                     "bin",
-    //                     "pixzig",
-    //                 }),
-    //             },
-    //         },
-    //     },
-    // );
-
-    // b.default_step.dependOn(&install_lib.step);
-
-    // var eng_build_step = b.step("build_eng", "Builds the engine.");
-    // eng_build_step.dependOn(&engDat.engine_lib.step);
-    // b.default_step.dependOn(eng_build_step);
-
     if (target.result.os.tag == .emscripten) {
         const engine_step = b.step("build-engine", "Build the pixzig object file for Emscripten");
         engine_step.dependOn(&engDat.engine_lib.step);
@@ -171,16 +144,6 @@ fn buildEngine(
             _ = b.addInstallArtifact(lib, .{});
             break :blk lib;
         } else {
-            const lib = b.addStaticLibrary(.{
-                .name = "pixzig",
-                .root_module = pixeng,
-            });
-            //engine_lib.root_module.strip = false;
-            const lib_inst = b.addInstallArtifact(lib, .{});
-            std.debug.print("build install prefix: {s}\n\n", .{b.install_path});
-            std.debug.print("lib inst: {s}\n\n", .{lib_inst.dest_sub_path});
-
-            std.debug.print("**** Adding object!\n\n", .{});
             const obj = b.addObject(.{
                 .name = "pixzig_obj",
                 .root_source_file = b.path("src/pixzig/pixzig.zig"),
@@ -188,9 +151,7 @@ fn buildEngine(
                 .optimize = optimize,
             });
             const installObjStep = b.addInstallFile(obj.getEmittedBin(), "web/pixzig.o");
-            lib.step.dependOn(&installObjStep.step);
-            b.getInstallStep().dependOn(&obj.step);
-            b.getInstallStep().dependOn(&lib.step);
+            b.getInstallStep().dependOn(&installObjStep.step);
 
             break :blk obj;
         }
@@ -407,7 +368,135 @@ pub fn buildExample(
             exe.step.dependOn(&install_content_step.step);
 
             const install_ex = b.addInstallArtifact(exe, .{ .dest_dir = .{ .override = .{ .custom = path } } });
-            //b.getInstallStep().dependOn(&.step);
+
+            const run_cmd = b.addRunArtifact(exe);
+            run_cmd.setCwd(.{ .cwd_relative = b.pathJoin(&.{ b.install_prefix, path }) });
+            run_cmd.step.dependOn(&install_ex.step);
+
+            if (b.args) |args| {
+                run_cmd.addArgs(args);
+            }
+
+            const run_step = b.step(name, "Run example");
+            run_step.dependOn(&run_cmd.step);
+        },
+    }
+
+    return exe;
+}
+
+pub fn buildGame(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    pixeng_mod: *std.Build.Module,
+    name: []const u8,
+    game_module: *std.Build.Module,
+    assets: []const []const u8,
+) *std.Build.Step.Compile {
+    const exe = blk: {
+        if (target.result.os.tag == .emscripten) {
+            break :blk b.addStaticLibrary(.{
+                .name = name,
+                .root_module = game_module,
+            });
+        } else {
+            break :blk b.addExecutable(.{
+                .name = name,
+                .root_module = game_module,
+            });
+        }
+    };
+
+    // Add the engine module
+    exe.root_module.addImport("pixzig", pixeng_mod);
+
+    // Handle platform-specific linking
+    switch (target.result.os.tag) {
+        .emscripten => {
+            const path = b.pathJoin(&.{ b.install_prefix, "web", name });
+            std.debug.print("Installing to: {s}\n", .{path});
+
+            const index_path = b.pathJoin(&.{ path, "index.html" });
+
+            const mkdir_command = b.addSystemCommand(&[_][]const u8{"mkdir"});
+            mkdir_command.addArgs(&.{ "-p", path });
+
+            const emcc_exe_path = "/usr/lib/emscripten/em++";
+            const emcc_command = b.addSystemCommand(&[_][]const u8{emcc_exe_path});
+
+            emcc_command.step.dependOn(&mkdir_command.step);
+            emcc_command.addArgs(&[_][]const u8{
+                "-o",
+                index_path,
+                "-sFULL-ES3=1",
+                "-sUSE_GLFW=3",
+                "-O3",
+                "-g",
+                "-sASYNCIFY",
+                "-sMIN_WEBGL_VERSION=2",
+                "-sINITIAL_MEMORY=167772160",
+                "-sALLOW_MEMORY_GROWTH=1",
+                "-sUSE_OFFSET_CONVERTER",
+                "-sSUPPORT_LONGJMP=1",
+                "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+                "-sSTACK_SIZE=2mb",
+                "-sEXPORT_ALL=1",
+                "--shell-file",
+                b.path("src/shell.html").getPath(b),
+            });
+
+            // Add all of the specified assets
+            for (assets) |asset| {
+                emcc_command.addArgs(&[_][]const u8{ "--preload-file", b.pathJoin(&.{ assets_dir, asset }) });
+            }
+
+            emcc_command.addFileArg(exe.getEmittedBin());
+
+            const pixzig_dep = b.dependency("pixzig", .{ .target = target });
+
+            const obj_path = pixzig_dep.builder.getInstallPath(
+                .prefix,
+                "web/pixzig.o",
+            );
+            emcc_command.addArg(obj_path);
+
+            const zgui = pixzig_dep.builder.dependency("zgui", .{
+                .target = target,
+                .backend = .glfw_opengl3,
+            });
+            const gui_dep = zgui.artifact("imgui");
+            emcc_command.addFileArg(gui_dep.getEmittedBin());
+
+            // Lua
+            const ziglua = pixzig_dep.builder.dependency("ziglua", .{
+                .target = target,
+                .optimize = optimize,
+                .lang = .lua53,
+            });
+            const lua_dep = ziglua.artifact("lua");
+            emcc_command.addFileArg(lua_dep.getEmittedBin());
+
+            emcc_command.step.dependOn(&exe.step);
+            b.default_step.dependOn(&emcc_command.step);
+        },
+        else => {
+            const path = b.pathJoin(&.{ "bin", name });
+
+            const install_content_step = b.addInstallDirectory(.{
+                .source_dir = b.path(assets_dir),
+                .install_dir = .{ .custom = path },
+                .install_subdir = "assets",
+                .include_extensions = assets,
+            });
+            exe.step.dependOn(&install_content_step.step);
+
+            const install_ex = b.addInstallArtifact(
+                exe,
+                .{
+                    .dest_dir = .{ .override = .{ .custom = path } },
+                },
+            );
 
             const run_cmd = b.addRunArtifact(exe);
             run_cmd.setCwd(.{ .cwd_relative = b.pathJoin(&.{ b.install_prefix, path }) });
