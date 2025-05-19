@@ -35,6 +35,8 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const build_examples = b.option(bool, "build_examples", "Build the examples") orelse true;
+
     // Build the engine as a static library
     const engDat = buildEngine(b, target, optimize);
 
@@ -50,71 +52,74 @@ pub fn build(b: *std.Build) void {
         path: []const u8,
         assets: []const []const u8,
     }{
-        // .{ .name = "tile_load_test", .path = "examples/tile_load_test.zig", .assets = &.{
-        //     "mario_grassish2.png",
-        //     "level1a.tmx",
-        // } },
-        // .{ .name = "natetris", .path = "games/natetris/natetris.zig", .assets = &.{} },
-        // .{ .name = "actor_test", .path = "examples/actor_test.zig", .assets = &.{
-        //     "pac-tiles.json",
-        //     "pac-tiles.png",
-        // } },
-        // .{ .name = "collision_test", .path = "examples/collision_test.zig", .assets = &.{
-        //     "mario_grassish2.png",
-        //     "level1a.tmx",
-        //     "pac-tiles.png",
-        // } },
-        // .{ .name = "flecs_test", .path = "examples/flecs_test.zig", .assets = &.{
-        //     "mario_grassish2.png",
-        // } },
-        // .{ .name = "a_star_path", .path = "examples/a_star_path.zig", .assets = &.{} },
-        // .{ .name = "gameloop_test", .path = "examples/gameloop_test.zig", .assets = &.{} },
-        // .{ .name = "game_state_test", .path = "examples/game_state_test.zig", .assets = &.{} },
-        // .{ .name = "glfw_sprites", .path = "examples/glfw_sprites.zig", .assets = &.{
-        //     "mario_grassish2.png",
-        // } },
-        // .{ .name = "grid_render", .path = "examples/grid_render.zig", .assets = &.{} },
-        // .{ .name = "console_test", .path = "examples/console_test.zig", .assets = &.{
-        //     "Roboto-Medium.ttf",
-        // } },
+        .{ .name = "tile_load_test", .path = "examples/tile_load_test.zig", .assets = &.{
+            "mario_grassish2.png",
+            "level1a.tmx",
+        } },
+        .{ .name = "natetris", .path = "games/natetris/natetris.zig", .assets = &.{} },
+        .{ .name = "actor_test", .path = "examples/actor_test.zig", .assets = &.{
+            "pac-tiles.json",
+            "pac-tiles.png",
+        } },
+        .{ .name = "collision_test", .path = "examples/collision_test.zig", .assets = &.{
+            "mario_grassish2.png",
+            "level1a.tmx",
+            "pac-tiles.png",
+        } },
+        .{ .name = "flecs_test", .path = "examples/flecs_test.zig", .assets = &.{
+            "mario_grassish2.png",
+        } },
+        .{ .name = "a_star_path", .path = "examples/a_star_path.zig", .assets = &.{} },
+        .{ .name = "gameloop_test", .path = "examples/gameloop_test.zig", .assets = &.{} },
+        .{ .name = "game_state_test", .path = "examples/game_state_test.zig", .assets = &.{} },
+        .{ .name = "glfw_sprites", .path = "examples/glfw_sprites.zig", .assets = &.{
+            "mario_grassish2.png",
+        } },
+        .{ .name = "grid_render", .path = "examples/grid_render.zig", .assets = &.{} },
+        .{ .name = "console_test", .path = "examples/console_test.zig", .assets = &.{
+            "Roboto-Medium.ttf",
+        } },
     };
 
     // Create a "build-all" option that builds everything
     const build_all_step = b.step("build-all", "Build all examples");
 
-    // Build each example
-    for (examples) |example_info| {
-        const exe = buildExample(
-            b,
-            target,
-            optimize,
-            engDat.engine_lib,
-            engDat.pixeng_mod,
-            example_info.name,
-            example_info.path,
-            example_info.assets,
-        );
-        const install_exe = b.addInstallArtifact(exe, .{
-            .dest_dir = .{
-                .override = .{ .custom = b.pathJoin(&.{ "bin", example_info.name }) },
-            },
-        });
-        build_all_step.dependOn(&install_exe.step);
-    }
+    // std.debug.print("build_examples = {}\n", .{build_examples});
+    if (build_examples) {
+        // Build each example
+        for (examples) |example_info| {
+            const exe = buildExample(
+                b,
+                target,
+                optimize,
+                engDat.engine_lib,
+                engDat.pixeng_mod,
+                example_info.name,
+                example_info.path,
+                example_info.assets,
+            );
+            const install_exe = b.addInstallArtifact(exe, .{
+                .dest_dir = .{
+                    .override = .{ .custom = b.pathJoin(&.{ "bin", example_info.name }) },
+                },
+            });
+            build_all_step.dependOn(&install_exe.step);
+        }
 
-    if (target.result.os.tag != .emscripten) {
-        // Sprite packer tool
-        const spack = buildExample(b, target, optimize, engDat.engine_lib, engDat.pixeng_mod, "spack", "tools/spack/spack.zig", &.{});
-        const zargs = b.dependency("zargunaught", .{});
-        spack.root_module.addImport("zargunaught", zargs.module("zargunaught"));
+        if (target.result.os.tag != .emscripten) {
+            // Sprite packer tool
+            const spack = buildExample(b, target, optimize, engDat.engine_lib, engDat.pixeng_mod, "spack", "tools/spack/spack.zig", &.{});
+            const zargs = b.dependency("zargunaught", .{});
+            spack.root_module.addImport("zargunaught", zargs.module("zargunaught"));
 
-        const zstbi = b.dependency("zstbi", .{ .target = target });
-        spack.root_module.addImport("zstbi", zstbi.module("root"));
+            const zstbi = b.dependency("zstbi", .{ .target = target });
+            spack.root_module.addImport("zstbi", zstbi.module("root"));
 
-        // Unit tests
-        const tests = buildExample(b, target, optimize, engDat.engine_lib, engDat.pixeng_mod, "tests", "tests/main.zig", &.{});
-        const testzMod = b.dependency("testz", .{});
-        tests.root_module.addImport("testz", testzMod.module("testz"));
+            // Unit tests
+            const tests = buildExample(b, target, optimize, engDat.engine_lib, engDat.pixeng_mod, "tests", "tests/main.zig", &.{});
+            const testzMod = b.dependency("testz", .{});
+            tests.root_module.addImport("testz", testzMod.module("testz"));
+        }
     }
 
     // Make build-all the default step
@@ -296,7 +301,7 @@ pub fn buildExample(
     switch (target.result.os.tag) {
         .emscripten => {
             const path = b.pathJoin(&.{ b.install_prefix, "web", name });
-            std.debug.print("Installing to: {s}\n", .{path});
+            // std.debug.print("Installing to: {s}\n", .{path});
 
             const index_path = b.pathJoin(&.{ path, "index.html" });
 
