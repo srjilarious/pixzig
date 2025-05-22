@@ -1,6 +1,6 @@
 .{
     .name = .pixzig,
-    .version = "0.6.0",
+    .version = "0.8.0",
     .fingerprint = 0xbec6f8beb58f4e18,
     .paths = .{"src"},
     .dependencies = .{

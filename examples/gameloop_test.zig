@@ -1,4 +1,3 @@
-// zig fmt: off
 const std = @import("std");
 const builtin = @import("builtin");
 const pixzig = @import("pixzig");
@@ -24,10 +23,7 @@ pub const App = struct {
     delay: Delay = .{ .max = 120 },
 
     pub fn init(val: i32) App {
-        return .{ 
-            .testVal = val, 
-            .fps = FpsCounter.init() 
-        };
+        return .{ .testVal = val, .fps = FpsCounter.init() };
     }
 
     pub fn deinit(self: *App) void {
@@ -35,7 +31,7 @@ pub const App = struct {
     }
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
-        if(self.fps.update(delta)) {
+        if (self.fps.update(delta)) {
             std.debug.print("FPS: {}\n", .{self.fps.fps()});
         }
 
@@ -54,10 +50,10 @@ pub const App = struct {
             std.debug.print("Right!\n", .{});
             self.testVal += 1;
         }
-        if( eng.keyboard.pressed(.space)) {
+        if (eng.keyboard.pressed(.space)) {
             std.debug.print("Context: {}\n", .{self.testVal});
         }
-        if(eng.keyboard.pressed(.escape)) {
+        if (eng.keyboard.pressed(.escape)) {
             return false;
         }
         return true;
@@ -73,11 +69,10 @@ pub fn main() !void {
     std.log.info("Pixzig Game Loop Example", .{});
 
     const alloc = std.heap.c_allocator;
-    
+
     const appRunner = try AppRunner.init("Pixzig Game Loop Example.", alloc, .{});
     var app = App.init(123);
 
     glfw.swapInterval(0);
     appRunner.run(&app);
 }
-
