@@ -257,10 +257,10 @@ pub fn buildGame(
     name: []const u8,
     exe_mod: *std.Build.Module,
     assets: []const []const u8,
-) *std.Build.Step {
+) *std.Build.Step.Compile {
     const engine_lib: ?*std.Build.Step.Compile = blk: {
         if (target.result.os.tag != .emscripten) {
-            break :blk engine_dep.artifact("engine");
+            break :blk engine_dep.artifact("pixzig");
         } else {
             break :blk null;
         }
