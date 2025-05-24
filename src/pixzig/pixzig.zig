@@ -57,7 +57,7 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
     const AppStruct = struct {
         pub const Engine = PixzigEngine(engOpts);
 
-        const UpdateStepUs: f64 = 1.0 / 120.0;
+        const UpdateStepMs: f64 = 1000.0 / 120.0;
 
         engine: *Engine,
         alloc: std.mem.Allocator,
@@ -84,17 +84,17 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
         }
 
         pub fn gameLoopCore(self: *Self, app: *AppData) bool {
-            const newCurrTime = glfw.getTime();
+            const newCurrTime = glfw.getTime() * 1000.0;
             const delta = newCurrTime - self.currTime;
             self.lag += delta;
             self.currTime = newCurrTime;
 
             glfw.pollEvents();
 
-            while (self.lag > UpdateStepUs) {
-                self.lag -= UpdateStepUs;
+            while (self.lag > UpdateStepMs) {
+                self.lag -= UpdateStepMs;
 
-                if (!app.update(self.engine, UpdateStepUs)) {
+                if (!app.update(self.engine, UpdateStepMs)) {
                     return false;
                 }
             }

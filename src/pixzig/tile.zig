@@ -417,6 +417,17 @@ pub const ObjectGroup = struct {
         return ObjectGroupIterator.init(self, class);
     }
 
+    pub fn firstByClass(self: *const ObjectGroup, class: []const u8) ?*Object {
+        for(0..self.objects.items.len) |idx| {
+            const curr = &self.objects.items[idx];
+            if(curr.class != null and std.mem.eql(u8, curr.class.?, class)) {
+                return &self.objects.items[idx];
+            }
+        }
+
+        return null;
+    }
+
     // pub fn dumpLayer(self: *const Self) void {
     //     for(0..@intCast(self.size.y)) |yy| {
     //         for(0..@intCast(self.size.x)) |xx| {

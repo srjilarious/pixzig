@@ -12,10 +12,10 @@ pub const FpsCounter = struct {
 
     pub fn update(self: *FpsCounter, elapsed: f64) bool {
         self.mElapsed += elapsed;
-        if (self.mElapsed > 1.0) {
+        if (self.mElapsed > 1000.0) {
             self.mFps = self.mFrames;
             self.mFrames = 0;
-            self.mElapsed -= 1.0;
+            self.mElapsed -= 1000.0;
             return true;
         }
 

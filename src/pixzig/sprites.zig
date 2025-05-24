@@ -51,7 +51,7 @@ pub const Flip = enum {
 
 pub const Frame = struct { 
     tex: *Texture,
-    frameTimeUs: i64, 
+    frameTimeMs: f64, 
     flip: Flip,
 
     pub fn apply(self: *Frame, spr: *Sprite, extraFlip: Flip) void {
@@ -177,7 +177,7 @@ pub const FileFrameSequence = struct {
 
 pub const FileFrame = struct {
     name: []const u8,
-    us: i64, 
+    ms: f64, 
     flip: ?Flip,
 };
 
@@ -270,7 +270,7 @@ pub const FrameSequenceManager = struct {
                 };
                 try seq.frames.append(.{
                     .tex = try texMgr.getTexture(fileFrame.name),
-                    .frameTimeUs = fileFrame.us,
+                    .frameTimeMs = fileFrame.ms,
                     .flip = flip,
                 });
             }
@@ -284,6 +284,9 @@ pub const FrameSequenceManager = struct {
             new.name = try self.alloc.dupe(u8, fileState.name);
             if(fileState.nextStateName) |nextState| {
                 new.nextState = try self.alloc.dupe(u8, nextState);
+            }
+            else {
+                new.nextState = null;
             }
             new.sequence = self.sequences.get(fileState.frameSeqName).?;
             try self.actorStates.put(new.name, new);
@@ -304,6 +307,10 @@ pub const FrameSequenceManager = struct {
         if(state.nextState) |nextState| {
             new.nextState = try self.alloc.dupe(u8, nextState);
         }
+        else {
+            new.nextState = null;
+        }
+
         try self.actorStates.put(new.name, new);
     }
 
@@ -321,7 +328,7 @@ pub const Actor = struct {
     alloc: std.mem.Allocator,
     currState: ?*ActorState,
     currFrame: i32,
-    currFrameTimeUs: i64,
+    currFrameTimeMs: f64,
     actorSize: Vec2I,
     dirtyState: bool,
 
@@ -331,7 +338,7 @@ pub const Actor = struct {
             .alloc = alloc,
             .currState = null, 
             .currFrame = 0, 
-            .currFrameTimeUs = 0, 
+            .currFrameTimeMs = 0, 
             .actorSize = Vec2I{ .x = 0, .y = 0 }, 
             .dirtyState = false 
         };
@@ -347,11 +354,12 @@ pub const Actor = struct {
         self.states.deinit();
     }
 
-    pub fn addState(self: *Actor, state: ActorState) !*Actor {
+    pub fn addState(self: *Actor, state: *const ActorState) !*Actor {
         const nameCopy = try self.alloc.dupe(u8, state.name);
         var val = try self.alloc.create(ActorState);
-        val.* = state;
+        val.* = state.*;
         val.name = nameCopy;
+
         if(state.nextState != null) {
             val.nextState = try self.alloc.dupe(u8, state.nextState.?);
         }
@@ -370,14 +378,14 @@ pub const Actor = struct {
         }
     }
 
-    pub fn update(self: *Actor, deltaUs: i64, spr: *Sprite) void {
+    pub fn update(self: *Actor, deltaMs: f64, spr: *Sprite) void {
         if(self.currState == null) return;
 
         const currSeq = self.currState.?.sequence;
         const currFrame = &currSeq.frames.items[@intCast(self.currFrame)];
-        self.currFrameTimeUs += deltaUs;
-        if(self.currFrameTimeUs > currFrame.frameTimeUs) {
-            self.currFrameTimeUs -= currFrame.frameTimeUs;
+        self.currFrameTimeMs += deltaMs;
+        if(self.currFrameTimeMs > currFrame.frameTimeMs) {
+            self.currFrameTimeMs -= currFrame.frameTimeMs;
             self.currFrame += 1;
             if(self.currFrame >= currSeq.frames.items.len) {
                 // TODO: Add in once behavior
@@ -387,5 +395,12 @@ pub const Actor = struct {
             // TODO: Add in flip on sequences.
             currSeq.frames.items[@intCast(self.currFrame)].apply(spr, .none);
         }
+    }
+
+    pub fn curr(self: *Actor) ?*Frame {
+        if(self.currState == null) return null;
+
+        const currSeq = self.currState.?.sequence;
+        return &currSeq.frames.items[@intCast(self.currFrame)];
     }
 };
