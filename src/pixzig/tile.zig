@@ -130,7 +130,11 @@ pub const Object = struct {
         if (!std.mem.eql(u8, node.tag, "object")) return error.BadNodeTag;
 
         obj.id = try std.fmt.parseInt(i32, node.getAttribute("id").?, 0);
-        obj.gid = try std.fmt.parseInt(i32, node.getAttribute("gid").?, 0);
+
+        if(node.getAttribute("gid")) |gid| {
+            obj.gid = try std.fmt.parseInt(i32, gid, 0);
+        }
+
         obj.pos = .{
             .x = try intFromFloatAttr(node,"x"),
             .y = try intFromFloatAttr(node,"y"),

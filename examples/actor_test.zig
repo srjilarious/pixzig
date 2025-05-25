@@ -46,24 +46,24 @@ pub const App = struct {
 
         const fr1: Frame = .{
             .tex = try eng.textures.getTexture("player_right_1"),
-            .frameTimeUs = 300,
+            .frameTimeMs = 300,
             .flip = .none,
         };
         const fr2: Frame = .{
             .tex = try eng.textures.getTexture("player_right_2"),
-            .frameTimeUs = 300,
+            .frameTimeMs = 300,
             .flip = .none,
         };
         const fr3: Frame = .{
             .tex = try eng.textures.getTexture("player_right_3"),
-            .frameTimeUs = 300,
+            .frameTimeMs = 300,
             .flip = .none,
         };
         const frseq = try pixzig.sprites.FrameSequence.init(alloc, &[_]Frame{ fr1, fr2, fr3 });
         try app.seqMgr.addSeq("player_right", frseq);
 
-        _ = try app.actor.addState(.{ .name = "right", .sequence = app.seqMgr.getSeq("player_right").?, .flip = .none });
-        _ = try app.actor.addState(.{ .name = "left", .sequence = app.seqMgr.getSeq("player_right").?, .flip = .horz });
+        _ = try app.actor.addState(&.{ .name = "right", .sequence = app.seqMgr.getSeq("player_right").?, .flip = .none });
+        _ = try app.actor.addState(&.{ .name = "left", .sequence = app.seqMgr.getSeq("player_right").?, .flip = .horz });
 
         return app;
     }

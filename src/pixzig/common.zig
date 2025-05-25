@@ -1,32 +1,39 @@
-// zig fmt: off
 const std = @import("std");
 
-pub const Vec2I = struct { 
-    x: i32, 
+pub const Vec2I = struct {
+    x: i32,
     y: i32,
 
     pub fn asVec2F(self: *const Vec2I) Vec2F {
-        return .{ .x = @floatFromInt(self.x), .y = @floatFromInt(self.y) };
+        return .{
+            .x = @floatFromInt(self.x),
+            .y = @floatFromInt(self.y),
+        };
     }
-
 };
 
-pub const Vec2U = struct { 
-    x: u32, 
+pub const Vec2U = struct {
+    x: u32,
     y: u32,
 
     pub fn asVec2I(self: *const Vec2U) Vec2I {
-        return .{ .x = @intCast(self.x), .y = @intCast(self.y) };
+        return .{
+            .x = @intCast(self.x),
+            .y = @intCast(self.y),
+        };
     }
 };
 
-pub const Vec2F = struct { 
-    x: f32, 
+pub const Vec2F = struct {
+    x: f32,
     y: f32,
 
     pub fn asVec2I(self: *const Vec2F) Vec2I {
-        return .{ .x = @intFromFloat(self.x), .y = @intFromFloat(self.y) };
-    } 
+        return .{
+            .x = @intFromFloat(self.x),
+            .y = @intFromFloat(self.y),
+        };
+    }
 };
 
 pub const RectF = struct {
@@ -43,7 +50,7 @@ pub const RectF = struct {
         return self.b - self.t;
     }
 
-    pub fn fromCoords(x: i32, y: i32, w: i32, h: i32, szW:i32, szH:i32) RectF {
+    pub fn fromCoords(x: i32, y: i32, w: i32, h: i32, szW: i32, szH: i32) RectF {
         const xF = @as(f32, @floatFromInt(x));
         const yF = @as(f32, @floatFromInt(y));
         const wF = @as(f32, @floatFromInt(w));
@@ -51,10 +58,10 @@ pub const RectF = struct {
         const szWF = @as(f32, @floatFromInt(szW));
         const szHF = @as(f32, @floatFromInt(szH));
         return .{
-            .l = xF/szWF,
-            .r = (xF+wF)/szWF,
-            .t = yF/szHF,
-            .b = (yF+hF)/szHF
+            .l = xF / szWF,
+            .r = (xF + wF) / szWF,
+            .t = yF / szHF,
+            .b = (yF + hF) / szHF,
         };
     }
 
@@ -67,10 +74,18 @@ pub const RectF = struct {
             .l = xF,
             .r = xF + wF,
             .t = yF,
-            .b = yF + hF
+            .b = yF + hF,
         };
     }
 
+    pub fn shrinkFrom(self: *const RectF, amount: f32) RectF {
+        return .{
+            .l = self.l + amount,
+            .r = self.r - amount,
+            .t = self.t + amount,
+            .b = self.b - amount,
+        };
+    }
     pub fn ensureSize(self: *RectF, w: i32, h: i32) void {
         const wF = @as(f32, @floatFromInt(w));
         const hF = @as(f32, @floatFromInt(h));
@@ -101,7 +116,7 @@ pub const RectI = struct {
     r: i32,
     b: i32,
 
-    pub fn init(l: i32, t: i32, w: i32, h:i32) RectI {
+    pub fn init(l: i32, t: i32, w: i32, h: i32) RectI {
         return RectI{
             .l = l,
             .t = t,
@@ -140,7 +155,7 @@ pub const Color = struct {
             .r = r,
             .g = g,
             .b = b,
-            .a = a
+            .a = a,
         };
     }
 };
@@ -151,8 +166,13 @@ pub const Color8 = struct {
     b: u8,
     a: u8,
 
-    pub fn from(r: u8, g: u8, b: u8, a:u8) Color8 {
-        return .{ .r=r, .g=g, .b=b, .a=a };
+    pub fn from(r: u8, g: u8, b: u8, a: u8) Color8 {
+        return .{
+            .r = r,
+            .g = g,
+            .b = b,
+            .a = a,
+        };
     }
 };
 

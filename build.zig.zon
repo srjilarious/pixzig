@@ -27,32 +27,30 @@
 
         },
         .zopengl = .{
-            //.path = "libs/zopengl",
-            .url = "https://github.com/zig-gamedev/zopengl/archive/c9c293a9af388478bca0ad52007a72372ef71747.tar.gz",
-            .hash = "1220c030f5e33e09bd80fe7a7b064b65e1fc02e9bbf603ba04716866c9f1ca16f8ce",
+            .url = "git+https://github.com/zig-gamedev/zopengl.git#d264cab3c4dd3734a79b102b912880a497427133",
+            .hash = "zopengl-0.6.0-dev-5-tnz5dlCADYpffQdOFMtwLbB-w7caLobHCoUg_uCdGU",
         },
+        // .zmath = .{
+        //     .url = "https://github.com/zig-gamedev/zmath/archive/24cdd20f9da09bd1ce7b552907eeaba9bafea59d.tar.gz",
+        //     .hash = "1220081d55b58b968d953db1afc2fb01b2f5733929144e69522461ce25fa6450d84e",
+        // },
         .zmath = .{
-            .url = "https://github.com/zig-gamedev/zmath/archive/24cdd20f9da09bd1ce7b552907eeaba9bafea59d.tar.gz",
-            .hash = "1220081d55b58b968d953db1afc2fb01b2f5733929144e69522461ce25fa6450d84e",
+            .url = "git+https://github.com/zig-gamedev/zmath.git#6a0747fe6834e58793500e05953c4c6ca045d3e1",
+            .hash = "zmath-0.11.0-dev-wjwivTArAwDIkHSuSiU3KuBvxh7igjJjJMqYRfy3hihO",
         },
         .zglfw = .{
             .url = "https://github.com/zig-gamedev/zglfw/archive/c2f6b33490e70f3055cb3264cb9f627ded23b828.tar.gz",
-            .hash = "1220fdbf17ba3351e6159874fc7b4e3cbe0513ddd8f3dae2d58b410404f9e7cddd26",
+            .hash = "zglfw-0.10.0-dev-zgVDNMacIQA-k7kNSfwUc9Lfzx-bb_wklVm25K-p8Tr7",
         },
         .zstbi = .{
             .url = "https://github.com/zig-gamedev/zstbi/archive/094c4bba5cdbec167d3f6aaa98cccccd5c99145f.tar.gz",
             .hash = "zstbi-0.11.0-dev-L0Ea_-eVBwCl8RYA98PhLDw3Fhw5k7FJOHSMDKWDOvqx",
         },
-        // .common = .{ .path = "libs/zig-gamedev/libs/common" },
-        // .zbullet = .{ .path = "libs/zbullet" },
         .zgui = .{
             .path = "libs/zgui",
             // .url = "https://github.com/zig-gamedev/zgui/archive/c16629e67e7bc1bca9a5c67d5123874c75f5374d.tar.gz",
             // .hash = "12202063c813c1b95affa57d83a6a4817d9a4114bd9db052f87740f81b1843ceca09",
         },
-        // .zgpu = .{ .path = "libs/zig-gamedev/libs/zgpu" },
-        // .ztracy = .{ .path = "libs/ztracy" },
-        // .zphysics = .{ .path = "libs/zphysics" },
         // .zaudio = .{ .path = "libs/zig-gamedev/libs/zaudio" },
         .zflecs = .{
             .path = "libs/zflecs",
