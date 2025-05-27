@@ -14,16 +14,6 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug Digcraft",
-      "program": "${workspaceFolder}/zig-out/bin/digcraft/digcraft",
-      "preLaunchTask": "build",
-      "args": [],
-      "cwd": "${workspaceFolder}/zig-out/bin/digcraft",
-      "console": "integratedTerminal"
-    },
-    {
-      "type": "lldb",
-      "request": "launch",
       "name": "Debug Nateris",
       "program": "${workspaceFolder}/zig-out/bin/natetris/natetris",
       "preLaunchTask": "build",

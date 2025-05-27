@@ -373,8 +373,13 @@ pub const Actor = struct {
     }
 
     pub fn setState(self: *Actor, name: []const u8) void {
+        // Don't reset the state if we're already on it.
+        if(self.currState != null and std.mem.eql(u8, self.currState.?.name, name)) return;
+
         if(self.states.getPtr(name)) |state| {
-            self.currState = @ptrCast(state);
+            self.currState = state.*;
+            self.currFrame = 0;
+            self.currFrameTimeMs = 0;
         }
     }
 
