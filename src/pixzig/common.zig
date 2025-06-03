@@ -10,6 +10,13 @@ pub const Vec2I = struct {
             .y = @floatFromInt(self.y),
         };
     }
+
+    pub fn asVec2U(self: *const Vec2I) Vec2U {
+        return .{
+            .x = @intCast(self.x),
+            .y = @intCast(self.y),
+        };
+    }
 };
 
 pub const Vec2U = struct {
