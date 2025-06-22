@@ -39,7 +39,7 @@
             .hash = "zmath-0.11.0-dev-wjwivTArAwDIkHSuSiU3KuBvxh7igjJjJMqYRfy3hihO",
         },
         .zglfw = .{
-            .url = "https://github.com/zig-gamedev/zglfw/archive/c2f6b33490e70f3055cb3264cb9f627ded23b828.tar.gz",
+            .url = "git+https://github.com/zig-gamedev/zglfw.git#c337cb3d3f984468ea7a386335937a5d555fc024",
             .hash = "zglfw-0.10.0-dev-zgVDNMacIQA-k7kNSfwUc9Lfzx-bb_wklVm25K-p8Tr7",
         },
         .zstbi = .{
