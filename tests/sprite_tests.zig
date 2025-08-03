@@ -22,9 +22,9 @@ pub fn frameSequenceFileLoadTest() !void {
         \\             "mode": "loop",
         \\             "name": "player_right",
         \\             "frames": [
-        \\                 {"name": "player_right_1", "us": 300, "flip": "none"},
-        \\                 {"name": "player_right_2", "us": 300, "flip": "none"},
-        \\                 {"name": "player_right_3", "us": 300, "flip": "none"}
+        \\                 {"name": "player_right_1", "ms": 300, "flip": "none"},
+        \\                 {"name": "player_right_2", "ms": 300, "flip": "none"},
+        \\                 {"name": "player_right_3", "ms": 300, "flip": "none"}
         \\             ]
         \\         }
         \\     ],
@@ -56,7 +56,7 @@ pub fn actorSequenceFileLoadTest() !void {
         \\             "mode": "loop",
         \\             "name": "player_right",
         \\             "frames": [
-        \\                 {"name": "player_right_1", "us": 300, "flip": "none"}
+        \\                 {"name": "player_right_1", "ms": 300, "flip": "none"}
         \\             ]
         \\         }
         \\     ],
