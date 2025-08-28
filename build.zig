@@ -132,7 +132,9 @@ pub fn build(b: *std.Build) void {
                 .target = target,
                 .optimize = optimize,
             });
-            const tests = buildExample(b, target, optimize, engDat.engine_lib, engDat.pixeng_mod, "tests", tests_mod, &.{});
+            const tests = buildExample(b, target, optimize, engDat.engine_lib, engDat.pixeng_mod, "tests", tests_mod, &.{
+                "Roboto-Medium.ttf",
+            });
             const testzMod = b.dependency("testz", .{});
             tests.root_module.addImport("testz", testzMod.module("testz"));
         }
@@ -239,6 +241,12 @@ fn buildEngine(
     // XML for tilemap loading
     const xml = b.addModule("xml", .{ .root_source_file = b.path("libs/xml.zig") });
     pixeng.addImport("xml", xml);
+
+    // STB Truetype module
+    const stbtt = b.addModule("stb_truetype", .{ .root_source_file = b.path("libs/stb_truetype/stb_truetype.zig") });
+    stbtt.addCSourceFile(.{ .file = b.path("libs/stb_truetype/stb_truetype.c") });
+    stbtt.addIncludePath(b.path("libs/stb_truetype"));
+    pixeng.addImport("stb_truetype", stbtt);
 
     // Install the engine library
     if (target.result.os.tag != .emscripten) {
