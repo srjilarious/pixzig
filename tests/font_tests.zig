@@ -17,6 +17,7 @@ pub fn loadFontTest() !void {
     const bitmap = pixzig.stb_tt.c.stbtt_GetCodepointBitmap(&font_info, 0, pixzig.stb_tt.c.stbtt_ScaleForPixelHeight(&font_info, 32.0), 65, &w, &h, 0, 0);
     const wu: usize = @intCast(w);
     const hu: usize = @intCast(h);
+    std.debug.print("\n", .{});
     for (0..hu) |j| {
         for (0..wu) |i| {
             std.debug.print("{c}", .{" .:ioVM@"[bitmap[j * wu + i] >> 5]});

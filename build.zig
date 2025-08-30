@@ -79,6 +79,9 @@ pub fn build(b: *std.Build) void {
         .{ .name = "console_test", .path = "examples/console_test.zig", .assets = &.{
             "Roboto-Medium.ttf",
         } },
+        .{ .name = "text_rendering", .path = "examples/text_rendering.zig", .assets = &.{
+            "Roboto-Medium.ttf",
+        } },
     };
 
     // Create a "build-all" option that builds everything

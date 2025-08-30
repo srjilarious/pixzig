@@ -34,6 +34,16 @@
     {
       "type": "lldb",
       "request": "launch",
+      "name": "Debug Text Rendering Example",
+      "program": "${workspaceFolder}/zig-out/bin/text_rendering/text_rendering",
+      "preLaunchTask": "build",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
       "name": "Debug Actor Test",
       "program": "${workspaceFolder}/zig-out/bin/actor_test/actor_test",
       "preLaunchTask": "build",

@@ -3,7 +3,8 @@ const std = @import("std");
 const stbi = @import("zstbi");
 const gl = @import("zopengl").bindings;
 const zmath = @import("zmath");
-const freetype = @import("freetype");
+
+pub const stb_tt = @import("stb_truetype");
 
 const common = @import("./common.zig");
 const textures = @import("./textures.zig");
@@ -566,7 +567,8 @@ pub const ShapeBatchQueue = struct {
 };
 
 pub const TextPixelShader: shaders.ShaderCode =
-    \\ #version 330 core
+    \\ #version 300 es
+    \\ precision mediump float;
     \\ in vec2 Texcoord; // Received from vertex shader
     \\ uniform sampler2D tex; // Texture sampler
     \\ out vec4 fragColor;
@@ -574,6 +576,7 @@ pub const TextPixelShader: shaders.ShaderCode =
     \\   fragColor = vec4(1.0, 1.0, 1.0, texture(tex, Texcoord).r); 
     \\ }
 ;
+
 pub const Character = struct {
     coords: RectF,
     size: Vec2I,
@@ -581,90 +584,108 @@ pub const Character = struct {
     advance: u32
 };
 
-
 pub const TextRenderer = struct {
     characters: std.AutoHashMap(u32, Character),
     tex: Texture,
     spriteBatch: SpriteBatchQueue,
     maxY: i32,
-    texShader: Shader,
+    texShader: *Shader,
     alloc: std.mem.Allocator,
 
-    pub fn init(fontFace: [:0]const u8, alloc: std.mem.Allocator) !TextRenderer {
+    pub fn init(fontData: []const u8, fontSize: f32, alloc: std.mem.Allocator) !TextRenderer {
         var chars = std.AutoHashMap(u32, Character).init(alloc);
-        var texShader = try shaders.Shader.init(
+        const texShader = try alloc.create(Shader);
+        texShader.* = try shaders.Shader.init(
             &shaders.TexVertexShader,
             &TextPixelShader
         );
 
-        const spriteBatch = try SpriteBatchQueue.init(alloc, &texShader);
+        const spriteBatch = try SpriteBatchQueue.init(alloc, texShader);
 
-        // Test font loading.
-        const lib = try freetype.Library.init();
-        defer lib.deinit();
-
-        const face = try lib.createFace(fontFace, 0);
-        try face.setCharSize(60 * 48, 0, 50, 0);
-        // Generate a buffer for multiple glyphs
-        const GlyphBufferWidth = 512;
-        const GlyphBufferHeight = 512;
-        var glyphBuffer = try alloc.alloc(u8, GlyphBufferWidth*GlyphBufferHeight);
+        // Pack font using STB_TrueType
+        var pack_context = stb_tt.c.stbtt_pack_context{};
+        const GlyphBufferWidth = 2048;
+        const GlyphBufferHeight = 1024;
+        const glyphBuffer = try alloc.alloc(u8, GlyphBufferWidth * GlyphBufferHeight);
         defer alloc.free(glyphBuffer);
+        @memset(glyphBuffer, 0); // Initialize to black
+        
+        // Pack ASCII printable characters (32-126)
+        const num_chars = 126 - 32;
+        const packed_chars = try alloc.alloc(stb_tt.c.stbtt_packedchar, num_chars);
+        defer alloc.free(packed_chars);
 
-        var currY: usize = 0;
-        var currLineMaxY: usize = 0;
-        var currLineX: usize = 0;
+        _ = stb_tt.c.stbtt_PackBegin(&pack_context, glyphBuffer.ptr, GlyphBufferWidth, GlyphBufferHeight, 0, 1, null);
+        _ = stb_tt.c.stbtt_PackFontRange(&pack_context, fontData.ptr, 0, fontSize, 32, num_chars, packed_chars.ptr);
+        stb_tt.c.stbtt_PackEnd(&pack_context);
+
+        // Get font metrics for baseline calculation
+        var font_info: stb_tt.c.stbtt_fontinfo = undefined;
+        _ = stb_tt.c.stbtt_InitFont(&font_info, fontData.ptr, 0);
+        
+        var ascent: i32 = undefined;
+        var descent: i32 = undefined;
+        var line_gap: i32 = undefined;
+        stb_tt.c.stbtt_GetFontVMetrics(&font_info, &ascent, &descent, &line_gap);
+        
+        const scale = stb_tt.c.stbtt_ScaleForPixelHeight(&font_info, fontSize);
+        const scaled_ascent = @as(i32, @intFromFloat(scale * @as(f32, @floatFromInt(ascent))));
+        
         var maxY: i32 = 0;
 
-        for(0x20..128) |c| {
+        // Convert packed characters to our Character format
+        for (packed_chars, 0..) |packed_char, i| {
+            const char_code: u32 = 32 + @as(u32, @intCast(i));
             
-            try face.loadChar(@intCast(c), .{ .render = true });
-            const glyph = face.glyph();
-            const bitmap = glyph.bitmap();
-            const bw = bitmap.width();
-            const bh = bitmap.rows();
-
-            if(bitmap.buffer() == null) {
-                //std.debug.print("Skipping char {}\n", .{c});
+            // Skip characters with no bitmap (like space)
+            if (packed_char.x0 == packed_char.x1 or packed_char.y0 == packed_char.y1) {
+                // Still add space character with advance but no visual
+                if (char_code == 32) { // Space character
+                    try chars.put(char_code, Character{
+                        .coords = RectF.fromCoords(0, 0, 0, 0, GlyphBufferWidth, GlyphBufferHeight),
+                        .size = .{ .x = 0, .y = 0 },
+                        .bearing = .{ .x = 0, .y = 0 },
+                        .advance = @as(u32, @intFromFloat(packed_char.xadvance)),
+                    });
+                }
                 continue;
             }
-            const buffer = bitmap.buffer().?;
-
-            // Check to move glyph to next line
-            if(currLineX + bw > GlyphBufferWidth) {
-                currLineX = 0;
-                currY += currLineMaxY;
-                currLineMaxY = 0;
-            }
-
-            for(0..bh) |y| {
-                for(0..bw) |x| {
-                    glyphBuffer[(currY+y)*GlyphBufferWidth+currLineX+x] = buffer[y*bw+x];
-                }
-            }
-
-            try chars.put(@intCast(c), .{
-                .coords = RectF.fromCoords(
-                    @intCast(currLineX), 
-                    @intCast(currY), 
-                    @intCast(bw), 
-                    @intCast(bh), 
-                    GlyphBufferWidth, GlyphBufferHeight),
-                .size = .{ .x = @intCast(bw), .y = @intCast(bh) },
-                .bearing = .{ .x = glyph.bitmapLeft(), .y = glyph.bitmapTop() },
-                .advance = @intCast(glyph.advance().x)
+            
+            const char_width = packed_char.x1 - packed_char.x0;
+            const char_height = packed_char.y1 - packed_char.y0;
+            
+            // Convert STB's coordinates to your RectF format
+            const coords = RectF.fromCoords(
+                @intCast(packed_char.x0),
+                @intCast(packed_char.y0),
+                @intCast(char_width),
+                @intCast(char_height),
+                GlyphBufferWidth,
+                GlyphBufferHeight
+            );
+            
+            // STB gives us offset from baseline, convert to your bearing format
+            // Note: STB's yoff is negative for characters that extend above baseline
+            const bearing_x = @as(i32, @intFromFloat(packed_char.xoff));
+            const bearing_y = @as(i32, @intFromFloat(-packed_char.yoff)); // Flip Y coordinate
+            
+            try chars.put(char_code, Character{
+                .coords = coords,
+                .size = .{ .x = char_width, .y = char_height },
+                .bearing = .{ .x = bearing_x, .y = bearing_y },
+                .advance = @as(u32, @intFromFloat(packed_char.xadvance)),
             });
-
-            if(bitmap.rows() > currLineMaxY) {
-                currLineMaxY = bitmap.rows();
-            }
-
-            maxY = @max(glyph.bitmapTop(), maxY);
-
-            currLineX += bitmap.width();
+            
+            // Track max Y for baseline calculations
+            maxY = @max(maxY, bearing_y);
+        }
+        
+        // If maxY is 0, use the font's ascent
+        if (maxY == 0) {
+            maxY = scaled_ascent;
         }
 
-        // generate texture
+        // Generate OpenGL texture
         var charTex: c_uint = undefined;
         gl.genTextures(1, &charTex);
         gl.bindTexture(gl.TEXTURE_2D, charTex);
@@ -679,56 +700,104 @@ pub const TextRenderer = struct {
             gl.UNSIGNED_BYTE,
             @ptrCast(glyphBuffer)
         );
+        
+        // Set texture parameters for crisp text rendering
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-        return .{ 
+        return TextRenderer{ 
             .alloc = alloc,
             .characters = chars,
             .spriteBatch = spriteBatch,
-            .tex = .{ 
+            .tex = Texture{ 
                 .texture = charTex, 
-                .size = .{ 
+                .size = Vec2U{ 
                     .x = @intCast(GlyphBufferWidth), 
                     .y = @intCast(GlyphBufferHeight)
                 },
-                .src = . { .l = 0, .t = 0, .r = 1, .b = 1 },
+                .src = RectF{ .l = 0, .t = 0, .r = 1, .b = 1 },
             },
             .texShader = texShader,
             .maxY = maxY,
         };
+    }
 
+    // Alternative init function that loads from file path (for non-WASM)
+    pub fn initFromFile(fontPath: []const u8, fontSize: f32, alloc: std.mem.Allocator) !TextRenderer {
+        const fontData = try std.fs.cwd().readFileAlloc(alloc, fontPath, std.math.maxInt(usize));
+        defer alloc.free(fontData);
+        
+        return try init(fontData, fontSize, alloc);
+    }
+    
+    // Alternative init function for embedded fonts (WASM-friendly)
+    pub fn initFromEmbedded(comptime fontPath: []const u8, fontSize: f32, alloc: std.mem.Allocator) !TextRenderer {
+        const fontData = @embedFile(fontPath);
+        return try init(fontData, fontSize, alloc);
     }
 
     pub fn deinit(self: *TextRenderer) void {
         self.characters.deinit();
+        gl.deleteTextures(1, &self.tex.texture);
+        self.spriteBatch.deinit();
+        self.texShader.deinit();
     }
 
     pub fn drawString(self: *TextRenderer, text: []const u8, pos: Vec2I) Vec2I {
         var currX: i32 = pos.x;
-
         const posY = pos.y + self.maxY;
 
         var drawSize: Vec2I = .{ .x = 0, .y = 0 };
+        
         for(text) |c| {
             const charDataPtr = self.characters.get(@intCast(c));
             if(charDataPtr == null) continue;
 
             const charData = charDataPtr.?;
-
-            self.spriteBatch.draw(
-                &self.tex, 
-                RectF.fromPosSize(currX, posY - charData.bearing.y, charData.size.x, charData.size.y), 
-                charData.coords,
-                .none);
-            const adv: i32 = @intCast(charData.advance/64);
-            currX += adv;
-            drawSize.x += adv;
+            
+            // Only draw if character has visual representation
+            if (charData.size.x > 0 and charData.size.y > 0) {
+                self.spriteBatch.draw(
+                    &self.tex, 
+                    RectF.fromPosSize(
+                        currX + charData.bearing.x, 
+                        posY - charData.bearing.y, 
+                        charData.size.x, 
+                        charData.size.y
+                    ), 
+                    charData.coords,
+                    .none
+                );
+            }
+            
+            currX += @intCast(charData.advance);
+            drawSize.x += @intCast(charData.advance);
             drawSize.y = @max(drawSize.y, charData.size.y);
         }
 
         return drawSize;
     }
-
+    
+    // Helper function to measure text without drawing
+    pub fn measureString(self: *TextRenderer, text: []const u8) Vec2I {
+        var width: i32 = 0;
+        var height: i32 = 0;
+        
+        for(text) |c| {
+            const charDataPtr = self.characters.get(@intCast(c));
+            if(charDataPtr == null) continue;
+            
+            const charData = charDataPtr.?;
+            width += @intCast(charData.advance);
+            height = @max(height, charData.size.y);
+        }
+        
+        return Vec2I{ .x = width, .y = height };
+    }
 };
+
 
 pub const RendererOptions = struct {
     numSpriteTextures: u8 = 1,
@@ -787,7 +856,7 @@ pub fn Renderer(opts: RendererOptions) type {
             if(opts.textRenderering) {
                 std.log.info("Setting up text renderering.\n", .{});
                 std.debug.assert(initOpts.fontFace != null);
-                rend.text = try TextRenderer.init(initOpts.fontFace.?, alloc);
+                rend.text = try TextRenderer.initFromFile(initOpts.fontFace.?, 32.0, alloc);
             }
 
             // set texture options
