@@ -522,7 +522,7 @@ pub const ShapeBatchQueue = struct {
         gl.useProgram(self.shader.program);
         gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&self.mvpArr[0]));
 
-        gl.disable(gl.TEXTURE_2D);
+        //gl.disable(gl.TEXTURE_2D);
 
         gl.bindVertexArray(self.vao);
         gl.enableVertexAttribArray(self.attrCoord);
@@ -573,7 +573,7 @@ pub const TextPixelShader: shaders.ShaderCode =
     \\ uniform sampler2D tex; // Texture sampler
     \\ out vec4 fragColor;
     \\ void main() {
-    \\   fragColor = vec4(1.0, 1.0, 1.0, texture(tex, Texcoord).r); 
+    \\   fragColor = vec4(1.0, 1.0, 1.0, texture(tex, Texcoord).a); 
     \\ }
 ;
 
@@ -692,11 +692,11 @@ pub const TextRenderer = struct {
         gl.texImage2D(
             gl.TEXTURE_2D,
             0,
-            gl.RED,
+            gl.ALPHA,
             @intCast(GlyphBufferWidth),
             @intCast(GlyphBufferHeight),
             0,
-            gl.RED,
+            gl.ALPHA,
             gl.UNSIGNED_BYTE,
             @ptrCast(glyphBuffer)
         );

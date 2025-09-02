@@ -249,6 +249,10 @@ fn buildEngine(
     const stbtt = b.addModule("stb_truetype", .{ .root_source_file = b.path("libs/stb_truetype/stb_truetype.zig") });
     stbtt.addCSourceFile(.{ .file = b.path("libs/stb_truetype/stb_truetype.c") });
     stbtt.addIncludePath(b.path("libs/stb_truetype"));
+    // Add Emscripten system includes for web builds
+    if (target.result.os.tag == .emscripten) {
+        stbtt.addIncludePath(.{ .cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include" });
+    }
     pixeng.addImport("stb_truetype", stbtt);
 
     // Install the engine library
