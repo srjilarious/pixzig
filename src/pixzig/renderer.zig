@@ -1,5 +1,6 @@
 // zig fmt: off
 const std = @import("std");
+const builtin = @import("builtin");
 const stbi = @import("zstbi");
 const gl = @import("zopengl").bindings;
 const zmath = @import("zmath");
@@ -566,7 +567,18 @@ pub const ShapeBatchQueue = struct {
     }
 };
 
-pub const TextPixelShader: shaders.ShaderCode =
+pub const TextPixelShader_Desktop: shaders.ShaderCode =
+    \\ #version 300 es
+    \\ precision mediump float;
+    \\ in vec2 Texcoord; // Received from vertex shader
+    \\ uniform sampler2D tex; // Texture sampler
+    \\ out vec4 fragColor;
+    \\ void main() {
+    \\   fragColor = vec4(1.0, 1.0, 1.0, texture(tex, Texcoord).r); 
+    \\ }
+;
+
+pub const TextPixelShader_Web: shaders.ShaderCode =
     \\ #version 300 es
     \\ precision mediump float;
     \\ in vec2 Texcoord; // Received from vertex shader
@@ -595,10 +607,19 @@ pub const TextRenderer = struct {
     pub fn init(fontData: []const u8, fontSize: f32, alloc: std.mem.Allocator) !TextRenderer {
         var chars = std.AutoHashMap(u32, Character).init(alloc);
         const texShader = try alloc.create(Shader);
-        texShader.* = try shaders.Shader.init(
-            &shaders.TexVertexShader,
-            &TextPixelShader
-        );
+
+        if (builtin.os.tag == .emscripten) {
+            texShader.* = try shaders.Shader.init(
+                &shaders.TexVertexShader,
+                &TextPixelShader_Web
+            );
+        }
+        else {
+            texShader.* = try shaders.Shader.init(
+                &shaders.TexVertexShader,
+                &TextPixelShader_Desktop
+            );
+        }
 
         const spriteBatch = try SpriteBatchQueue.init(alloc, texShader);
 
@@ -689,14 +710,17 @@ pub const TextRenderer = struct {
         var charTex: c_uint = undefined;
         gl.genTextures(1, &charTex);
         gl.bindTexture(gl.TEXTURE_2D, charTex);
+
+        const format = if (builtin.os.tag == .emscripten) gl.ALPHA else gl.RED;
+
         gl.texImage2D(
             gl.TEXTURE_2D,
             0,
-            gl.ALPHA,
+            format,
             @intCast(GlyphBufferWidth),
             @intCast(GlyphBufferHeight),
             0,
-            gl.ALPHA,
+            format,
             gl.UNSIGNED_BYTE,
             @ptrCast(glyphBuffer)
         );
