@@ -5,12 +5,14 @@
     .paths = .{"src"},
     .dependencies = .{
         .testz = .{
-            // .url = "https://github.com/srjilarious/testz/archive/49528d2.tar.gz",
-            // .hash = "12200811a46177bab3a72c34cd184d715133751a1c2b447caf61f7f6652e552f3dcb",
-            .path = "../testz",
+            .url = "https://github.com/srjilarious/testz/archive/refs/tags/v0.6.1.tar.gz",
+            .hash = "testz-0.6.1-abaPyQtkCAAghoY_EDIMufyF8KnRVrtTP0pThw3wVLaA",
+            //.path = "../testz",
         },
         .zargunaught = .{
-            .path = "../zargunaught",
+            .url = "https://github.com/srjilarious/zargunaught/archive/refs/tags/v0.6.1.tar.gz",
+            .hash = "zargunaught-0.6.1-aoeNI3HYAADx21bVdg26S1NSvQmFW3_FWmtEexscYm1x",
+            //.path = "../zargunaught",
         },
         // .freetype = .{
         //     .path = "libs/freetype",
