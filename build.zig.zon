@@ -5,14 +5,14 @@
     .paths = .{"src"},
     .dependencies = .{
         .testz = .{
-            .url = "https://github.com/srjilarious/testz/archive/refs/tags/v0.6.1.tar.gz",
-            .hash = "testz-0.6.1-abaPyQtkCAAghoY_EDIMufyF8KnRVrtTP0pThw3wVLaA",
-            //.path = "../testz",
+            // .url = "https://github.com/srjilarious/testz/archive/refs/tags/v0.6.1.tar.gz",
+            // .hash = "testz-0.6.1-abaPyQtkCAAghoY_EDIMufyF8KnRVrtTP0pThw3wVLaA",
+            .path = "../testz",
         },
         .zargunaught = .{
-            .url = "https://github.com/srjilarious/zargunaught/archive/refs/tags/v0.6.1.tar.gz",
-            .hash = "zargunaught-0.6.1-aoeNI3HYAADx21bVdg26S1NSvQmFW3_FWmtEexscYm1x",
-            //.path = "../zargunaught",
+            // .url = "https://github.com/srjilarious/zargunaught/archive/refs/tags/v0.6.1.tar.gz",
+            // .hash = "zargunaught-0.6.1-aoeNI3HYAADx21bVdg26S1NSvQmFW3_FWmtEexscYm1x",
+            .path = "../zargunaught",
         },
         // .freetype = .{
         //     .path = "libs/freetype",
@@ -22,37 +22,37 @@
         //     .hash = "12209b2055d213076fa0476de11c5eae1ad5b6fb91789e6bf218686b8f5f4a4114de",
         // },
         // Using a random commit with a fix for latest zig version 0.14.0-dev.2596
-        .ziglua = .{
-            .path = "libs/ziglua",
-            // .url = "https://github.com/natecraddock/ziglua/archive/2233e8f0408e4683ffd2cb2ed4b9727b84ac88f7.tar.gz",
-            // .hash = "122076d9306fd9a873c894246b315eb9ddb846148f22f07a148f853e5d6291425ff6",
+        // .ziglua = .{
+        //     .path = "libs/ziglua",
+        //     // .url = "https://github.com/natecraddock/ziglua/archive/2233e8f0408e4683ffd2cb2ed4b9727b84ac88f7.tar.gz",
+        //     // .hash = "122076d9306fd9a873c894246b315eb9ddb846148f22f07a148f853e5d6291425ff6",
 
-        },
+        // },
         .zopengl = .{
-            .url = "git+https://github.com/zig-gamedev/zopengl.git#d264cab3c4dd3734a79b102b912880a497427133",
-            .hash = "zopengl-0.6.0-dev-5-tnz5dlCADYpffQdOFMtwLbB-w7caLobHCoUg_uCdGU",
+            .url = "git+https://github.com/zig-gamedev/zopengl.git#33ae578d91692c814e7d6b4b42573142475f68d0",
+            .hash = "zopengl-0.6.0-dev-5-tnz7Y8CQCW_JRgxPCM4ETsKGOGHddqw5y1XaXhrsb4",
         },
         // .zmath = .{
         //     .url = "https://github.com/zig-gamedev/zmath/archive/24cdd20f9da09bd1ce7b552907eeaba9bafea59d.tar.gz",
         //     .hash = "1220081d55b58b968d953db1afc2fb01b2f5733929144e69522461ce25fa6450d84e",
         // },
         .zmath = .{
-            .url = "git+https://github.com/zig-gamedev/zmath.git#6a0747fe6834e58793500e05953c4c6ca045d3e1",
-            .hash = "zmath-0.11.0-dev-wjwivTArAwDIkHSuSiU3KuBvxh7igjJjJMqYRfy3hihO",
+            .url = "git+https://github.com/zig-gamedev/zmath.git#3a5955b2b72cd081563fbb084eff05bffd1e3fbb",
+            .hash = "zmath-0.11.0-dev-wjwivdMsAwD-xaLj76YHUq3t9JDH-X16xuMTmnDzqbu2",
         },
         .zglfw = .{
-            .url = "git+https://github.com/zig-gamedev/zglfw.git#c337cb3d3f984468ea7a386335937a5d555fc024",
-            .hash = "zglfw-0.10.0-dev-zgVDNMacIQA-k7kNSfwUc9Lfzx-bb_wklVm25K-p8Tr7",
+            .url = "git+https://github.com/zig-gamedev/zglfw.git#feeeff9386dd44ba2c18488113023865c41b80a4",
+            .hash = "zglfw-0.10.0-dev-zgVDNLyhIQCZR_rbIf7hnCKuifzcmPOLOQhd_hrqq8cl",
         },
         .zstbi = .{
-            .url = "https://github.com/zig-gamedev/zstbi/archive/094c4bba5cdbec167d3f6aaa98cccccd5c99145f.tar.gz",
-            .hash = "zstbi-0.11.0-dev-L0Ea_-eVBwCl8RYA98PhLDw3Fhw5k7FJOHSMDKWDOvqx",
+            .url = "git+https://github.com/zig-gamedev/zstbi.git#2c4b3100ccb7aed90ecc9439030899764e2a8d47",
+            .hash = "zstbi-0.11.0-dev-L0Ea_yaWBwAHwFoCuyjkFyaiSsbjt4UOrkntR0c_nmzz",
         },
-        .zgui = .{
-            .path = "libs/zgui",
-            // .url = "https://github.com/zig-gamedev/zgui/archive/c16629e67e7bc1bca9a5c67d5123874c75f5374d.tar.gz",
-            // .hash = "12202063c813c1b95affa57d83a6a4817d9a4114bd9db052f87740f81b1843ceca09",
-        },
+        // .zgui = .{
+        //     .path = "libs/zgui",
+        //     // .url = "https://github.com/zig-gamedev/zgui/archive/c16629e67e7bc1bca9a5c67d5123874c75f5374d.tar.gz",
+        //     // .hash = "12202063c813c1b95affa57d83a6a4817d9a4114bd9db052f87740f81b1843ceca09",
+        // },
         // .zaudio = .{ .path = "libs/zig-gamedev/libs/zaudio" },
         .zflecs = .{
             .path = "libs/zflecs",

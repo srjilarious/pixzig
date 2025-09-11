@@ -15,11 +15,12 @@ fn addArchIncludes(b: *std.Build, target: std.Build.ResolvedTarget, optimize: st
             const cache_include = std.fs.path.join(b.allocator, &.{ b.sysroot.?, "include" }) catch @panic("Out of memory");
             defer b.allocator.free(cache_include);
 
-            var dir = std.fs.openDirAbsolute(cache_include, std.fs.Dir.OpenDirOptions{ .access_sub_paths = true, .no_follow = true }) catch {
-                @panic("No emscripten cache. Generate it!");
-            };
+            // TODO: Add this check back in.
+            // var dir = std.fs.openDirAbsolute(cache_include, std.fs.Dir.OpenDirOptions{ .access_sub_paths = true, .no_follow = true }) catch {
+            //     @panic("No emscripten cache. Generate it!");
+            // };
 
-            dir.close();
+            // dir.close();
             dep.addIncludePath(.{ .cwd_relative = cache_include });
         },
         else => {},
@@ -76,9 +77,9 @@ pub fn build(b: *std.Build) void {
             "mario_grassish2.png",
         } },
         .{ .name = "grid_render", .path = "examples/grid_render.zig", .assets = &.{} },
-        .{ .name = "console_test", .path = "examples/console_test.zig", .assets = &.{
-            "Roboto-Medium.ttf",
-        } },
+        // .{ .name = "console_test", .path = "examples/console_test.zig", .assets = &.{
+        //     "Roboto-Medium.ttf",
+        // } },
         .{ .name = "text_rendering", .path = "examples/text_rendering.zig", .assets = &.{
             "Roboto-Medium.ttf",
         } },
@@ -162,9 +163,10 @@ fn buildEngine(
     // Create the engine library
     const engine_lib = blk: {
         if (target.result.os.tag != .emscripten) {
-            const lib = b.addStaticLibrary(.{
+            const lib = b.addLibrary(.{
                 .name = "pixzig",
                 .root_module = pixeng,
+                .linkage = .static,
             });
             //engine_lib.root_module.strip = false;
             _ = b.addInstallArtifact(lib, .{});
@@ -172,9 +174,7 @@ fn buildEngine(
         } else {
             const obj = b.addObject(.{
                 .name = "pixzig_obj",
-                .root_source_file = b.path("src/pixzig/pixzig.zig"),
-                .target = target,
-                .optimize = optimize,
+                .root_module = pixeng,
             });
             const installObjStep = b.addInstallFile(obj.getEmittedBin(), "web/pixzig.o");
             b.getInstallStep().dependOn(&installObjStep.step);
@@ -219,27 +219,27 @@ fn buildEngine(
     pixeng.addImport("zmath", math_mod);
 
     // GUI
-    const zgui = b.dependency("zgui", .{
-        .target = target,
-        .backend = .glfw_opengl3,
-    });
-    const zgui_mod = zgui.module("root");
-    pixeng.addImport("zgui", zgui_mod);
-    const gui_lib = zgui.artifact("imgui");
-    addArchIncludes(b, target, optimize, gui_lib) catch unreachable;
-    engine_lib.linkLibrary(gui_lib);
+    // const zgui = b.dependency("zgui", .{
+    //     .target = target,
+    //     .backend = .glfw_opengl3,
+    // });
+    // const zgui_mod = zgui.module("root");
+    // pixeng.addImport("zgui", zgui_mod);
+    // const gui_lib = zgui.artifact("imgui");
+    // addArchIncludes(b, target, optimize, gui_lib) catch unreachable;
+    // engine_lib.linkLibrary(gui_lib);
 
     // Lua
-    const ziglua = b.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
-    ziglua.module("ziglua").addIncludePath(.{ .cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include" });
-    ziglua.module("ziglua-c").addIncludePath(.{ .cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include" });
-    const ziglua_mod = ziglua.module("ziglua");
-    const ziglua_c_mod = ziglua.module("ziglua-c");
-    pixeng.addImport("ziglua", ziglua_mod);
-    pixeng.addImport("ziglua-c", ziglua_c_mod);
-    const lua_lib = ziglua.artifact("lua");
-    addArchIncludes(b, target, optimize, lua_lib) catch unreachable;
-    engine_lib.linkLibrary(lua_lib);
+    // const ziglua = b.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
+    // ziglua.module("ziglua").addIncludePath(.{ .cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include" });
+    // ziglua.module("ziglua-c").addIncludePath(.{ .cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include" });
+    // const ziglua_mod = ziglua.module("ziglua");
+    // const ziglua_c_mod = ziglua.module("ziglua-c");
+    // pixeng.addImport("ziglua", ziglua_mod);
+    // pixeng.addImport("ziglua-c", ziglua_c_mod);
+    // const lua_lib = ziglua.artifact("lua");
+    // addArchIncludes(b, target, optimize, lua_lib) catch unreachable;
+    // engine_lib.linkLibrary(lua_lib);
 
     // XML for tilemap loading
     const xml = b.addModule("xml", .{ .root_source_file = b.path("libs/xml.zig") });
@@ -303,11 +303,14 @@ pub fn buildExample(
     exe_mod: *std.Build.Module,
     assets: []const []const u8,
 ) *std.Build.Step.Compile {
+    _ = optimize;
+
     const exe = blk: {
         if (target.result.os.tag == .emscripten) {
-            break :blk b.addStaticLibrary(.{
+            break :blk b.addLibrary(.{
                 .name = name,
                 .root_module = exe_mod,
+                .linkage = .static,
             });
         } else {
             break :blk b.addExecutable(.{
@@ -368,17 +371,17 @@ pub fn buildExample(
             );
             emcc_command.addArg(obj_path);
 
-            const zgui = pixeng_mod.owner.dependency("zgui", .{
-                .target = target,
-                .backend = .glfw_opengl3,
-            });
-            const gui_dep = zgui.artifact("imgui");
-            emcc_command.addFileArg(gui_dep.getEmittedBin());
+            // const zgui = pixeng_mod.owner.dependency("zgui", .{
+            //     .target = target,
+            //     .backend = .glfw_opengl3,
+            // });
+            // const gui_dep = zgui.artifact("imgui");
+            // emcc_command.addFileArg(gui_dep.getEmittedBin());
 
             // Lua
-            const ziglua = pixeng_mod.owner.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
-            const lua_dep = ziglua.artifact("lua");
-            emcc_command.addFileArg(lua_dep.getEmittedBin());
+            // const ziglua = pixeng_mod.owner.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
+            // const lua_dep = ziglua.artifact("lua");
+            // emcc_command.addFileArg(lua_dep.getEmittedBin());
 
             // emcc_command.addFileArg(.getEmittedBin());
             emcc_command.step.dependOn(&exe.step);

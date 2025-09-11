@@ -80,8 +80,9 @@ pub fn build(b: *std.Build) void {
     };
 
     const imgui = if (options.shared) blk: {
-        const lib = b.addSharedLibrary(.{
+        const lib = b.addLibrary(.{
             .name = "imgui",
+            .linkage = .dynamic,
             .target = target,
             .optimize = optimize,
         });
@@ -97,8 +98,9 @@ pub fn build(b: *std.Build) void {
         }
 
         break :blk lib;
-    } else b.addStaticLibrary(.{
+    } else b.addLibrary(.{
         .name = "imgui",
+        .linkage = .static,
         .target = target,
         .optimize = optimize,
     });

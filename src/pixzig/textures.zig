@@ -104,26 +104,26 @@ pub fn drawBufferFromChars(buffer: []u8, buffSize: Vec2U, chars: []const u8, cha
 pub const TextureManager = struct {
     textures: std.ArrayList(TextureImage),
     atlas: std.StringHashMap(Texture),
-    allocator: std.mem.Allocator,
+    alloc: std.mem.Allocator,
 
     pub fn init(alloc: std.mem.Allocator) TextureManager{
         return .{ 
-            .textures = std.ArrayList(TextureImage).init(alloc),
+            .textures = .{},
             .atlas = std.StringHashMap(Texture).init(alloc),
-            .allocator = alloc 
+            .alloc = alloc 
         };
     }
 
     pub fn destroy(self: *TextureManager) void {
         for (self.textures.items) |t| {
             gl.deleteTextures(1, &t.texture);
-            self.allocator.free(t.name.?);
+            self.alloc.free(t.name.?);
         }
-        self.textures.clearAndFree();
+        self.textures.clearAndFree(self.alloc);
 
         var atlasKeys = self.atlas.keyIterator();
         while(atlasKeys.next()) |key| {
-            self.allocator.free(key.*);
+            self.alloc.free(key.*);
         }
 
         self.atlas.deinit();
@@ -198,13 +198,13 @@ pub const TextureManager = struct {
 
         const baseName = utils.baseNameFromPath(name);
 
-        try self.textures.append(.{
+        try self.textures.append(self.alloc, .{
             .texture = texture,
             .size = .{ .x = @intCast(width), .y = @intCast(height) },
-            .name = try self.allocator.dupe(u8, baseName),
+            .name = try self.alloc.dupe(u8, baseName),
         });
 
-        try self.atlas.put(try self.allocator.dupe(u8, baseName), .{
+        try self.atlas.put(try self.alloc.dupe(u8, baseName), .{
             .texture = texture,
             .size = .{ .x = @intCast(width), .y = @intCast(height) },
             .src = .{ .t = 0, .l = 0, .b = 1, .r = 1}
@@ -220,12 +220,12 @@ pub const TextureManager = struct {
         std.log.info("Loading image '{s}' from '{s}'\n", .{name, file_path});
 
         // Convert our string slice to a null terminated string
-        var nt_str = self.allocator.alloc(u8, file_path.len + 1) catch |err| {
+        var nt_str = self.alloc.alloc(u8, file_path.len + 1) catch |err| {
             std.log.err("Caught error! {}", .{err});
             return err;
         };
 
-        defer self.allocator.free(nt_str);
+        defer self.alloc.free(nt_str);
 
         @memcpy(nt_str[0..file_path.len], file_path);
         nt_str[file_path.len] = 0;
@@ -242,22 +242,21 @@ pub const TextureManager = struct {
 
     pub fn loadAtlas(self: *TextureManager, baseName: []const u8) !usize 
     {
-        const imageName = try utils.addExtension(self.allocator, baseName, ".png");
-        defer self.allocator.free(imageName);
+        const imageName = try utils.addExtension(self.alloc, baseName, ".png");
+        defer self.alloc.free(imageName);
         const texImage = try self.loadTexture(baseName, imageName);
 
-        const jsonName = try utils.addExtension(self.allocator, baseName, ".json");
-        defer self.allocator.free(jsonName);
-        const f = try std.fs.cwd().openFile(jsonName, .{});
-        defer f.close();
+        const jsonName = try utils.addExtension(self.alloc, baseName, ".json");
+        defer self.alloc.free(jsonName);
 
-        var buffered = std.io.bufferedReader(f.reader());
-        var reader = std.json.reader(self.allocator, buffered.reader());
-        defer reader.deinit();
-        const parsed = try std.json.parseFromTokenSource(
-            SpackFile, 
-            self.allocator, 
-            &reader, 
+        // Read entire file into memory
+        const file_contents = try std.fs.cwd().readFileAlloc(self.alloc, jsonName, std.math.maxInt(usize));
+        defer self.alloc.free(file_contents);
+
+        const parsed = try std.json.parseFromSlice(
+            SpackFile,
+            self.alloc,
+            file_contents,
             .{}
         );
         defer parsed.deinit();
@@ -269,7 +268,7 @@ pub const TextureManager = struct {
         for(spack.frames) |frame| {
             
             try self.atlas.put(
-                try self.allocator.dupe(u8, frame.name), 
+                try self.alloc.dupe(u8, frame.name), 
                 .{
                     .texture = texImage.texture,
                     .size = frame.sizePx,
@@ -291,7 +290,7 @@ pub const TextureManager = struct {
     }
     
     pub fn addSubTexture(self: *TextureManager, tex: *Texture, name: []const u8, coords: RectF) !*Texture {
-       try self.atlas.put(try self.allocator.dupe(u8, name), tex.sub(coords));
+       try self.atlas.put(try self.alloc.dupe(u8, name), tex.sub(coords));
        return self.atlas.getPtr(name).?;
     }
 

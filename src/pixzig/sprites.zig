@@ -135,6 +135,7 @@ pub const ActorState = struct {
 
 pub const FrameSequence = struct {
     frames: std.ArrayList(Frame),
+    alloc: std.mem.Allocator,
     mode: AnimPlayMode,
 
     pub fn initEmpty(alloc: std.mem.Allocator) !FrameSequence {
@@ -142,24 +143,26 @@ pub const FrameSequence = struct {
 
         return .{ 
             .frames = frames,
+            .alloc = alloc,
             .mode = .loop, 
         };
     }
 
     pub fn init(alloc: std.mem.Allocator, framesArr: []const Frame ) !FrameSequence {
-        var frames = std.ArrayList(Frame).init(alloc);
+        var frames: std.ArrayList(Frame) = .{};
         for(framesArr) |fr| {
-            try frames.append(fr);
+            try frames.append(alloc, fr);
         }
 
         return .{ 
             .frames = frames,
+            .alloc = alloc,
             .mode = .loop, 
         };
     }
 
     pub fn deinit(self: *FrameSequence) void {
-        self.frames.deinit();
+        self.frames.deinit(self.alloc);
     }
 
 };

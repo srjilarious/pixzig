@@ -5,8 +5,8 @@ pub const Language = lua_setup.Language;
 const Step = std.Build.Step;
 
 const lua_setup = @import("build/lua.zig");
-const luau_setup = @import("build/luau.zig");
-const luajit_setup = @import("build/luajit.zig");
+// const luau_setup = @import("build/luau.zig");
+// const luajit_setup = @import("build/luajit.zig");
 
 pub fn build(b: *Build) void {
     // Remove the default install and uninstall steps
@@ -26,6 +26,8 @@ pub fn build(b: *Build) void {
     // Zig module
     const ziglua = b.addModule("ziglua", .{
         .root_source_file = b.path("src/lib.zig"),
+        .target = target,
+        .optimize = optimize,
     });
 
     // Expose build configuration to the ziglua module
@@ -42,9 +44,9 @@ pub fn build(b: *Build) void {
     const upstream = b.dependency(@tagName(lang), .{});
 
     const lib = switch (lang) {
-        .luajit => luajit_setup.configure(b, target, optimize, upstream, shared),
-        .luau => luau_setup.configure(b, target, optimize, upstream, luau_use_4_vector),
-        else => lua_setup.configure(b, target, optimize, upstream, lang, shared),
+        // .luajit => luajit_setup.configure(b, target, optimize, upstream, shared),
+        // .luau => luau_setup.configure(b, target, optimize, upstream, luau_use_4_vector),
+        else => lua_setup.configure(b, ziglua, target, optimize, upstream, lang, shared),
     };
 
     // Expose the Lua artifact, and get an install step that header translation can refer to
@@ -87,8 +89,9 @@ pub fn build(b: *Build) void {
             const cache_include = std.fs.path.join(b.allocator, &.{ b.sysroot.?, "include" }) catch @panic("Out of memory");
             defer b.allocator.free(cache_include);
 
-            var dir = std.fs.openDirAbsolute(cache_include, std.fs.Dir.OpenDirOptions{ .access_sub_paths = true, .no_follow = true }) catch @panic("No emscripten cache. Generate it!");
-            dir.close();
+            // TODO: Add this check back in.
+            // var dir = std.fs.openDirAbsolute(cache_include, std.fs.Dir.OpenDirOptions{ .access_sub_paths = true, .no_follow = true }) catch @panic("No emscripten cache. Generate it!");
+            // dir.close();
             //lib.addIncludePath(.{ .cwd_relative = cache_include });
             c_headers.addIncludePath(.{ .cwd_relative = cache_include });
         },
@@ -110,9 +113,13 @@ pub fn build(b: *Build) void {
 
     // Tests
     const tests = b.addTest(.{
-        .root_source_file = b.path("src/tests.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.addModule("tests", .{
+            // .root_source_file = b.path("tests/tests.zig"),
+            // Use tests.zig to select which tests to run
+            .root_source_file = b.path("src/tests.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     tests.root_module.addImport("ziglua", ziglua);
 
@@ -133,9 +140,11 @@ pub fn build(b: *Build) void {
     for (examples) |example| {
         const exe = b.addExecutable(.{
             .name = example[0],
-            .root_source_file = b.path(example[1]),
-            .target = target,
-            .optimize = optimize,
+            .root_module = b.addModule(example[0], .{
+                .root_source_file = b.path(example[1]),
+                .target = target,
+                .optimize = optimize,
+            }),
         });
         exe.root_module.addImport("ziglua", ziglua);
 
@@ -153,9 +162,7 @@ pub fn build(b: *Build) void {
 
     const docs = b.addObject(.{
         .name = "ziglua",
-        .root_source_file = b.path("src/lib.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = ziglua,
     });
 
     const install_docs = b.addInstallDirectory(.{
@@ -169,9 +176,12 @@ pub fn build(b: *Build) void {
 
     // definitions example
     const def_exe = b.addExecutable(.{
-        .root_source_file = b.path("examples/define-exe.zig"),
         .name = "define-zig-types",
-        .target = target,
+        .root_module = b.addModule("define-zig-types", .{
+            .root_source_file = b.path("examples/define-exe.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     def_exe.root_module.addImport("ziglua", ziglua);
     var run_def_exe = b.addRunArtifact(def_exe);

@@ -12,7 +12,7 @@ pub const Language = enum {
     luau,
 };
 
-pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, upstream: *Build.Dependency, lang: Language, shared: bool) *Step.Compile {
+pub fn configure(b: *Build, mod: *Build.Module, target: Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, upstream: *Build.Dependency, lang: Language, shared: bool) *Step.Compile {
     const version = switch (lang) {
         .lua51 => std.SemanticVersion{ .major = 5, .minor = 1, .patch = 5 },
         .lua52 => std.SemanticVersion{ .major = 5, .minor = 2, .patch = 4 },
@@ -22,18 +22,18 @@ pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.
     };
 
     const lib = if (shared)
-        b.addSharedLibrary(.{
+        b.addLibrary(.{
             .name = "lua",
-            .target = target,
-            .optimize = optimize,
+            .linkage = .static,
             .version = version,
+            .root_module = mod,
         })
     else
-        b.addStaticLibrary(.{
+        b.addLibrary(.{
             .name = "lua",
-            .target = target,
-            .optimize = optimize,
+            .linkage = .static,
             .version = version,
+            .root_module = mod,
         });
 
     lib.addIncludePath(upstream.path("src"));
