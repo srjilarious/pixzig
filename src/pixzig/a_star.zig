@@ -80,9 +80,9 @@ pub fn AStarPathFinder(comptime CheckContext: type) type {
         pub fn init(checker: CheckContext, alloc: std.mem.Allocator, size: Vec2I) !@This() {
             if (size.x < 0 or size.y < 0) return error.NegativeBoundsGiven;
 
-            var locDataArr = LocDataArray.init(alloc);
+            var locDataArr: LocDataArray = .{};
             const amount: usize = @intCast(size.x * size.y);
-            try locDataArr.appendNTimes(LocData{}, amount);
+            try locDataArr.appendNTimes(alloc, LocData{}, amount);
             return .{
                 .locDataArr = locDataArr,
                 .size = size,
@@ -154,9 +154,9 @@ pub fn AStarPathFinder(comptime CheckContext: type) type {
 
             // Reconstruct the path from goal back to start.
             var pLoc = self.locData(goal);
-            try path.append(goal);
+            try path.append(self.alloc, goal);
             while (pLoc != null and !pLoc.?.cameFrom.equals(start)) {
-                try path.append(pLoc.?.cameFrom);
+                try path.append(self.alloc, pLoc.?.cameFrom);
                 pLoc = self.locData(pLoc.?.cameFrom);
             }
 

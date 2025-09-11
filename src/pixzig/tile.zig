@@ -77,13 +77,13 @@ pub const Tile = struct {
         } else {
             // Lazy init string/value property list.
             if (self.properties == null) {
-                self.properties = PropertyList.init(self.alloc);
+                self.properties = .{};
             }
 
             const newName = try self.alloc.dupe(u8, name);
             const newValue = try self.alloc.dupe(u8, value);
             const newProp: Property = .{ .name = newName, .value = newValue };
-            try self.properties.?.append(newProp);
+            try self.properties.?.append(self.alloc, newProp);
         }
     }
 
@@ -94,7 +94,7 @@ pub const Tile = struct {
                 self.alloc.free(prop.name);
                 self.alloc.free(prop.value);
             }
-            self.properties.?.deinit();
+            self.properties.?.deinit(self.alloc);
         }
     }
 };
@@ -160,14 +160,14 @@ pub const Object = struct {
 
                 // Lazy init string/value property list.
                 if (obj.properties == null) {
-                    obj.properties = PropertyList.init(alloc);
+                    obj.properties = .{};
                 }
 
                 const newProp: Property = .{ 
                     .name = try alloc.dupe(u8, name), 
                     .value = try alloc.dupe(u8, value), 
                 };
-                try obj.properties.?.append(newProp);
+                try obj.properties.?.append(alloc, newProp);
             }
         }
 
@@ -205,7 +205,7 @@ pub const TileSet = struct {
 
     pub fn init(alloc: std.mem.Allocator) !TileSet {
         return .{
-            .tiles = std.ArrayList(Tile).init(alloc),
+            .tiles = .{},
             .tileSize = .{ .x = 0, .y = 0 },
             .textureSize = .{ .x = 0, .y = 0 },
             .columns = 0,
@@ -215,13 +215,13 @@ pub const TileSet = struct {
     }
 
     pub fn initEmpty(alloc: std.mem.Allocator, tileSize: Vec2I, textureSize: Vec2I, tileCount: usize) !TileSet {
-        var tiles = std.ArrayList(Tile).init(alloc);
+        var tiles: std.ArrayList(Tile) = .{}; 
         const baseTile = Tile{
             .core = Clear,
             .properties = null,
             .alloc = alloc
         };
-        try tiles.appendNTimes(baseTile, tileCount);
+        try tiles.appendNTimes(alloc, baseTile, tileCount);
 
         return .{
             .tiles = tiles,
@@ -256,7 +256,7 @@ pub const TileSet = struct {
             .properties = null,
             .alloc = alloc
         };
-        try tileset.tiles.appendNTimes(baseTile, tileCount);
+        try tileset.tiles.appendNTimes(alloc, baseTile, tileCount);
 
         var children = node.elements();
         while (children.next()) |child| {
@@ -287,7 +287,7 @@ pub const TileSet = struct {
             self.tiles.items[idx].deinit();
         }
 
-        self.tiles.deinit();
+        self.tiles.deinit(self.alloc);
     }
 
     pub fn tile(self: *TileSet, idx: usize) ?*Tile {
@@ -310,8 +310,8 @@ pub const ObjectGroup = struct {
 
     pub fn init(alloc: std.mem.Allocator) !Self {
         return .{
-            .objects = std.ArrayList(Object).init(alloc),
-            .properties = PropertyList.init(alloc),
+            .objects = .{},
+            .properties = .{},
             .id = 0,
             .name = null,
             .alloc = alloc
@@ -344,12 +344,12 @@ pub const ObjectGroup = struct {
                         .value = try alloc.dupe(u8, value), 
                     };
 
-                    try layer.properties.append(newProp);
+                    try layer.properties.append(alloc, newProp);
                 }
             }
             else if(std.mem.eql(u8, elem.tag, "object")) {
                 const newObj = try Object.initFromElement(alloc, elem);
-                try layer.objects.append(newObj);
+                try layer.objects.append(alloc, newObj);
             }
         }
 
@@ -454,8 +454,8 @@ pub const TileLayer = struct {
 
     pub fn init(alloc: std.mem.Allocator) !TileLayer {
         return .{
-            .tiles = std.ArrayList(i32).init(alloc),
-            .properties = PropertyList.init(alloc),
+            .tiles = .{},
+            .properties = .{},
             .size = .{ .x = 0, .y = 0 },
             .name = null,
             .tileset = null,
@@ -466,11 +466,11 @@ pub const TileLayer = struct {
     }
 
     pub fn initEmpty(alloc: std.mem.Allocator, size: Vec2I, tileSize: Vec2I) !TileLayer {
-        var tilesArr = std.ArrayList(i32).init(alloc);
-        try tilesArr.appendNTimes(-1, @intCast(size.x*size.y));
+        var tilesArr: std.ArrayList(i32) = .{}; 
+        try tilesArr.appendNTimes(alloc, -1, @intCast(size.x*size.y));
         return .{
             .tiles = tilesArr,
-            .properties = PropertyList.init(alloc),
+            .properties = .{},
             .size = size,
             .name = null,
             .tileset = null,
@@ -498,7 +498,7 @@ pub const TileLayer = struct {
         if(!std.mem.eql(u8, encoding, "csv")) return error.UnsupportedLayerEncoding;
 
         // Resize the layer to have space for all of our tile indices.
-        try layer.tiles.resize(@intCast(layer.size.x*layer.size.y));
+        try layer.tiles.resize(alloc, @intCast(layer.size.x*layer.size.y));
 
         const tileDataVal = node.getCharData("data").?;
         var it = std.mem.tokenizeAny(u8, tileDataVal, ",\n");
@@ -524,7 +524,7 @@ pub const TileLayer = struct {
             self.name = null;
         }
 
-        self.tiles.deinit();
+        self.tiles.deinit(self.alloc);
 
         for (0..self.properties.items.len) |idx| {
             const prop = &self.properties.items[idx];
@@ -532,7 +532,7 @@ pub const TileLayer = struct {
             self.alloc.free(prop.value);
         }
 
-        self.properties.deinit();
+        self.properties.deinit(self.alloc);
 
         self.tileset = null;
     }
@@ -593,9 +593,9 @@ pub const TileMap = struct {
 
     pub fn init(alloc: std.mem.Allocator) !TileMap {
         return .{
-            .tilesets = std.ArrayList(TileSet).init(alloc),
-            .layers = std.ArrayList(TileLayer).init(alloc),
-            .objectGroups = std.ArrayList(ObjectGroup).init(alloc),
+            .tilesets = .{},
+            .layers = .{},
+            .objectGroups = .{},
             .alloc = alloc
         };
     }
@@ -623,17 +623,17 @@ pub const TileMap = struct {
                     newTileset.columns
                 });
                 
-                try map.tilesets.append(newTileset);
+                try map.tilesets.append(alloc, newTileset);
             }
             else if(std.mem.eql(u8, elem.tag, "layer")) {
                 const newLayer = try TileLayer.initFromElement(alloc, elem);
                 std.log.debug("Loaded a tile layer: '{?s}'", .{newLayer.name});
-                try map.layers.append(newLayer);
+                try map.layers.append(alloc, newLayer);
             }
             else if(std.mem.eql(u8, elem.tag, "objectgroup")) {
                 const newObjGroup = try ObjectGroup.initFromElement(alloc, elem);
                 std.log.debug("Loaded object group: '{?s}'", .{ newObjGroup.name});
-                try map.objectGroups.append(newObjGroup);
+                try map.objectGroups.append(alloc, newObjGroup);
             }
         }
 
@@ -688,13 +688,13 @@ pub const TileMap = struct {
             self.tilesets.items[idx].deinit();
         }
 
-        self.tilesets.deinit();
+        self.tilesets.deinit(self.alloc);
 
         for(0..self.layers.items.len) |idx| {
             self.layers.items[idx].deinit();
         }
 
-        self.layers.deinit();
+        self.layers.deinit(self.alloc);
     }
 };
 
@@ -711,12 +711,12 @@ const TileIndexMap = struct {
     pub fn init(alloc: std.mem.Allocator) Self {
         return .{
             .alloc = alloc,
-            .arr = std.ArrayList(KV).init(alloc)
+            .arr = .{}, 
         };
     }
 
     pub fn deinit(self: *Self) void {
-        self.arr.deinit();
+        self.arr.deinit(self.alloc);
     }
 
     pub fn getBuffIndex(self: *const Self, tileIdx: usize) ?usize {
@@ -773,7 +773,7 @@ const TileIndexMap = struct {
             return true;
         }
         else {
-            try self.arr.append(val);
+            try self.arr.append(self.alloc, val);
             return false;
         }
     }
