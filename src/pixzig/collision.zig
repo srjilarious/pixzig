@@ -9,15 +9,17 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
     return struct {
         const Self = @This();
 
-        grid: std.ArrayList([maxItemsPerCell]?T),
+        const GridList = std.ArrayList([maxItemsPerCell]?T);
+        grid: GridList,
         gridSize: Vec2U,
         gridExtent: Vec2U,
         cellSize: Vec2U,
+        alloc: std.mem.Allocator,
 
         pub fn init(alloc: std.mem.Allocator, gridSize: Vec2U, cellSize: Vec2U) !Self {
-            var grid = std.ArrayList([maxItemsPerCell]?T).init(alloc);
+            var grid: GridList = .{};
             const gridLen = gridSize.x * gridSize.y;
-            try grid.resize(gridLen);
+            try grid.resize(alloc, gridLen);
             for (0..gridLen) |idx| {
                 for (0..maxItemsPerCell) |subIdx| {
                     grid.items[idx][subIdx] = null;
@@ -29,17 +31,18 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
                 .gridSize = gridSize,
                 .gridExtent = .{ .x = gridSize.x * cellSize.x, .y = gridSize.y * cellSize.y },
                 .cellSize = cellSize,
+                .alloc = alloc,
             };
         }
 
         pub fn deinit(self: *Self) void {
-            self.grid.deinit();
+            self.grid.deinit(self.alloc);
         }
 
         pub fn resize(self: *Self, sz: Vec2U) !void {
             self.gridSize = sz;
             // TODO: Handle copying contents into resized grid.
-            try self.grid.resize(sz.x * sz.y);
+            try self.grid.resize(self.alloc, sz.x * sz.y);
         }
 
         pub fn insert(self: *Self, pixelPos: Vec2U, obj: T) !void {

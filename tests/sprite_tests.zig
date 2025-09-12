@@ -31,15 +31,10 @@ pub fn frameSequenceFileLoadTest() !void {
         \\    "states": [] 
         \\ }
     ;
-    // Create a fixed buffer stream from the string
-    var buffer_stream = std.io.fixedBufferStream(jsonStr);
-
-    // Get a reader from the stream
-    const reader = buffer_stream.reader();
 
     var seqMgr = try FrameSequenceManager.init(alloc);
     var tm = try createDummyTextureManager(alloc);
-    try seqMgr.loadSequence(reader, &tm);
+    try seqMgr.loadSequence(jsonStr, &tm);
     try testz.expectEqual(seqMgr.sequences.count(), 1);
     const seq = seqMgr.getSeq("player_right");
     try testz.expectTrue(seq != null);
@@ -70,15 +65,10 @@ pub fn actorSequenceFileLoadTest() !void {
         \\     ]
         \\ }
     ;
-    // Create a fixed buffer stream from the string
-    var buffer_stream = std.io.fixedBufferStream(jsonStr);
-
-    // Get a reader from the stream
-    const reader = buffer_stream.reader();
 
     var seqMgr = try FrameSequenceManager.init(alloc);
     var tm = try createDummyTextureManager(alloc);
-    try seqMgr.loadSequence(reader, &tm);
+    try seqMgr.loadSequence(jsonStr, &tm);
     try testz.expectEqual(seqMgr.sequences.count(), 1);
     const seq = seqMgr.getSeq("player_right");
     try testz.expectTrue(seq != null);

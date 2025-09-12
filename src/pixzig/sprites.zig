@@ -139,7 +139,7 @@ pub const FrameSequence = struct {
     mode: AnimPlayMode,
 
     pub fn initEmpty(alloc: std.mem.Allocator) !FrameSequence {
-        const frames = std.ArrayList(Frame).init(alloc);
+        const frames: std.ArrayList(Frame) = .{};
 
         return .{ 
             .frames = frames,
@@ -238,23 +238,18 @@ pub const FrameSequenceManager = struct {
 
     pub fn loadSequenceFile(self: *Self, filename: []const u8, texMgr: *TextureManager) !void {
         // Load file contents
-        const f = try std.fs.cwd().openFile(filename, .{});
-        defer f.close();
-
-        var buffered = std.io.bufferedReader(f.reader());
+        const file_contents = try std.fs.cwd().readFileAlloc(self.alloc, filename, std.math.maxInt(usize));
+        defer self.alloc.free(file_contents);
         
         // Load sequence
-        try self.loadSequence(buffered.reader(), texMgr);
+        try self.loadSequence(file_contents, texMgr);
     }
 
-    pub fn loadSequence(self: *Self, reader: anytype, texMgr: *TextureManager) !void {
-        // Parse Json into File structures
-        var jsonReader = std.json.reader(self.alloc, reader);
-        defer jsonReader.deinit();
-        const parsed = try std.json.parseFromTokenSource(
+    pub fn loadSequence(self: *Self, json_contents: []const u8, texMgr: *TextureManager) !void {
+        const parsed = try std.json.parseFromSlice(
             FrameSequenceFile, 
             self.alloc, 
-            &jsonReader, 
+            json_contents, 
             .{}
         );
         defer parsed.deinit();
@@ -271,7 +266,7 @@ pub const FrameSequenceManager = struct {
                         break :blk .none;
                     }
                 };
-                try seq.frames.append(.{
+                try seq.frames.append(self.alloc, .{
                     .tex = try texMgr.getTexture(fileFrame.name),
                     .frameTimeMs = fileFrame.ms,
                     .flip = flip,
