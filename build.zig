@@ -247,7 +247,7 @@ fn buildEngine(
 
     // STB Truetype module
     const stbtt = b.addModule("stb_truetype", .{ .root_source_file = b.path("libs/stb_truetype/stb_truetype.zig") });
-    stbtt.addCSourceFile(.{ .file = b.path("libs/stb_truetype/stb_truetype.c") });
+    stbtt.addCSourceFile(.{ .file = b.path("libs/stb_truetype/stb_truetype.c"), .flags = &.{"-fno-sanitize=undefined"} });
     stbtt.addIncludePath(b.path("libs/stb_truetype"));
     // Add Emscripten system includes for web builds
     if (target.result.os.tag == .emscripten) {

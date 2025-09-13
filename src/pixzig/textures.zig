@@ -138,8 +138,8 @@ pub const TextureManager = struct {
         mapping: []const CharToColor) !*Texture
     {
         // Generate the color buffer, mapping chars to their given colors.
-        var buffer: []u8 = try self.allocator.alloc(u8, width*height*4);
-        defer self.allocator.free(buffer);
+        var buffer: []u8 = try self.alloc.alloc(u8, width*height*4);
+        defer self.alloc.free(buffer);
 
         // Manually track the index since we need to skip newlines.
         var chrIdx: usize = 0;
