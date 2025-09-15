@@ -46,15 +46,15 @@ Then in your `build.zig` file you can use the dependency.
 pub fn build(b: *std.Build) void {
     // ... snip ...
 
-    const ziglua = b.dependency("ziglua", .{
+    const lua_dep = b.dependency("zlua", .{
         .target = target,
         .optimize = optimize,
     });
 
     // ... snip ...
 
-    // add the ziglua module and lua artifact
-    exe.root_module.addImport("ziglua", ziglua.module("ziglua"));
+    // add the zlua module and lua artifact
+    exe.root_module.addImport("zlua", lua_dep.module("zlua"));
 
 }
 ```
@@ -66,11 +66,12 @@ There are currently three additional options that can be passed to `b.dependency
 * `.lang`: Set the Lua language to build and embed. Defaults to `.lua54`. Possible values are `.lua51`, `.lua52`, `.lua53`, `.lua54`, and `luau`.
 * `.shared`: Defaults to `false` for embedding in a Zig program. Set to `true` to dynamically link the Lua source code (useful for creating shared modules).
 * `luau_use_4_vector`: defaults to false. Set to true to use 4-vectors instead of the default 3-vector in Luau.
+* `lua_user_h`: defaults to null. Provide a path to an additional header file for the Lua compilation. Must be set to to `examples/user.h` in order to run the multithreaded example.
 
 For example, here is a `b.dependency()` call that and links against a shared Lua 5.2 library:
 
 ```zig
-const ziglua = b.dependency("ziglua", .{
+const zlua = b.dependency("zlua", .{
     .target = target,
     .optimize = optimize,
     .lang = .lua52,
@@ -78,13 +79,13 @@ const ziglua = b.dependency("ziglua", .{
 });
 ``````
 
-The `ziglua` module will now be available in your code. Here is a simple example that pushes and inspects an integer on the Lua stack:
+The `zlua` module will now be available in your code. Here is a simple example that pushes and inspects an integer on the Lua stack:
 
 ```zig
 const std = @import("std");
-const ziglua = @import("ziglua");
+const zlua = @import("zlua");
 
-const Lua = ziglua.Lua;
+const Lua = zlua.Lua;
 
 pub fn main() anyerror!void {
     // Create an allocator

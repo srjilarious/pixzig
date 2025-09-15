@@ -1,6 +1,6 @@
 //! Similar to the Lua C API documentation, each function has an indicator to describe how interacts with the stack and which errors it may return.
 //!
-//! Instead of using the form `[-o, +p, x]`, Ziglua uses the words **Pops**, **Pushes**, and **Errors** for clarity.
+//! Instead of using the form `[-o, +p, x]`, Zlua uses the words **Pops**, **Pushes**, and **Errors** for clarity.
 //!
 //! * **Pops**: how many elements the function pops from the stack.
 //! * **Pushes**: how many elements the function pushes onto the stack.
@@ -76,7 +76,7 @@ pub const ArithOperator = switch (lang) {
 
 /// Type for C functions
 /// See https://www.lua.org/manual/5.4/manual.html#lua_CFunction for the protocol
-pub const CFn = *const fn (state: ?*LuaState) callconv(.C) c_int;
+pub const CFn = *const fn (state: ?*LuaState) callconv(.c) c_int;
 
 /// Operations supported by `Lua.compare()`
 pub const CompareOperator = enum(u2) {
@@ -86,13 +86,13 @@ pub const CompareOperator = enum(u2) {
 };
 
 /// Type for C userdata destructors
-pub const CUserdataDtorFn = *const fn (userdata: *anyopaque) callconv(.C) void;
+pub const CUserdataDtorFn = *const fn (userdata: *anyopaque) callconv(.c) void;
 
 /// Type for C interrupt callback
-pub const CInterruptCallbackFn = *const fn (state: ?*LuaState, gc: c_int) callconv(.C) void;
+pub const CInterruptCallbackFn = *const fn (state: ?*LuaState, gc: c_int) callconv(.c) void;
 
 /// Type for C useratom callback
-pub const CUserAtomCallbackFn = *const fn (str: [*c]const u8, len: usize) callconv(.C) i16;
+pub const CUserAtomCallbackFn = *const fn (str: [*c]const u8, len: usize) callconv(.c) i16;
 
 /// The internal Lua debug structure
 const Debug = c.lua_Debug;
@@ -302,7 +302,7 @@ pub const DebugInfo = switch (lang) {
     .luau => DebugInfoLuau,
 };
 
-/// The superset of all errors returned from ziglua
+/// The superset of all errors returned from zlua
 pub const Error = error{
     /// A generic failure (used when a function can only fail in one way)
     LuaError,
@@ -357,7 +357,7 @@ pub const FnReg = struct {
 pub const globals_index = c.LUA_GLOBALSINDEX;
 
 /// Type for debugging hook functions
-pub const CHookFn = *const fn (state: ?*LuaState, ar: ?*Debug) callconv(.C) void;
+pub const CHookFn = *const fn (state: ?*LuaState, ar: ?*Debug) callconv(.c) void;
 
 /// Specifies on which events the hook will be called
 pub const HookMask = packed struct {
@@ -401,7 +401,7 @@ pub const Integer = c.lua_Integer;
 pub const Context = isize;
 
 /// Type for continuation functions
-pub const CContFn = *const fn (state: ?*LuaState, status: c_int, ctx: Context) callconv(.C) c_int;
+pub const CContFn = *const fn (state: ?*LuaState, status: c_int, ctx: Context) callconv(.c) c_int;
 
 pub const Libs51 = packed struct {
     base: bool = false,
@@ -499,7 +499,7 @@ pub const mult_return = c.LUA_MULTRET;
 pub const Number = c.lua_Number;
 
 /// The type of the reader function used by `Lua.load()`
-pub const CReaderFn = *const fn (state: ?*LuaState, data: ?*anyopaque, size: [*c]usize) callconv(.C) [*c]const u8;
+pub const CReaderFn = *const fn (state: ?*LuaState, data: ?*anyopaque, size: [*c]usize) callconv(.c) [*c]const u8;
 
 /// The possible status of a call to `Lua.resumeThread`
 pub const ResumeStatus = enum(u1) {
@@ -563,12 +563,12 @@ pub const Unsigned = c.lua_Unsigned;
 
 /// The type of warning functions used by Lua to emit warnings
 pub const CWarnFn = switch (lang) {
-    .lua54 => *const fn (data: ?*anyopaque, msg: [*c]const u8, to_cont: c_int) callconv(.C) void,
+    .lua54 => *const fn (data: ?*anyopaque, msg: [*c]const u8, to_cont: c_int) callconv(.c) void,
     else => @compileError("CWarnFn not defined"),
 };
 
 /// The type of the writer function used by `Lua.dump()`
-pub const CWriterFn = *const fn (state: ?*LuaState, buf: ?*const anyopaque, size: usize, data: ?*anyopaque) callconv(.C) c_int;
+pub const CWriterFn = *const fn (state: ?*LuaState, buf: ?*const anyopaque, size: usize, data: ?*anyopaque) callconv(.c) c_int;
 
 /// For bundling a parsed value with an arena allocator
 /// Copied from std.json.Parsed
@@ -592,7 +592,7 @@ pub const Lua = opaque {
 
     /// Allows Lua to allocate memory using a Zig allocator passed in via data.
     /// See https://www.lua.org/manual/5.4/manual.html#lua_Alloc for more details
-    fn alloc(data: ?*anyopaque, ptr: ?*anyopaque, osize: usize, nsize: usize) callconv(.C) ?*align(alignment) anyopaque {
+    fn alloc(data: ?*anyopaque, ptr: ?*anyopaque, osize: usize, nsize: usize) callconv(.c) ?*align(alignment) anyopaque {
         // just like malloc() returns a pointer "which is suitably aligned for any built-in type",
         // the memory allocated by this function should also be aligned for any type that Lua may
         // desire to allocate. use the largest alignment for the target
@@ -613,8 +613,12 @@ pub const Lua = opaque {
         } else if (nsize == 0) {
             return null;
         } else {
+            const builtin = @import("builtin"); // FIXME: remove when zig-0.15 is released and 0.14 can be dropped
             // ptr is null, allocate a new block of memory
-            const new_ptr = allocator_ptr.alignedAlloc(u8, alignment, nsize) catch return null;
+            const new_ptr = (if (builtin.zig_version.major == 0 and builtin.zig_version.minor < 15)
+                allocator_ptr.alignedAlloc(u8, alignment, nsize)
+            else
+                allocator_ptr.alignedAlloc(u8, .fromByteUnits(alignment), nsize)) catch return null;
             return new_ptr.ptr;
         }
     }
@@ -622,10 +626,8 @@ pub const Lua = opaque {
     /// Initialize a Lua state with the given allocator. Use `Lua.deinit()` to close the state and free memory.
     ///
     /// Creates a new independent state and returns its main thread.
-    /// Returns NULL if it cannot create the state (due to lack of memory).
-    /// The argument f is the allocator function; Lua will do all memory allocation
-    /// for this state through this function (see lua_Alloc). The second argument,
-    /// ud, is an opaque pointer that Lua passes to the allocator in every call.
+    /// Returns an error if it cannot create the state (due to lack of memory).
+    /// Lua will do all memory allocation for this state through the passed Allocator (see lua_Alloc).
     ///
     /// * Pops:   `0`
     /// * Pushes: `0`
@@ -640,7 +642,6 @@ pub const Lua = opaque {
         const allocator_ptr = try a.create(Allocator);
         allocator_ptr.* = a;
 
-        // @constCast() is safe here because Lua does not mutate the pointer internally
         if (c.lua_newstate(alloc, allocator_ptr)) |state| {
             return @ptrCast(state);
         } else return error.OutOfMemory;
@@ -730,6 +731,8 @@ pub const Lua = opaque {
     ///
     /// See https://www.lua.org/manual/5.4/manual.html#lua_atpanic
     pub fn atPanic(lua: *Lua, panic_fn: CFn) ?CFn {
+        if (lang == .luau) @compileError(@src().fn_name ++ " is not implemented in Luau.");
+
         return c.lua_atpanic(@ptrCast(lua), panic_fn);
     }
 
@@ -750,7 +753,7 @@ pub const Lua = opaque {
     /// * Finally you call `Lua.call()`
     /// * `args.args` is the number of arguments that you pushed onto the stack. When the function returns, all arguments and
     /// the function value are popped and the call results are pushed onto the stack.
-    /// * The number of results is adjusted to `args.results`, unless `args.results` is `ziglua.mult_return`. In this case, all results from the function are pushed
+    /// * The number of results is adjusted to `args.results`, unless `args.results` is `zlua.mult_return`. In this case, all results from the function are pushed
     /// * Lua takes care that the returned values fit into the stack space, but it does not ensure any extra space in the stack. The function results
     /// are pushed onto the stack in direct order (the first result is pushed first), so that after the call the last result is
     /// on the top of the stack.
@@ -967,6 +970,7 @@ pub const Lua = opaque {
     pub const dump = switch (lang) {
         .lua53, .lua54 => dump53,
         else => dump51,
+        .luau => @compileError("Not implemented in Luau."),
     };
 
     /// Returns `true` if the two values in acceptable indices `index1` and `index2` are equal, following the semantics of the Lua `==`
@@ -1299,11 +1303,13 @@ pub const Lua = opaque {
 
     /// Only available in Luau
     pub fn setReadonly(lua: *Lua, idx: i32, enabled: bool) void {
+        if (lang != .luau) @compileError(@src().fn_name ++ " is only available in Luau.");
         c.lua_setreadonly(@ptrCast(lua), idx, @intFromBool(enabled));
     }
 
     /// Only available in Luau
     pub fn getReadonly(lua: *Lua, idx: i32) bool {
+        if (lang != .luau) @compileError(@src().fn_name ++ " is only available in Luau.");
         return c.lua_getreadonly(@ptrCast(lua), idx) != 0;
     }
 
@@ -1473,6 +1479,7 @@ pub const Lua = opaque {
     /// * Errors: `never`
     ///
     pub fn isVector(lua: *Lua, index: i32) bool {
+        if (lang != .luau) @compileError(@src().fn_name ++ " is only available in Luau.");
         return c.lua_isvector(@as(*LuaState, @ptrCast(lua)), index);
     }
 
@@ -1894,6 +1901,7 @@ pub const Lua = opaque {
     ///
     /// See https://www.lua.org/manual/5.4/manual.html#lua_pushcclosure
     pub fn pushClosureNamed(lua: *Lua, c_fn: CFn, debugname: [:0]const u8, n: i32) void {
+        if (lang != .luau) @compileError(@src().fn_name ++ " is only available in Luau.");
         c.lua_pushcclosurek(@ptrCast(lua), c_fn, debugname, n, null);
     }
 
@@ -1917,6 +1925,7 @@ pub const Lua = opaque {
     ///
     /// See https://www.lua.org/manual/5.4/manual.html#lua_pushcfunction
     pub fn pushFunctionNamed(lua: *Lua, c_fn: CFn, debugname: [:0]const u8) void {
+        if (lang != .luau) @compileError(@src().fn_name ++ " is only available in Luau.");
         c.lua_pushcclosurek(@ptrCast(lua), c_fn, debugname, 0, null);
     }
 
@@ -2106,7 +2115,10 @@ pub const Lua = opaque {
     /// Pushes a floating point 3-vector (or 4-vector if configured) `v` onto the stack
     ///
     /// Only available in Luau
-    pub const pushVector = if (luau_vector_size == 3) pushVector3 else pushVector4;
+    pub const pushVector = switch (lang) {
+        .luau => if (luau_vector_size == 3) pushVector3 else pushVector4,
+        else => @compileError("pushVector is only available in Luau."),
+    };
 
     /// Returns true if the two values in indices `index1` and `index2` are primitively equal
     /// (that is, equal without calling the `__eq` metamethod). Otherwise returns false.
@@ -2486,6 +2498,7 @@ pub const Lua = opaque {
     ///
     /// Only available in Luau
     pub fn setUserdataTag(lua: *Lua, index: i32, tag: i32) void {
+        if (lang != .luau) @compileError(@src().fn_name ++ " is only available in Luau.");
         std.debug.assert((tag >= 0 and tag < c.LUA_UTAG_LIMIT)); // Luau will do the same assert, this is easier to debug
         c.lua_setuserdatatag(@ptrCast(lua), index, tag);
     }
@@ -2579,6 +2592,19 @@ pub const Lua = opaque {
     /// See https://www.lua.org/manual/5.4/manual.html#lua_toclose
     pub fn toClose(lua: *Lua, index: i32) void {
         c.lua_toclose(@ptrCast(lua), index);
+    }
+
+    /// Converts the Lua value at the given `index` to a numeric type;
+    /// if T is an integer type, the Lua value is converted to an integer.
+    ///
+    /// * Pops:   `0`
+    /// * Pushes: `0`
+    /// * Errors: `error.Overflow` if `T` is an integer type and the value at index doesn't fit
+    pub fn toNumeric(lua: *Lua, comptime T: type, index: i32) !T {
+        if (@typeInfo(T) == .int) {
+            return std.math.cast(T, try lua.toInteger(index)) orelse error.Overflow;
+        }
+        return @floatCast(try lua.toNumber(index));
     }
 
     /// Converts the Lua value at the given `index` to a signed integer
@@ -2737,6 +2763,7 @@ pub const Lua = opaque {
 
     /// Only available in Luau
     pub fn toUserdataTagged(lua: *Lua, comptime T: type, index: i32, tag: i32) !*T {
+        if (lang != .luau) @compileError(@src().fn_name ++ " is only available in Luau.");
         if (c.lua_touserdatatagged(@ptrCast(lua), index, tag)) |ptr| return @ptrCast(@alignCast(ptr));
         return error.LuaError;
     }
@@ -2746,6 +2773,7 @@ pub const Lua = opaque {
     ///
     /// Only available in Luau
     pub fn toVector(lua: *Lua, index: i32) ![luau_vector_size]f32 {
+        if (lang != .luau) @compileError(@src().fn_name ++ " is only available in Luau.");
         const res = c.lua_tovector(@ptrCast(lua), index);
         if (res) |r| {
             switch (luau_vector_size) {
@@ -2762,6 +2790,7 @@ pub const Lua = opaque {
     ///
     /// Only available in Luau
     pub fn toStringAtom(lua: *Lua, index: i32) !struct { i32, [:0]const u8 } {
+        if (lang != .luau) @compileError(@src().fn_name ++ " is only available in Luau.");
         var atom: c_int = undefined;
         if (c.lua_tostringatom(@ptrCast(lua), index, &atom)) |ptr| {
             return .{ atom, std.mem.span(ptr) };
@@ -2774,6 +2803,7 @@ pub const Lua = opaque {
     ///
     /// Only available in Luau
     pub fn namecallAtom(lua: *Lua) !struct { i32, [:0]const u8 } {
+        if (lang != .luau) @compileError(@src().fn_name ++ " is only available in Luau.");
         var atom: c_int = undefined;
         if (c.lua_namecallatom(@ptrCast(lua), &atom)) |ptr| {
             return .{ atom, std.mem.span(ptr) };
@@ -3203,6 +3233,7 @@ pub const Lua = opaque {
 
     /// Only available in Luau
     pub fn setInterruptCallbackFn(lua: *Lua, cb: ?CInterruptCallbackFn) void {
+        if (lang != .luau) @compileError(@src().fn_name ++ " is only available in Luau.");
         if (c.lua_callbacks(@ptrCast(lua))) |cb_struct| {
             cb_struct.*.interrupt = cb;
         }
@@ -3210,6 +3241,7 @@ pub const Lua = opaque {
 
     /// Only available in Luau
     pub fn setUserAtomCallbackFn(lua: *Lua, cb: CUserAtomCallbackFn) void {
+        if (lang != .luau) @compileError(@src().fn_name ++ " is only available in Luau.");
         if (c.lua_callbacks(@ptrCast(lua))) |cb_struct| {
             cb_struct.*.useratom = cb;
         }
@@ -3321,6 +3353,32 @@ pub const Lua = opaque {
     /// See https://www.lua.org/manual/5.4/manual.html#luaL_checkany
     pub fn checkAny(lua: *Lua, arg: i32) void {
         c.luaL_checkany(@ptrCast(lua), arg);
+    }
+
+    /// Checks whether the function argument `arg` is a numeric type and converts it to type T
+    ///
+    /// Raises a Lua error if the argument is an integer type but std.math.cast fails
+    ///
+    /// * Pops:   `0`
+    /// * Pushes: `0`
+    /// * Errors: `explained in text / on purpose`
+    pub fn checkNumeric(lua: *Lua, comptime T: type, arg: i32) T {
+        if (comptime @typeInfo(T) != .int) return @floatCast(lua.checkNumber(arg));
+        return std.math.cast(T, lua.checkInteger(arg)) orelse {
+            const error_msg = comptime msg: {
+                var buf: [1024]u8 = undefined;
+                const info = @typeInfo(T).int;
+                const signedness = switch (info.signedness) {
+                    .unsigned => "u",
+                    .signed => "i",
+                };
+                const output = std.fmt.bufPrintZ(&buf, "integer argument doesn't fit inside {s}{d} range [{d}, {d}]", .{
+                    signedness, info.bits, std.math.minInt(T), std.math.maxInt(T),
+                }) catch unreachable;
+                break :msg output[0..output.len :0].*;
+            };
+            lua.argError(arg, &error_msg);
+        };
     }
 
     /// Checks whether the function argument `arg` is a number and returns this number cast to an i32
@@ -3474,6 +3532,7 @@ pub const Lua = opaque {
     ///
     /// Only available in Luau
     pub fn checkVector(lua: *Lua, arg: i32) [luau_vector_size]f32 {
+        if (lang != .luau) @compileError(@src().fn_name ++ " is only available in Luau.");
         const vec = lua.toVector(arg) catch {
             lua.typeError(arg, lua.typeName(LuaType.vector));
         };
@@ -3553,7 +3612,7 @@ pub const Lua = opaque {
     ///
     /// Only available in Luau
     pub fn raiseInterruptErrorStr(lua: *Lua, fmt: [:0]const u8, args: anytype) noreturn {
-        if (lang != .luau) return;
+        if (lang != .luau) @compileError(@src().fn_name ++ " is only available in Luau.");
         c.lua_rawcheckstack(@ptrCast(lua), 1);
         lua.raiseErrorStr(fmt, args);
         unreachable;
@@ -3647,6 +3706,7 @@ pub const Lua = opaque {
     ///
     /// See https://www.lua.org/manual/5.4/manual.html#luaL_gsub
     pub fn globalSub(lua: *Lua, str: [:0]const u8, pat: [:0]const u8, rep: [:0]const u8) []const u8 {
+        if (lang == .luau) @compileError(@src().fn_name ++ " is not available in Luau.");
         const s = c.luaL_gsub(@ptrCast(lua), str.ptr, pat.ptr, rep.ptr);
         const l = lua.rawLen(-1);
         return s[0..l];
@@ -4208,6 +4268,7 @@ pub const Lua = opaque {
     /// * Pushes: `0`
     /// * Errors: `other`
     pub fn openPackage(lua: *Lua) void {
+        if (lang == .luau) @compileError(@src().fn_name ++ " is not available in Luau.");
         lua.requireF(c.LUA_LOADLIBNAME, c.luaopen_package, true);
         if (lang == .lua52 or lang == .lua53 or lang == .lua54) lua.pop(1);
     }
@@ -4262,6 +4323,7 @@ pub const Lua = opaque {
     /// * Pushes: `0`
     /// * Errors: `other`
     pub fn openIO(lua: *Lua) void {
+        if (lang == .luau) @compileError(@src().fn_name ++ " is not available in Luau.");
         lua.requireF(c.LUA_IOLIBNAME, c.luaopen_io, true);
         if (lang == .lua52 or lang == .lua53 or lang == .lua54) lua.pop(1);
     }
@@ -4304,6 +4366,7 @@ pub const Lua = opaque {
     /// * Pushes: `0`
     /// * Errors: `other`
     pub fn openVector(lua: *Lua) void {
+        if (lang == .luau) @compileError(@src().fn_name ++ " is only available in Luau.");
         lua.requireF(c.LUA_VECLIBNAME, c.luaopen_vector, true);
         if (lang == .lua52 or lang == .lua53 or lang == .lua54) lua.pop(1);
     }
@@ -4311,9 +4374,9 @@ pub const Lua = opaque {
     /// Returns if given typeinfo is a string type
     fn isTypeString(typeinfo: std.builtin.Type.Pointer) bool {
         const childinfo = @typeInfo(typeinfo.child);
-        if (typeinfo.child == u8 and typeinfo.size != .One) {
+        if (typeinfo.child == u8 and typeinfo.size != .one) {
             return true;
-        } else if (typeinfo.size == .One and childinfo == .array and childinfo.array.child == u8) {
+        } else if (typeinfo.size == .one and childinfo == .array and childinfo.array.child == u8) {
             return true;
         }
         return false;
@@ -4323,22 +4386,22 @@ pub const Lua = opaque {
     fn pushAnyString(lua: *Lua, value: anytype) !void {
         const info = @typeInfo(@TypeOf(value)).pointer;
         switch (info.size) {
-            .One => {
+            .one => {
                 const childinfo = @typeInfo(info.child).array;
                 std.debug.assert(childinfo.child == u8);
-                std.debug.assert(childinfo.sentinel != null);
+                std.debug.assert(childinfo.sentinel() != null);
 
-                const casted: *childinfo.child = @ptrCast(@constCast(childinfo.sentinel.?));
-                if (casted.* != 0) {
-                    @compileError("Sentinel of slice must be a null terminator");
+                if (childinfo.sentinel()) |sentinel| {
+                    if (sentinel != 0) {
+                        @compileError("Sentinel of slice must be a null terminator");
+                    }
                 }
                 _ = lua.pushStringZ(value);
             },
-            .C, .Many, .Slice => {
+            .c, .many, .slice => {
                 std.debug.assert(info.child == u8);
-                if (info.sentinel) |sentinel| {
-                    const casted: *info.child = @ptrCast(@constCast(sentinel));
-                    if (casted.* != 0) {
+                if (info.sentinel()) |sentinel| {
+                    if (sentinel != 0) {
                         @compileError("Sentinel of slice must be a null terminator");
                     }
                     _ = lua.pushStringZ(value);
@@ -4355,7 +4418,74 @@ pub const Lua = opaque {
     /// Works with ints, floats, booleans, structs,
     /// tagged unions, optionals, and strings
     pub fn pushAny(lua: *Lua, value: anytype) !void {
-        switch (@typeInfo(@TypeOf(value))) {
+        const T = @TypeOf(value);
+        const type_info = @typeInfo(T);
+
+        if (type_info == .@"struct" or type_info == .@"union" or type_info == .@"enum") {
+            if (@hasDecl(T, "toLua")) {
+                const toLuaArgs = .{ value, lua };
+                const fnSignature = comptime fn_sign: {
+                    var b: []const u8 = "pub fn toLua(";
+
+                    for (0..toLuaArgs.len) |i| {
+                        b = b ++ std.fmt.comptimePrint("{s}{s}", .{ @typeName(@TypeOf(toLuaArgs[i])), if (i == (toLuaArgs.len - 1)) "" else ", " });
+                    }
+
+                    b = b ++ ") !void";
+
+                    break :fn_sign b;
+                };
+
+                const fl = @field(T, "toLua");
+                const flt = @TypeOf(fl);
+                const fli = @typeInfo(flt);
+                switch (fli) {
+                    .@"fn" => |f| {
+                        const args_ok = comptime args_ok: {
+                            const f_params = f.params;
+
+                            if (f_params.len != toLuaArgs.len) break :args_ok false;
+
+                            for (0..toLuaArgs.len) |i| {
+                                if (f_params[i].type != @TypeOf(toLuaArgs[i])) break :args_ok false;
+                            }
+
+                            break :args_ok true;
+                        };
+
+                        if (args_ok) {
+                            if (f.return_type) |rt| {
+                                const rti = @typeInfo(rt);
+                                switch (rti) {
+                                    .error_union => {
+                                        if (rti.error_union.payload == void) {
+                                            return try @call(.auto, fl, toLuaArgs);
+                                        } else {
+                                            @compileError("toLua invalid return type, required fn signature: " ++ fnSignature);
+                                        }
+                                    },
+                                    .void => {
+                                        return @call(.auto, fl, toLuaArgs);
+                                    },
+                                    else => {
+                                        @compileError("toLua invalid return type, required fn signature: " ++ fnSignature);
+                                    },
+                                }
+                            } else {
+                                return @call(.auto, fl, toLuaArgs);
+                            }
+                        } else {
+                            @compileError("toLua has invalid args, required fn signature: " ++ fnSignature);
+                        }
+                    },
+                    else => {
+                        @compileError("toLua is not a function, required fn signature: " ++ fnSignature);
+                    },
+                }
+            }
+        }
+
+        switch (type_info) {
             .int, .comptime_int => {
                 lua.pushInteger(@intCast(value));
             },
@@ -4366,7 +4496,7 @@ pub const Lua = opaque {
                 if (comptime isTypeString(info)) {
                     try lua.pushAnyString(value);
                 } else switch (info.size) {
-                    .One => {
+                    .one => {
                         if (info.is_const) {
                             @compileLog(value);
                             @compileLog("Lua cannot guarantee that references will not be modified");
@@ -4374,7 +4504,7 @@ pub const Lua = opaque {
                         }
                         lua.pushLightUserdata(@ptrCast(value));
                     },
-                    .C, .Many, .Slice => {
+                    .c, .many, .slice => {
                         lua.createTable(0, 0);
                         for (value, 0..) |index_value, i| {
                             try lua.pushAny(i + 1);
@@ -4410,10 +4540,18 @@ pub const Lua = opaque {
             },
             .@"struct" => |info| {
                 lua.createTable(0, 0);
-                inline for (info.fields) |field| {
-                    try lua.pushAny(field.name);
-                    try lua.pushAny(@field(value, field.name));
-                    lua.setTable(-3);
+                if (info.is_tuple) {
+                    inline for (0..info.fields.len) |i| {
+                        try lua.pushAny(i + 1);
+                        try lua.pushAny(value[i]);
+                        lua.setTable(-3);
+                    }
+                } else {
+                    inline for (info.fields) |field| {
+                        try lua.pushAny(field.name);
+                        try lua.pushAny(@field(value, field.name));
+                        lua.setTable(-3);
+                    }
                 }
             },
             .@"union" => |info| {
@@ -4470,7 +4608,7 @@ pub const Lua = opaque {
     /// Converts the specified index of the lua stack to the specified
     /// type if possible and returns it
     /// optional allocator
-    fn toAnyInternal(lua: *Lua, comptime T: type, a: ?std.mem.Allocator, comptime allow_alloc: bool, index: i32) !T {
+    pub fn toAnyInternal(lua: *Lua, comptime T: type, a: ?std.mem.Allocator, comptime allow_alloc: bool, index: i32) !T {
         const stack_size_on_entry = lua.getTop();
         defer {
             if (lua.getTop() != stack_size_on_entry) {
@@ -4480,7 +4618,74 @@ pub const Lua = opaque {
             }
         }
 
-        switch (@typeInfo(T)) {
+        const type_info = @typeInfo(T);
+
+        if (type_info == .@"struct" or type_info == .@"union" or type_info == .@"enum") {
+            if (@hasDecl(T, "fromLua")) {
+                const fromLuaArgs = .{ lua, a, index };
+                const fnSignature = comptime fn_sign: {
+                    var b: []const u8 = "pub fn fromLua(";
+
+                    for (0..fromLuaArgs.len) |i| {
+                        b = b ++ std.fmt.comptimePrint("{s}{s}", .{ @typeName(@TypeOf(fromLuaArgs[i])), if (i == (fromLuaArgs.len - 1)) "" else ", " });
+                    }
+
+                    b = b ++ ") !" ++ @typeName(T);
+
+                    break :fn_sign b;
+                };
+
+                const fl = @field(T, "fromLua");
+                const flt = @TypeOf(fl);
+                const fli = @typeInfo(flt);
+                switch (fli) {
+                    .@"fn" => |f| {
+                        const args_ok = comptime args_ok: {
+                            const f_params = f.params;
+
+                            if (f_params.len != fromLuaArgs.len) break :args_ok false;
+
+                            for (0..fromLuaArgs.len) |i| {
+                                if (f_params[i].type != @TypeOf(fromLuaArgs[i])) break :args_ok false;
+                            }
+
+                            break :args_ok true;
+                        };
+
+                        if (args_ok) {
+                            if (f.return_type) |rt| {
+                                if (rt == T) {
+                                    return @call(.auto, fl, fromLuaArgs);
+                                } else {
+                                    const rti = @typeInfo(rt);
+                                    switch (rti) {
+                                        .error_union => {
+                                            if (rti.error_union.payload == T) {
+                                                return try @call(.auto, fl, fromLuaArgs);
+                                            } else {
+                                                @compileError("fromLua invalid return type, required fn signature: " ++ fnSignature);
+                                            }
+                                        },
+                                        else => {
+                                            @compileError("fromLua invalid return type, required fn signature: " ++ fnSignature);
+                                        },
+                                    }
+                                }
+                            } else {
+                                @compileError("fromLua require a fn signature: " ++ fnSignature);
+                            }
+                        } else {
+                            @compileError("fromLua has invalid args, required fn signature: " ++ fnSignature);
+                        }
+                    },
+                    else => {
+                        @compileError("fromLua is not a function, required fn signature: " ++ fnSignature);
+                    },
+                }
+            }
+        }
+
+        switch (type_info) {
             .int => {
                 const result = try lua.toInteger(index);
                 return @as(T, @intCast(result));
@@ -4521,16 +4726,16 @@ pub const Lua = opaque {
                             @compileError("toAny cannot allocate memory, try using toAnyAlloc");
                         }
 
-                        if (info.sentinel != null) {
+                        if (info.sentinel() != null) {
                             return try a.?.dupeZ(u8, string[0..end]);
                         } else {
                             return try a.?.dupe(u8, string[0..end]);
                         }
                     } else {
-                        return if (info.sentinel == null) string[0..end] else string[0..end :0];
+                        return if (info.sentinel() == null) string[0..end] else string[0..end :0];
                     }
                 } else switch (info.size) {
-                    .Slice, .Many => {
+                    .slice, .many => {
                         if (!allow_alloc) {
                             @compileError("toAny cannot allocate memory, try using toAnyAlloc");
                         }
@@ -4554,7 +4759,11 @@ pub const Lua = opaque {
                 return error.LuaInvalidEnumTagName;
             },
             .@"struct" => {
-                return try lua.toStruct(T, a, allow_alloc, index);
+                if (type_info.@"struct".is_tuple) {
+                    return try lua.toTuple(T, a, allow_alloc, index);
+                } else {
+                    return try lua.toStruct(T, a, allow_alloc, index);
+                }
             },
             .@"union" => |u| {
                 if (u.tag_type == null) @compileError("Parameter type is not a tagged union");
@@ -4600,7 +4809,7 @@ pub const Lua = opaque {
     }
 
     /// Converts a lua array to a zig slice, memory is owned by the caller
-    fn toSlice(lua: *Lua, comptime ChildType: type, a: std.mem.Allocator, raw_index: i32) ![]ChildType {
+    pub fn toSlice(lua: *Lua, comptime ChildType: type, a: std.mem.Allocator, raw_index: i32) ![]ChildType {
         const index = lua.absIndex(raw_index);
 
         if (!lua.isTable(index)) {
@@ -4620,8 +4829,51 @@ pub const Lua = opaque {
         return result;
     }
 
+    /// Converts value at given index to a zig struct tuple if possible
+    pub fn toTuple(lua: *Lua, comptime T: type, a: ?std.mem.Allocator, comptime allow_alloc: bool, raw_index: i32) !T {
+        const stack_size_on_entry = lua.getTop();
+        defer std.debug.assert(lua.getTop() == stack_size_on_entry);
+
+        const info = @typeInfo(T).@"struct";
+        const index = lua.absIndex(raw_index);
+
+        var result: T = undefined;
+
+        if (lua.isTable(index)) {
+            lua.pushValue(index);
+            defer lua.pop(1);
+
+            inline for (info.fields, 0..) |field, i| {
+                if (lua.getMetaField(-1, "__index")) |_| {
+                    lua.pushValue(-2);
+                    lua.pushInteger(@intCast(i + 1));
+                    lua.call(.{ .args = 1, .results = 1 });
+                } else |_| {
+                    _ = lua.rawGetIndex(-1, @intCast(i + 1));
+                }
+                defer lua.pop(1);
+                result[i] = try lua.toAnyInternal(field.type, a, allow_alloc, -1);
+            }
+        } else {
+            // taking it as vararg
+            const in_range = if (raw_index < 0) (index - @as(i32, info.fields.len)) >= 0 else ((index + @as(i32, info.fields.len)) - 1) <= stack_size_on_entry;
+            if (in_range) {
+                inline for (info.fields, 0..) |field, i| {
+                    const stack_size_before_call = lua.getTop();
+                    const idx = if (raw_index < 0) index - @as(i32, @intCast(i)) else index + @as(i32, @intCast(i));
+                    result[i] = try lua.toAnyInternal(field.type, a, allow_alloc, idx);
+                    std.debug.assert(stack_size_before_call == lua.getTop());
+                }
+            } else {
+                return error.NotInRange;
+            }
+        }
+
+        return result;
+    }
+
     /// Converts value at given index to a zig struct if possible
-    fn toStruct(lua: *Lua, comptime T: type, a: ?std.mem.Allocator, comptime allow_alloc: bool, raw_index: i32) !T {
+    pub fn toStruct(lua: *Lua, comptime T: type, a: ?std.mem.Allocator, comptime allow_alloc: bool, raw_index: i32) !T {
         const stack_size_on_entry = lua.getTop();
         defer std.debug.assert(lua.getTop() == stack_size_on_entry);
 
@@ -4641,8 +4893,8 @@ pub const Lua = opaque {
             const lua_field_type = lua.getTable(index);
             defer lua.pop(1);
             if (lua_field_type == .nil) {
-                if (field.default_value) |default_value| {
-                    @field(result, field.name) = @as(*const field.type, @ptrCast(@alignCast(default_value))).*;
+                if (field.defaultValue()) |default| {
+                    @field(result, field.name) = default;
                 } else if (field_type_info != .optional) {
                     return error.LuaTableMissingValue;
                 }
@@ -4699,7 +4951,7 @@ pub const Lua = opaque {
                 inline for (info.@"fn".params, 0..) |param, i| {
                     const param_info = @typeInfo(param.type.?);
                     //only use the overhead of creating the arena allocator if needed
-                    if (comptime param_info == .pointer and param_info.pointer.size != .One) {
+                    if (comptime param_info == .pointer and param_info.pointer.size != .one) {
                         const parsed = lua.toAnyAlloc(param.type.?, (i + 1)) catch |err| {
                             lua.raiseErrorStr(@errorName(err), .{});
                         };
@@ -4903,7 +5155,7 @@ pub const Buffer = struct {
     }
 };
 
-// Helper functions to make the ziglua API easier to use
+// Helper functions to make the zlua API easier to use
 
 const Tuple = std.meta.Tuple;
 
@@ -4950,7 +5202,7 @@ pub fn wrap(comptime function: anytype) TypeOfWrap(function) {
         // CFn
         Tuple(&.{*Lua}) => {
             return struct {
-                fn inner(state: ?*LuaState) callconv(.C) c_int {
+                fn inner(state: ?*LuaState) callconv(.c) c_int {
                     // this is called by Lua, state should never be null
                     var lua: *Lua = @ptrCast(state.?);
                     if (has_error_union) {
@@ -4966,7 +5218,7 @@ pub fn wrap(comptime function: anytype) TypeOfWrap(function) {
         // CHookFn
         Tuple(&.{ *Lua, Event, *DebugInfo }) => {
             return struct {
-                fn inner(state: ?*LuaState, ar: ?*Debug) callconv(.C) void {
+                fn inner(state: ?*LuaState, ar: ?*Debug) callconv(.c) void {
                     // this is called by Lua, state should never be null
                     var lua: *Lua = @ptrCast(state.?);
                     var debug_info: DebugInfo = .{
@@ -4989,7 +5241,7 @@ pub fn wrap(comptime function: anytype) TypeOfWrap(function) {
         // CContFn
         Tuple(&.{ *Lua, Status, Context }) => {
             return struct {
-                fn inner(state: ?*LuaState, status: c_int, ctx: Context) callconv(.C) c_int {
+                fn inner(state: ?*LuaState, status: c_int, ctx: Context) callconv(.c) c_int {
                     // this is called by Lua, state should never be null
                     var lua: *Lua = @ptrCast(state.?);
                     if (has_error_union) {
@@ -5005,7 +5257,7 @@ pub fn wrap(comptime function: anytype) TypeOfWrap(function) {
         // CReaderFn
         Tuple(&.{ *Lua, *anyopaque }) => {
             return struct {
-                fn inner(state: ?*LuaState, data: ?*anyopaque, size: [*c]usize) callconv(.C) [*c]const u8 {
+                fn inner(state: ?*LuaState, data: ?*anyopaque, size: [*c]usize) callconv(.c) [*c]const u8 {
                     // this is called by Lua, state should never be null
                     var lua: *Lua = @ptrCast(state.?);
                     if (has_error_union) {
@@ -5034,7 +5286,7 @@ pub fn wrap(comptime function: anytype) TypeOfWrap(function) {
         // CUserdataDtorFn
         Tuple(&.{*anyopaque}) => {
             return struct {
-                fn inner(userdata: *anyopaque) callconv(.C) void {
+                fn inner(userdata: *anyopaque) callconv(.c) void {
                     return @call(.always_inline, function, .{userdata});
                 }
             }.inner;
@@ -5042,7 +5294,7 @@ pub fn wrap(comptime function: anytype) TypeOfWrap(function) {
         // CInterruptCallbackFn
         Tuple(&.{ *Lua, i32 }) => {
             return struct {
-                fn inner(state: ?*LuaState, gc: c_int) callconv(.C) void {
+                fn inner(state: ?*LuaState, gc: c_int) callconv(.c) void {
                     // this is called by Lua, state should never be null
                     var lua: *Lua = @ptrCast(state.?);
                     if (has_error_union) {
@@ -5058,7 +5310,7 @@ pub fn wrap(comptime function: anytype) TypeOfWrap(function) {
         // CUserAtomCallbackFn
         Tuple(&.{[]const u8}) => {
             return struct {
-                fn inner(str: [*c]const u8, len: usize) callconv(.C) i16 {
+                fn inner(str: [*c]const u8, len: usize) callconv(.c) i16 {
                     if (str) |s| {
                         const buf = s[0..len];
                         return @call(.always_inline, function, .{buf});
@@ -5070,7 +5322,7 @@ pub fn wrap(comptime function: anytype) TypeOfWrap(function) {
         // CWarnFn
         Tuple(&.{ ?*anyopaque, []const u8, bool }) => {
             return struct {
-                fn inner(data: ?*anyopaque, msg: [*c]const u8, to_cont: c_int) callconv(.C) void {
+                fn inner(data: ?*anyopaque, msg: [*c]const u8, to_cont: c_int) callconv(.c) void {
                     // warning messages emitted from Lua should be null-terminated for display
                     const message = std.mem.span(@as([*:0]const u8, @ptrCast(msg)));
                     @call(.always_inline, function, .{ data, message, to_cont != 0 });
@@ -5080,7 +5332,7 @@ pub fn wrap(comptime function: anytype) TypeOfWrap(function) {
         // CWriterFn
         Tuple(&.{ *Lua, []const u8, *anyopaque }) => {
             return struct {
-                fn inner(state: ?*LuaState, buf: ?*const anyopaque, size: usize, data: ?*anyopaque) callconv(.C) c_int {
+                fn inner(state: ?*LuaState, buf: ?*const anyopaque, size: usize, data: ?*anyopaque) callconv(.c) c_int {
                     // this is called by Lua, state should never be null
                     var lua: *Lua = @ptrCast(state.?);
                     const buffer = @as([*]const u8, @ptrCast(buf))[0..size];
@@ -5169,7 +5421,7 @@ pub fn exportFn(comptime name: []const u8, comptime func: anytype) CFn {
     if (lang == .luau) @compileError("Luau does not support compiling or loading shared modules");
 
     return struct {
-        fn luaopen(state: ?*LuaState) callconv(.C) c_int {
+        fn luaopen(state: ?*LuaState) callconv(.c) c_int {
             const declaration = comptime wrap(func);
 
             return @call(.always_inline, declaration, .{state});

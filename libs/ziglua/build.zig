@@ -5,8 +5,8 @@ pub const Language = lua_setup.Language;
 const Step = std.Build.Step;
 
 const lua_setup = @import("build/lua.zig");
-// const luau_setup = @import("build/luau.zig");
-// const luajit_setup = @import("build/luajit.zig");
+const luau_setup = @import("build/luau.zig");
+const luajit_setup = @import("build/luajit.zig");
 
 pub fn build(b: *Build) void {
     // Remove the default install and uninstall steps
@@ -16,112 +16,118 @@ pub fn build(b: *Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const lang = b.option(Language, "lang", "Lua language version to build") orelse .lua54;
+    const library_name = b.option([]const u8, "library_name", "Library name for lua linking, default is `lua`") orelse "lua";
     const shared = b.option(bool, "shared", "Build shared library instead of static") orelse false;
     const luau_use_4_vector = b.option(bool, "luau_use_4_vector", "Build Luau to use 4-vectors instead of the default 3-vector.") orelse false;
+    const lua_user_h = b.option(Build.LazyPath, "lua_user_h", "Lazy path to user supplied c header file") orelse null;
 
     if (lang == .luau and shared) {
         std.debug.panic("Luau does not support compiling or loading shared modules", .{});
     }
 
+    if (lua_user_h != null and (lang == .luajit or lang == .luau)) {
+        std.debug.panic("Only basic lua supports a user provided header file", .{});
+    }
+
     // Zig module
-    const ziglua = b.addModule("ziglua", .{
+    const zlua = b.addModule("zlua", .{
         .root_source_file = b.path("src/lib.zig"),
-        .target = target,
-        .optimize = optimize,
     });
 
     // Expose build configuration to the ziglua module
     const config = b.addOptions();
     config.addOption(Language, "lang", lang);
     config.addOption(bool, "luau_use_4_vector", luau_use_4_vector);
-    ziglua.addOptions("config", config);
+    zlua.addOptions("config", config);
 
     if (lang == .luau) {
         const vector_size: usize = if (luau_use_4_vector) 4 else 3;
-        ziglua.addCMacro("LUA_VECTOR_SIZE", b.fmt("{}", .{vector_size}));
+        zlua.addCMacro("LUA_VECTOR_SIZE", b.fmt("{}", .{vector_size}));
     }
 
-    const upstream = b.dependency(@tagName(lang), .{});
+    if (b.lazyDependency(@tagName(lang), .{})) |upstream| {
+        const lib = switch (lang) {
+            .luajit => luajit_setup.configure(b, target, optimize, upstream, shared),
+            .luau => luau_setup.configure(b, target, optimize, upstream, luau_use_4_vector),
+            else => lua_setup.configure(b, target, optimize, upstream, .{
+                .lang = lang,
+                .shared = shared,
+                .library_name = library_name,
+                .lua_user_h = lua_user_h,
+            }),
+        };
 
-    const lib = switch (lang) {
-        // .luajit => luajit_setup.configure(b, target, optimize, upstream, shared),
-        // .luau => luau_setup.configure(b, target, optimize, upstream, luau_use_4_vector),
-        else => lua_setup.configure(b, ziglua, target, optimize, upstream, lang, shared),
-    };
+        // Expose the Lua artifact, and get an install step that header translation can refer to
+        const install_lib = b.addInstallArtifact(lib, .{});
+        b.getInstallStep().dependOn(&install_lib.step);
 
-    // Expose the Lua artifact, and get an install step that header translation can refer to
-    const install_lib = b.addInstallArtifact(lib, .{});
-    b.getInstallStep().dependOn(&install_lib.step);
+        switch (lang) {
+            .luau => {
+                zlua.addIncludePath(upstream.path("Common/include"));
+                zlua.addIncludePath(upstream.path("Compiler/include"));
+                zlua.addIncludePath(upstream.path("Ast/include"));
+                zlua.addIncludePath(upstream.path("VM/include"));
+            },
+            else => zlua.addIncludePath(upstream.path("src")),
+        }
 
-    switch (lang) {
-        .luau => {
-            ziglua.addIncludePath(upstream.path("Common/include"));
-            ziglua.addIncludePath(upstream.path("Compiler/include"));
-            ziglua.addIncludePath(upstream.path("Ast/include"));
-            ziglua.addIncludePath(upstream.path("VM/include"));
-        },
-        else => ziglua.addIncludePath(upstream.path("src")),
+        zlua.linkLibrary(lib);
+
+        // lib must expose all headers included by these root headers
+        const c_header_path = switch (lang) {
+            .luajit => b.path("build/include/luajit_all.h"),
+            .luau => b.path("build/include/luau_all.h"),
+            else => b.path("build/include/lua_all.h"),
+        };
+        const c_headers = b.addTranslateC(.{
+            .root_source_file = c_header_path,
+            .target = target,
+            .optimize = optimize,
+        });
+
+        // PIXZIG addition for emscripten
+        // Need to figure out how to access TranslateC step from top-level build.zig.
+        switch (target.result.os.tag) {
+            .emscripten => {
+                if (b.sysroot == null) {
+                    @panic("Pass '--sysroot \"~/.cache/emscripten/sysroot\"'");
+                }
+
+                const cache_include = std.fs.path.join(b.allocator, &.{ b.sysroot.?, "include" }) catch @panic("Out of memory");
+                defer b.allocator.free(cache_include);
+
+                // TODO: Add this check back in.
+                // var dir = std.fs.openDirAbsolute(cache_include, std.fs.Dir.OpenDirOptions{ .access_sub_paths = true, .no_follow = true }) catch @panic("No emscripten cache. Generate it!");
+                // dir.close();
+                //lib.addIncludePath(.{ .cwd_relative = cache_include });
+                c_headers.addIncludePath(.{ .cwd_relative = cache_include });
+            },
+            else => {},
+        }
+        // END PIXZIG
+
+        c_headers.addIncludePath(lib.getEmittedIncludeTree());
+        c_headers.step.dependOn(&install_lib.step);
+
+        const ziglua_c = b.addModule("ziglua-c", .{
+            .root_source_file = c_headers.getOutput(),
+            .target = c_headers.target,
+            .optimize = c_headers.optimize,
+            .link_libc = c_headers.link_libc,
+        });
+
+        zlua.addImport("c", ziglua_c);
     }
-
-    ziglua.linkLibrary(lib);
-
-    // lib must expose all headers included by these root headers
-    const c_header_path = switch (lang) {
-        .luajit => b.path("include/luajit_all.h"),
-        .luau => b.path("include/luau_all.h"),
-        else => b.path("include/lua_all.h"),
-    };
-    const c_headers = b.addTranslateC(.{
-        .root_source_file = c_header_path,
-        .target = target,
-        .optimize = optimize,
-        //.link_libc = true,
-    });
-
-    // PIXZIG addition for emscripten
-    // Need to figure out how to access TranslateC step from top-level build.zig.
-    switch (target.result.os.tag) {
-        .emscripten => {
-            if (b.sysroot == null) {
-                @panic("Pass '--sysroot \"~/.cache/emscripten/sysroot\"'");
-            }
-
-            const cache_include = std.fs.path.join(b.allocator, &.{ b.sysroot.?, "include" }) catch @panic("Out of memory");
-            defer b.allocator.free(cache_include);
-
-            // TODO: Add this check back in.
-            // var dir = std.fs.openDirAbsolute(cache_include, std.fs.Dir.OpenDirOptions{ .access_sub_paths = true, .no_follow = true }) catch @panic("No emscripten cache. Generate it!");
-            // dir.close();
-            //lib.addIncludePath(.{ .cwd_relative = cache_include });
-            c_headers.addIncludePath(.{ .cwd_relative = cache_include });
-        },
-        else => {},
-    }
-    // END PIXZIG
-
-    c_headers.addIncludePath(lib.getEmittedIncludeTree());
-    c_headers.step.dependOn(&install_lib.step);
-
-    const ziglua_c = b.addModule("ziglua-c", .{
-        .root_source_file = c_headers.getOutput(),
-        .target = c_headers.target,
-        .optimize = c_headers.optimize,
-        .link_libc = c_headers.link_libc,
-    });
-
-    ziglua.addImport("c", ziglua_c);
 
     // Tests
     const tests = b.addTest(.{
-        .root_module = b.addModule("tests", .{
-            // .root_source_file = b.path("tests/tests.zig"),
-            // Use tests.zig to select which tests to run
+        .root_module = b.createModule(.{
             .root_source_file = b.path("src/tests.zig"),
             .target = target,
             .optimize = optimize,
         }),
     });
-    tests.root_module.addImport("ziglua", ziglua);
+    tests.root_module.addImport("zlua", zlua);
 
     const run_tests = b.addRunArtifact(tests);
     const test_step = b.step("test", "Run ziglua tests");
@@ -131,6 +137,7 @@ pub fn build(b: *Build) void {
     var common_examples = [_]struct { []const u8, []const u8 }{
         .{ "interpreter", "examples/interpreter.zig" },
         .{ "zig-function", "examples/zig-fn.zig" },
+        .{ "multithreaded", "examples/multithreaded.zig" },
     };
     const luau_examples = [_]struct { []const u8, []const u8 }{
         .{ "luau-bytecode", "examples/luau-bytecode.zig" },
@@ -140,13 +147,13 @@ pub fn build(b: *Build) void {
     for (examples) |example| {
         const exe = b.addExecutable(.{
             .name = example[0],
-            .root_module = b.addModule(example[0], .{
+            .root_module = b.createModule(.{
                 .root_source_file = b.path(example[1]),
                 .target = target,
                 .optimize = optimize,
             }),
         });
-        exe.root_module.addImport("ziglua", ziglua);
+        exe.root_module.addImport("zlua", zlua);
 
         const artifact = b.addInstallArtifact(exe, .{});
         const exe_step = b.step(b.fmt("install-example-{s}", .{example[0]}), b.fmt("Install {s} example", .{example[0]}));
@@ -162,7 +169,11 @@ pub fn build(b: *Build) void {
 
     const docs = b.addObject(.{
         .name = "ziglua",
-        .root_module = ziglua,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/lib.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     const install_docs = b.addInstallDirectory(.{
@@ -177,13 +188,12 @@ pub fn build(b: *Build) void {
     // definitions example
     const def_exe = b.addExecutable(.{
         .name = "define-zig-types",
-        .root_module = b.addModule("define-zig-types", .{
+        .root_module = b.createModule(.{
             .root_source_file = b.path("examples/define-exe.zig"),
             .target = target,
-            .optimize = optimize,
         }),
     });
-    def_exe.root_module.addImport("ziglua", ziglua);
+    def_exe.root_module.addImport("zlua", zlua);
     var run_def_exe = b.addRunArtifact(def_exe);
     run_def_exe.addFileArg(b.path("definitions.lua"));
 

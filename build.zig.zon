@@ -22,12 +22,12 @@
         //     .hash = "12209b2055d213076fa0476de11c5eae1ad5b6fb91789e6bf218686b8f5f4a4114de",
         // },
         // Using a random commit with a fix for latest zig version 0.14.0-dev.2596
-        // .ziglua = .{
-        //     .path = "libs/ziglua",
-        //     // .url = "https://github.com/natecraddock/ziglua/archive/2233e8f0408e4683ffd2cb2ed4b9727b84ac88f7.tar.gz",
-        //     // .hash = "122076d9306fd9a873c894246b315eb9ddb846148f22f07a148f853e5d6291425ff6",
+        .ziglua = .{
+            .path = "libs/ziglua",
+            // .url = "https://github.com/natecraddock/ziglua/archive/2233e8f0408e4683ffd2cb2ed4b9727b84ac88f7.tar.gz",
+            // .hash = "122076d9306fd9a873c894246b315eb9ddb846148f22f07a148f853e5d6291425ff6",
 
-        // },
+        },
         .zopengl = .{
             .url = "git+https://github.com/zig-gamedev/zopengl.git#33ae578d91692c814e7d6b4b42573142475f68d0",
             .hash = "zopengl-0.6.0-dev-5-tnz7Y8CQCW_JRgxPCM4ETsKGOGHddqw5y1XaXhrsb4",

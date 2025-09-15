@@ -3,37 +3,65 @@ const std = @import("std");
 const Build = std.Build;
 const Step = std.Build.Step;
 
+const applyPatchToFile = @import("utils.zig").applyPatchToFile;
+
 pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, upstream: *Build.Dependency, shared: bool) *Step.Compile {
     // TODO: extract this to the main build function because it is shared between all specialized build functions
 
-    const lib: *Step.Compile = if (shared)
-        b.addSharedLibrary(.{
-            .name = "lua",
-            .target = target,
-            .optimize = optimize,
-            .unwind_tables = null, // TODO used to be lib.root_module.unwind_tables = true;  what's the right value now?
-        })
-    else
-        b.addStaticLibrary(.{
-            .name = "lua",
-            .target = target,
-            .optimize = optimize,
-            .unwind_tables = null, // TODO used to be lib.root_module.unwind_tables = true;  what's the right value now?
-        });
+    const lib = b.createModule(.{
+        .target = target,
+        .optimize = optimize,
+        .unwind_tables = .sync,
+    });
+    const library = b.addLibrary(.{
+        .name = "lua",
+        .root_module = lib,
+        .linkage = if (shared) .dynamic else .static,
+    });
 
     // Compile minilua interpreter used at build time to generate files
-    const minilua = b.addExecutable(.{
-        .name = "minilua",
-        .target = target, // TODO ensure this is the host
+    const minilua_mod = b.createModule(.{
+        .target = b.graph.host, // Use host target for cross build
         .optimize = .ReleaseSafe,
     });
+    const minilua = b.addExecutable(.{
+        .name = "minilua",
+        .root_module = minilua_mod,
+    });
     minilua.linkLibC();
-    minilua.root_module.sanitize_c = false;
+    // FIXME: remove branch when zig-0.15 is released and 0.14 can be dropped
+    const builtin = @import("builtin");
+    if (builtin.zig_version.major == 0 and builtin.zig_version.minor < 15) {
+        minilua.root_module.sanitize_c = false;
+    } else {
+        minilua.root_module.sanitize_c = .off;
+    }
     minilua.addCSourceFile(.{ .file = upstream.path("src/host/minilua.c") });
 
     // Generate the buildvm_arch.h file using minilua
     const dynasm_run = b.addRunArtifact(minilua);
-    dynasm_run.addFileArg(upstream.path("dynasm/dynasm.lua"));
+
+    if (b.graph.host.result.os.tag == .windows) {
+        // Patch windows cross build for LuaJIT
+        const sourceDynasmFile = upstream.path("dynasm/dynasm.lua");
+        const destDynasmFile = upstream.path("dynasm/dynasm-patched.lua");
+        const patchDynasm = applyPatchToFile(b, b.graph.host, sourceDynasmFile, b.path("build/luajit.patch"), "dynasm-patched.lua");
+
+        const copyPatchedDynasm = b.addSystemCommand(&[_][]const u8{
+            "cmd",
+        });
+        copyPatchedDynasm.addArgs(&.{ "/q", "/c", "copy" });
+        copyPatchedDynasm.step.dependOn(&patchDynasm.run.step);
+        copyPatchedDynasm.addFileArg(patchDynasm.output);
+        copyPatchedDynasm.addFileArg(destDynasmFile);
+
+        dynasm_run.step.dependOn(&patchDynasm.run.step);
+        dynasm_run.step.dependOn(&copyPatchedDynasm.step);
+
+        dynasm_run.addFileArg(destDynasmFile);
+    } else {
+        dynasm_run.addFileArg(upstream.path("dynasm/dynasm.lua"));
+    }
 
     // TODO: Many more flags to figure out
     if (target.result.cpu.arch.endian() == .little) {
@@ -47,6 +75,10 @@ pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.
 
     if (target.result.abi.float() == .hard) {
         dynasm_run.addArgs(&.{ "-D", "FPU", "-D", "HFABI" });
+    }
+
+    if (target.result.cpu.arch == .aarch64 or target.result.cpu.arch == .aarch64_be) {
+        dynasm_run.addArgs(&.{ "-D", "DUALNUM" });
     }
 
     if (target.result.os.tag == .windows) dynasm_run.addArgs(&.{ "-D", "WIN" });
@@ -73,17 +105,31 @@ pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.
     const luajit_h = genversion_run.addOutputFileArg("luajit.h");
 
     // Compile the buildvm executable used to generate other files
-    const buildvm = b.addExecutable(.{
-        .name = "buildvm",
-        .target = target, // TODO ensure this is the host
+    const vm_mod = b.createModule(.{
+        .target = b.graph.host, // Use host target for cross build
         .optimize = .ReleaseSafe,
     });
+    const buildvm = b.addExecutable(.{
+        .name = "buildvm",
+        .root_module = vm_mod,
+    });
     buildvm.linkLibC();
-    buildvm.root_module.sanitize_c = false;
+    // FIXME: remove branch when zig-0.15 is released and 0.14 can be dropped
+    if (builtin.zig_version.major == 0 and builtin.zig_version.minor < 15) {
+        buildvm.root_module.sanitize_c = false;
+    } else {
+        buildvm.root_module.sanitize_c = .off;
+    }
 
     // Needs to run after the buildvm_arch.h and luajit.h files are generated
     buildvm.step.dependOn(&dynasm_run.step);
     buildvm.step.dependOn(&genversion_run.step);
+
+    const buildvm_c_flags: []const []const u8 = switch (target.result.cpu.arch) {
+        .aarch64, .aarch64_be => &.{ "-DLUAJIT_TARGET=LUAJIT_ARCH_arm64", "-DLJ_ARCH_HASFPU=1", "-DLJ_ABI_SOFTFP=0" },
+        .x86_64 => &.{ "-DLUAJIT_TARGET=LUAJIT_ARCH_X64" },
+        else => &.{},
+    };
 
     buildvm.addCSourceFiles(.{
         .root = .{ .dependency = .{
@@ -91,6 +137,7 @@ pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.
             .sub_path = "",
         } },
         .files = &.{ "src/host/buildvm_asm.c", "src/host/buildvm_fold.c", "src/host/buildvm_lib.c", "src/host/buildvm_peobj.c", "src/host/buildvm.c" },
+        .flags = buildvm_c_flags,
     });
 
     buildvm.addIncludePath(upstream.path("src"));
@@ -130,16 +177,14 @@ pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.
     const buildvm_folddef = b.addRunArtifact(buildvm);
     buildvm_folddef.addArgs(&.{ "-m", "folddef", "-o" });
     const folddef_header = buildvm_folddef.addOutputFileArg("lj_folddef.h");
-    for (luajit_lib) |file| {
-        buildvm_folddef.addFileArg(upstream.path(file));
-    }
+    buildvm_folddef.addFileArg(upstream.path("src/lj_opt_fold.c"));
 
     const buildvm_ljvm = b.addRunArtifact(buildvm);
     buildvm_ljvm.addArg("-m");
 
     if (target.result.os.tag == .windows) {
         buildvm_ljvm.addArg("peobj");
-    } else if (target.result.isDarwinLibC()) {
+    } else if (target.result.os.tag.isDarwin()) {
         buildvm_ljvm.addArg("machasm");
     } else {
         buildvm_ljvm.addArg("elfasm");
@@ -147,7 +192,7 @@ pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.
 
     buildvm_ljvm.addArg("-o");
     if (target.result.os.tag == .windows) {
-        const ljvm_ob = buildvm_ljvm.addOutputFileArg("lj_vm. o");
+        const ljvm_ob = buildvm_ljvm.addOutputFileArg("lj_vm.o");
         lib.addObjectFile(ljvm_ob);
     } else {
         const ljvm_asm = buildvm_ljvm.addOutputFileArg("lj_vm.S");
@@ -155,27 +200,27 @@ pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.
     }
 
     // Finally build LuaJIT after generating all the files
-    lib.step.dependOn(&genversion_run.step);
-    lib.step.dependOn(&buildvm_bcdef.step);
-    lib.step.dependOn(&buildvm_ffdef.step);
-    lib.step.dependOn(&buildvm_libdef.step);
-    lib.step.dependOn(&buildvm_recdef.step);
-    lib.step.dependOn(&buildvm_folddef.step);
-    lib.step.dependOn(&buildvm_ljvm.step);
+    library.step.dependOn(&genversion_run.step);
+    library.step.dependOn(&buildvm_bcdef.step);
+    library.step.dependOn(&buildvm_ffdef.step);
+    library.step.dependOn(&buildvm_libdef.step);
+    library.step.dependOn(&buildvm_recdef.step);
+    library.step.dependOn(&buildvm_folddef.step);
+    library.step.dependOn(&buildvm_ljvm.step);
 
-    lib.linkLibC();
+    library.linkLibC();
 
-    lib.root_module.addCMacro("LUAJIT_UNWIND_EXTERNAL", "");
+    lib.addCMacro("LUAJIT_UNWIND_EXTERNAL", "");
 
-    lib.linkSystemLibrary("unwind");
+    lib.linkSystemLibrary("unwind", .{});
 
-    lib.addIncludePath(upstream.path("src"));
-    lib.addIncludePath(luajit_h.dirname());
-    lib.addIncludePath(bcdef_header.dirname());
-    lib.addIncludePath(ffdef_header.dirname());
-    lib.addIncludePath(libdef_header.dirname());
-    lib.addIncludePath(recdef_header.dirname());
-    lib.addIncludePath(folddef_header.dirname());
+    library.addIncludePath(upstream.path("src"));
+    library.addIncludePath(luajit_h.dirname());
+    library.addIncludePath(bcdef_header.dirname());
+    library.addIncludePath(ffdef_header.dirname());
+    library.addIncludePath(libdef_header.dirname());
+    library.addIncludePath(recdef_header.dirname());
+    library.addIncludePath(folddef_header.dirname());
 
     lib.addCSourceFiles(.{
         .root = .{ .dependency = .{
@@ -185,15 +230,20 @@ pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.
         .files = &luajit_vm,
     });
 
-    lib.root_module.sanitize_c = false;
+    // FIXME: remove branch when zig-0.15 is released and 0.14 can be dropped
+    if (builtin.zig_version.major == 0 and builtin.zig_version.minor < 15) {
+        lib.sanitize_c = false;
+    } else {
+        lib.sanitize_c = .off;
+    }
 
-    lib.installHeader(upstream.path("src/lua.h"), "lua.h");
-    lib.installHeader(upstream.path("src/lualib.h"), "lualib.h");
-    lib.installHeader(upstream.path("src/lauxlib.h"), "lauxlib.h");
-    lib.installHeader(upstream.path("src/luaconf.h"), "luaconf.h");
-    lib.installHeader(luajit_h, "luajit.h");
+    library.installHeader(upstream.path("src/lua.h"), "lua.h");
+    library.installHeader(upstream.path("src/lualib.h"), "lualib.h");
+    library.installHeader(upstream.path("src/lauxlib.h"), "lauxlib.h");
+    library.installHeader(upstream.path("src/luaconf.h"), "luaconf.h");
+    library.installHeader(luajit_h, "luajit.h");
 
-    return lib;
+    return library;
 }
 
 const luajit_lib = [_][]const u8{

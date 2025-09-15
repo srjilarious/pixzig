@@ -230,16 +230,16 @@ fn buildEngine(
     // engine_lib.linkLibrary(gui_lib);
 
     // Lua
-    // const ziglua = b.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
-    // ziglua.module("ziglua").addIncludePath(.{ .cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include" });
-    // ziglua.module("ziglua-c").addIncludePath(.{ .cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include" });
-    // const ziglua_mod = ziglua.module("ziglua");
-    // const ziglua_c_mod = ziglua.module("ziglua-c");
-    // pixeng.addImport("ziglua", ziglua_mod);
-    // pixeng.addImport("ziglua-c", ziglua_c_mod);
-    // const lua_lib = ziglua.artifact("lua");
-    // addArchIncludes(b, target, optimize, lua_lib) catch unreachable;
-    // engine_lib.linkLibrary(lua_lib);
+    const ziglua = b.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
+    ziglua.module("zlua").addIncludePath(.{ .cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include" });
+    ziglua.module("ziglua-c").addIncludePath(.{ .cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include" });
+    const ziglua_mod = ziglua.module("zlua");
+    const ziglua_c_mod = ziglua.module("ziglua-c");
+    pixeng.addImport("ziglua", ziglua_mod);
+    pixeng.addImport("ziglua-c", ziglua_c_mod);
+    const lua_lib = ziglua.artifact("lua");
+    addArchIncludes(b, target, optimize, lua_lib) catch unreachable;
+    engine_lib.linkLibrary(lua_lib);
 
     // XML for tilemap loading
     const xml = b.addModule("xml", .{ .root_source_file = b.path("libs/xml.zig") });
@@ -303,8 +303,6 @@ pub fn buildExample(
     exe_mod: *std.Build.Module,
     assets: []const []const u8,
 ) *std.Build.Step.Compile {
-    _ = optimize;
-
     const exe = blk: {
         if (target.result.os.tag == .emscripten) {
             break :blk b.addLibrary(.{
@@ -379,9 +377,9 @@ pub fn buildExample(
             // emcc_command.addFileArg(gui_dep.getEmittedBin());
 
             // Lua
-            // const ziglua = pixeng_mod.owner.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
-            // const lua_dep = ziglua.artifact("lua");
-            // emcc_command.addFileArg(lua_dep.getEmittedBin());
+            const ziglua = pixeng_mod.owner.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
+            const lua_dep = ziglua.artifact("lua");
+            emcc_command.addFileArg(lua_dep.getEmittedBin());
 
             // emcc_command.addFileArg(.getEmittedBin());
             emcc_command.step.dependOn(&exe.step);
