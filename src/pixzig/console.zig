@@ -31,9 +31,9 @@ pub const Console = struct {
         console.* = .{
             .alloc = alloc,
             .scriptEng = scriptEng,
-            .history = std.ArrayList([]u8).init(alloc),
+            .history = .{},
             .historyIndex = -1,
-            .logBuffer = std.ArrayList([]u8).init(alloc),
+            .logBuffer = .{},
             .opts = opts,
             .enabled = true,
             .shouldFocus = true,
@@ -76,14 +76,14 @@ pub const Console = struct {
             self.alloc.free(entry);
         }
 
-        self.history.deinit();
+        self.history.deinit(self.alloc);
 
         for (self.logBuffer.items) |entry| {
             // Free the log entries we allocated in our log func.
             self.alloc.free(entry);
         }
 
-        self.logBuffer.deinit();
+        self.logBuffer.deinit(self.alloc);
         self.alloc.free(self.inputBuffer);
         self.alloc.free(self.storedCommandBuffer);
         self.alloc.destroy(self);
@@ -91,7 +91,7 @@ pub const Console = struct {
 
     fn addMessageToHistoryZ(self: *Console, msgC: [:0]const u8) !void {
         const newMsgC = try self.alloc.dupe(u8, msgC);
-        try self.history.append(newMsgC[0..]);
+        try self.history.append(self.alloc, newMsgC[0..]);
     }
 
     const AddMessageOpts = struct {
@@ -121,7 +121,7 @@ pub const Console = struct {
             @memcpy(new_msg, msg);
         }
 
-        try self.logBuffer.append(new_msg);
+        try self.logBuffer.append(self.alloc, new_msg);
     }
 
     fn log(lua: *Lua) i32 {
