@@ -207,6 +207,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 zgui.init(allocator);
                 zgui.getStyle().scaleAllSizes(scale_factor);
                 zgui.backend.init(window);
+                // zgui.backend.initOpenGL(window);
             }
 
             std.log.debug("Initializing STBI.", .{});

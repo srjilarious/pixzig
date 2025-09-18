@@ -4,10 +4,18 @@ pub const Backend = enum {
     no_backend,
     glfw_wgpu,
     glfw_opengl3,
+    glfw_vulkan,
     glfw_dx12,
     win32_dx12,
     glfw,
     sdl2_opengl3,
+    osx_metal,
+    sdl2,
+    sdl2_renderer,
+    sdl3,
+    sdl3_opengl3,
+    sdl3_renderer,
+    sdl3_gpu,
 };
 
 pub fn build(b: *std.Build) void {
@@ -65,10 +73,8 @@ pub fn build(b: *std.Build) void {
 
     const options_module = options_step.createModule();
 
-    const mod = b.addModule("root", .{
+    _ = b.addModule("root", .{
         .root_source_file = b.path("src/gui.zig"),
-        .target = target,
-        .optimize = optimize,
         .imports = &.{
             .{ .name = "zgui_options", .module = options_module },
         },
@@ -81,50 +87,45 @@ pub fn build(b: *std.Build) void {
         if (options.use_32bit_draw_idx) "-DIMGUI_USE_32BIT_DRAW_INDEX" else "",
     };
 
-    const imgui = if (options.shared) blk: {
-        const lib = b.addLibrary(.{
-            .name = "imgui",
-            .linkage = .dynamic,
-            .root_module = mod,
-        });
+    const objcflags = &.{
+        "-Wno-deprecated",
+        "-Wno-pedantic",
+        "-Wno-availability",
+    };
 
+    const imgui = b.addLibrary(.{
+        .name = "imgui",
+        .linkage = if (options.shared) .dynamic else .static,
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+
+    imgui.root_module.addCMacro("IMGUI_DISABLE_OBSOLETE_FUNCTIONS", "");
+
+    if (options.shared) {
         if (target.result.os.tag == .windows) {
-            lib.root_module.addCMacro("IMGUI_API", "__declspec(dllexport)");
-            lib.root_module.addCMacro("IMPLOT_API", "__declspec(dllexport)");
-            lib.root_module.addCMacro("ZGUI_API", "__declspec(dllexport)");
+            imgui.root_module.addCMacro("IMGUI_API", "__declspec(dllexport)");
+            imgui.root_module.addCMacro("IMPLOT_API", "__declspec(dllexport)");
+            imgui.root_module.addCMacro("ZGUI_API", "__declspec(dllexport)");
         }
 
         if (target.result.os.tag == .macos) {
-            lib.linker_allow_shlib_undefined = true;
+            imgui.linker_allow_shlib_undefined = true;
         }
-
-        break :blk lib;
-    } else b.addLibrary(.{
-        .name = "imgui",
-        .linkage = .static,
-        .root_module = mod,
-    });
+    }
 
     b.installArtifact(imgui);
 
     const emscripten = target.result.os.tag == .emscripten;
-    if (emscripten) {
-        // imgui.root_module.addCMacro("__EMSCRIPTEN__", "");
-        // TODO: read from enviroment or `emcc --version`
-        imgui.root_module.addCMacro("__EMSCRIPTEN_major__", "3");
-        imgui.root_module.addCMacro("__EMSCRIPTEN_minor__", "1");
-        imgui.root_module.stack_protector = false;
-        //imgui.root_module.disable_stack_probing = true;
-    }
 
     imgui.addIncludePath(b.path("libs"));
     imgui.addIncludePath(b.path("libs/imgui"));
 
-    if (!emscripten) {
-        imgui.linkLibC();
-        if (target.result.abi != .msvc)
-            imgui.linkLibCpp();
-    }
+    imgui.linkLibC();
+    if (target.result.abi != .msvc)
+        imgui.linkLibCpp();
 
     imgui.addCSourceFile(.{
         .file = b.path("src/zgui.cpp"),
@@ -222,52 +223,6 @@ pub fn build(b: *std.Build) void {
         imgui.addCSourceFile(.{ .file = b.path("libs/imgui_test_engine/imgui_te_perftool.cpp"), .flags = cflags });
         imgui.addCSourceFile(.{ .file = b.path("libs/imgui_test_engine/imgui_te_ui.cpp"), .flags = cflags });
         imgui.addCSourceFile(.{ .file = b.path("libs/imgui_test_engine/imgui_te_utils.cpp"), .flags = cflags });
-
-        // TODO: Workaround because zig on win64 doesn have phtreads
-        // TODO: Implement corutine in zig can solve this
-        //     if (target.result.os.tag == .windows) {
-        //         const src: []const []const u8 = &.{
-        //             "libs/winpthreads/src/nanosleep.c",
-        //             "libs/winpthreads/src/cond.c",
-        //             "libs/winpthreads/src/barrier.c",
-        //             "libs/winpthreads/src/misc.c",
-        //             "libs/winpthreads/src/clock.c",
-        //             "libs/winpthreads/src/libgcc/dll_math.c",
-        //             "libs/winpthreads/src/spinlock.c",
-        //             "libs/winpthreads/src/thread.c",
-        //             "libs/winpthreads/src/mutex.c",
-        //             "libs/winpthreads/src/sem.c",
-        //             "libs/winpthreads/src/sched.c",
-        //             "libs/winpthreads/src/ref.c",
-        //             "libs/winpthreads/src/rwlock.c",
-        //         };
-
-        //         const winpthreeads_mod = b.addModule("winpthreads", .{
-        //             .root_source_file = b.path("libs/winpthreads/src/pthread.h"),
-        //         });
-        //         const winpthreads = b.addLibrary(.{
-        //             .name = "winpthreads",
-        //             .optimize = optimize,
-        //             .target = target,
-        //         });
-        //         winpthreads.want_lto = false;
-        //         winpthreads.root_module.sanitize_c = false;
-        //         if (optimize == .Debug or optimize == .ReleaseSafe)
-        //             winpthreads.bundle_compiler_rt = true
-        //         else
-        //             winpthreads.root_module.strip = true;
-        //         winpthreads.addCSourceFiles(.{ .files = src, .flags = &.{
-        //             "-Wall",
-        //             "-Wextra",
-        //         } });
-        //         winpthreads.root_module.addCMacro("__USE_MINGW_ANSI_STDIO", "1");
-        //         winpthreads.addIncludePath(b.path("libs/winpthreads/include"));
-        //         winpthreads.addIncludePath(b.path("libs/winpthreads/src"));
-        //         winpthreads.linkLibC();
-        //         b.installArtifact(winpthreads);
-        //         imgui.linkLibrary(winpthreads);
-        //         imgui.addSystemIncludePath(b.path("libs/winpthreads/include"));
-        //     }
     }
 
     switch (options.backend) {
@@ -302,9 +257,7 @@ pub fn build(b: *std.Build) void {
                     "libs/imgui/backends/imgui_impl_opengl3.cpp",
                 },
                 .flags = &(cflags.* ++ .{
-                    "-DIMGUI_IMPL_OPENGL_LOADER_CUSTOM",
-                    // "-DIMGUI_IMPL_OPENGL_ES3",
-                    "-DIMGUI_IMPL_OPENGL_USE_VERTEX_ARRAY",
+                    //"-DIMGUI_IMPL_OPENGL_LOADER_CUSTOM",
                 }),
             });
         },
@@ -337,6 +290,19 @@ pub fn build(b: *std.Build) void {
                 else => {},
             }
         },
+        .glfw_vulkan => {
+            if (b.lazyDependency("zglfw", .{})) |zglfw| {
+                imgui.addIncludePath(zglfw.path("libs/glfw/include"));
+            }
+
+            imgui.addCSourceFiles(.{
+                .files = &.{
+                    "libs/imgui/backends/imgui_impl_glfw.cpp",
+                    "libs/imgui/backends/imgui_impl_vulkan.cpp",
+                },
+                .flags = &(cflags.* ++ .{ "-DVK_NO_PROTOTYPES", "-DZGUI_DEGAMMA" }),
+            });
+        },
         .glfw => {
             if (b.lazyDependency("zglfw", .{})) |zglfw| {
                 imgui.addIncludePath(zglfw.path("libs/glfw/include"));
@@ -354,10 +320,94 @@ pub fn build(b: *std.Build) void {
             }
             imgui.addCSourceFiles(.{
                 .files = &.{
+                    "libs/imgui/backends/imgui_impl_opengl3_loader.h",
                     "libs/imgui/backends/imgui_impl_sdl2.cpp",
                     "libs/imgui/backends/imgui_impl_opengl3.cpp",
                 },
-                .flags = &(cflags.* ++ .{"-DIMGUI_IMPL_OPENGL_LOADER_CUSTOM"}),
+                .flags = &(cflags.* ++ .{"-DIMGUI_IMPL_OPENGL_LOADER_IMGL3W"}),
+            });
+        },
+        .osx_metal => {
+            imgui.linkFramework("Foundation");
+            imgui.linkFramework("Metal");
+            imgui.linkFramework("Cocoa");
+            imgui.linkFramework("QuartzCore");
+            imgui.addCSourceFiles(.{
+                .files = &.{
+                    "libs/imgui/backends/imgui_impl_osx.mm",
+                    "libs/imgui/backends/imgui_impl_metal.mm",
+                },
+                .flags = objcflags,
+            });
+        },
+        .sdl2 => {
+            if (b.lazyDependency("zsdl", .{})) |zsdl| {
+                imgui.addIncludePath(zsdl.path("libs/sdl2/include"));
+            }
+            imgui.addCSourceFiles(.{
+                .files = &.{
+                    "libs/imgui/backends/imgui_impl_sdl2.cpp",
+                },
+                .flags = cflags,
+            });
+        },
+        .sdl2_renderer => {
+            if (b.lazyDependency("zsdl", .{})) |zsdl| {
+                imgui.addIncludePath(zsdl.path("libs/sdl2/include"));
+            }
+            imgui.addCSourceFiles(.{
+                .files = &.{
+                    "libs/imgui/backends/imgui_impl_sdl2.cpp",
+                    "libs/imgui/backends/imgui_impl_sdlrenderer2.cpp",
+                },
+                .flags = cflags,
+            });
+        },
+        .sdl3_gpu => {
+            if (b.lazyDependency("zsdl", .{})) |zsdl| {
+                imgui.addIncludePath(zsdl.path("libs/sdl3/include"));
+            }
+            imgui.addCSourceFiles(.{
+                .files = &.{
+                    "libs/imgui/backends/imgui_impl_sdl3.cpp",
+                    "libs/imgui/backends/imgui_impl_sdlgpu3.cpp",
+                },
+                .flags = cflags,
+            });
+        },
+        .sdl3_renderer => {
+            if (b.lazyDependency("zsdl", .{})) |zsdl| {
+                imgui.addIncludePath(zsdl.path("libs/sdl3/include"));
+            }
+            imgui.addCSourceFiles(.{
+                .files = &.{
+                    "libs/imgui/backends/imgui_impl_sdl3.cpp",
+                    "libs/imgui/backends/imgui_impl_sdlrenderer3.cpp",
+                },
+                .flags = cflags,
+            });
+        },
+        .sdl3_opengl3 => {
+            if (b.lazyDependency("zsdl", .{})) |zsdl| {
+                imgui.addIncludePath(zsdl.path("libs/sdl3/include/SDL3"));
+            }
+            imgui.addCSourceFiles(.{
+                .files = &.{
+                    "libs/imgui/backends/imgui_impl_sdl3.cpp",
+                    "libs/imgui/backends/imgui_impl_opengl3.cpp",
+                },
+                .flags = &(cflags.* ++ .{"-DIMGUI_IMPL_OPENGL_LOADER_IMGL3W"}),
+            });
+        },
+        .sdl3 => {
+            if (b.lazyDependency("zsdl", .{})) |zsdl| {
+                imgui.addIncludePath(zsdl.path("libs/sdl3/include"));
+            }
+            imgui.addCSourceFiles(.{
+                .files = &.{
+                    "libs/imgui/backends/imgui_impl_sdl3.cpp",
+                },
+                .flags = cflags,
             });
         },
         .no_backend => {},
@@ -370,22 +420,20 @@ pub fn build(b: *std.Build) void {
         }
     }
 
-    if (target.result.os.tag != .emscripten) {
-        const test_step = b.step("test", "Run zgui tests");
+    const test_step = b.step("test", "Run zgui tests");
 
-        const tests = b.addTest(.{
-            .name = "zgui-tests",
-            .root_module = b.addModule("tests", .{
-                .root_source_file = b.path("src/gui.zig"),
-                .target = target,
-                .optimize = optimize,
-            }),
-        });
-        b.installArtifact(tests);
+    const tests = b.addTest(.{
+        .name = "zgui-tests",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/gui.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    b.installArtifact(tests);
 
-        tests.root_module.addImport("zgui_options", options_module);
-        tests.linkLibrary(imgui);
+    tests.root_module.addImport("zgui_options", options_module);
+    tests.linkLibrary(imgui);
 
-        test_step.dependOn(&b.addRunArtifact(tests).step);
-    }
+    test_step.dependOn(&b.addRunArtifact(tests).step);
 }

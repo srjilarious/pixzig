@@ -79,6 +79,7 @@ pub const App = struct {
         const fb_size = eng.window.getFramebufferSize();
         // zgui.backend
         zgui.backend.newFrame(@intCast(fb_size[0]), @intCast(fb_size[1]));
+        // zgui.backend.newFrame(); //@intCast(fb_size[0]), @intCast(fb_size[1]));
 
         // Set the starting window position and size to custom values
         zgui.setNextWindowPos(.{ .x = 20.0, .y = 20.0, .cond = .first_use_ever });
