@@ -53,30 +53,30 @@ pub fn build(b: *std.Build) void {
         path: []const u8,
         assets: []const []const u8,
     }{
-        .{ .name = "tile_load_test", .path = "examples/tile_load_test.zig", .assets = &.{
-            "mario_grassish2.png",
-            "level1a.tmx",
-        } },
-        .{ .name = "natetris", .path = "games/natetris/natetris.zig", .assets = &.{} },
-        .{ .name = "actor_test", .path = "examples/actor_test.zig", .assets = &.{
-            "pac-tiles.json",
-            "pac-tiles.png",
-        } },
-        .{ .name = "collision_test", .path = "examples/collision_test.zig", .assets = &.{
-            "mario_grassish2.png",
-            "level1a.tmx",
-            "pac-tiles.png",
-        } },
-        .{ .name = "flecs_test", .path = "examples/flecs_test.zig", .assets = &.{
-            "mario_grassish2.png",
-        } },
-        .{ .name = "a_star_path", .path = "examples/a_star_path.zig", .assets = &.{} },
-        .{ .name = "gameloop_test", .path = "examples/gameloop_test.zig", .assets = &.{} },
-        .{ .name = "game_state_test", .path = "examples/game_state_test.zig", .assets = &.{} },
-        .{ .name = "glfw_sprites", .path = "examples/glfw_sprites.zig", .assets = &.{
-            "mario_grassish2.png",
-        } },
-        .{ .name = "grid_render", .path = "examples/grid_render.zig", .assets = &.{} },
+        // .{ .name = "tile_load_test", .path = "examples/tile_load_test.zig", .assets = &.{
+        //     "mario_grassish2.png",
+        //     "level1a.tmx",
+        // } },
+        // .{ .name = "natetris", .path = "games/natetris/natetris.zig", .assets = &.{} },
+        // .{ .name = "actor_test", .path = "examples/actor_test.zig", .assets = &.{
+        //     "pac-tiles.json",
+        //     "pac-tiles.png",
+        // } },
+        // .{ .name = "collision_test", .path = "examples/collision_test.zig", .assets = &.{
+        //     "mario_grassish2.png",
+        //     "level1a.tmx",
+        //     "pac-tiles.png",
+        // } },
+        // .{ .name = "flecs_test", .path = "examples/flecs_test.zig", .assets = &.{
+        //     "mario_grassish2.png",
+        // } },
+        // .{ .name = "a_star_path", .path = "examples/a_star_path.zig", .assets = &.{} },
+        // .{ .name = "gameloop_test", .path = "examples/gameloop_test.zig", .assets = &.{} },
+        // .{ .name = "game_state_test", .path = "examples/game_state_test.zig", .assets = &.{} },
+        // .{ .name = "glfw_sprites", .path = "examples/glfw_sprites.zig", .assets = &.{
+        //     "mario_grassish2.png",
+        // } },
+        // .{ .name = "grid_render", .path = "examples/grid_render.zig", .assets = &.{} },
         .{ .name = "console_test", .path = "examples/console_test.zig", .assets = &.{
             "Roboto-Medium.ttf",
         } },
@@ -342,6 +342,8 @@ pub fn buildExample(
                 "-O3",
                 "-g",
                 "-sASYNCIFY",
+                "-sUSE_WEBGL2=1",
+                "-sOFFSCREEN_FRAMEBUFFER=1",
                 "-sMIN_WEBGL_VERSION=2",
                 "-sINITIAL_MEMORY=167772160",
                 "-sALLOW_MEMORY_GROWTH=1",

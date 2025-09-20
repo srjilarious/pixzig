@@ -147,48 +147,56 @@
 #endif
 
 // GL includes
-#if defined(IMGUI_IMPL_OPENGL_ES2)
-#if (defined(__APPLE__) && (TARGET_OS_IOS || TARGET_OS_TV))
-#include <OpenGLES/ES2/gl.h>    // Use GL ES 2
-#else
-#include <GLES2/gl2.h>          // Use GL ES 2
-#endif
-#if defined(__EMSCRIPTEN__)
-#ifndef GL_GLEXT_PROTOTYPES
-#define GL_GLEXT_PROTOTYPES
-#endif
-#include <GLES2/gl2ext.h>
-#endif
-#elif defined(IMGUI_IMPL_OPENGL_ES3)
-#if (defined(__APPLE__) && (TARGET_OS_IOS || TARGET_OS_TV))
-#include <OpenGLES/ES3/gl.h>    // Use GL ES 3
-#else
-#include <GLES3/gl3.h>          // Use GL ES 3
-#endif
-#elif !defined(IMGUI_IMPL_OPENGL_LOADER_CUSTOM)
-// Modern desktop OpenGL doesn't have a standard portable header file to load OpenGL function pointers.
-// Helper libraries are often used for this purpose! Here we are using our own minimal custom loader based on gl3w.
-// In the rest of your app/engine, you can use another loader of your choice (gl3w, glew, glad, glbinding, glext, glLoadGen, etc.).
-// If you happen to be developing a new feature for this backend (imgui_impl_opengl3.cpp):
-// - You may need to regenerate imgui_impl_opengl3_loader.h to add new symbols. See https://github.com/dearimgui/gl3w_stripped
-//   Typically you would run: python3 ./gl3w_gen.py --output ../imgui/backends/imgui_impl_opengl3_loader.h --ref ../imgui/backends/imgui_impl_opengl3.cpp ./extra_symbols.txt
-// - You can temporarily use an unstripped version. See https://github.com/dearimgui/gl3w_stripped/releases
-// Changes to this backend using new APIs should be accompanied by a regenerated stripped loader version.
-#define IMGL3W_IMPL
-#define IMGUI_IMPL_OPENGL_LOADER_IMGL3W
-#include "imgui_impl_opengl3_loader.h"
+// PIXZIG: Added extra block to just get to zig-gamedev opengl-decls needed in emscripten builds.
+#if defined(__EMSCRIPTEN__) 
+    extern "C" {
+        #include "opengl-decls.h"
+    }
+#else 
+    #if defined(IMGUI_IMPL_OPENGL_ES2)
+    #if (defined(__APPLE__) && (TARGET_OS_IOS || TARGET_OS_TV))
+    #include <OpenGLES/ES2/gl.h>    // Use GL ES 2
+    #else
+    #include <GLES2/gl2.h>          // Use GL ES 2
+    #endif
+    #if defined(__EMSCRIPTEN__)
+    #ifndef GL_GLEXT_PROTOTYPES
+    #define GL_GLEXT_PROTOTYPES
+    #endif
+    #include <GLES2/gl2ext.h>
+    #endif
+    #elif defined(IMGUI_IMPL_OPENGL_ES3)
+    #if (defined(__APPLE__) && (TARGET_OS_IOS || TARGET_OS_TV))
+    #include <OpenGLES/ES3/gl.h>    // Use GL ES 3
+    #else
+    #include <GLES3/gl3.h>          // Use GL ES 3
+    #endif
+    #elif !defined(IMGUI_IMPL_OPENGL_LOADER_CUSTOM)
+    // Modern desktop OpenGL doesn't have a standard portable header file to load OpenGL function pointers.
+    // Helper libraries are often used for this purpose! Here we are using our own minimal custom loader based on gl3w.
+    // In the rest of your app/engine, you can use another loader of your choice (gl3w, glew, glad, glbinding, glext, glLoadGen, etc.).
+    // If you happen to be developing a new feature for this backend (imgui_impl_opengl3.cpp):
+    // - You may need to regenerate imgui_impl_opengl3_loader.h to add new symbols. See https://github.com/dearimgui/gl3w_stripped
+    //   Typically you would run: python3 ./gl3w_gen.py --output ../imgui/backends/imgui_impl_opengl3_loader.h --ref ../imgui/backends/imgui_impl_opengl3.cpp ./extra_symbols.txt
+    // - You can temporarily use an unstripped version. See https://github.com/dearimgui/gl3w_stripped/releases
+    // Changes to this backend using new APIs should be accompanied by a regenerated stripped loader version.
+    #define IMGL3W_IMPL
+    #define IMGUI_IMPL_OPENGL_LOADER_IMGL3W
+    #include "imgui_impl_opengl3_loader.h"
+    #endif
 #endif
 
+// PIXZIG: Commented out.
 // Vertex arrays are not supported on ES2/WebGL1 unless Emscripten which uses an extension
-#ifndef IMGUI_IMPL_OPENGL_ES2
-#define IMGUI_IMPL_OPENGL_USE_VERTEX_ARRAY
-#elif defined(__EMSCRIPTEN__)
-#define IMGUI_IMPL_OPENGL_USE_VERTEX_ARRAY
-#define glBindVertexArray       glBindVertexArrayOES
-#define glGenVertexArrays       glGenVertexArraysOES
-#define glDeleteVertexArrays    glDeleteVertexArraysOES
-#define GL_VERTEX_ARRAY_BINDING GL_VERTEX_ARRAY_BINDING_OES
-#endif
+// #ifndef IMGUI_IMPL_OPENGL_ES2
+// #define IMGUI_IMPL_OPENGL_USE_VERTEX_ARRAY
+// #elif defined(__EMSCRIPTEN__)
+// #define IMGUI_IMPL_OPENGL_USE_VERTEX_ARRAY
+// #define glBindVertexArray       glBindVertexArrayOES
+// #define glGenVertexArrays       glGenVertexArraysOES
+// #define glDeleteVertexArrays    glDeleteVertexArraysOES
+// #define GL_VERTEX_ARRAY_BINDING GL_VERTEX_ARRAY_BINDING_OES
+// #endif
 
 // Desktop GL 2.0+ has extension and glPolygonMode() which GL ES and WebGL don't have..
 // A desktop ES context can technically compile fine with our loader, so we also perform a runtime checks
@@ -719,7 +727,7 @@ static void ImGui_ImplOpenGL3_DestroyTexture(ImTextureData* tex)
     tex->SetStatus(ImTextureStatus_Destroyed);
 }
 
-void ImGui_ImplOpenGL3_UpdateTexture(ImTextureData* tex)
+extern "C" void ImGui_ImplOpenGL3_UpdateTexture(ImTextureData* tex)
 {
     if (tex->Status == ImTextureStatus_WantCreate)
     {
@@ -777,7 +785,7 @@ void ImGui_ImplOpenGL3_UpdateTexture(ImTextureData* tex)
             for (int y = 0; y < r.h; y++, out_p += src_pitch)
                 memcpy(out_p, tex->GetPixelsAt(r.x, r.y + y), src_pitch);
             IM_ASSERT(out_p == bd->TempBuffer.end());
-            GL_CALL(glTexSubImage2D(GL_TEXTURE_2D, 0, r.x, r.y, r.w, r.h, GL_RGBA, GL_UNSIGNED_BYTE, bd->TempBuffer.Data));
+            //GL_CALL(glTexSubImage2D(GL_TEXTURE_2D, 0, r.x, r.y, r.w, r.h, GL_RGBA, GL_UNSIGNED_BYTE, bd->TempBuffer.Data));
         }
 #endif
         tex->SetStatus(ImTextureStatus_OK);

@@ -73,8 +73,10 @@ pub fn build(b: *std.Build) void {
 
     const options_module = options_step.createModule();
 
-    _ = b.addModule("root", .{
+    const mod = b.addModule("root", .{
         .root_source_file = b.path("src/gui.zig"),
+        .target = target,
+        .optimize = optimize,
         .imports = &.{
             .{ .name = "zgui_options", .module = options_module },
         },
@@ -82,8 +84,11 @@ pub fn build(b: *std.Build) void {
 
     const cflags = &.{
         "-fno-sanitize=undefined",
+        // "-fsanitize=undefined",
         "-Wno-elaborated-enum-base",
         "-Wno-error=date-time",
+        "-DGL_GLEXT_PROTOTYPES",
+        "-Wno-macro-redefined",
         if (options.use_32bit_draw_idx) "-DIMGUI_USE_32BIT_DRAW_INDEX" else "",
     };
 
@@ -91,15 +96,13 @@ pub fn build(b: *std.Build) void {
         "-Wno-deprecated",
         "-Wno-pedantic",
         "-Wno-availability",
+        "-fsanitize=undefined",
     };
 
     const imgui = b.addLibrary(.{
         .name = "imgui",
         .linkage = if (options.shared) .dynamic else .static,
-        .root_module = b.createModule(.{
-            .target = target,
-            .optimize = optimize,
-        }),
+        .root_module = mod,
     });
 
     imgui.root_module.addCMacro("IMGUI_DISABLE_OBSOLETE_FUNCTIONS", "");
@@ -119,13 +122,23 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(imgui);
 
     const emscripten = target.result.os.tag == .emscripten;
+    if (emscripten) {
+        // imgui.root_module.addCMacro("__EMSCRIPTEN__", "");
+        // TODO: read from enviroment or `emcc --version`
+        imgui.root_module.addCMacro("__EMSCRIPTEN_major__", "3");
+        imgui.root_module.addCMacro("__EMSCRIPTEN_minor__", "1");
+        imgui.root_module.stack_protector = false;
+        //imgui.root_module.disable_stack_probing = true;
+    }
 
     imgui.addIncludePath(b.path("libs"));
     imgui.addIncludePath(b.path("libs/imgui"));
 
-    imgui.linkLibC();
-    if (target.result.abi != .msvc)
-        imgui.linkLibCpp();
+    if (!emscripten) {
+        imgui.linkLibC();
+        if (target.result.abi != .msvc)
+            imgui.linkLibCpp();
+    }
 
     imgui.addCSourceFile(.{
         .file = b.path("src/zgui.cpp"),
@@ -257,7 +270,9 @@ pub fn build(b: *std.Build) void {
                     "libs/imgui/backends/imgui_impl_opengl3.cpp",
                 },
                 .flags = &(cflags.* ++ .{
-                    //"-DIMGUI_IMPL_OPENGL_LOADER_CUSTOM",
+                    // "-DIMGUI_IMPL_OPENGL_LOADER_CUSTOM",
+                    "-DIMGUI_IMPL_OPENGL_USE_VERTEX_ARRAY",
+                    // "-DIMGUI_IMPL_OPENGL_ES2",
                 }),
             });
         },
@@ -420,20 +435,22 @@ pub fn build(b: *std.Build) void {
         }
     }
 
-    const test_step = b.step("test", "Run zgui tests");
+    if (target.result.os.tag != .emscripten) {
+        const test_step = b.step("test", "Run zgui tests");
 
-    const tests = b.addTest(.{
-        .name = "zgui-tests",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/gui.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
-    });
-    b.installArtifact(tests);
+        const tests = b.addTest(.{
+            .name = "zgui-tests",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/gui.zig"),
+                .target = target,
+                .optimize = optimize,
+            }),
+        });
+        b.installArtifact(tests);
 
-    tests.root_module.addImport("zgui_options", options_module);
-    tests.linkLibrary(imgui);
+        tests.root_module.addImport("zgui_options", options_module);
+        tests.linkLibrary(imgui);
 
-    test_step.dependOn(&b.addRunArtifact(tests).step);
+        test_step.dependOn(&b.addRunArtifact(tests).step);
+    }
 }

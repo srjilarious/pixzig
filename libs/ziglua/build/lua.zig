@@ -85,23 +85,37 @@ pub fn configure(
         else => unreachable,
     };
 
-    lib.addCSourceFiles(.{
-        .root = .{ .dependency = .{
-            .dependency = upstream,
-            .sub_path = "",
-        } },
-        .files = lua_source_files,
-        .flags = &flags,
-    });
-
-    // Patch ldo.c for Lua 5.1
-    if (lang == .lua51) {
-        const patched = applyPatchToFile(b, b.graph.host, upstream.path("src/ldo.c"), b.path("build/lua-5.1.patch"), "ldo.c");
-
-        library.step.dependOn(&patched.run.step);
-
-        lib.addCSourceFile(.{ .file = patched.output, .flags = &flags });
+    // PIXZIG: Emscripten requires compiling each C file separately
+    if (target.result.os.tag != .emscripten) {
+        lib.addCSourceFiles(.{
+            .root = .{ .dependency = .{
+                .dependency = upstream,
+                .sub_path = "",
+            } },
+            .files = lua_source_files,
+            .flags = &flags,
+        });
+    } else {
+        for (lua_source_files) |file| {
+            const compile_lua = emCompileStep(
+                b,
+                upstream.path(file),
+                optimize,
+                &flags,
+            );
+            lib.addObjectFile(compile_lua);
+        }
     }
+
+    // PIXZIG: Add patch back in.
+    // Patch ldo.c for Lua 5.1
+    // if (lang == .lua51) {
+    //     const patched = applyPatchToFile(b, b.graph.host, upstream.path("src/ldo.c"), b.path("build/lua-5.1.patch"), "ldo.c");
+
+    //     library.step.dependOn(&patched.run.step);
+
+    //     lib.addCSourceFile(.{ .file = patched.output, .flags = &flags });
+    // }
 
     library.linkLibC();
 
@@ -116,6 +130,35 @@ pub fn configure(
     }
 
     return library;
+}
+
+pub fn emCompileStep(b: *Build, filename: Build.LazyPath, optimize: std.builtin.OptimizeMode, extra_flags: []const []const u8) Build.LazyPath {
+    // const emcc_path = emSdkLazyPath(b, emsdk, &.{ "upstream", "emscripten", "emcc" }).getPath(b);
+    // const emcc = b.addSystemCommand(&.{emcc_path});
+    const emcc_exe_path = "/usr/lib/emscripten/emcc";
+    const emcc = b.addSystemCommand(&[_][]const u8{emcc_exe_path});
+    emcc.setName("emcc"); // hide emcc path
+    emcc.addArg("-c");
+    if (optimize == .ReleaseSmall) {
+        emcc.addArg("-Oz");
+    } else if (optimize == .ReleaseFast or optimize == .ReleaseSafe) {
+        emcc.addArg("-O3");
+    }
+    emcc.addFileArg(filename);
+    for (extra_flags) |flag| {
+        emcc.addArg(flag);
+    }
+    emcc.addArg("-o");
+
+    const output_name = switch (filename) {
+        .dependency => filename.dependency.sub_path,
+        .src_path => filename.src_path.sub_path,
+        .cwd_relative => filename.cwd_relative,
+        .generated => filename.generated.sub_path,
+    };
+
+    const output = emcc.addOutputFileArg(b.fmt("{s}.o", .{output_name}));
+    return output;
 }
 
 const lua_base_source_files = [_][]const u8{
