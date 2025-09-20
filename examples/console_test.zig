@@ -32,6 +32,7 @@ pub const App = struct {
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app: *App = try alloc.create(App);
 
+        // _ = eng;
         _ = zgui.io.addFontFromFile(
             "assets/Roboto-Medium.ttf",
             std.math.floor(16.0 * eng.scaleFactor),
@@ -86,6 +87,8 @@ pub const App = struct {
         zgui.setNextWindowSize(.{ .w = -1.0, .h = -1.0, .cond = .first_use_ever });
 
         if (zgui.begin("My window", .{})) {
+            zgui.textUnformatted("Your text here");
+
             if (zgui.button("Press me!", .{ .w = 200.0 })) {
                 std.log.debug("Button pressed\n", .{});
             }

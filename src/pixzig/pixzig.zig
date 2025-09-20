@@ -206,7 +206,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 std.log.info("Initializing GUI system.", .{});
                 zgui.init(allocator);
                 zgui.getStyle().scaleAllSizes(scale_factor);
-                zgui.backend.init(window);
+                zgui.backend.initWithGlSlVersion(window, "#version 300 es");
                 // zgui.backend.initOpenGL(window);
             }
 

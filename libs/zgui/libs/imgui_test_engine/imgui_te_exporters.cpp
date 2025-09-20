@@ -122,7 +122,7 @@ void ImGuiTestEngine_ExportEx(ImGuiTestEngine* engine, ImGuiTestEngineExportForm
 {
     if (format == ImGuiTestEngineExportFormat_None)
         return;
-    IM_ASSERT(filename != nullptr);
+    IM_ASSERT(filename != NULL);
 
     if (format == ImGuiTestEngineExportFormat_JUnitXml)
         ImGuiTestEngine_ExportJUnitXml(engine, filename);
@@ -132,11 +132,11 @@ void ImGuiTestEngine_ExportEx(ImGuiTestEngine* engine, ImGuiTestEngineExportForm
 
 void ImGuiTestEngine_ExportJUnitXml(ImGuiTestEngine* engine, const char* output_file)
 {
-    IM_ASSERT(engine != nullptr);
-    IM_ASSERT(output_file != nullptr);
+    IM_ASSERT(engine != NULL);
+    IM_ASSERT(output_file != NULL);
 
     FILE* fp = fopen(output_file, "w+b");
-    if (fp == nullptr)
+    if (fp == NULL)
     {
         fprintf(stderr, "Writing '%s' failed.\n", output_file);
         return;
@@ -145,7 +145,7 @@ void ImGuiTestEngine_ExportJUnitXml(ImGuiTestEngine* engine, const char* output_
     // Per-testsuite test statistics.
     struct
     {
-        const char* Name     = nullptr;
+        const char* Name     = NULL;
         int         Tests    = 0;
         int         Failures = 0;
         int         Disabled = 0;

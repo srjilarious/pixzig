@@ -286,10 +286,6 @@ pub fn setupAxis(axis: Axis, args: SetupAxis) void {
     zguiPlot_SetupAxis(axis, if (args.label) |l| l else null, args.flags);
 }
 extern fn zguiPlot_SetupAxis(axis: Axis, label: ?[*:0]const u8, flags: AxisFlags) void;
-pub fn setAxis(axis: Axis) void {
-    zguiPlot_SetAxis(axis);
-}
-extern fn zguiPlot_SetAxis(axis: Axis) void;
 //----------------------------------------------------------------------------------------------
 pub const Condition = enum(u32) {
     none = @intFromEnum(gui.Condition.none),
@@ -608,11 +604,12 @@ fn PlotBarsValuesGen(comptime T: type) type {
     };
 }
 pub fn plotBarsValues(label_id: [:0]const u8, comptime T: type, args: PlotBarsValuesGen(T)) void {
-    zguiPlot_PlotBarsValues(
+    assert(args.xv.len == args.yv.len);
+    zguiPlot_PlotBars(
         label_id,
         gui.typeToDataTypeEnum(T),
         args.v.ptr,
-        @as(i32, @intCast(args.v.len)),
+        @as(i32, @intCast(args.xv.len)),
         args.bar_size,
         args.shift,
         args.flags,
@@ -657,30 +654,6 @@ pub fn dragPoint(id: i32, args: DragPoint) bool {
     );
 }
 extern fn zguiPlot_DragPoint(id: i32, x: *f64, y: *f64, *const [4]f32, size: f32, flags: DragToolFlags) bool;
-//----------------------------------------------------------------------------------------------
-pub const Tag = struct {
-    round: bool = false,
-};
-
-pub fn tagX(x: f64, col: [4]f32, args: Tag) void {
-    zguiPlot_TagX(x, &col, args.round);
-}
-extern fn zguiPlot_TagX(x: f64, col: *const [4]f32, round: bool) void;
-
-pub fn tagXText(x: f64, col: [4]f32, comptime fmt: []const u8, fmt_args: anytype) void {
-    zguiPlot_TagXText(x, &col, "%s", gui.formatZ(fmt, fmt_args).ptr);
-}
-extern fn zguiPlot_TagXText(x: f64, col: *const [4]f32, fmt: [*:0]const u8, ...) void;
-
-pub fn tagY(y: f64, col: [4]f32, args: Tag) void {
-    zguiPlot_TagY(y, &col, args.round);
-}
-extern fn zguiPlot_TagY(y: f64, col: *const [4]f32, round: bool) void;
-
-pub fn tagYText(y: f64, col: [4]f32, comptime fmt: []const u8, fmt_args: anytype) void {
-    zguiPlot_TagYText(y, &col, "%s", gui.formatZ(fmt, fmt_args).ptr);
-}
-extern fn zguiPlot_TagYText(y: f64, col: *const [4]f32, fmt: [*:0]const u8, ...) void;
 //----------------------------------------------------------------------------------------------
 // PlotText
 const PlotTextFlags = packed struct(u32) {

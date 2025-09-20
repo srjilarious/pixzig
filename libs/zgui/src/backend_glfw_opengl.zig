@@ -1,5 +1,6 @@
 const gui = @import("gui.zig");
 const backend_glfw = @import("backend_glfw.zig");
+const std = @import("std");
 
 pub fn initWithGlSlVersion(
     window: *const anyopaque, // zglfw.Window
@@ -7,7 +8,7 @@ pub fn initWithGlSlVersion(
 ) void {
     backend_glfw.initOpenGL(window);
 
-    ImGui_ImplOpenGL3_Init(@ptrCast(glsl_version));
+    _ = ImGui_ImplOpenGL3_Init(@ptrCast(glsl_version));
 }
 
 pub fn init(
@@ -33,12 +34,13 @@ pub fn newFrame(fb_width: u32, fb_height: u32) void {
 
 pub fn draw() void {
     gui.render();
-    ImGui_ImplOpenGL3_RenderDrawData(gui.getDrawData());
+    const drawData = gui.getDrawData();
+    ImGui_ImplOpenGL3_RenderDrawData(drawData);
 }
 
 // Those functions are defined in 'imgui_impl_opengl3.cpp`
 // (they include few custom changes).
-extern fn ImGui_ImplOpenGL3_Init(glsl_version: [*c]const u8) void;
+extern fn ImGui_ImplOpenGL3_Init(glsl_version: [*c]const u8) c_int;
 extern fn ImGui_ImplOpenGL3_Shutdown() void;
 extern fn ImGui_ImplOpenGL3_NewFrame() void;
 extern fn ImGui_ImplOpenGL3_RenderDrawData(data: *const anyopaque) void;

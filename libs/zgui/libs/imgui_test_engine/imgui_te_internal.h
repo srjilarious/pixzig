@@ -39,8 +39,8 @@ struct ImGuiTestGatherTask
     short                   InLayerMask = 0;
 
     // Output/Temp
-    ImGuiTestItemList*      OutList = nullptr;
-    ImGuiTestItemInfo*      LastItemInfo = nullptr;
+    ImGuiTestItemList*      OutList = NULL;
+    ImGuiTestItemInfo*      LastItemInfo = NULL;
 
     void Clear() { memset(this, 0, sizeof(*this)); }
 };
@@ -52,8 +52,8 @@ struct ImGuiTestFindByLabelTask
     // Input
     ImGuiID                 InPrefixId = 0;                 // A known base ID which appears BEFORE the wildcard ID (for "hello/**/foo/bar" it would be hash of "hello")
     int                     InSuffixDepth = 0;              // Number of labels in a path, after unknown base ID (for "hello/**/foo/bar" it would be 2)
-    const char*             InSuffix = nullptr;             // A label string which appears on ID stack after unknown base ID (for "hello/**/foo/bar" it would be "foo/bar")
-    const char*             InSuffixLastItem = nullptr;     // A last label string (for "hello/**/foo/bar" it would be "bar")
+    const char*             InSuffix = NULL;                // A label string which appears on ID stack after unknown base ID (for "hello/**/foo/bar" it would be "foo/bar")
+    const char*             InSuffixLastItem = NULL;        // A last label string (for "hello/**/foo/bar" it would be "bar")
     ImGuiID                 InSuffixLastItemHash = 0;
     ImGuiItemStatusFlags    InFilterItemStatusFlags = 0;    // Flags required for item to be returned
 
@@ -67,8 +67,6 @@ enum ImGuiTestInputType
     ImGuiTestInputType_Key,
     ImGuiTestInputType_Char,
     ImGuiTestInputType_ViewportFocus,
-    ImGuiTestInputType_ViewportSetPos,
-    ImGuiTestInputType_ViewportSetSize,
     ImGuiTestInputType_ViewportClose
 };
 
@@ -80,7 +78,6 @@ struct ImGuiTestInput
     ImWchar                 Char = 0;
     bool                    Down = false;
     ImGuiID                 ViewportId = 0;
-    ImVec2                  ViewportPosSize;
 
     static ImGuiTestInput   ForKeyChord(ImGuiKeyChord key_chord, bool down)
     {
@@ -104,24 +101,6 @@ struct ImGuiTestInput
         ImGuiTestInput inp;
         inp.Type = ImGuiTestInputType_ViewportFocus;
         inp.ViewportId = viewport_id;
-        return inp;
-    }
-
-    static ImGuiTestInput   ForViewportSetPos(ImGuiID viewport_id, const ImVec2& pos)
-    {
-        ImGuiTestInput inp;
-        inp.Type = ImGuiTestInputType_ViewportSetPos;
-        inp.ViewportId = viewport_id;
-        inp.ViewportPosSize = pos;
-        return inp;
-    }
-
-    static ImGuiTestInput   ForViewportSetSize(ImGuiID viewport_id, const ImVec2& size)
-    {
-        ImGuiTestInput inp;
-        inp.Type = ImGuiTestInputType_ViewportSetSize;
-        inp.ViewportId = viewport_id;
-        inp.ViewportPosSize = size;
         return inp;
     }
 
@@ -149,8 +128,8 @@ struct ImGuiTestInputs
 struct ImGuiTestEngine
 {
     ImGuiTestEngineIO           IO;
-    ImGuiContext*               UiContextTarget = nullptr;      // imgui context for testing
-    ImGuiContext*               UiContextActive = nullptr;      // imgui context for testing == UiContextTarget or nullptr
+    ImGuiContext*               UiContextTarget = NULL;         // imgui context for testing
+    ImGuiContext*               UiContextActive = NULL;         // imgui context for testing == UiContextTarget or NULL
 
     bool                        Started = false;
     ImU64                       BatchStartTime = 0;
@@ -159,12 +138,11 @@ struct ImGuiTestEngine
     float                       OverrideDeltaTime = -1.0f;      // Inject custom delta time into imgui context to simulate clock passing faster than wall clock time.
     ImVector<ImGuiTest*>        TestsAll;
     ImVector<ImGuiTestRunTask>  TestsQueue;
-    ImGuiTestContext*           TestContext = nullptr;          // Running test context
-    bool                        TestsSourceLinesDirty = false;
+    ImGuiTestContext*           TestContext = NULL;             // Running test context
     ImVector<ImGuiTestInfoTask*>InfoTasks;
     ImGuiTestGatherTask         GatherTask;
     ImGuiTestFindByLabelTask    FindByLabelTask;
-    ImGuiTestCoroutineHandle    TestQueueCoroutine = nullptr;   // Coroutine to run the test queue
+    ImGuiTestCoroutineHandle    TestQueueCoroutine = NULL;      // Coroutine to run the test queue
     bool                        TestQueueCoroutineShouldExit = false; // Flag to indicate that we are shutting down and the test queue coroutine should stop
 
     // Inputs
@@ -172,8 +150,8 @@ struct ImGuiTestEngine
 
     // UI support
     bool                        Abort = false;
-    ImGuiTest*                  UiSelectAndScrollToTest = nullptr;
-    ImGuiTest*                  UiSelectedTest = nullptr;
+    ImGuiTest*                  UiSelectAndScrollToTest = NULL;
+    ImGuiTest*                  UiSelectedTest = NULL;
     Str*                        UiFilterTests;
     Str*                        UiFilterPerfs;
     ImU32                       UiFilterByStatusMask = ~0u;
@@ -188,12 +166,12 @@ struct ImGuiTestEngine
     double                      PerfRefDeltaTime;
     ImMovingAverage<double>     PerfDeltaTime100;
     ImMovingAverage<double>     PerfDeltaTime500;
-    ImGuiPerfTool*              PerfTool = nullptr;
+    ImGuiPerfTool*              PerfTool = NULL;
 
     // Screen/Video Capturing
     ImGuiCaptureToolUI          CaptureTool;                        // Capture tool UI
     ImGuiCaptureContext         CaptureContext;                     // Capture context used in tests
-    ImGuiCaptureArgs*           CaptureCurrentArgs = nullptr;
+    ImGuiCaptureArgs*           CaptureCurrentArgs = NULL;
 
     // Tools
     bool                        PostSwapCalled = false;
@@ -219,12 +197,8 @@ int                 ImGuiTestEngine_GetFrameCount(ImGuiTestEngine* engine);
 bool                ImGuiTestEngine_PassFilter(ImGuiTest* test, const char* filter);
 void                ImGuiTestEngine_RunTest(ImGuiTestEngine* engine, ImGuiTestContext* ctx, ImGuiTest* test, ImGuiTestRunFlags run_flags);
 
-void                ImGuiTestEngine_BindImGuiContext(ImGuiTestEngine* engine, ImGuiContext* ui_ctx);
-void                ImGuiTestEngine_UnbindImGuiContext(ImGuiTestEngine* engine, ImGuiContext* ui_ctx);
-
 void                ImGuiTestEngine_RebootUiContext(ImGuiTestEngine* engine);
 ImGuiPerfTool*      ImGuiTestEngine_GetPerfTool(ImGuiTestEngine* engine);
-void                ImGuiTestEngine_UpdateTestsSourceLines(ImGuiTestEngine* engine);
 
 // Screen/Video Capturing
 bool                ImGuiTestEngine_CaptureScreenshot(ImGuiTestEngine* engine, ImGuiCaptureArgs* args);

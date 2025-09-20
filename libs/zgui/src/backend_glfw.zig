@@ -19,14 +19,6 @@ pub fn initOpenGL(
     }
 }
 
-pub fn initVulkan(
-    window: *const anyopaque, // zglfw.Window
-) void {
-    if (!ImGui_ImplGlfw_InitForVulkan(window, true)) {
-        unreachable;
-    }
-}
-
 pub fn deinit() void {
     ImGui_ImplGlfw_Shutdown();
 }
@@ -39,6 +31,5 @@ pub fn newFrame() void {
 // (they include few custom changes).
 extern fn ImGui_ImplGlfw_InitForOther(window: *const anyopaque, install_callbacks: bool) bool;
 extern fn ImGui_ImplGlfw_InitForOpenGL(window: *const anyopaque, install_callbacks: bool) bool;
-extern fn ImGui_ImplGlfw_InitForVulkan(window: *const anyopaque, install_callbacks: bool) bool;
 extern fn ImGui_ImplGlfw_NewFrame() void;
 extern fn ImGui_ImplGlfw_Shutdown() void;
