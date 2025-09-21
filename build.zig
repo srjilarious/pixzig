@@ -57,26 +57,26 @@ pub fn build(b: *std.Build) void {
             "mario_grassish2.png",
             "level1a.tmx",
         } },
-        // .{ .name = "natetris", .path = "games/natetris/natetris.zig", .assets = &.{} },
-        // .{ .name = "actor_test", .path = "examples/actor_test.zig", .assets = &.{
-        //     "pac-tiles.json",
-        //     "pac-tiles.png",
-        // } },
-        // .{ .name = "collision_test", .path = "examples/collision_test.zig", .assets = &.{
-        //     "mario_grassish2.png",
-        //     "level1a.tmx",
-        //     "pac-tiles.png",
-        // } },
-        // .{ .name = "flecs_test", .path = "examples/flecs_test.zig", .assets = &.{
-        //     "mario_grassish2.png",
-        // } },
-        // .{ .name = "a_star_path", .path = "examples/a_star_path.zig", .assets = &.{} },
-        // .{ .name = "gameloop_test", .path = "examples/gameloop_test.zig", .assets = &.{} },
-        // .{ .name = "game_state_test", .path = "examples/game_state_test.zig", .assets = &.{} },
-        // .{ .name = "glfw_sprites", .path = "examples/glfw_sprites.zig", .assets = &.{
-        //     "mario_grassish2.png",
-        // } },
-        // .{ .name = "grid_render", .path = "examples/grid_render.zig", .assets = &.{} },
+        .{ .name = "natetris", .path = "games/natetris/natetris.zig", .assets = &.{} },
+        .{ .name = "actor_test", .path = "examples/actor_test.zig", .assets = &.{
+            "pac-tiles.json",
+            "pac-tiles.png",
+        } },
+        .{ .name = "collision_test", .path = "examples/collision_test.zig", .assets = &.{
+            "mario_grassish2.png",
+            "level1a.tmx",
+            "pac-tiles.png",
+        } },
+        .{ .name = "flecs_test", .path = "examples/flecs_test.zig", .assets = &.{
+            "mario_grassish2.png",
+        } },
+        .{ .name = "a_star_path", .path = "examples/a_star_path.zig", .assets = &.{} },
+        .{ .name = "gameloop_test", .path = "examples/gameloop_test.zig", .assets = &.{} },
+        .{ .name = "game_state_test", .path = "examples/game_state_test.zig", .assets = &.{} },
+        .{ .name = "glfw_sprites", .path = "examples/glfw_sprites.zig", .assets = &.{
+            "mario_grassish2.png",
+        } },
+        .{ .name = "grid_render", .path = "examples/grid_render.zig", .assets = &.{} },
         .{ .name = "console_test", .path = "examples/console_test.zig", .assets = &.{
             "Roboto-Medium.ttf",
         } },
@@ -225,9 +225,11 @@ fn buildEngine(
     });
     const zgui_mod = zgui.module("root");
     pixeng.addImport("zgui", zgui_mod);
-    const gui_lib = zgui.artifact("imgui");
-    addArchIncludes(b, target, optimize, gui_lib) catch unreachable;
-    engine_lib.linkLibrary(gui_lib);
+    if (target.result.os.tag == .emscripten) {
+        const gui_lib = zgui.artifact("imgui");
+        addArchIncludes(b, target, optimize, gui_lib) catch unreachable;
+        engine_lib.linkLibrary(gui_lib);
+    }
 
     // Lua
     const ziglua = b.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
@@ -390,7 +392,8 @@ pub fn buildExample(
             b.default_step.dependOn(&install.step);
         },
         else => {
-            exe.linkLibrary(engine_lib.?);
+            _ = engine_lib;
+            //exe.linkLibrary(engine_lib.?);
 
             const path = b.pathJoin(&.{ "bin", name });
 
