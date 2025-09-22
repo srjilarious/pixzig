@@ -25,6 +25,7 @@ pub const console = @import("./console.zig");
 pub const collision = @import("./collision.zig");
 pub const a_star = @import("./a_star.zig");
 pub const system = @import("./system.zig");
+pub const assets = @import("./assets.zig");
 
 pub const Texture = textures.Texture;
 pub const TextureImage = textures.TextureImage;
@@ -39,6 +40,7 @@ pub const Color8 = common.Color8;
 
 pub const PixzigEngineOptions = struct {
     withGui: bool = false,
+    defaultIcon: bool = true,
     rendererOpts: renderer.RendererOptions = .{},
 };
 
@@ -225,6 +227,13 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 .keyboard = input.Keyboard.init(window, allocator),
                 .renderer = try EngRenderer.init(allocator, options.renderInitOpts),
             };
+
+            if (engOpts.defaultIcon) {
+                std.log.debug("Setting default window icon.", .{});
+                var defaultIcon = std.io.Reader.fixed(assets.icon48x48);
+                try eng.setIcon(&defaultIcon);
+            }
+
             return eng;
         }
 
@@ -241,6 +250,24 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             glfw.terminate();
 
             self.allocator.destroy(self);
+        }
+
+        pub fn setIcon(self: *Self, icon_data: *std.io.Reader) !void {
+            if (builtin.os.tag != .emscripten) {
+                const data_buffer = try icon_data.readAlloc(self.allocator, icon_data.end);
+                defer self.allocator.free(data_buffer);
+
+                var icon_image = try stbi.Image.loadFromMemory(data_buffer, 4);
+                defer icon_image.deinit();
+
+                const icon = glfw.Image{
+                    .width = @intCast(icon_image.width),
+                    .height = @intCast(icon_image.height),
+                    .pixels = icon_image.data.ptr,
+                };
+
+                self.window.setIcon(&.{icon});
+            }
         }
     };
 }
