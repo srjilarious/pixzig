@@ -24,7 +24,6 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{});
 
 pub const App = struct {
     alloc: std.mem.Allocator,
-    projMat: zmath.Mat,
     scrollOffset: Vec2F,
     mapRenderer: tile.TileMapRenderer,
     shapeBatch: pixzig.renderer.ShapeBatchQueue,
@@ -36,9 +35,6 @@ pub const App = struct {
     fps: FpsCounter,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
-        // Orthographic projection matrix
-        const projMat = zmath.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
-
         const texShader = try pixzig.shaders.Shader.init(
             &pixzig.shaders.TexVertexShader,
             &pixzig.shaders.TexPixelShader,
@@ -70,7 +66,6 @@ pub const App = struct {
         const app = try alloc.create(App);
         app.* = .{
             .alloc = alloc,
-            .projMat = projMat,
             .scrollOffset = .{ .x = 0, .y = 0 },
             .mapRenderer = mapRender,
             .map = map,
@@ -160,7 +155,7 @@ pub const App = struct {
         eng.renderer.clear(0, 0, 0.2, 1);
 
         self.fps.renderTick();
-        const mvp = zmath.mul(zmath.translation(self.scrollOffset.x, self.scrollOffset.y, 0.0), self.projMat);
+        const mvp = zmath.mul(zmath.translation(self.scrollOffset.x, self.scrollOffset.y, 0.0), eng.projMat);
         try self.mapRenderer.draw(self.tex, &self.map.layers.items[1], mvp);
 
         // Draw outline.

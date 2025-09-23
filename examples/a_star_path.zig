@@ -45,11 +45,10 @@ const MapHeight = 18;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.PixzigAppRunner(App, .{ .gameScale = 5.0 });
 
 pub const App = struct {
     alloc: std.mem.Allocator,
-    projMat: zmath.Mat,
     fps: FpsCounter,
     grid: GridRenderer,
     path: Path,
@@ -66,9 +65,6 @@ pub const App = struct {
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app = try alloc.create(App);
-
-        // Orthographic projection matrix
-        const projMat = zmath.orthographicOffCenterLhGl(0, 200, 0, 150, -0.1, 1000);
 
         const shader = try Shader.init(&shaders.ColorVertexShader, &shaders.ColorPixelShader);
         const grid = try GridRenderer.init(alloc, shader, .{ .x = MapWidth, .y = MapHeight }, .{ .x = TileWidth, .y = TileHeight }, 1, Color{ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 });
@@ -217,7 +213,6 @@ pub const App = struct {
 
         app.* = .{
             .alloc = alloc,
-            .projMat = projMat,
             .fps = FpsCounter.init(),
             .grid = grid,
             .tex = tex,
@@ -397,7 +392,7 @@ pub const App = struct {
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
         self.fps.renderTick();
 
-        eng.renderer.begin(self.projMat);
+        eng.renderer.begin(eng.projMat);
 
         eng.renderer.clear(0.0, 0.0, 0.2, 1.0);
         //eng.renderer.drawFullTexture(self.tex, .{ .x = 0, .y = 0 }, 8);
@@ -408,9 +403,9 @@ pub const App = struct {
         );
         eng.renderer.end();
 
-        try self.pathLayerRenderer.draw(self.tex, &self.layer, self.projMat);
+        try self.pathLayerRenderer.draw(self.tex, &self.layer, eng.projMat);
 
-        try self.grid.draw(self.projMat);
+        try self.grid.draw(eng.projMat);
     }
 };
 

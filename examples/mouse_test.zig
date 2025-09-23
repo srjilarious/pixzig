@@ -21,7 +21,6 @@ const PixzigEngine = pixzig.PixzigEngine;
 pub const App = struct {
     fps: FpsCounter,
     alloc: std.mem.Allocator,
-    projMat: zmath.Mat,
     mouse: pixzig.input.Mouse,
     spriteBatch: pixzig.renderer.SpriteBatchQueue,
     tex: *pixzig.Texture,
@@ -29,10 +28,6 @@ pub const App = struct {
     texShader: pixzig.shaders.Shader,
 
     pub fn init(eng: *PixzigEngine, alloc: std.mem.Allocator) !App {
-
-        // Orthographic projection matrix
-        const projMat = math.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
-
         var texShader = try pixzig.shaders.Shader.init(
             &pixzig.shaders.TexVertexShader,
             &pixzig.shaders.TexPixelShader
@@ -47,7 +42,6 @@ pub const App = struct {
         return .{ 
             .fps = FpsCounter.init(),
             .alloc = alloc,
-            .projMat = projMat,
             .mouse = pixzig.input.Mouse.init(eng.window, eng.allocator),
             .spriteBatch = spriteBatch,
             .tex = tex,
@@ -85,7 +79,7 @@ pub const App = struct {
         eng.clear(.{ 0, 0, 0.2, 1 });
         self.fps.renderTick();
 
-        self.spriteBatch.begin(self.projMat);
+        self.spriteBatch.begin(eng.projMat);
         self.spriteBatch.drawSprite(&self.pointer);
         self.spriteBatch.end();
     }
@@ -130,25 +124,4 @@ pub fn main() !void {
     }
 }
 
-// pub fn main() !void {
-
-//     var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
-//     defer _ = gpa_state.deinit();
-//     const gpa = gpa_state.allocator();
-
-//     var eng = try pixzig.PixzigEngine.init("Glfw Eng Mouse Test.", gpa, EngOptions{});
-//     defer eng.deinit();
-
-//     const AppRunner = pixzig.PixzigApp(MyApp);
-
-//     var app = try MyApp.init(&eng, gpa);
-
-//     eng.window.setInputMode(.cursor, .hidden);
-//     glfw.swapInterval(0);
-
-//     std.debug.print("Starting main loop...\n", .{});
-//     AppRunner.gameLoop(&app, &eng);
-
-//     std.debug.print("Cleaning up...\n", .{});
-// }
 

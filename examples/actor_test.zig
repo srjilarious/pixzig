@@ -21,14 +21,13 @@ const Actor = pixzig.sprites.Actor;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.PixzigAppRunner(App, .{ .gameScale = 8.0 });
 
 pub const App = struct {
     alloc: std.mem.Allocator,
     spr: Sprite,
     actor: Actor,
     seqMgr: FrameSequenceManager,
-    projMat: zmath.Mat,
     fps: FpsCounter,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
@@ -40,7 +39,6 @@ pub const App = struct {
             .spr = Sprite.create(try eng.textures.getTexture("player_right_1"), .{ .x = 16, .y = 16 }),
             .actor = try pixzig.sprites.Actor.init(alloc),
             .seqMgr = try FrameSequenceManager.init(alloc),
-            .projMat = zmath.mul(zmath.scaling(4.0, 4.0, 1.0), zmath.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000)),
             .fps = FpsCounter.init(),
         };
 
@@ -112,7 +110,7 @@ pub const App = struct {
         eng.renderer.clear(0.2, 0, 0.2, 1);
         self.fps.renderTick();
 
-        eng.renderer.begin(self.projMat);
+        eng.renderer.begin(eng.projMat);
         eng.renderer.drawSprite(&self.spr);
         eng.renderer.end();
     }
@@ -129,55 +127,3 @@ pub fn main() !void {
     glfw.swapInterval(0);
     appRunner.run(app);
 }
-
-// pub fn main() !void {
-//     std.log.info("Pixzig Engine actor test!", .{});
-//     var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
-//     defer _ = gpa_state.deinit();
-//     const gpa = gpa_state.allocator();
-
-//     var eng = try pixzig.PixzigEngine.init("Pixzig Actor Test!", gpa, EngOptions{});
-//     defer eng.deinit();
-
-//     // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-//     // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
-//     // Orthographic projection matrix
-//     const projMat =
-
-//     var texShader = try pixzig.shaders.Shader.init(&pixzig.shaders.TexVertexShader, &pixzig.shaders.TexPixelShader);
-//     defer texShader.deinit();
-
-//     var spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(gpa, &texShader);
-//     defer spriteBatch.deinit();
-
-//     // defer frseq_2.deinit();
-
-//     var actor = gpa);
-//     defer actor.deinit();
-
-//     // actor.setState("test");
-
-//     var spr = pixzig.sprites.
-//     spr.setPos(32, 32);
-//     fr1.apply(&spr);
-//     fr2.apply(&spr);
-//     fr3.apply(&spr);
-
-//     std.debug.print("Starting main loop...\n", .{});
-//     // Main loop
-//     while (!eng.window.shouldClose() and eng.window.getKey(.escape) != .press) {
-//         glfw.pollEvents();
-
-//         eng.keyboard.update();
-
-//         gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0.0, 0.0, 0.0, 1.0 });
-
-//         spriteBatch.begin(projMat);
-//         actor.update(30, &spr);
-//         spriteBatch.drawSprite(&spr);
-//         spriteBatch.end();
-
-//         eng.window.swapBuffers();
-//     }
-// }

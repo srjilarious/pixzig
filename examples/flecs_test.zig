@@ -33,7 +33,6 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{});
 
 pub const App = struct {
     alloc: std.mem.Allocator,
-    projMat: zmath.Mat,
     scrollOffset: Vec2F,
     tex: *pixzig.Texture,
     fps: FpsCounter,
@@ -43,8 +42,6 @@ pub const App = struct {
     draw_query: *flecs.query_t,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
-        // Orthographic projection matrix
-        const projMat = zmath.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
         const bigtex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
 
         const tex = try eng.textures.addSubTexture(bigtex, "guy", RectF.fromCoords(192, 64, 32, 32, 512, 512));
@@ -76,7 +73,6 @@ pub const App = struct {
         var app = try alloc.create(App);
         app.* = App{
             .alloc = alloc,
-            .projMat = projMat,
             .scrollOffset = .{ .x = 0, .y = 0 },
             .paused = false,
             .tex = tex,
@@ -196,7 +192,7 @@ pub const App = struct {
 
         self.fps.renderTick();
 
-        eng.renderer.begin(self.projMat);
+        eng.renderer.begin(eng.projMat);
 
         var it = flecs.query_iter(self.world, self.draw_query);
         while (flecs.query_next(&it)) {

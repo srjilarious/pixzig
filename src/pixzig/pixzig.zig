@@ -41,6 +41,7 @@ pub const Color8 = common.Color8;
 pub const PixzigEngineOptions = struct {
     withGui: bool = false,
     defaultIcon: bool = true,
+    gameScale: f32 = 1.0,
     rendererOpts: renderer.RendererOptions = .{},
 };
 
@@ -143,6 +144,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         options: PixzigEngineInitOptions,
         scaleFactor: f32,
         allocator: std.mem.Allocator,
+        projMat: zmath.Mat,
         textures: TextureManager,
         keyboard: input.Keyboard,
         renderer: EngRenderer,
@@ -199,15 +201,15 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             std.log.info("GL Version: {s}", .{glVersion});
             std.log.info("GLSL Version: {s}", .{glslVersion});
 
-            const scale_factor = scale_factor: {
+            const scaleFactor = scaleFactor: {
                 const scale = window.getContentScale();
-                break :scale_factor @max(scale[0], scale[1]);
+                break :scaleFactor @max(scale[0], scale[1]);
             };
 
             if (engOpts.withGui) {
                 std.log.info("Initializing GUI system.", .{});
                 zgui.init(allocator);
-                zgui.getStyle().scaleAllSizes(scale_factor);
+                zgui.getStyle().scaleAllSizes(scaleFactor);
                 zgui.backend.initWithGlSlVersion(window, "#version 300 es");
                 // zgui.backend.initOpenGL(window);
             }
@@ -217,12 +219,24 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
 
             std.log.info("Pixzig Engine Initialized.", .{});
 
+            // Create a default 2D orthogrpaphic projection matrix fitting the window.
+            // Also allow scaling the game content with engOpts.gameScale.
+            const projMat = zmath.mul(zmath.scaling(engOpts.gameScale, engOpts.gameScale, 1.0), zmath.orthographicOffCenterLhGl(
+                0,
+                @as(f32, @floatFromInt(options.windowSize.x)) * scaleFactor,
+                0,
+                @as(f32, @floatFromInt(options.windowSize.y)) * scaleFactor,
+                -0.1,
+                1000,
+            ));
+
             const eng = try allocator.create(Self);
             eng.* = .{
                 .window = window,
                 .options = options,
-                .scaleFactor = scale_factor,
+                .scaleFactor = scaleFactor,
                 .allocator = allocator,
+                .projMat = projMat,
                 .textures = TextureManager.init(allocator),
                 .keyboard = input.Keyboard.init(window, allocator),
                 .renderer = try EngRenderer.init(allocator, options.renderInitOpts),

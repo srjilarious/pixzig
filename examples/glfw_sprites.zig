@@ -23,7 +23,6 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{});
 
 pub const App = struct {
     alloc: std.mem.Allocator,
-    projMat: zmath.Mat,
     scrollOffset: Vec2F,
     tex: *pixzig.Texture,
     fps: FpsCounter,
@@ -36,15 +35,11 @@ pub const App = struct {
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app = try alloc.create(App);
 
-        // Orthographic projection matrix
-        const projMat = zmath.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
-
         std.log.debug("Loading texture...\n", .{});
         const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
 
         app.* = .{
             .alloc = alloc,
-            .projMat = projMat,
             .scrollOffset = .{ .x = 0, .y = 0 },
             .tex = tex,
             .fps = FpsCounter.init(),
@@ -114,7 +109,7 @@ pub const App = struct {
         eng.renderer.clear(0, 0, 0.2, 1);
         self.fps.renderTick();
 
-        eng.renderer.begin(self.projMat);
+        eng.renderer.begin(eng.projMat);
 
         for (0..3) |idx| {
             eng.renderer.draw(self.tex, self.dest[idx], self.srcCoords[idx]);

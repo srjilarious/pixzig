@@ -26,7 +26,6 @@ const AppRunner =  pixzig.PixzigAppRunner(App, .{});
 
 pub const App = struct {
     alloc: std.mem.Allocator,
-    projMat: zmath.Mat,
     scrollOffset: Vec2F,
     spriteBatch: pixzig.renderer.SpriteBatchQueue,
     tex: *pixzig.Texture,
@@ -42,8 +41,6 @@ pub const App = struct {
     draw_query: *flecs.query_t,
  
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
-        // Orthographic projection matrix
-        const projMat = zmath.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
 
         var texShader = try pixzig.shaders.Shader.init(
             &pixzig.shaders.TexVertexShader,
@@ -87,7 +84,6 @@ pub const App = struct {
         var app = try alloc.create(App);
         app.* = App{
             .alloc = alloc,
-            .projMat = projMat,
             .scrollOffset = .{ .x = 0, .y = 0}, 
             .paused = false,
             .spriteBatch = spriteBatch,
@@ -245,7 +241,7 @@ pub const App = struct {
         eng.renderer.clear(0, 0, 0.2, 1);
         self.fps.renderTick();
        
-        self.spriteBatch.begin(self.projMat);
+        self.spriteBatch.begin(eng.projMat);
 
         var it = flecs.query_iter(self.world, self.draw_query);
         while (flecs.query_next(&it)) {
