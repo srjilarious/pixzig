@@ -596,33 +596,18 @@ pub const Character = struct {
     advance: u32
 };
 
-pub const TextRenderer = struct {
-    characters: std.AutoHashMap(u32, Character),
-    tex: Texture,
-    spriteBatch: SpriteBatchQueue,
+pub const FontAtlas = struct {
+    chars: std.AutoHashMap(u32, Character),
+    texture: Texture,
     maxY: i32,
-    texShader: *Shader,
-    alloc: std.mem.Allocator,
+    // isAlpha: bool,
 
-    pub fn init(fontData: []const u8, fontSize: f32, alloc: std.mem.Allocator) !TextRenderer {
-        var chars = std.AutoHashMap(u32, Character).init(alloc);
-        const texShader = try alloc.create(Shader);
+    pub fn getChar(self: *FontAtlas, char: u32) ?Character {
+        return self.chars.get(char);
+    }
 
-        if (builtin.os.tag == .emscripten) {
-            texShader.* = try shaders.Shader.init(
-                &shaders.TexVertexShader,
-                &TextPixelShader_Web
-            );
-        }
-        else {
-            texShader.* = try shaders.Shader.init(
-                &shaders.TexVertexShader,
-                &TextPixelShader_Desktop
-            );
-        }
-
-        const spriteBatch = try SpriteBatchQueue.init(alloc, texShader);
-
+    fn initFromTtf(fontData: []const u8, fontSize: f32, alloc: std.mem.Allocator) !FontAtlas{
+         var chars = std.AutoHashMap(u32, Character).init(alloc);
         // Pack font using STB_TrueType
         var pack_context = stb_tt.c.stbtt_pack_context{};
         const GlyphBufferWidth = 2048;
@@ -731,11 +716,9 @@ pub const TextRenderer = struct {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-        return TextRenderer{ 
-            .alloc = alloc,
-            .characters = chars,
-            .spriteBatch = spriteBatch,
-            .tex = Texture{ 
+        return .{
+            .chars = chars,
+            .texture = Texture{ 
                 .texture = charTex, 
                 .size = Vec2U{ 
                     .x = @intCast(GlyphBufferWidth), 
@@ -743,40 +726,98 @@ pub const TextRenderer = struct {
                 },
                 .src = RectF{ .l = 0, .t = 0, .r = 1, .b = 1 },
             },
-            .texShader = texShader,
             .maxY = maxY,
         };
     }
 
     // Alternative init function that loads from file path (for non-WASM)
-    pub fn initFromFile(fontPath: []const u8, fontSize: f32, alloc: std.mem.Allocator) !TextRenderer {
+    pub fn initFromTtfFile(fontPath: []const u8, fontSize: f32, alloc: std.mem.Allocator) !FontAtlas {
         const fontData = try std.fs.cwd().readFileAlloc(alloc, fontPath, std.math.maxInt(usize));
         defer alloc.free(fontData);
         
-        return try init(fontData, fontSize, alloc);
+        return initFromTtf(fontData, fontSize, alloc);
     }
     
     // Alternative init function for embedded fonts (WASM-friendly)
-    pub fn initFromEmbedded(comptime fontPath: []const u8, fontSize: f32, alloc: std.mem.Allocator) !TextRenderer {
+    pub fn initFromTtfEmbedded(comptime fontPath: []const u8, fontSize: f32, alloc: std.mem.Allocator) !FontAtlas {
         const fontData = @embedFile(fontPath);
-        return try init(fontData, fontSize, alloc);
+        return initFromTtf(fontData, fontSize, alloc);
+    }
+
+    pub fn deinit(self: *FontAtlas) void {
+        gl.deleteTextures(1, &self.tex.texture);
+        self.characters.deinit();
+    }
+};
+
+pub const TextRenderer = struct {
+    spriteBatch: SpriteBatchQueue,
+    texShader: *Shader,
+    alloc: std.mem.Allocator,
+    atlas: ?*FontAtlas,
+
+    pub fn init(alloc: std.mem.Allocator) !TextRenderer {
+        const texShader = try alloc.create(Shader);
+
+        if (builtin.os.tag == .emscripten) {
+            texShader.* = try shaders.Shader.init(
+                &shaders.TexVertexShader,
+                &TextPixelShader_Web
+            );
+        }
+        else {
+            texShader.* = try shaders.Shader.init(
+                &shaders.TexVertexShader,
+                &TextPixelShader_Desktop
+            );
+        }
+
+        const spriteBatch = try SpriteBatchQueue.init(alloc, texShader);
+        
+        return TextRenderer{ 
+            .alloc = alloc,
+            .spriteBatch = spriteBatch,
+            .texShader = texShader,
+            .atlas = null,
+        };
     }
 
     pub fn deinit(self: *TextRenderer) void {
-        self.characters.deinit();
-        gl.deleteTextures(1, &self.tex.texture);
+        // self.fontAtlas.deinit();
         self.spriteBatch.deinit();
         self.texShader.deinit();
     }
 
+    pub fn begin(self: *TextRenderer, mvp: zmath.Mat, atlas: ?*FontAtlas) void {
+        if(atlas != null) {
+            self.atlas = atlas;
+        }
+
+        //self.tex = atlas.tex;
+        self.spriteBatch.begin(mvp);
+    }
+
+    pub fn end(self: *TextRenderer) void {
+        self.spriteBatch.end();
+    }
+
+    pub fn setAtlas(self: *TextRenderer, atlas: *FontAtlas) void {
+        self.atlas = atlas;
+    }
+
     pub fn drawString(self: *TextRenderer, text: []const u8, pos: Vec2I) Vec2I {
         var currX: i32 = pos.x;
-        const posY = pos.y + self.maxY;
 
         var drawSize: Vec2I = .{ .x = 0, .y = 0 };
         
+        if(self.atlas == null) {
+            std.log.err("TextRenderer: No FontAtlas set. Cannot draw text.", .{});
+            return drawSize;
+        }
+
+        const posY = pos.y + self.atlas.?.maxY;
         for(text) |c| {
-            const charDataPtr = self.characters.get(@intCast(c));
+            const charDataPtr = self.atlas.?.chars.get(@intCast(c));
             if(charDataPtr == null) continue;
 
             const charData = charDataPtr.?;
@@ -784,7 +825,7 @@ pub const TextRenderer = struct {
             // Only draw if character has visual representation
             if (charData.size.x > 0 and charData.size.y > 0) {
                 self.spriteBatch.draw(
-                    &self.tex, 
+                    &self.atlas.?.texture, 
                     RectF.fromPosSize(
                         currX + charData.bearing.x, 
                         posY - charData.bearing.y, 
@@ -810,7 +851,7 @@ pub const TextRenderer = struct {
         var height: i32 = 0;
         
         for(text) |c| {
-            const charDataPtr = self.characters.get(@intCast(c));
+            const charDataPtr = self.atlas.chars.get(@intCast(c));
             if(charDataPtr == null) continue;
             
             const charData = charDataPtr.?;
@@ -849,6 +890,7 @@ pub fn Renderer(opts: RendererOptions) type {
             colorShader: Shader = undefined,
             
             text: TextRenderer = undefined,
+            fontAtlas: ?FontAtlas = null,
 
         };
 
@@ -880,7 +922,16 @@ pub fn Renderer(opts: RendererOptions) type {
             if(opts.textRenderering) {
                 std.log.info("Setting up text renderering.\n", .{});
                 std.debug.assert(initOpts.fontFace != null);
-                rend.text = try TextRenderer.initFromFile(initOpts.fontFace.?, 32.0, alloc);
+                rend.text = try TextRenderer.init(alloc);
+
+                if (initOpts.fontFace != null) {
+                    rend.fontAtlas = try FontAtlas.initFromTtfFile(initOpts.fontFace.?, 32.0, alloc);
+                    rend.text.setAtlas(&rend.fontAtlas.?);
+                }
+                else {
+                    std.log.warn("No default font provided. Text rendering will not work until a FontAtlas is set.", .{});
+                }
+                
             }
 
             // set texture options
@@ -926,7 +977,7 @@ pub fn Renderer(opts: RendererOptions) type {
             }
 
             if(opts.textRenderering) {
-                self.impl.text.spriteBatch.begin(mvp);
+                self.impl.text.begin(mvp, null);
             }
         }
 
@@ -940,7 +991,7 @@ pub fn Renderer(opts: RendererOptions) type {
             }
 
             if(opts.textRenderering) {
-                self.impl.text.spriteBatch.end();
+                self.impl.text.end();
             }
         }
         
