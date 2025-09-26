@@ -44,7 +44,7 @@ pub const FontAtlas = struct {
     chars: std.AutoHashMap(u32, Character),
     texture: Texture,
     maxY: i32,
-    // isAlpha: bool,
+    isAlpha: bool,
 
     pub fn getChar(self: *FontAtlas, char: u32) ?Character {
         return self.chars.get(char);
@@ -104,8 +104,15 @@ pub const FontAtlas = struct {
             const char_width = packed_char.x1 - packed_char.x0;
             const char_height = packed_char.y1 - packed_char.y0;
 
-            // Convert STB's coordinates to your RectF format
-            const coords = RectF.fromCoords(@intCast(packed_char.x0), @intCast(packed_char.y0), @intCast(char_width), @intCast(char_height), GlyphBufferWidth, GlyphBufferHeight);
+            // Generate teh texture coordinates
+            const coords = RectF.fromCoords(
+                @intCast(packed_char.x0),
+                @intCast(packed_char.y0),
+                @intCast(char_width),
+                @intCast(char_height),
+                GlyphBufferWidth,
+                GlyphBufferHeight,
+            );
 
             // STB gives us offset from baseline, convert to your bearing format
             // Note: STB's yoff is negative for characters that extend above baseline
@@ -151,6 +158,7 @@ pub const FontAtlas = struct {
                 .src = RectF{ .l = 0, .t = 0, .r = 1, .b = 1 },
             },
             .maxY = maxY,
+            .isAlpha = true,
         };
     }
 
@@ -168,6 +176,82 @@ pub const FontAtlas = struct {
         return initFromTtf(fontData, fontSize, alloc);
     }
 
+    pub fn initFromBitmap(
+        fontImagePath: []const u8,
+        charWidth: u32,
+        charHeight: u32,
+        charsPerRow: u32,
+        chars: []const u8,
+        alloc: std.mem.Allocator,
+    ) !FontAtlas {
+        const fipz = try alloc.dupeZ(u8, fontImagePath);
+        defer alloc.free(fipz);
+
+        var image = try stbi.Image.loadFromFile(fipz, 0);
+        defer image.deinit();
+        if (image.width == 0 or image.height == 0) {
+            return error.ImageLoadFailed;
+        }
+
+        // Generate OpenGL texture
+        var charTex: c_uint = undefined;
+        gl.genTextures(1, &charTex);
+        gl.bindTexture(gl.TEXTURE_2D, charTex);
+
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, @intCast(image.width), @intCast(image.height), 0, gl.RGBA, gl.UNSIGNED_BYTE, image.data.ptr);
+
+        // Set texture parameters for crisp text rendering
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+        var charsMap = std.AutoHashMap(u32, Character).init(alloc);
+        var maxY: i32 = 0;
+
+        for (0..chars.len) |i| {
+            const char_code = chars[i];
+            const col = i % charsPerRow;
+            const row = i / charsPerRow;
+
+            const x0 = col * charWidth;
+            const y0 = row * charHeight;
+
+            // Skip characters that would be out of bounds
+            if (x0 + charWidth > @as(u32, image.width) or y0 + charHeight > @as(u32, image.height)) {
+                continue;
+            }
+
+            const coords = RectF.fromCoords(
+                @intCast(x0),
+                @intCast(y0),
+                @intCast(charWidth),
+                @intCast(charHeight),
+                @intCast(image.width),
+                @intCast(image.height),
+            );
+
+            try charsMap.put(char_code, Character{
+                .coords = coords,
+                .size = .{ .x = @intCast(charWidth), .y = @intCast(charHeight) },
+                .bearing = .{ .x = 0, .y = @intCast(charHeight) }, // Assume top-left origin
+                .advance = charWidth, // Fixed width
+            });
+            maxY = @max(maxY, @as(i32, @intCast(charHeight)));
+        }
+
+        return .{
+            .chars = charsMap,
+            .texture = Texture{
+                .texture = charTex,
+                .size = Vec2U{ .x = @as(u32, image.width), .y = @as(u32, image.height) },
+                .src = RectF{ .l = 0, .t = 0, .r = 1, .b = 1 },
+            },
+            .maxY = maxY,
+            .isAlpha = false,
+        };
+    }
+
     pub fn deinit(self: *FontAtlas) void {
         gl.deleteTextures(1, &self.tex.texture);
         self.characters.deinit();
@@ -176,17 +260,21 @@ pub const FontAtlas = struct {
 
 pub const TextRenderer = struct {
     spriteBatch: SpriteBatchQueue,
+    alphaTexShader: *Shader,
     texShader: *Shader,
     alloc: std.mem.Allocator,
     atlas: ?*FontAtlas,
 
     pub fn init(alloc: std.mem.Allocator) !TextRenderer {
         const texShader = try alloc.create(Shader);
+        const alphaTexShader = try alloc.create(Shader);
 
         if (builtin.os.tag == .emscripten) {
-            texShader.* = try shaders.Shader.init(&shaders.TexVertexShader, &TextPixelShader_Web);
+            alphaTexShader.* = try shaders.Shader.init(&shaders.TexVertexShader, &TextPixelShader_Web);
+            texShader.* = try shaders.Shader.init(&shaders.TexVertexShader, &shaders.TexPixelShader);
         } else {
-            texShader.* = try shaders.Shader.init(&shaders.TexVertexShader, &TextPixelShader_Desktop);
+            alphaTexShader.* = try shaders.Shader.init(&shaders.TexVertexShader, &TextPixelShader_Desktop);
+            texShader.* = try shaders.Shader.init(&shaders.TexVertexShader, &shaders.TexPixelShader);
         }
 
         const spriteBatch = try SpriteBatchQueue.init(alloc, texShader);
@@ -194,6 +282,7 @@ pub const TextRenderer = struct {
         return TextRenderer{
             .alloc = alloc,
             .spriteBatch = spriteBatch,
+            .alphaTexShader = alphaTexShader,
             .texShader = texShader,
             .atlas = null,
         };
@@ -220,6 +309,11 @@ pub const TextRenderer = struct {
 
     pub fn setAtlas(self: *TextRenderer, atlas: *FontAtlas) void {
         self.atlas = atlas;
+        if (atlas.isAlpha) {
+            self.spriteBatch.shader = self.alphaTexShader;
+        } else {
+            self.spriteBatch.shader = self.texShader;
+        }
     }
 
     pub fn drawString(self: *TextRenderer, text: []const u8, pos: Vec2I) Vec2I {

@@ -83,6 +83,9 @@ pub fn build(b: *std.Build) void {
         .{ .name = "text_rendering", .path = "examples/text_rendering.zig", .assets = &.{
             "Roboto-Medium.ttf",
         } },
+        .{ .name = "bitmap_text_rendering", .path = "examples/bitmap_text_rendering.zig", .assets = &.{
+            "font5r.png",
+        } },
     };
 
     // Create a "build-all" option that builds everything

@@ -20,7 +20,7 @@ const Color = common.Color;
 const Rotate = common.Rotate;
 const Texture = textures.Texture;
 const Shader = shaders.Shader;
-const FontAtlas = textMod.FontAtlas;
+pub const FontAtlas = textMod.FontAtlas;
 
 pub const SpriteBatchQueue = @import("./renderer/sprite_batch.zig").SpriteBatchQueue;
 pub const ShapeBatchQueue = @import("./renderer/shape.zig").ShapeBatchQueue;
@@ -74,14 +74,15 @@ pub fn Renderer(opts: RendererOptions) type {
 
             if (opts.textRenderering) {
                 std.log.info("Setting up text renderering.\n", .{});
-                std.debug.assert(initOpts.fontFace != null);
                 rend.text = try TextRenderer.init(alloc);
 
                 if (initOpts.fontFace != null) {
                     rend.fontAtlas = try FontAtlas.initFromTtfFile(initOpts.fontFace.?, 32.0, alloc);
                     rend.text.setAtlas(&rend.fontAtlas.?);
                 } else {
-                    std.log.warn("No default font provided. Text rendering will not work until a FontAtlas is set.", .{});
+                    if (builtin.mode == .Debug) {
+                        std.log.warn("No default font provided. Text rendering will not work until a FontAtlas is set.", .{});
+                    }
                 }
             }
 
