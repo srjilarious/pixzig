@@ -2,8 +2,8 @@
 const std = @import("std");
 const stbi = @import("zstbi");
 const gl = @import("zopengl").bindings;
-const common = @import("./common.zig");
-const utils = @import("./utils.zig");
+const common = @import("../common.zig");
+const utils = @import("../utils.zig");
 
 const Vec2U = common.Vec2U;
 const Vec2I = common.Vec2I;

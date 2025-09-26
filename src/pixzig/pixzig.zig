@@ -12,11 +12,11 @@ pub const xml = @import("xml");
 pub const stb_tt = @import("stb_truetype");
 
 pub const common = @import("./common.zig");
-pub const sprites = @import("./sprites.zig");
 pub const input = @import("./input.zig");
 pub const tile = @import("./tile.zig");
-pub const shaders = @import("./shaders.zig");
-pub const textures = @import("./textures.zig");
+pub const sprites = @import("./renderer/sprites.zig");
+pub const shaders = @import("./renderer/shaders.zig");
+pub const textures = @import("./renderer/textures.zig");
 pub const renderer = @import("./renderer.zig");
 pub const utils = @import("./utils.zig");
 pub const gamestate = @import("./gamestate.zig");

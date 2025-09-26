@@ -3,7 +3,7 @@ const std = @import("std");
 const stbi = @import("zstbi");
 const gl = @import("zopengl").bindings;
 const zmath = @import("zmath");
-const common = @import("./common.zig");
+const common = @import("../common.zig");
 const textures = @import("./textures.zig");
 
 const Vec2I = common.Vec2I;

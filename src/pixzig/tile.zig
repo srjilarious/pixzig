@@ -6,8 +6,8 @@ const zmath = @import("zmath");
 const xml = @import("xml");
 
 const common = @import("./common.zig");
-const textures = @import("./textures.zig");
-const shaders = @import("./shaders.zig");
+const textures = @import("./renderer/textures.zig");
+const shaders = @import("./renderer/shaders.zig");
 
 const Vec2I = common.Vec2I;
 const Vec2U = common.Vec2U;
