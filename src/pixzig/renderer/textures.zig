@@ -218,18 +218,8 @@ pub const TextureManager = struct {
     pub fn loadTexture(self: *TextureManager, name: []const u8, file_path: []const u8) !*Texture 
     {
         std.log.info("Loading image '{s}' from '{s}'\n", .{name, file_path});
-
-        // Convert our string slice to a null terminated string
-        var nt_str = self.alloc.alloc(u8, file_path.len + 1) catch |err| {
-            std.log.err("Caught error! {}", .{err});
-            return err;
-        };
-
-        defer self.alloc.free(nt_str);
-
-        @memcpy(nt_str[0..file_path.len], file_path);
-        nt_str[file_path.len] = 0;
-        const nt_file_path = nt_str[0..file_path.len :0];
+        const nt_file_path = try self.alloc.dupeZ(u8, file_path);
+        defer self.alloc.free(nt_file_path);
 
         // Try to load an image
         var image = try stbi.Image.loadFromFile(nt_file_path, 0);
