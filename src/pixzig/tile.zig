@@ -781,7 +781,7 @@ const TileIndexMap = struct {
 
 pub const TileMapRenderer = struct {
     mapSize: Vec2U = undefined,
-    shader: Shader = undefined,
+    shader: *const Shader = undefined,
     vao: u32 = 0,
     vboVertices: u32 = 0,
     vboTexCoords: u32 = 0,
@@ -797,7 +797,7 @@ pub const TileMapRenderer = struct {
     numBuffVals: usize = 0,
     tileIndexMap: TileIndexMap,
 
-    pub fn init(alloc: std.mem.Allocator, shader: Shader) !TileMapRenderer {
+    pub fn init(alloc: std.mem.Allocator, shader: *const Shader) !TileMapRenderer {
         var tr = TileMapRenderer{
             .shader = shader,
             .alloc = alloc,

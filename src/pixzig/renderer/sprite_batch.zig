@@ -20,7 +20,7 @@ const Texture = textures.Texture;
 const Shader = shaders.Shader;
 
 pub const SpriteBatchQueue = struct {
-    shader: *Shader,
+    shader: *const Shader,
     vao: u32 = 0,
     vboVertices: u32 = 0,
     vboTexCoords: u32 = 0,
@@ -43,7 +43,7 @@ pub const SpriteBatchQueue = struct {
     texture: ?*Texture = null,
     begun: bool = false,
 
-    pub fn init(alloc: std.mem.Allocator, shader: *Shader) !SpriteBatchQueue {
+    pub fn init(alloc: std.mem.Allocator, shader: *const Shader) !SpriteBatchQueue {
         var batch = SpriteBatchQueue{ .allocator = alloc, .shader = shader };
 
         batch.vertices = try alloc.alloc(f32, C.NumVerts);

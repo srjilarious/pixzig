@@ -67,64 +67,37 @@ pub const ColorPixelShader: ShaderCode =
     \\}
 ;
 
-// pub const TexVertexShader: ShaderCode =
-//     \\ #version 330 core
-//     \\ layout(location = 0) in vec2 coord3d;
-//     \\ layout(location = 1) in vec2 texcoord;
-//     \\ // Pass texture coordinate to fragment shader
-//     \\ out vec2 Texcoord;
-//     \\ 
-//     \\ uniform mat4 projectionMatrix;
-//     \\ 
-//     \\ void main() {
-//     \\    gl_Position = projectionMatrix * vec4(coord3d, 0.0, 1.0);
-//     \\    // Pass texture coordinate to fragment shader
-//     \\    Texcoord = texcoord;
-//     \\ }
-// ;
+pub const TextPixelShader_Desktop: ShaderCode =
+    \\ #version 300 es
+    \\ precision mediump float;
+    \\ in vec2 Texcoord; // Received from vertex shader
+    \\ uniform sampler2D tex; // Texture sampler
+    \\ out vec4 fragColor;
+    \\ void main() {
+    \\   fragColor = vec4(1.0, 1.0, 1.0, texture(tex, Texcoord).r); 
+    \\ }
+;
 
-// pub const TexPixelShader: ShaderCode =
-//     \\ #version 330 core
-//     \\ in vec2 Texcoord; // Received from vertex shader
-//     \\ uniform sampler2D tex; // Texture sampler
-//     \\ out vec4 fragColor;
-//     \\ void main() {
-//     \\   // Sample the texture at the given coordinates
-//     \\   fragColor = texture(tex, Texcoord); 
-//     \\ }
-// ;
+pub const TextPixelShader_Web: ShaderCode =
+    \\ #version 300 es
+    \\ precision mediump float;
+    \\ in vec2 Texcoord; // Received from vertex shader
+    \\ uniform sampler2D tex; // Texture sampler
+    \\ out vec4 fragColor;
+    \\ void main() {
+    \\   fragColor = vec4(1.0, 1.0, 1.0, texture(tex, Texcoord).a); 
+    \\ }
+;
 
-// pub const ColorVertexShader: ShaderCode =
-//     \\ #version 330 core
-//     \\ layout(location = 0) in vec2 coord3d;
-//     \\ layout(location = 1) in vec4 color;
-//     \\ // Pass texture coordinate to fragment shader
-//     \\ out vec4 Col;
-//     \\ 
-//     \\ uniform mat4 projectionMatrix;
-//     \\ 
-//     \\ void main() {
-//     \\    gl_Position = projectionMatrix * vec4(coord3d, 0.0, 1.0);
-//     \\    // Pass texture coordinate to fragment shader
-//     \\    Col = color;
-//     \\ }
-// ;
-
-// pub const ColorPixelShader: ShaderCode =
-//     \\ #version 330 core
-//     \\ in vec4 Col; // Received from vertex shader
-//     \\ out vec4 fragColor;
-//     \\ void main() {
-//     \\   // Sample the texture at the given coordinates
-//     \\   fragColor = Col; 
-//     \\ }
-// ;
-
+pub const ColorShader = "color_shader";
+pub const TextureShader = "texture_shader";
+pub const FontShader = "font_shader";
 
 pub const Shader = struct {
     program: u32 = 0,
     vertex: u32 = 0,
     fragment: u32 = 0,
+    name: ?[]const u8 = null,
 
     fn compile(glsl: ShaderCodePtr, shaderType: u32) !u32 {
         const res = gl.createShader(shaderType);
@@ -144,13 +117,16 @@ pub const Shader = struct {
         return res;
     }
 
-    pub fn init(vs: ShaderCodePtr, fs: ShaderCodePtr) !Shader {
+    pub fn init(vs: ShaderCodePtr, fs: ShaderCodePtr, extra: struct{ name: ?[]const u8 = null}) !Shader {
         var shader = Shader{};
 
         // Compile the vertex and fragment shaders.
         shader.vertex = try compile(vs, gl.VERTEX_SHADER);
         shader.fragment = try compile(fs, gl.FRAGMENT_SHADER);
-        
+        if(extra.name != null) {
+            shader.name = extra.name;
+        }
+
         // Create the shader program and attach our vertex/fragment shaders.
         shader.program = gl.createProgram();
         gl.attachShader(shader.program, shader.vertex);

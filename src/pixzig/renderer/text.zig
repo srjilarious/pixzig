@@ -14,29 +14,8 @@ const Vec2U = common.Vec2U;
 const RectF = common.RectF;
 const Texture = textures.Texture;
 const Shader = shaders.Shader;
+const ResourceManager = textures.ResourceManager;
 const SpriteBatchQueue = @import("./sprite_batch.zig").SpriteBatchQueue;
-
-pub const TextPixelShader_Desktop: shaders.ShaderCode =
-    \\ #version 300 es
-    \\ precision mediump float;
-    \\ in vec2 Texcoord; // Received from vertex shader
-    \\ uniform sampler2D tex; // Texture sampler
-    \\ out vec4 fragColor;
-    \\ void main() {
-    \\   fragColor = vec4(1.0, 1.0, 1.0, texture(tex, Texcoord).r); 
-    \\ }
-;
-
-pub const TextPixelShader_Web: shaders.ShaderCode =
-    \\ #version 300 es
-    \\ precision mediump float;
-    \\ in vec2 Texcoord; // Received from vertex shader
-    \\ uniform sampler2D tex; // Texture sampler
-    \\ out vec4 fragColor;
-    \\ void main() {
-    \\   fragColor = vec4(1.0, 1.0, 1.0, texture(tex, Texcoord).a); 
-    \\ }
-;
 
 pub const Character = struct { coords: RectF, size: Vec2I, bearing: Vec2I, advance: u32 };
 
@@ -260,38 +239,26 @@ pub const FontAtlas = struct {
 
 pub const TextRenderer = struct {
     spriteBatch: SpriteBatchQueue,
-    alphaTexShader: *Shader,
-    texShader: *Shader,
+    alphaTexShader: *const Shader,
+    texShader: *const Shader,
     alloc: std.mem.Allocator,
     atlas: ?*FontAtlas,
 
-    pub fn init(alloc: std.mem.Allocator) !TextRenderer {
-        const texShader = try alloc.create(Shader);
-        const alphaTexShader = try alloc.create(Shader);
-
-        if (builtin.os.tag == .emscripten) {
-            alphaTexShader.* = try shaders.Shader.init(&shaders.TexVertexShader, &TextPixelShader_Web);
-            texShader.* = try shaders.Shader.init(&shaders.TexVertexShader, &shaders.TexPixelShader);
-        } else {
-            alphaTexShader.* = try shaders.Shader.init(&shaders.TexVertexShader, &TextPixelShader_Desktop);
-            texShader.* = try shaders.Shader.init(&shaders.TexVertexShader, &shaders.TexPixelShader);
-        }
-
+    pub fn init(alloc: std.mem.Allocator, resMgr: *ResourceManager) !TextRenderer {
+        const texShader = try resMgr.getShaderByName(shaders.TextureShader);
         const spriteBatch = try SpriteBatchQueue.init(alloc, texShader);
 
         return TextRenderer{
             .alloc = alloc,
             .spriteBatch = spriteBatch,
-            .alphaTexShader = alphaTexShader,
+            .alphaTexShader = try resMgr.getShaderByName(shaders.FontShader),
             .texShader = texShader,
             .atlas = null,
         };
     }
 
     pub fn deinit(self: *TextRenderer) void {
-        // self.fontAtlas.deinit();
         self.spriteBatch.deinit();
-        self.texShader.deinit();
     }
 
     pub fn begin(self: *TextRenderer, mvp: zmath.Mat, atlas: ?*FontAtlas) void {

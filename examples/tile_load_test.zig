@@ -26,19 +26,16 @@ pub const App = struct {
     alloc: std.mem.Allocator,
     scrollOffset: Vec2F,
     mapRenderer: tile.TileMapRenderer,
-    shapeBatch: pixzig.renderer.ShapeBatchQueue,
-    colorShader: pixzig.shaders.Shader,
     guy: RectF,
     map: tile.TileMap,
     tex: *pixzig.Texture,
-    texShader: pixzig.shaders.Shader,
     fps: FpsCounter,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
-        const texShader = try pixzig.shaders.Shader.init(
-            &pixzig.shaders.TexVertexShader,
-            &pixzig.shaders.TexPixelShader,
-        );
+        // const texShader = try pixzig.shaders.Shader.init(
+        //     &pixzig.shaders.TexVertexShader,
+        //     &pixzig.shaders.TexPixelShader,
+        // );
 
         const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
 
@@ -49,19 +46,12 @@ pub const App = struct {
         std.log.info("Tile 0,0 data: {any}", .{tData});
 
         std.log.info("Initializing map renderer.", .{});
-        var mapRender = try tile.TileMapRenderer.init(alloc, texShader);
+        var mapRender = try tile.TileMapRenderer.init(alloc, try eng.textures.getShaderByName(pixzig.shaders.TextureShader));
 
         std.log.info("Creating tile renderering data.", .{});
         try mapRender.recreateVertices(&map.tilesets.items[0], &map.layers.items[1]);
 
         std.log.info("Done creating tile renderering data.", .{});
-
-        var colorShader = try pixzig.shaders.Shader.init(
-            &pixzig.shaders.ColorVertexShader,
-            &pixzig.shaders.ColorPixelShader,
-        );
-
-        const shapeBatch = try pixzig.renderer.ShapeBatchQueue.init(alloc, &colorShader);
 
         const app = try alloc.create(App);
         app.* = .{
@@ -70,9 +60,6 @@ pub const App = struct {
             .mapRenderer = mapRender,
             .map = map,
             .tex = tex,
-            .texShader = texShader,
-            .colorShader = colorShader,
-            .shapeBatch = shapeBatch,
             .guy = RectF.fromPosSize(33, 33, 32, 32),
             .fps = FpsCounter.init(),
         };
@@ -82,9 +69,6 @@ pub const App = struct {
     pub fn deinit(self: *App) void {
         self.mapRenderer.deinit();
         self.map.deinit();
-        self.texShader.deinit();
-        self.shapeBatch.deinit();
-        self.colorShader.deinit();
         self.alloc.destroy(self);
     }
 
@@ -159,9 +143,9 @@ pub const App = struct {
         try self.mapRenderer.draw(self.tex, &self.map.layers.items[1], mvp);
 
         // Draw outline.
-        self.shapeBatch.begin(mvp);
-        self.shapeBatch.drawRect(self.guy, Color.from(255, 255, 0, 200), 2);
-        self.shapeBatch.end();
+        eng.renderer.begin(mvp);
+        eng.renderer.drawRect(self.guy, Color.from(255, 255, 0, 200), 2);
+        eng.renderer.end();
     }
 };
 

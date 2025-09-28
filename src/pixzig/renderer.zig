@@ -19,6 +19,7 @@ const RectF = common.RectF;
 const Color = common.Color;
 const Rotate = common.Rotate;
 const Texture = textures.Texture;
+const ResourceManager = textures.ResourceManager;
 const Shader = shaders.Shader;
 pub const FontAtlas = textMod.FontAtlas;
 
@@ -45,36 +46,41 @@ pub fn Renderer(opts: RendererOptions) type {
 
         const Impl = struct {
             batches: [opts.numSpriteTextures]SpriteBatchQueue,
-            texShader: Shader,
 
             shapes: ShapeBatchQueue = undefined,
-            colorShader: Shader = undefined,
-
             text: TextRenderer = undefined,
             fontAtlas: ?FontAtlas = null,
         };
 
-        pub fn init(alloc: std.mem.Allocator, initOpts: RendererInitOpts) !@This() {
+        pub fn init(alloc: std.mem.Allocator, resMgr: *ResourceManager, initOpts: RendererInitOpts) !@This() {
             var rend = try alloc.create(Impl);
 
-            rend.texShader = try Shader.init(&shaders.TexVertexShader, &shaders.TexPixelShader);
+            std.log.info("Initializing shaders.", .{});
+            const texShader = try resMgr.loadShader(shaders.TextureShader, &shaders.TexVertexShader, &shaders.TexPixelShader);
 
             std.log.info("Setting up {} sprite batch queues.", .{opts.numSpriteTextures});
             for (0..opts.numSpriteTextures) |idx| {
-                const sbq = try SpriteBatchQueue.init(alloc, &rend.texShader);
+                const sbq = try SpriteBatchQueue.init(alloc, texShader);
                 rend.batches[idx] = sbq;
             }
 
             if (opts.shapeRendering) {
                 std.log.info("Setting up shaders for shape renderering.", .{});
-                rend.colorShader = try shaders.Shader.init(&shaders.ColorVertexShader, &shaders.ColorPixelShader);
+                const colorShader = try resMgr.loadShader(shaders.ColorShader, &shaders.ColorVertexShader, &shaders.ColorPixelShader);
 
-                rend.shapes = try ShapeBatchQueue.init(alloc, &rend.colorShader);
+                rend.shapes = try ShapeBatchQueue.init(alloc, colorShader);
             }
 
             if (opts.textRenderering) {
                 std.log.info("Setting up text renderering.\n", .{});
-                rend.text = try TextRenderer.init(alloc);
+
+                if (builtin.os.tag == .emscripten) {
+                    _ = try resMgr.loadShader(shaders.FontShader, &shaders.TexVertexShader, &shaders.TextPixelShader_Web);
+                } else {
+                    _ = try resMgr.loadShader(shaders.FontShader, &shaders.TexVertexShader, &shaders.TextPixelShader_Desktop);
+                }
+
+                rend.text = try TextRenderer.init(alloc, resMgr);
 
                 if (initOpts.fontFace != null) {
                     rend.fontAtlas = try FontAtlas.initFromTtfFile(initOpts.fontFace.?, 32.0, alloc);

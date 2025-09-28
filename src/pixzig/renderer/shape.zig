@@ -22,7 +22,7 @@ const Shader = shaders.Shader;
 const NumColorCoords = 4 * 4 * C.MaxSprites;
 
 pub const ShapeBatchQueue = struct {
-    shader: *Shader = undefined,
+    shader: *const Shader = undefined,
     vao: u32 = 0,
     vboVertices: u32 = 0,
     vboColorCoords: u32 = 0,
@@ -43,7 +43,7 @@ pub const ShapeBatchQueue = struct {
     mvpArr: [16]f32 = undefined,
     begun: bool = false,
 
-    pub fn init(alloc: std.mem.Allocator, shader: *Shader) !ShapeBatchQueue {
+    pub fn init(alloc: std.mem.Allocator, shader: *const Shader) !ShapeBatchQueue {
         var batch = ShapeBatchQueue{
             .allocator = alloc,
             .shader = shader,

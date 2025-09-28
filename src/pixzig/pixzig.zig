@@ -30,7 +30,7 @@ pub const assets = @import("./assets.zig");
 pub const Texture = textures.Texture;
 pub const TextureImage = textures.TextureImage;
 
-const TextureManager = textures.TextureManager;
+const ResourceManager = textures.ResourceManager;
 
 pub const Vec2I = common.Vec2I;
 pub const RectI = common.RectI;
@@ -145,9 +145,9 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         scaleFactor: f32,
         allocator: std.mem.Allocator,
         projMat: zmath.Mat,
-        textures: TextureManager,
+        textures: ResourceManager,
         keyboard: input.Keyboard,
-        renderer: EngRenderer,
+        renderer: EngRenderer = undefined,
 
         const Self = @This();
         const EngRenderer = renderer.Renderer(engOpts.rendererOpts);
@@ -237,11 +237,12 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 .scaleFactor = scaleFactor,
                 .allocator = allocator,
                 .projMat = projMat,
-                .textures = TextureManager.init(allocator),
+                .textures = ResourceManager.init(allocator),
                 .keyboard = input.Keyboard.init(window, allocator),
-                .renderer = try EngRenderer.init(allocator, options.renderInitOpts),
+                .renderer = undefined,
             };
 
+            eng.renderer = try EngRenderer.init(allocator, &eng.textures, options.renderInitOpts);
             if (engOpts.defaultIcon) {
                 std.log.debug("Setting default window icon.", .{});
                 var defaultIcon = std.io.Reader.fixed(assets.icon48x48);
