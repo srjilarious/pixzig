@@ -34,13 +34,12 @@ pub const App = struct {
     grid: GridRenderer,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
-        _ = eng;
         // Orthographic projection matrix
         const projMat = zmath.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
-        const shader = try Shader.init(&shaders.ColorVertexShader, &shaders.ColorPixelShader);
+
         const grid = try GridRenderer.init(
             alloc,
-            shader,
+            try eng.textures.getShaderByName(shaders.ColorShader),
             .{ .x = 20, .y = 12 },
             .{ .x = 32, .y = 32 },
             1,

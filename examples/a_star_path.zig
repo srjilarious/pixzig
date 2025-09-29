@@ -66,8 +66,7 @@ pub const App = struct {
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app = try alloc.create(App);
 
-        const shader = try Shader.init(&shaders.ColorVertexShader, &shaders.ColorPixelShader);
-        const grid = try GridRenderer.init(alloc, shader, .{ .x = MapWidth, .y = MapHeight }, .{ .x = TileWidth, .y = TileHeight }, 1, Color{ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 });
+        const grid = try GridRenderer.init(alloc, try eng.textures.getShaderByName(shaders.ColorShader), .{ .x = MapWidth, .y = MapHeight }, .{ .x = TileWidth, .y = TileHeight }, 1, Color{ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 });
 
         // Create a texture for the path tiles.
         const colorMap = &[_]CharToColor{
@@ -243,7 +242,7 @@ pub const App = struct {
         app.pathLayer = try TileLayer.initEmpty(alloc, .{ .x = MapWidth, .y = MapHeight }, .{ .x = TileWidth, .y = TileHeight });
         app.pathLayer.tileset = &app.tileSet;
 
-        app.pathLayerRenderer = try tile.TileMapRenderer.init(alloc, eng.renderer.impl.texShader);
+        app.pathLayerRenderer = try tile.TileMapRenderer.init(alloc, try eng.textures.getShaderByName(shaders.TextureShader));
         // TODO: Change to pathLayer and make wall layer renderer.
         try app.pathLayerRenderer.recreateVertices(&app.tileSet, &app.layer);
 

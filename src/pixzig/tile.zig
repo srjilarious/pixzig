@@ -1116,7 +1116,7 @@ pub const TileMapRenderer = struct {
 
 
 pub const GridRenderer = struct {
-    shader: Shader = undefined,
+    shader: *const Shader = undefined,
     color: Color = undefined,
     vao: u32 = 0,
     vboVertices: u32 = 0,
@@ -1136,7 +1136,7 @@ pub const GridRenderer = struct {
     numRects: usize = 0,
     initialized: bool = false,
 
-    pub fn init(alloc: std.mem.Allocator, shader: Shader, mapSize: Vec2I, tileSize: Vec2I, borderSize: usize, color: Color) !GridRenderer {
+    pub fn init(alloc: std.mem.Allocator, shader: *const Shader, mapSize: Vec2I, tileSize: Vec2I, borderSize: usize, color: Color) !GridRenderer {
         var gr = GridRenderer{
             .shader = shader,
             .color = color,
