@@ -5,11 +5,13 @@ const pixzig = @import("pixzig");
 const glfw = pixzig.glfw;
 const zmath = pixzig.zmath;
 const flecs = pixzig.flecs;
+
+const shaders = pixzig.shaders;
+
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
 
-const math = @import("zmath");
 const EngOptions = pixzig.PixzigEngineOptions;
 
 const tile = pixzig.tile;
@@ -29,7 +31,6 @@ pub const App = struct {
     scrollOffset: Vec2F,
     spriteBatch: pixzig.renderer.SpriteBatchQueue,
     tex: *pixzig.Texture,
-    texShader: pixzig.shaders.Shader,
     collideGrid: CollisionGridEntity,
     mouse: pixzig.input.Mouse,
     // colorShader: pixzig.shaders.Shader,
@@ -42,15 +43,11 @@ pub const App = struct {
  
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
 
-        var texShader = try pixzig.shaders.Shader.init(
-            &pixzig.shaders.TexVertexShader,
-            &pixzig.shaders.TexPixelShader
-        );
 
         const bigtex = try eng.textures.loadTexture("tiles", "assets/pac-tiles.png");
         const tex = try eng.textures.addSubTexture(bigtex, "guy", RectF.fromCoords(32, 32, 32, 32, 512, 512));
 
-        const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &texShader);
+        const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, try eng.textures.getShaderByName(shaders.TextureShader));
 
         // var colorShader = try pixzig.shaders.Shader.init(
         //         &pixzig.shaders.ColorVertexShader,
@@ -90,7 +87,6 @@ pub const App = struct {
             .mouse = pixzig.input.Mouse.init(eng.window, eng.allocator),
             // .shapeBatch = shapeBatch,
             .tex = tex,
-            .texShader = texShader,
             .collideGrid = try CollisionGridEntity.init(alloc, .{ .x=100, .y=100}, .{.x=8, .y=8}),
             // .colorShader = colorShader,
             .fps = FpsCounter.init(),
@@ -110,9 +106,6 @@ pub const App = struct {
 
     pub fn deinit(self: *App) void {
         self.spriteBatch.deinit();
-        // self.shapeBatch.deinit();
-        // self.colorShader.deinit();
-        self.texShader.deinit();
         self.collideGrid.deinit();
 
         flecs.query_fini(self.update_query);
