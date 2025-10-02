@@ -2,11 +2,11 @@ const std = @import("std");
 const testz = @import("testz");
 const pixzig = @import("pixzig");
 const RectF = pixzig.RectF;
-const TextureManager = pixzig.textures.TextureManager;
+const ResourceManager = pixzig.resources.ResourceManager;
 const FrameSequenceManager = pixzig.sprites.FrameSequenceManager;
 
-fn createDummyTextureManager(alloc: std.mem.Allocator) !TextureManager {
-    var tm = TextureManager.init(alloc);
+fn createDummyTextureManager(alloc: std.mem.Allocator) !ResourceManager {
+    var tm = ResourceManager.init(alloc);
     try tm.atlas.put("player_right_1", .{ .texture = 0, .size = .{ .x = 8, .y = 8 }, .src = RectF.fromCoords(0, 0, 8, 8, 128, 128) });
     try tm.atlas.put("player_right_2", .{ .texture = 0, .size = .{ .x = 8, .y = 8 }, .src = RectF.fromCoords(8, 0, 8, 8, 128, 128) });
     try tm.atlas.put("player_right_3", .{ .texture = 0, .size = .{ .x = 8, .y = 8 }, .src = RectF.fromCoords(16, 0, 8, 8, 128, 128) });

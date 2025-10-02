@@ -31,29 +31,29 @@ pub const App = struct {
     fps: FpsCounter,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
-        _ = try eng.textures.loadAtlas("assets/pac-tiles");
+        _ = try eng.resources.loadAtlas("assets/pac-tiles");
 
         var app = try alloc.create(App);
         app.* = .{
             .alloc = alloc,
-            .spr = Sprite.create(try eng.textures.getTexture("player_right_1"), .{ .x = 16, .y = 16 }),
+            .spr = Sprite.create(try eng.resources.getTexture("player_right_1"), .{ .x = 16, .y = 16 }),
             .actor = try pixzig.sprites.Actor.init(alloc),
             .seqMgr = try FrameSequenceManager.init(alloc),
             .fps = FpsCounter.init(),
         };
 
         const fr1: Frame = .{
-            .tex = try eng.textures.getTexture("player_right_1"),
+            .tex = try eng.resources.getTexture("player_right_1"),
             .frameTimeMs = 300,
             .flip = .none,
         };
         const fr2: Frame = .{
-            .tex = try eng.textures.getTexture("player_right_2"),
+            .tex = try eng.resources.getTexture("player_right_2"),
             .frameTimeMs = 300,
             .flip = .none,
         };
         const fr3: Frame = .{
-            .tex = try eng.textures.getTexture("player_right_3"),
+            .tex = try eng.resources.getTexture("player_right_3"),
             .frameTimeMs = 300,
             .flip = .none,
         };

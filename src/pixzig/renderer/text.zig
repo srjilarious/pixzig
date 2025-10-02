@@ -6,6 +6,7 @@ const zmath = @import("zmath");
 pub const stb_tt = @import("stb_truetype");
 
 const common = @import("../common.zig");
+const resources = @import("../resources.zig");
 const textures = @import("./textures.zig");
 const shaders = @import("./shaders.zig");
 
@@ -14,7 +15,7 @@ const Vec2U = common.Vec2U;
 const RectF = common.RectF;
 const Texture = textures.Texture;
 const Shader = shaders.Shader;
-const ResourceManager = textures.ResourceManager;
+const ResourceManager = resources.ResourceManager;
 const SpriteBatchQueue = @import("./sprite_batch.zig").SpriteBatchQueue;
 
 pub const Character = struct { coords: RectF, size: Vec2I, bearing: Vec2I, advance: u32 };

@@ -44,10 +44,10 @@ pub const App = struct {
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
 
 
-        const bigtex = try eng.textures.loadTexture("tiles", "assets/pac-tiles.png");
-        const tex = try eng.textures.addSubTexture(bigtex, "guy", RectF.fromCoords(32, 32, 32, 32, 512, 512));
+        const bigtex = try eng.resources.loadTexture("tiles", "assets/pac-tiles.png");
+        const tex = try eng.resources.addSubTexture(bigtex, "guy", RectF.fromCoords(32, 32, 32, 32, 512, 512));
 
-        const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, try eng.textures.getShaderByName(shaders.TextureShader));
+        const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, try eng.resources.getShaderByName(shaders.TextureShader));
 
         // var colorShader = try pixzig.shaders.Shader.init(
         //         &pixzig.shaders.ColorVertexShader,

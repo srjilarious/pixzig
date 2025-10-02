@@ -66,7 +66,7 @@ pub const App = struct {
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app = try alloc.create(App);
 
-        const grid = try GridRenderer.init(alloc, try eng.textures.getShaderByName(shaders.ColorShader), .{ .x = MapWidth, .y = MapHeight }, .{ .x = TileWidth, .y = TileHeight }, 1, Color{ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 });
+        const grid = try GridRenderer.init(alloc, try eng.resources.getShaderByName(shaders.ColorShader), .{ .x = MapWidth, .y = MapHeight }, .{ .x = TileWidth, .y = TileHeight }, 1, Color{ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 });
 
         // Create a texture for the path tiles.
         const colorMap = &[_]CharToColor{
@@ -202,13 +202,13 @@ pub const App = struct {
         pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, bottomRightChars, .{ .x = TileWidth, .y = TileHeight }, .{ .x = 24, .y = 8 }, colorMap);
         pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, startChars, .{ .x = TileWidth, .y = TileHeight }, .{ .x = 0, .y = 16 }, colorMap);
         pixzig.textures.drawBufferFromChars(textureBuff, bufferSize, endChars, .{ .x = TileWidth, .y = TileHeight }, .{ .x = 8, .y = 16 }, colorMap);
-        // const wallTex = try eng.textures.createTextureFromChars("wall", 8, 8, lockedChars, );
+        // const wallTex = try eng.resources.createTextureFromChars("wall", 8, 8, lockedChars, );
 
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        const tex = try eng.textures.loadTextureFromBuffer("a_star", bufferSize.x, bufferSize.y, textureBuff);
+        const tex = try eng.resources.loadTextureFromBuffer("a_star", bufferSize.x, bufferSize.y, textureBuff);
 
         app.* = .{
             .alloc = alloc,
@@ -242,7 +242,7 @@ pub const App = struct {
         app.pathLayer = try TileLayer.initEmpty(alloc, .{ .x = MapWidth, .y = MapHeight }, .{ .x = TileWidth, .y = TileHeight });
         app.pathLayer.tileset = &app.tileSet;
 
-        app.pathLayerRenderer = try tile.TileMapRenderer.init(alloc, try eng.textures.getShaderByName(shaders.TextureShader));
+        app.pathLayerRenderer = try tile.TileMapRenderer.init(alloc, try eng.resources.getShaderByName(shaders.TextureShader));
         // TODO: Change to pathLayer and make wall layer renderer.
         try app.pathLayerRenderer.recreateVertices(&app.tileSet, &app.layer);
 

@@ -39,7 +39,7 @@ pub const App = struct {
 
         const grid = try GridRenderer.init(
             alloc,
-            try eng.textures.getShaderByName(shaders.ColorShader),
+            try eng.resources.getShaderByName(shaders.ColorShader),
             .{ .x = 20, .y = 12 },
             .{ .x = 32, .y = 32 },
             1,

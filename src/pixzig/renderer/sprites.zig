@@ -1,6 +1,7 @@
 const std = @import("std");
 const common = @import("../common.zig");
 const textures = @import("./textures.zig");
+const resources = @import("../resources.zig");
 
 const Vec2I = common.Vec2I;
 const Vec2F = common.Vec2F;
@@ -8,7 +9,7 @@ const RectF = common.RectF;
 const Rotate = common.Rotate;
 
 const Texture = textures.Texture;
-const TextureManager = textures.TextureManager;
+const ResourceManager = resources.ResourceManager;
 
 pub const Sprite = struct {
     texture: *Texture,
@@ -199,7 +200,7 @@ pub const FrameSequenceManager = struct {
         self.actorStates.deinit();
     }
 
-    pub fn loadSequenceFile(self: *Self, filename: []const u8, texMgr: *TextureManager) !void {
+    pub fn loadSequenceFile(self: *Self, filename: []const u8, texMgr: *ResourceManager) !void {
         // Load file contents
         const file_contents = try std.fs.cwd().readFileAlloc(self.alloc, filename, std.math.maxInt(usize));
         defer self.alloc.free(file_contents);
@@ -208,7 +209,7 @@ pub const FrameSequenceManager = struct {
         try self.loadSequence(file_contents, texMgr);
     }
 
-    pub fn loadSequence(self: *Self, json_contents: []const u8, texMgr: *TextureManager) !void {
+    pub fn loadSequence(self: *Self, json_contents: []const u8, texMgr: *ResourceManager) !void {
         const parsed = try std.json.parseFromSlice(FrameSequenceFile, self.alloc, json_contents, .{});
         defer parsed.deinit();
 

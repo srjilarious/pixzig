@@ -33,7 +33,7 @@ pub fn main() !void {
         \\=------=
     ;
 
-    const tex = try eng.textures.createTextureImageFromChars("test", 8, 8, chars, &[_]CharToColor{
+    const tex = try eng.resources.createTextureImageFromChars("test", 8, 8, chars, &[_]CharToColor{
         .{ .char = '#', .color = Color8.from(40, 255, 40, 255) },
         .{ .char = '-', .color = Color8.from(100, 100, 200, 255) },
         .{ .char = '=', .color = Color8.from(100, 100, 100, 255) },

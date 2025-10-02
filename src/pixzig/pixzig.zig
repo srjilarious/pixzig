@@ -14,6 +14,7 @@ pub const stb_tt = @import("stb_truetype");
 pub const common = @import("./common.zig");
 pub const input = @import("./input.zig");
 pub const tile = @import("./tile.zig");
+pub const resources = @import("./resources.zig");
 pub const sprites = @import("./renderer/sprites.zig");
 pub const shaders = @import("./renderer/shaders.zig");
 pub const textures = @import("./renderer/textures.zig");
@@ -30,7 +31,7 @@ pub const assets = @import("./assets.zig");
 pub const Texture = textures.Texture;
 pub const TextureImage = textures.TextureImage;
 
-const ResourceManager = textures.ResourceManager;
+const ResourceManager = resources.ResourceManager;
 
 pub const Vec2I = common.Vec2I;
 pub const RectI = common.RectI;
@@ -145,7 +146,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         scaleFactor: f32,
         allocator: std.mem.Allocator,
         projMat: zmath.Mat,
-        textures: ResourceManager,
+        resources: ResourceManager,
         keyboard: input.Keyboard,
         renderer: EngRenderer = undefined,
 
@@ -237,12 +238,12 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 .scaleFactor = scaleFactor,
                 .allocator = allocator,
                 .projMat = projMat,
-                .textures = ResourceManager.init(allocator),
+                .resources = ResourceManager.init(allocator),
                 .keyboard = input.Keyboard.init(window, allocator),
                 .renderer = undefined,
             };
 
-            eng.renderer = try EngRenderer.init(allocator, &eng.textures, options.renderInitOpts);
+            eng.renderer = try EngRenderer.init(allocator, &eng.resources, options.renderInitOpts);
             if (engOpts.defaultIcon) {
                 std.log.debug("Setting default window icon.", .{});
                 var defaultIcon = std.io.Reader.fixed(assets.icon48x48);
@@ -254,7 +255,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
 
         pub fn deinit(self: *Self) void {
             stbi.deinit();
-            self.textures.destroy();
+            self.resources.deinit();
 
             if (engOpts.withGui) {
                 zgui.backend.deinit();

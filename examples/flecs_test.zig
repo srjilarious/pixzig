@@ -42,9 +42,9 @@ pub const App = struct {
     draw_query: *flecs.query_t,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
-        const bigtex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
+        const bigtex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
 
-        const tex = try eng.textures.addSubTexture(bigtex, "guy", RectF.fromCoords(192, 64, 32, 32, 512, 512));
+        const tex = try eng.resources.addSubTexture(bigtex, "guy", RectF.fromCoords(192, 64, 32, 32, 512, 512));
 
         const world = flecs.init();
 

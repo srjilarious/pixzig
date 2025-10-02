@@ -124,7 +124,7 @@ pub const Natetris = struct {
         \\=------=
         ;
 
-        const tex = try eng.textures.createTextureImageFromChars("test", 8, 8, blockChars, &[_]CharToColor{
+        const tex = try eng.resources.createTextureImageFromChars("test", 8, 8, blockChars, &[_]CharToColor{
             .{ .char = '#', .color = Color8.from(40, 255, 40, 255) },
             .{ .char = '-', .color = Color8.from(100, 100, 200, 255) },
             .{ .char = '=', .color = Color8.from(100, 100, 100, 255) },
@@ -144,7 +144,7 @@ pub const Natetris = struct {
         \\=------=
         ;
 
-        const wallTex = try eng.textures.createTextureImageFromChars("wall", 8, 8, lockedChars, &[_]CharToColor{
+        const wallTex = try eng.resources.createTextureImageFromChars("wall", 8, 8, lockedChars, &[_]CharToColor{
             .{ .char = '#', .color = Color8.from(180, 180, 180, 255) },
             .{ .char = '-', .color = Color8.from(80, 80, 80, 255) },
             .{ .char = '=', .color = Color8.from(100, 100, 100, 255) },
@@ -153,7 +153,7 @@ pub const Natetris = struct {
             .{ .char = ' ', .color = Color8.from(0, 0, 0, 0) },
         });
 
-        const lockedTex = try eng.textures.createTextureImageFromChars("locked", 8, 8, lockedChars, &[_]CharToColor{
+        const lockedTex = try eng.resources.createTextureImageFromChars("locked", 8, 8, lockedChars, &[_]CharToColor{
             .{ .char = '#', .color = Color8.from(150, 150, 210, 255) },
             .{ .char = '-', .color = Color8.from(80, 80, 120, 255) },
             .{ .char = '=', .color = Color8.from(100, 100, 150, 255) },

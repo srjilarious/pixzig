@@ -9,6 +9,7 @@ pub const stb_tt = @import("stb_truetype");
 
 const textMod = @import("./renderer/text.zig");
 const common = @import("./common.zig");
+const resources = @import("./resources.zig");
 const textures = @import("./renderer/textures.zig");
 const shaders = @import("./renderer/shaders.zig");
 
@@ -19,7 +20,7 @@ const RectF = common.RectF;
 const Color = common.Color;
 const Rotate = common.Rotate;
 const Texture = textures.Texture;
-const ResourceManager = textures.ResourceManager;
+const ResourceManager = resources.ResourceManager;
 const Shader = shaders.Shader;
 pub const FontAtlas = textMod.FontAtlas;
 

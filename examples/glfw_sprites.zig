@@ -36,7 +36,7 @@ pub const App = struct {
         const app = try alloc.create(App);
 
         std.log.debug("Loading texture...\n", .{});
-        const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
+        const tex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
 
         app.* = .{
             .alloc = alloc,

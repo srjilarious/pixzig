@@ -33,9 +33,9 @@ pub const App = struct {
             &pixzig.shaders.TexPixelShader
         );
 
-        const bigtex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
+        const bigtex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
        
-        const tex = try eng.textures.addSubTexture(bigtex, "guy", RectF.fromCoords(32, 32, 32, 32, 512, 512));
+        const tex = try eng.resources.addSubTexture(bigtex, "guy", RectF.fromCoords(32, 32, 32, 32, 512, 512));
 
         const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &texShader);
         

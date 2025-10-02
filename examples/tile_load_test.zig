@@ -37,7 +37,7 @@ pub const App = struct {
         //     &pixzig.shaders.TexPixelShader,
         // );
 
-        const tex = try eng.textures.loadTexture("tiles", "assets/mario_grassish2.png");
+        const tex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
 
         std.log.info("Loading tile map", .{});
         const map = try tile.TileMap.initFromFile("assets/level1a.tmx", alloc);
@@ -46,7 +46,7 @@ pub const App = struct {
         std.log.info("Tile 0,0 data: {any}", .{tData});
 
         std.log.info("Initializing map renderer.", .{});
-        var mapRender = try tile.TileMapRenderer.init(alloc, try eng.textures.getShaderByName(pixzig.shaders.TextureShader));
+        var mapRender = try tile.TileMapRenderer.init(alloc, try eng.resources.getShaderByName(pixzig.shaders.TextureShader));
 
         std.log.info("Creating tile renderering data.", .{});
         try mapRender.recreateVertices(&map.tilesets.items[0], &map.layers.items[1]);
