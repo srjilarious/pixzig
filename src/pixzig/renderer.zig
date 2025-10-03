@@ -36,6 +36,7 @@ pub const RendererOptions = struct {
 
 pub const RendererInitOpts = struct {
     fontFace: ?[:0]const u8 = null,
+    fontSize: f32 = 20.0,
 };
 
 pub fn Renderer(opts: RendererOptions) type {
@@ -84,7 +85,7 @@ pub fn Renderer(opts: RendererOptions) type {
                 rend.text = try TextRenderer.init(alloc, resMgr);
 
                 if (initOpts.fontFace != null) {
-                    rend.fontAtlas = try FontAtlas.initFromTtfFile(initOpts.fontFace.?, 32.0, alloc);
+                    rend.fontAtlas = try FontAtlas.initFromTtfFile(initOpts.fontFace.?, initOpts.fontSize, alloc);
                     rend.text.setAtlas(&rend.fontAtlas.?);
                 } else {
                     if (builtin.mode == .Debug) {

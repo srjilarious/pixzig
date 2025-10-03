@@ -148,10 +148,10 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         projMat: zmath.Mat,
         resources: ResourceManager,
         keyboard: input.Keyboard,
-        renderer: EngRenderer = undefined,
+        renderer: Renderer = undefined,
 
         const Self = @This();
-        const EngRenderer = renderer.Renderer(engOpts.rendererOpts);
+        pub const Renderer = renderer.Renderer(engOpts.rendererOpts);
 
         pub fn init(title: [:0]const u8, allocator: std.mem.Allocator, options: PixzigEngineInitOptions) !*Self {
             try glfw.init();
@@ -243,7 +243,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 .renderer = undefined,
             };
 
-            eng.renderer = try EngRenderer.init(allocator, &eng.resources, options.renderInitOpts);
+            eng.renderer = try Renderer.init(allocator, &eng.resources, options.renderInitOpts);
             if (engOpts.defaultIcon) {
                 std.log.debug("Setting default window icon.", .{});
                 var defaultIcon = std.io.Reader.fixed(assets.icon48x48);

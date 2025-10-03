@@ -1,4 +1,3 @@
-// zig fmt: off
 const std = @import("std");
 const ziglua = @import("ziglua");
 const zgui = @import("zgui");
@@ -94,9 +93,7 @@ pub const Console = struct {
         try self.history.append(self.alloc, newMsgC[0..]);
     }
 
-    const AddMessageOpts = struct {
-        prepend: ?[]const u8 = null
-    };
+    const AddMessageOpts = struct { prepend: ?[]const u8 = null };
 
     fn addMessageToLogZ(self: *Console, msgC: [:0]const u8, opts: AddMessageOpts) !void {
         const msg = utils.cStrToSlice(msgC);
@@ -107,17 +104,16 @@ pub const Console = struct {
 
         // Allocate a copy of the message to add to our log entries.
         var spaceNeeded: usize = msg.len;
-        if(opts.prepend != null) {
+        if (opts.prepend != null) {
             spaceNeeded += opts.prepend.?.len;
         }
 
         const new_msg = try self.alloc.alloc(u8, spaceNeeded);
-        if(opts.prepend != null) {
+        if (opts.prepend != null) {
             const startLen = opts.prepend.?.len;
             @memcpy(new_msg[0..startLen], opts.prepend.?);
             @memcpy(new_msg[startLen..], msg);
-        }
-        else {
+        } else {
             @memcpy(new_msg, msg);
         }
 
@@ -137,7 +133,7 @@ pub const Console = struct {
             std.debug.print("log(): Bad msg parameter.\n", .{});
             return 0;
         };
-        
+
         console.addMessageToLogZ(msgC, .{}) catch {
             std.debug.print("Error adding message to history!\n", .{});
             return 0;
@@ -150,16 +146,15 @@ pub const Console = struct {
         std.debug.print("Running: {s}\n", .{self.inputBuffer});
 
         var addToHistory: bool = false;
-        if( self.history.items.len != 0) {
-            if(!std.mem.eql(u8, self.inputBuffer, self.history.items[self.history.items.len-1])) {
+        if (self.history.items.len != 0) {
+            if (!std.mem.eql(u8, self.inputBuffer, self.history.items[self.history.items.len - 1])) {
                 addToHistory = true;
             }
-        }
-        else {
+        } else {
             addToHistory = true;
         }
 
-        if(addToHistory) {
+        if (addToHistory) {
             try self.addMessageToHistoryZ(self.inputBuffer);
         }
 
@@ -175,59 +170,43 @@ pub const Console = struct {
 
         // Clear the current input buffer.
         @memset(self.inputBuffer, 0);
-
     }
 
     pub fn draw(self: *Console) void {
-        if (zgui.begin("Console", .{ .flags = .{ .no_scrollbar = true }})) {
+        if (zgui.begin("Console", .{ .flags = .{ .no_scrollbar = true } })) {
             const currSize = zgui.getWindowSize();
             const fontSize = zgui.getFontSize();
-            _ = zgui.beginChild("ConsoleTest", .{
-                .w = currSize[0] - 25, 
-                .h = currSize[1] - 3*fontSize - 5,
-                .window_flags = .{ .always_vertical_scrollbar = true }
-            });
-            
-            for(0..self.logBuffer.items.len) |idx| {
+            _ = zgui.beginChild("ConsoleTest", .{ .w = currSize[0] - 25, .h = currSize[1] - 3 * fontSize - 5, .window_flags = .{ .always_vertical_scrollbar = true } });
+
+            for (0..self.logBuffer.items.len) |idx| {
                 zgui.pushIntId(@intCast(idx));
                 zgui.textWrapped("{s}", .{self.logBuffer.items[idx]});
                 zgui.popId();
             }
 
-            if(self.shouldFocus) {
+            if (self.shouldFocus) {
                 zgui.setScrollHereY(.{});
             }
 
             zgui.endChild();
 
             const historyLen = self.history.items.len;
-            if(self.historyIndex == -1 or historyLen == 0) {
+            if (self.historyIndex == -1 or historyLen == 0) {
                 zgui.text(">> ", .{});
-            } 
-            else {
+            } else {
                 const currIdx = @as(i32, @intCast(historyLen)) - self.historyIndex;
-                zgui.text("[{}/{}] >> ", .{currIdx, historyLen});
+                zgui.text("[{}/{}] >> ", .{ currIdx, historyLen });
             }
 
-
             zgui.sameLine(.{});
-            if(self.shouldFocus) {
+            if (self.shouldFocus) {
                 zgui.setKeyboardFocusHere(0);
                 self.shouldFocus = false;
             }
-            
+
             zgui.pushItemWidth(-1);
-            if(zgui.inputText("##", .{ 
-                .buf = self.inputBuffer, 
-                .flags = .{ 
-                    .enter_returns_true = true, 
-                    .callback_history = true 
-                },
-                .callback = inputCallback,
-                .user_data = self
-            })) {
-                self.runCurrentInput() catch {
-                };
+            if (zgui.inputText("##", .{ .buf = self.inputBuffer, .flags = .{ .enter_returns_true = true, .callback_history = true }, .callback = inputCallback, .user_data = self })) {
+                self.runCurrentInput() catch {};
                 self.shouldFocus = true;
             }
             zgui.popItemWidth();
@@ -236,34 +215,31 @@ pub const Console = struct {
     }
 
     fn inputCallback(data: *zgui.InputTextCallbackData) i32 {
-        const console: *Console = @alignCast(@ptrCast(data.user_data));
+        const console: *Console = @ptrCast(@alignCast(data.user_data));
 
-        if(data.event_flag.callback_history) {
+        if (data.event_flag.callback_history) {
             var updateText: bool = false;
-            if(console.history.items.len > 0) {
-                if(data.event_key == .up_arrow) {
-                    if(console.historyIndex == -1) {
+            if (console.history.items.len > 0) {
+                if (data.event_key == .up_arrow) {
+                    if (console.historyIndex == -1) {
                         @memcpy(console.storedCommandBuffer, console.inputBuffer);
                         console.historyIndex = @intCast(console.history.items.len - 1);
                         updateText = true;
-                    }
-                    else if(console.historyIndex > 0) {
+                    } else if (console.historyIndex > 0) {
                         console.historyIndex -= 1;
                         updateText = true;
                     }
 
                     const histIndex: usize = @intCast(console.historyIndex);
                     @memcpy(console.inputBuffer, console.history.items[histIndex]);
-                }
-                else if(data.event_key == .down_arrow) {
-                    if(console.historyIndex != -1) {
+                } else if (data.event_key == .down_arrow) {
+                    if (console.historyIndex != -1) {
                         console.historyIndex += 1;
 
-                        if(console.historyIndex >= console.history.items.len) {
+                        if (console.historyIndex >= console.history.items.len) {
                             console.historyIndex = -1;
                             @memcpy(console.inputBuffer, console.storedCommandBuffer);
-                        }
-                        else {
+                        } else {
                             const histIndex: usize = @intCast(console.historyIndex);
                             @memcpy(console.inputBuffer, console.history.items[histIndex]);
                         }
@@ -272,7 +248,7 @@ pub const Console = struct {
                     }
                 }
 
-                if(updateText) {
+                if (updateText) {
                     data.deleteChars(0, data.buf_text_len);
                     const msg = utils.cStrToSlice(console.inputBuffer);
                     data.insertChars(0, msg);

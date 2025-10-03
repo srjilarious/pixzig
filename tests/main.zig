@@ -2,7 +2,6 @@ const std = @import("std");
 const testz = @import("testz");
 const pixzig = @import("pixzig");
 const zopengl = pixzig.zopengl;
-const gl = zopengl.bindings;
 
 // Need to reference the OpenGL bindings to ensure they get compiled in test mode.
 // Otherwise we end up with missing linker symbols in zgui.  This only happens because
