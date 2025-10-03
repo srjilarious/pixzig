@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 pub const glfw = @import("zglfw");
 pub const stbi = @import("zstbi");
 
-const zopengl = @import("zopengl");
+pub const zopengl = @import("zopengl");
 pub const gl = zopengl.bindings;
 pub const zmath = @import("zmath");
 pub const zgui = @import("zgui");

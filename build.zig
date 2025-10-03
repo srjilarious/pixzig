@@ -52,6 +52,8 @@ pub fn build(b: *std.Build) void {
         name: []const u8,
         path: []const u8,
         assets: []const []const u8,
+        extraMods: []const []const u8 = &.{},
+        buildForWeb: bool = true,
     }{
         .{ .name = "tile_load_test", .path = "examples/tile_load_test.zig", .assets = &.{
             "mario_grassish2.png",
@@ -86,6 +88,16 @@ pub fn build(b: *std.Build) void {
         .{ .name = "bitmap_text_rendering", .path = "examples/bitmap_text_rendering.zig", .assets = &.{
             "font5r.png",
         } },
+        .{
+            .name = "tests",
+            .path = "tests/main.zig",
+            // .path = "tests/main.zig",
+            .assets = &.{
+                "Roboto-Medium.ttf",
+            },
+            .extraMods = &.{"testz"},
+            .buildForWeb = false,
+        },
     };
 
     // Create a "build-all" option that builds everything
@@ -95,6 +107,9 @@ pub fn build(b: *std.Build) void {
     if (build_examples) {
         // Build each example
         for (examples) |example_info| {
+            // Skip if marked to not build for web and we're building for emscripten.
+            if (target.result.os.tag == .emscripten and !example_info.buildForWeb) continue;
+
             const exe_mod = b.createModule(.{
                 .root_source_file = b.path(example_info.path),
                 .target = target,
@@ -111,6 +126,11 @@ pub fn build(b: *std.Build) void {
                 exe_mod,
                 example_info.assets,
             );
+
+            for (example_info.extraMods) |em| {
+                const extraMod = b.dependency(em, .{});
+                exe_mod.addImport(em, extraMod.module(em));
+            }
             const install_exe = b.addInstallArtifact(exe, .{
                 .dest_dir = .{
                     .override = .{ .custom = b.pathJoin(&.{ "bin", example_info.name }) },
@@ -134,16 +154,31 @@ pub fn build(b: *std.Build) void {
             spack.root_module.addImport("zstbi", zstbi.module("root"));
 
             // Unit tests
-            const tests_mod = b.createModule(.{
-                .root_source_file = b.path("tests/main.zig"),
-                .target = target,
-                .optimize = optimize,
-            });
-            const tests = buildExample(b, target, optimize, engDat.engine_lib, engDat.pixeng_mod, "tests", tests_mod, &.{
-                "Roboto-Medium.ttf",
-            });
-            const testzMod = b.dependency("testz", .{});
-            tests.root_module.addImport("testz", testzMod.module("testz"));
+            // const tests_mod = b.createModule(.{
+            //     .root_source_file = b.path("tests/main.zig"),
+            //     .target = target,
+            //     .optimize = optimize,
+            // });
+            // const tests = buildExample(
+            //     b,
+            //     target,
+            //     optimize,
+            //     engDat.engine_lib,
+            //     engDat.pixeng_mod,
+            //     "tests",
+            //     tests_mod,
+            //     &.{
+            //         "Roboto-Medium.ttf",
+            //     },
+            // );
+            // const testzMod = b.dependency("testz", .{});
+            // tests.root_module.addImport("testz", testzMod.module("testz"));
+            // const install_exe = b.addInstallArtifact(tests, .{
+            //     .dest_dir = .{
+            //         .override = .{ .custom = b.pathJoin(&.{ "bin", "tests" }) },
+            //     },
+            // });
+            // build_all_step.dependOn(&install_exe.step);
         }
     }
 
