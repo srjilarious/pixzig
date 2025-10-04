@@ -64,6 +64,9 @@ pub const App = struct {
 
         eng.renderer.drawEnclosingRect(RectF.fromPosSize(20, 320, size.x, size.y), Color.from(100, 255, 100, 255), 2);
 
+        _ = eng.renderer.drawScaledString("Scaled 2x!", .{ .x = 20, .y = 280 }, 2.0);
+        _ = eng.renderer.drawScaledString("Scaled 0.5x!", .{ .x = 20, .y = 50 }, 0.5);
+
         eng.renderer.end();
     }
 };

@@ -18,7 +18,11 @@ const Shader = shaders.Shader;
 const ResourceManager = resources.ResourceManager;
 const SpriteBatchQueue = @import("./sprite_batch.zig").SpriteBatchQueue;
 
-pub const Character = struct { coords: RectF, size: Vec2I, bearing: Vec2I, advance: u32 };
+pub const Character = struct { coords: RectF, size: Vec2I, bearing: Vec2I, advance: i32 };
+
+fn scaleInt(value: i32, scale: f32) i32 {
+    return @as(i32, @intFromFloat(@as(f32, @floatFromInt(value)) * scale));
+}
 
 pub const FontAtlas = struct {
     chars: std.AutoHashMap(u32, Character),
@@ -75,7 +79,7 @@ pub const FontAtlas = struct {
                         .coords = RectF.fromCoords(0, 0, 0, 0, GlyphBufferWidth, GlyphBufferHeight),
                         .size = .{ .x = 0, .y = 0 },
                         .bearing = .{ .x = 0, .y = 0 },
-                        .advance = @as(u32, @intFromFloat(packed_char.xadvance)),
+                        .advance = @as(i32, @intFromFloat(packed_char.xadvance)),
                     });
                 }
                 continue;
@@ -103,7 +107,7 @@ pub const FontAtlas = struct {
                 .coords = coords,
                 .size = .{ .x = char_width, .y = char_height },
                 .bearing = .{ .x = bearing_x, .y = bearing_y },
-                .advance = @as(u32, @intFromFloat(packed_char.xadvance)),
+                .advance = @as(i32, @intFromFloat(packed_char.xadvance)),
             });
 
             // Track max Y for baseline calculations
@@ -158,9 +162,9 @@ pub const FontAtlas = struct {
 
     pub fn initFromBitmap(
         fontImagePath: []const u8,
-        charWidth: u32,
-        charHeight: u32,
-        charsPerRow: u32,
+        charWidth: i32,
+        charHeight: i32,
+        charsPerRow: i32,
         chars: []const u8,
         alloc: std.mem.Allocator,
     ) !FontAtlas {
@@ -309,6 +313,47 @@ pub const TextRenderer = struct {
             currX += @intCast(charData.advance);
             drawSize.x += @intCast(charData.advance);
             drawSize.y = @max(drawSize.y, charData.size.y);
+        }
+
+        return drawSize;
+    }
+
+    pub fn drawScaledString(self: *TextRenderer, text: []const u8, pos: Vec2I, scale: f32) Vec2I {
+        var currX: i32 = pos.x;
+
+        var drawSize: Vec2I = .{ .x = 0, .y = 0 };
+
+        if (self.atlas == null) {
+            std.log.err("TextRenderer: No FontAtlas set. Cannot draw text.", .{});
+            return drawSize;
+        }
+
+        const posY = pos.y + scaleInt(self.atlas.?.maxY, scale);
+        for (text) |c| {
+            const charDataPtr = self.atlas.?.chars.get(@intCast(c));
+            if (charDataPtr == null) continue;
+
+            const charData = charDataPtr.?;
+
+            // Only draw if character has visual representation
+            if (charData.size.x > 0 and charData.size.y > 0) {
+                self.spriteBatch.draw(
+                    &self.atlas.?.texture,
+                    RectF.fromPosSize(
+                        currX + scaleInt(charData.bearing.x, scale),
+                        posY - scaleInt(charData.bearing.y, scale),
+                        scaleInt(charData.size.x, scale),
+                        scaleInt(charData.size.y, scale),
+                    ),
+                    charData.coords,
+                    .none,
+                );
+            }
+
+            const advanceScale = scaleInt(charData.advance, scale);
+            currX += advanceScale;
+            drawSize.x += advanceScale;
+            drawSize.y = @max(drawSize.y, scaleInt(charData.size.y, scale));
         }
 
         return drawSize;

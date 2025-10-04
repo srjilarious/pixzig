@@ -198,5 +198,10 @@ pub fn Renderer(opts: RendererOptions) type {
             std.debug.assert(opts.textRenderering);
             return self.impl.text.drawString(text, pos);
         }
+
+        pub fn drawScaledString(self: *Self, text: []const u8, pos: Vec2I, scale: f32) Vec2I {
+            std.debug.assert(opts.textRenderering);
+            return self.impl.text.drawScaledString(text, pos, scale);
+        }
     };
 }
