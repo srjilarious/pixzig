@@ -195,14 +195,17 @@ pub const FontAtlas = struct {
 
         for (0..chars.len) |i| {
             const char_code = chars[i];
-            const col = i % charsPerRow;
-            const row = i / charsPerRow;
+            const chW = @as(u32, @intCast(charWidth));
+            const chH = @as(u32, @intCast(charHeight));
 
-            const x0 = col * charWidth;
-            const y0 = row * charHeight;
+            const col = i % @as(u32, @intCast(charsPerRow));
+            const row = i / @as(u32, @intCast(charsPerRow));
+
+            const x0 = col * chW;
+            const y0 = row * chH;
 
             // Skip characters that would be out of bounds
-            if (x0 + charWidth > @as(u32, image.width) or y0 + charHeight > @as(u32, image.height)) {
+            if (x0 + chW > image.width or y0 + chH > image.height) {
                 continue;
             }
 

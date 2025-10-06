@@ -429,3 +429,52 @@ pub fn checkDownTest() !void {
         }
     }
 }
+
+pub fn checkRemoveTest() !void {
+    // creates a 10x10 grid with cells 5x5 pixels
+    var grid = try IntCollisionGrid.init(std.heap.page_allocator, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
+    defer grid.deinit();
+
+    grid.insertRect(.{ .t = 0, .l = 0, .r = 15, .b = 20 }, 100) catch {
+        try testz.fail();
+    };
+
+    grid.insertRect(.{ .t = 6, .l = 10, .r = 25, .b = 15 }, 200) catch {
+        try testz.fail();
+    };
+
+    var hits: [2]?i32 = .{ null, null };
+    var res = grid.checkPoint(.{ .x = 3, .y = 3 }, &hits[0..]) catch {
+        try testz.fail();
+    };
+
+    try testz.expectEqual(res, 1);
+    try testz.expectNotEqual(hits[0], null);
+    try testz.expectEqual(hits[0].?, 100);
+
+    try testz.expectEqual(hits[1], null);
+
+    // Now remove the rect and make sure we don't hit it anymore.
+    grid.removeRect(.{ .t = 0, .l = 0, .r = 15, .b = 20 }, 100) catch {
+        try testz.fail();
+    };
+
+    hits = .{ null, null };
+    res = grid.checkPoint(.{ .x = 3, .y = 3 }, &hits[0..]) catch {
+        try testz.fail();
+    };
+
+    try testz.expectEqual(res, 0);
+    try testz.expectEqual(hits[0], null);
+    try testz.expectEqual(hits[1], null);
+
+    // Make sure we can still hit the other rect.
+    res = grid.checkPoint(.{ .x = 12, .y = 12 }, &hits[0..]) catch {
+        try testz.fail();
+    };
+    try testz.expectEqual(res, 1);
+    try testz.expectNotEqual(hits[0], null);
+    try testz.expectEqual(hits[0].?, 200);
+
+    try testz.expectEqual(hits[1], null);
+}

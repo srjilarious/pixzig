@@ -115,8 +115,26 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
                         if (items[itIdx] == obj) {
                             items[itIdx] = null;
 
-                            // TODO: swap this cell's null with the last non-null item to fill it in.
-                            //
+                            // Swap this cell's null with the last non-null item to fill it in.
+                            // First find the last non-null item.
+                            var swapIdx: usize = itIdx + 1;
+                            while (swapIdx < items.len) {
+                                if (items[swapIdx] == null) {
+                                    break;
+                                }
+
+                                swapIdx += 1;
+                            }
+
+                            // Move back one from the last null item.  We'll make sure it's not the itIdx still.
+                            swapIdx -= 1;
+
+                            // Do the swap
+                            if (swapIdx < items.len and swapIdx != itIdx) {
+                                items[itIdx] = items[swapIdx];
+                                items[swapIdx] = null;
+                            }
+
                             break;
                         }
                     }
