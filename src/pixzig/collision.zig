@@ -26,6 +26,8 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
                 }
             }
 
+            std.debug.print("Initializing collision grid: {} x {} cells, cell size {} x {}, extent {} x {}\n", .{ gridSize.x, gridSize.y, cellSize.x, cellSize.y, gridSize.x * cellSize.x, gridSize.y * cellSize.y });
+
             return .{
                 .grid = grid,
                 .gridSize = gridSize,
@@ -40,6 +42,7 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
         }
 
         pub fn resize(self: *Self, sz: Vec2U) !void {
+            std.debug.print("** Resizing collision grid to {} x {}\n", .{ sz.x, sz.y });
             self.gridSize = sz;
             // TODO: Handle copying contents into resized grid.
             try self.grid.resize(self.alloc, sz.x * sz.y);
@@ -54,6 +57,8 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             for (0..items.len) |itIdx| {
                 if (items[itIdx] == null) {
                     items[itIdx] = obj;
+                    // std.debug.print("Inserted object {} at cell ({}, {}) idx {} at items[{}]\n", .{ obj, cx, cy, idx, itIdx });
+
                     return;
                 }
             }
@@ -94,7 +99,58 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             }
         }
 
-        pub fn removeRect(self: *Self, bounds: RectF, obj: T) !void {
+        pub fn removePoint(self: *Self, pixelPos: Vec2I, obj: T) !usize {
+            if (pixelPos.x < 0 or @as(usize, @intCast(pixelPos.x)) >= self.gridExtent.x) {
+                return 0;
+            }
+
+            if (pixelPos.y < 0 or @as(usize, @intCast(pixelPos.y)) >= self.gridExtent.y) {
+                return 0;
+            }
+
+            const cx: usize = @as(usize, @intCast(pixelPos.x)) / self.cellSize.x;
+            const cy: usize = @as(usize, @intCast(pixelPos.y)) / self.cellSize.y;
+            const idx: usize = cy * self.gridSize.x + cx;
+            var items = &self.grid.items[idx];
+
+            // std.debug.print("Trying to remove object {} at cell ({}, {}) idx {}\n", .{ obj, cx, cy, idx });
+
+            var cellsRemoved: usize = 0;
+            for (0..items.len) |itIdx| {
+                // std.debug.print("Checking item at idx {}: {?}\n", .{ itIdx, items[itIdx] });
+                if (items[itIdx] == obj) {
+                    cellsRemoved += 1;
+                    items[itIdx] = null;
+
+                    // Swap this cell's null with the last non-null item to fill it in.
+                    // First find the last non-null item.
+                    var swapIdx: usize = itIdx + 1;
+                    while (swapIdx < items.len) {
+                        if (items[swapIdx] == null) {
+                            break;
+                        }
+
+                        swapIdx += 1;
+                    }
+
+                    // Move back one from the last null item.  We'll make sure it's not the itIdx still.
+                    swapIdx -= 1;
+
+                    // Do the swap
+                    if (swapIdx < items.len and swapIdx != itIdx) {
+                        items[itIdx] = items[swapIdx];
+                        items[swapIdx] = null;
+                    }
+
+                    break;
+                }
+            }
+
+            return cellsRemoved;
+        }
+
+        pub fn removeRect(self: *Self, bounds: RectF, obj: T) !usize {
+            var cellsRemoved: usize = 0;
             const cx: usize = @as(usize, @intFromFloat(bounds.l)) / self.cellSize.x;
             const cy: usize = @as(usize, @intFromFloat(bounds.t)) / self.cellSize.y;
             const nx: usize = (@as(usize, @intFromFloat(bounds.width())) + self.cellSize.x - 1) / self.cellSize.x;
@@ -113,6 +169,7 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
                     var items = &self.grid.items[idx];
                     for (0..items.len) |itIdx| {
                         if (items[itIdx] == obj) {
+                            cellsRemoved += 1;
                             items[itIdx] = null;
 
                             // Swap this cell's null with the last non-null item to fill it in.
@@ -140,6 +197,8 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
                     }
                 }
             }
+
+            return cellsRemoved;
         }
 
         pub fn checkPoint(self: *Self, pixelPos: Vec2I, outList: *const []?T) !usize {
