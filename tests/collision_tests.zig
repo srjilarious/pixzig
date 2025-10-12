@@ -171,6 +171,38 @@ pub fn checkVertTest() !void {
             try testz.expectEqual(hitList[idx], null);
         }
     }
+
+    // Check that an out of bounds left line doesn't error out.
+    {
+        const res = try grid.checkVert(-3, 0, 9, &hitList[0..]);
+        try testz.expectEqual(res, 0);
+    }
+
+    // Check that an out of bounds right line doesn't error out.
+    {
+        const res = try grid.checkVert(12, 0, 9, &hitList[0..]);
+        try testz.expectEqual(res, 0);
+    }
+
+    // Check case where we hit both rects, extending off beginning of grid.
+    {
+        const res = grid.checkVert(2, -10, 2, &hitList[0..]) catch |err| {
+            try testz.failWith(err);
+            return error.Fail;
+        };
+
+        try testz.expectEqual(res, 2);
+    }
+
+    // Check case where we hit both rects, extending off end of grid.
+    {
+        const res = grid.checkVert(2, 0, 20, &hitList[0..]) catch |err| {
+            try testz.failWith(err);
+            return error.Fail;
+        };
+
+        try testz.expectEqual(res, 2);
+    }
 }
 
 pub fn checkLeftTest() !void {
@@ -455,7 +487,7 @@ pub fn checkRemoveTest() !void {
     try testz.expectEqual(hits[1], null);
 
     // Now remove the rect and make sure we don't hit it anymore.
-    grid.removeRect(.{ .t = 0, .l = 0, .r = 15, .b = 20 }, 100) catch {
+    _ = grid.removeRect(.{ .t = 0, .l = 0, .r = 15, .b = 20 }, 100) catch {
         try testz.fail();
     };
 

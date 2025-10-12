@@ -233,10 +233,30 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
         }
 
         pub fn checkHorz(self: *Self, cxStart: i32, cxEnd: i32, cy: i32, outList: *const []?T) !usize {
+
+            // Check bounds
+            if (cy < 0 or cy >= @as(i32, @intCast(self.gridSize.y))) {
+                return 0;
+            }
+
+            if (cxEnd < 0 or cxStart >= @as(i32, @intCast(self.gridSize.x))) {
+                return 0;
+            }
+
+            var cxS = cxStart;
+            var cxE = cxEnd;
+            if (cxStart < 0) {
+                cxS = 0;
+            }
+
+            if (cxEnd >= @as(i32, @intCast(self.gridSize.x))) {
+                cxE = @as(i32, @intCast(self.gridSize.x)) - 1;
+            }
+
             var baseIdx: usize = 0;
             var numFound: usize = 0;
-            const cxStartU: usize = @intCast(cxStart);
-            const cxEndU: usize = @intCast(cxEnd);
+            const cxStartU: usize = @intCast(cxS);
+            const cxEndU: usize = @intCast(cxE);
             const cyU: usize = @intCast(cy);
             for (cxStartU..cxEndU + 1) |cx| {
                 const idx: usize = cyU * self.gridSize.x + cx;
@@ -278,8 +298,29 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
         pub fn checkVert(self: *Self, cx: i32, cyStart: i32, cyEnd: i32, outList: *const []?T) !usize {
             var baseIdx: usize = 0;
             var numFound: usize = 0;
-            const cyStartU: usize = @intCast(cyStart);
-            const cyEndU: usize = @intCast(cyEnd);
+
+            var cyS = cyStart;
+            var cyE = cyEnd;
+
+            // Check bounds
+            if (cx < 0 or cx >= @as(i32, @intCast(self.gridSize.x))) {
+                return 0;
+            }
+
+            if (cyEnd < 0 or cyStart >= @as(i32, @intCast(self.gridSize.y))) {
+                return 0;
+            }
+
+            if (cyStart < 0) {
+                cyS = 0;
+            }
+
+            if (cyEnd >= @as(i32, @intCast(self.gridSize.y))) {
+                cyE = @as(i32, @intCast(self.gridSize.y)) - 1;
+            }
+
+            const cyStartU: usize = @intCast(cyS);
+            const cyEndU: usize = @intCast(cyE);
             const cxU: usize = @intCast(cx);
             for (cyStartU..cyEndU + 1) |cy| {
                 const idx: usize = cy * self.gridSize.x + cxU;
