@@ -260,6 +260,7 @@ fn buildEngine(
     const zgui = b.dependency("zgui", .{
         .target = target,
         .backend = .glfw_opengl3,
+        .with_freetype = false,
     });
     const zgui_mod = zgui.module("root");
     pixeng.addImport("zgui", zgui_mod);

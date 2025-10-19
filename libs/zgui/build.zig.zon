@@ -59,11 +59,11 @@
             .hash = "zsdl-0.4.0-dev-rFpjE2BgWQADibKkkIjv0Ig8k96MOu3Yeo6e0n9OD85L",
             .lazy = true,
         },
-        .freetype = .{
-            .url = "https://github.com/hexops/freetype/archive/972cd37bccecae2cc9f54cf0b562263a13209d02.tar.gz",
-            .hash = "freetype-0.0.0-AAAAAA5JcwBMujojfNLEq5g_WijZtU56mRLYx8bjjiMU",
-            .lazy = true,
-        },
+        // .freetype = .{
+        //     .url = "https://github.com/hexops/freetype/archive/972cd37bccecae2cc9f54cf0b562263a13209d02.tar.gz",
+        //     .hash = "freetype-0.0.0-AAAAAA5JcwBMujojfNLEq5g_WijZtU56mRLYx8bjjiMU",
+        //     .lazy = true,
+        // },
         .zopengl = .{
             .url = "https://github.com/zig-gamedev/zopengl/archive/33ae578d91692c814e7d6b4b42573142475f68d0.tar.gz",
             .hash = "zopengl-0.6.0-dev-5-tnz7Y8CQCW_JRgxPCM4ETsKGOGHddqw5y1XaXhrsb4",
