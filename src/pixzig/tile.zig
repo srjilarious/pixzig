@@ -173,6 +173,34 @@ pub const Object = struct {
         return obj;
     }
 
+    pub fn intPropWithDefault(self: *const Self, name: []const u8, default: i32) i32 {
+        if (self.properties != null) {
+            for (0..self.properties.?.items.len) |idx| {
+                const prop = &self.properties.?.items[idx];
+                if (std.mem.eql(u8, prop.name, name)) {
+                    return std.fmt.parseInt(i32, prop.value, 0) orelse default;
+                }
+            }
+        }
+
+        return default;
+    }
+
+    pub fn intProp(self: *const Self, name: []const u8) !i32 {
+        if (self.properties == null) return error.NoProperties;
+
+        for (0..self.properties.?.items.len) |idx| {
+            const prop = &self.properties.?.items[idx];
+            if (std.mem.eql(u8, prop.name, name)) {
+                return std.fmt.parseInt(i32, prop.value, 0) catch {
+                    return error.BadPropertyFormat;
+                };
+            }
+        }
+
+        return error.PropertyNotFound;
+    }
+
     pub fn deinit(self: *Self) void {
         if (self.name != null) {
             self.alloc.free(self.name.?);
