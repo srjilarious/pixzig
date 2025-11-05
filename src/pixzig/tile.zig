@@ -201,6 +201,19 @@ pub const Object = struct {
         return error.PropertyNotFound;
     }
 
+    pub fn stringProp(self: *const Self, name: []const u8) ![]const u8 {
+        if (self.properties == null) return error.NoProperties;
+
+        for (0..self.properties.?.items.len) |idx| {
+            const prop = &self.properties.?.items[idx];
+            if (std.mem.eql(u8, prop.name, name)) {
+                return prop.value;
+            }
+        }
+
+        return error.PropertyNotFound;
+    }
+
     pub fn deinit(self: *Self) void {
         if (self.name != null) {
             self.alloc.free(self.name.?);
