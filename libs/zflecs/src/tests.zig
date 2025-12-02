@@ -74,10 +74,10 @@ test "zflecs.entities.basics" {
     const ptr = ecs.get(world, bob, Position).?;
     print("({d}, {d})\n", .{ ptr.x, ptr.y });
 
-    _ = ecs.set(world, bob, Position, .{ .x = 20, .y = 30 });
+    _ = ecs.set(world, bob, Position, .{ .x = 10, .y = 30 });
 
     const alice = ecs.set_name(world, 0, "Alice");
-    _ = ecs.set(world, alice, Position, .{ .x = 10, .y = 20 });
+    _ = ecs.set(world, alice, Position, .{ .x = 10, .y = 50 });
     ecs.add(world, alice, Walking);
 
     const str = ecs.type_str(world, ecs.get_type(world, alice)).?;
@@ -87,11 +87,11 @@ test "zflecs.entities.basics" {
     ecs.remove(world, alice, Walking);
 
     {
-        var term = ecs.term_t{ .id = ecs.id(Position) };
-        var it = ecs.each(world, &term);
+        var it = ecs.each(world, Position);
         while (ecs.each_next(&it)) {
             if (ecs.field(&it, Position, 0)) |positions| {
                 for (positions, it.entities()) |p, e| {
+                    try std.testing.expectEqual(p.x, 10);
                     print(
                         "Term loop: {s}: ({d}, {d})\n",
                         .{ ecs.get_name(world, e).?, p.x, p.y },
@@ -285,7 +285,7 @@ test "zflecs.basic" {
 const Eats = struct {};
 const Apples = struct {};
 
-fn move(it: *ecs.iter_t) callconv(.C) void {
+fn move(it: *ecs.iter_t) callconv(.c) void {
     const p = ecs.field(it, Position, 0).?;
     const v = ecs.field(it, Velocity, 1).?;
 
@@ -312,7 +312,7 @@ test "zflecs.helloworld" {
     ecs.TAG(world, Apples);
 
     {
-        ecs.ADD_SYSTEM_WITH_FILTERS(world, "move system", ecs.OnUpdate, move, &.{
+        _ = ecs.ADD_SYSTEM_WITH_FILTERS(world, "move system", ecs.OnUpdate, move, &.{
             .{ .id = ecs.id(Position) },
             .{ .id = ecs.id(Velocity) },
         });
@@ -361,8 +361,8 @@ test "zflecs.helloworld_systemcomptime" {
     ecs.TAG(world, Eats);
     ecs.TAG(world, Apples);
 
-    ecs.ADD_SYSTEM(world, "move system", ecs.OnUpdate, move_system);
-    ecs.ADD_SYSTEM(world, "move system with iterator", ecs.OnUpdate, move_system_with_it);
+    _ = ecs.ADD_SYSTEM(world, "move system", ecs.OnUpdate, move_system);
+    _ = ecs.ADD_SYSTEM(world, "move system with iterator", ecs.OnUpdate, move_system_with_it);
 
     const bob = ecs.new_entity(world, "Bob");
     _ = ecs.set(world, bob, Position, .{ .x = 0, .y = 0 });
@@ -477,16 +477,9 @@ test "zflecs.struct-dtor-hook" {
     defer _ = ecs.fini(world);
 
     const Chat = struct {
-        messages: std.ArrayList([]const u8),
-
-        pub fn init(allocator: std.mem.Allocator) @This() {
-            return @This(){
-                .messages = std.ArrayList([]const u8).init(allocator),
-            };
-        }
-
-        pub fn dtor(self: @This()) void {
-            self.messages.deinit();
+        messages: std.ArrayList([]const u8) = .{},
+        pub fn dtor(self: *@This()) void {
+            self.messages.deinit(std.testing.allocator);
         }
     };
 
@@ -494,19 +487,19 @@ test "zflecs.struct-dtor-hook" {
     {
         var system_desc = ecs.system_desc_t{};
         system_desc.callback = struct {
-            pub fn chatSystem(it: *ecs.iter_t) callconv(.C) void {
+            pub fn chatSystem(it: *ecs.iter_t) callconv(.c) void {
                 const chat_components = ecs.field(it, Chat, 0).?;
                 for (0..it.count()) |i| {
-                    chat_components[i].messages.append("some words hi") catch @panic("whomp");
+                    chat_components[i].messages.append(std.testing.allocator, "some words hi") catch @panic("whomp");
                 }
             }
         }.chatSystem;
         system_desc.query.terms[0] = .{ .id = ecs.id(Chat) };
-        ecs.SYSTEM(world, "Chat system", ecs.OnUpdate, &system_desc);
+        _ = ecs.SYSTEM(world, "Chat system", ecs.OnUpdate, &system_desc);
     }
 
     const chat_entity = ecs.new_entity(world, "Chat entity");
-    _ = ecs.set(world, chat_entity, Chat, Chat.init(std.testing.allocator));
+    _ = ecs.set(world, chat_entity, Chat, Chat{});
 
     _ = ecs.progress(world, 0);
 
@@ -516,4 +509,31 @@ test "zflecs.struct-dtor-hook" {
     // This test fails if the ".hooks = .{ .dtor = ... }" from COMPONENT is
     // commented out since the cleanup is never called to free the ArrayList
     // memory.
+}
+fn module(world: *ecs.world_t) callconv(.c) void {
+    var desc = ecs.component_desc_t{ .entity = 0, .type = .{ .size = 0, .alignment = 0 } };
+    _ = ecs.module_init(world, "SimpleModule", &desc);
+
+    ecs.COMPONENT(world, Position);
+    ecs.COMPONENT(world, Velocity);
+}
+test "zflecs-module" {
+    const world = ecs.init();
+    defer _ = ecs.fini(world);
+
+    const module_id = ecs.import_c(world, module, "SimpleModule");
+
+    try expect(module_id != 0);
+
+    _ = ecs.ADD_SYSTEM(world, "move system", ecs.OnUpdate, move_system);
+
+    const bob = ecs.new_entity(world, "Bob");
+    _ = ecs.set(world, bob, Position, .{ .x = 0, .y = 0 });
+    _ = ecs.set(world, bob, Velocity, .{ .x = 1, .y = 2 });
+
+    _ = ecs.progress(world, 0);
+    _ = ecs.progress(world, 0);
+
+    const p = ecs.get(world, bob, Position).?;
+    print("Bob's position is ({d}, {d})\n", .{ p.x, p.y });
 }

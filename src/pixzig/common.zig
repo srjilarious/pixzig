@@ -115,6 +115,13 @@ pub const RectF = struct {
     pub fn pos2F(self: *const RectF) Vec2F {
         return .{ .x = self.l, .y = self.t };
     }
+
+    pub fn centerF(self: *const RectF) Vec2F {
+        return .{
+            .x = (self.l + self.r) * 0.5,
+            .y = (self.t + self.b) * 0.5,
+        };
+    }
 };
 
 pub const RectI = struct {
