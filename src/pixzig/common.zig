@@ -122,6 +122,15 @@ pub const RectF = struct {
             .y = (self.t + self.b) * 0.5,
         };
     }
+
+    pub fn setPos(self: *RectF, x: f32, y: f32) void {
+        const w = self.width();
+        const h = self.height();
+        self.l = x;
+        self.t = y;
+        self.r = x + w;
+        self.b = y + h;
+    }
 };
 
 pub const RectI = struct {

@@ -11,6 +11,7 @@ const ScriptEngine = scripting.ScriptEngine;
 
 pub const ConsoleOpts = struct {
     numLogLines: usize = 2000,
+    enabledByDefault: bool = true,
 };
 
 pub const Console = struct {
@@ -34,7 +35,7 @@ pub const Console = struct {
             .historyIndex = -1,
             .logBuffer = .{},
             .opts = opts,
-            .enabled = true,
+            .enabled = opts.enabledByDefault,
             .shouldFocus = true,
             .inputBuffer = try alloc.allocSentinel(u8, 256, 0),
             .storedCommandBuffer = try alloc.allocSentinel(u8, 256, 0),
