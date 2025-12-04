@@ -277,6 +277,10 @@ pub const FrameSequenceManager = struct {
     }
 };
 
+pub const AddStateOpts = struct {
+    name: ?[]const u8 = null,
+};
+
 pub const Actor = struct {
     states: std.StringHashMap(*ActorState),
     alloc: std.mem.Allocator,
@@ -300,8 +304,15 @@ pub const Actor = struct {
         self.states.deinit();
     }
 
-    pub fn addState(self: *Actor, state: *const ActorState) !*Actor {
-        const nameCopy = try self.alloc.dupe(u8, state.name);
+    pub fn addState(self: *Actor, state: *const ActorState, opts: AddStateOpts) !*Actor {
+        const nameCopy = blk: {
+            if (opts.name == null) {
+                break :blk try self.alloc.dupe(u8, state.name);
+            } else {
+                break :blk try self.alloc.dupe(u8, opts.name.?);
+            }
+        };
+
         var val = try self.alloc.create(ActorState);
         val.* = state.*;
         val.name = nameCopy;
