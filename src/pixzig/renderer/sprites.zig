@@ -96,7 +96,7 @@ pub const ActorState = struct {
     name: []const u8,
     nextState: ?[]const u8 = null,
     sequence: *const FrameSequence,
-    flip: Flip,
+    flip: Flip = .none,
 };
 
 pub const FrameSequence = struct {
@@ -154,7 +154,6 @@ pub const FileActorState = struct {
     nextStateName: ?[]const u8 = null,
 
     frameSeqName: []const u8,
-    // Flip applied on top of sequence flip.
     flip: Flip,
 };
 
@@ -244,6 +243,7 @@ pub const FrameSequenceManager = struct {
                 new.nextState = null;
             }
             new.sequence = self.sequences.get(fileState.frameSeqName).?;
+            new.flip = fileState.flip;
             try self.actorStates.put(new.name, new);
         }
     }
@@ -354,8 +354,7 @@ pub const Actor = struct {
                 self.currFrame = 0;
             }
 
-            // TODO: Add in flip on sequences.
-            currSeq.frames.items[@intCast(self.currFrame)].apply(spr, .none);
+            currSeq.frames.items[@intCast(self.currFrame)].apply(spr, self.currState.?.flip);
         }
     }
 
