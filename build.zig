@@ -82,6 +82,9 @@ pub fn build(b: *std.Build) void {
         .{ .name = "console_test", .path = "examples/console_test.zig", .assets = &.{
             "Roboto-Medium.ttf",
         } },
+        .{ .name = "console2_test", .path = "examples/console2_test.zig", .assets = &.{
+            "Roboto-Medium.ttf",
+        } },
         .{ .name = "text_rendering", .path = "examples/text_rendering.zig", .assets = &.{
             "Roboto-Medium.ttf",
         } },
