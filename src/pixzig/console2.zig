@@ -190,9 +190,15 @@ pub const Console = struct {
     }
 
     pub fn draw(self: *Console) void {
-        self.shapeRenderer.*.drawFilledRect(
-            .fromPosSize(0, 0, 640, 400),
+        self.shapeRenderer.drawFilledRect(
+            .fromPosSize(10, 10, 640, 400),
             Color.from(0, 0, 0, 200),
+        );
+
+        _ = self.textRenderer.drawString(
+            "Console (not implemented yet)",
+            .{ .x = 20, .y = 20 },
+            //Color.from(255, 255, 255, 255),
         );
 
         // if (zgui.begin("Console", .{ .flags = .{ .no_scrollbar = true } })) {

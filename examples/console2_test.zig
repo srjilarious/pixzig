@@ -20,7 +20,11 @@ const console = pixzig.console2;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{ .withGui = true });
+const AppRunner = pixzig.PixzigAppRunner(App, .{
+    .rendererOpts = .{
+        .textRenderering = true,
+    },
+});
 
 pub const App = struct {
     fps: FpsCounter,
@@ -96,7 +100,9 @@ pub fn main() !void {
     std.log.info("Pixzig Console Test Example", .{});
 
     const alloc = std.heap.c_allocator;
-    const appRunner = try AppRunner.init("Pixzig: Console Test Example.", alloc, .{});
+    const appRunner = try AppRunner.init("Pixzig: Console Test Example.", alloc, .{ .renderInitOpts = .{
+        .fontFace = "assets/Roboto-Medium.ttf",
+    } });
 
     std.log.info("Initializing app.\n", .{});
     const app: *App = try App.init(alloc, appRunner.engine);
