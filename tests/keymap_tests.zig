@@ -199,3 +199,13 @@ pub fn repeatKeyChordTrigger() !void {
         try testz.expectEqualStr(func.?, "testThing");
     }
 }
+
+pub fn charFromKeyTest() !void {
+    try testz.expectEqual(input.charFromKey(.a, false), 'a');
+    try testz.expectEqual(input.charFromKey(.a, true), 'A');
+    try testz.expectEqual(input.charFromKey(.comma, true), '<');
+    try testz.expectEqual(input.charFromKey(.grave_accent, false), '`');
+    try testz.expectEqual(input.charFromKey(.grave_accent, true), '~');
+    try testz.expectEqual(input.charFromKey(.F1, false), null);
+    try testz.expectEqual(input.charFromKey(.F1, true), null);
+}

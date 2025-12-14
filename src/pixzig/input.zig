@@ -19,6 +19,74 @@ fn getIndexForKey(key: glfw.Key) usize {
     return 0;
 }
 
+pub fn charFromKey(key: glfw.Key, shift: bool) ?u8 {
+    const keyInt = @intFromEnum(key);
+    if (keyInt > @intFromEnum(glfw.Key.space) and keyInt <= @intFromEnum(glfw.Key.grave_accent)) {
+        if (!shift) {
+            if (keyInt >= 'A' and keyInt <= 'Z') {
+                // Convert to lower case.
+                return @intCast(keyInt + 32);
+            } else {
+                return @intCast(keyInt);
+            }
+        } else {
+            return switch (key) {
+                .a => 'A',
+                .b => 'B',
+                .c => 'C',
+                .d => 'D',
+                .e => 'E',
+                .f => 'F',
+                .g => 'G',
+                .h => 'H',
+                .i => 'I',
+                .j => 'J',
+                .k => 'K',
+                .l => 'L',
+                .m => 'M',
+                .n => 'N',
+                .o => 'O',
+                .p => 'P',
+                .q => 'Q',
+                .r => 'R',
+                .s => 'S',
+                .t => 'T',
+                .u => 'U',
+                .v => 'V',
+                .w => 'W',
+                .x => 'X',
+                .y => 'Y',
+                .z => 'Z',
+                .one => '!',
+                .two => '@',
+                .three => '#',
+                .four => '$',
+                .five => '%',
+                .six => '^',
+                .seven => '&',
+                .eight => '*',
+                .nine => '(',
+                .zero => ')',
+
+                .apostrophe => '"',
+                .comma => '<',
+                .minus => '-',
+                .period => '>',
+                .slash => '?',
+                .semicolon => ':',
+                .equal => '+',
+                .left_bracket => '{',
+                .backslash => '|',
+                .right_bracket => '}',
+                .grave_accent => '~',
+                else => null,
+            };
+        }
+    }
+
+    return null;
+}
+
 pub const KeyboardState = struct {
     keys: std.StaticBitSet(NumKeys),
 
@@ -124,6 +192,11 @@ pub const Keyboard = struct {
         const keyIdx = getIndexForKey(key);
         return (!self.currKeys().downIdx(keyIdx) and self.prevKeys().downIdx(keyIdx));
     }
+
+    // pub fn text(self: *Keyboard, buf: []u8) usize {
+    //     var idx: usize = 0;
+    //     for()
+    // }
 };
 
 // ----------------------------------------------------------------------------
