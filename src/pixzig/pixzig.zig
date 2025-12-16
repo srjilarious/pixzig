@@ -101,6 +101,7 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
             while (self.lag > UpdateStepMs) {
                 self.lag -= UpdateStepMs;
 
+                self.engine.keyboard.update(self.engine.window);
                 if (!app.update(self.engine, UpdateStepMs)) {
                     return false;
                 }
@@ -241,7 +242,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 .allocator = allocator,
                 .projMat = projMat,
                 .resources = ResourceManager.init(allocator),
-                .keyboard = input.Keyboard.init(window, allocator),
+                .keyboard = input.Keyboard.init(),
                 .renderer = undefined,
             };
 

@@ -222,8 +222,6 @@ pub const Natetris = struct {
             std.log.debug("FPS: {}\n", .{self.fps.fps()});
         }
 
-        eng.keyboard.update();
-
         if (eng.keyboard.pressed(.one)) {
             if(self.currIdx > 0) self.currIdx -= 1;
             @memcpy(self.shape, Shapes[self.currIdx]);

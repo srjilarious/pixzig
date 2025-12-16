@@ -65,9 +65,6 @@ pub const App = struct {
             std.log.debug("FPS: {}\n", .{self.fps.fps()});
         }
 
-        // std.log.debug("update: b\n",.{});
-        eng.keyboard.update();
-
         if (eng.keyboard.pressed(.escape)) {
             return false;
         }

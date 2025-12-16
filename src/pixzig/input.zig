@@ -131,17 +131,33 @@ pub const KeyboardState = struct {
             .super = self.down(.left_super) or self.down(.right_super),
         };
     }
+
+    pub fn shift(self: *const KeyboardState) bool {
+        return self.down(.left_shift) or self.down(.right_shift);
+    }
+
+    pub fn ctrl(self: *const KeyboardState) bool {
+        return self.down(.left_control) or self.down(.right_control);
+    }
+
+    pub fn alt(self: *const KeyboardState) bool {
+        return self.down(.left_alt) or self.down(.right_alt);
+    }
+
+    pub fn super(self: *const KeyboardState) bool {
+        return self.down(.left_super) or self.down(.right_super);
+    }
 };
 
 pub const Keyboard = struct {
     currIdx: usize,
     prevIdx: usize,
     keyBuffers: [2]KeyboardState,
-    window: *glfw.Window,
-    allocator: std.mem.Allocator,
+    // window: *glfw.Window,
+    // allocator: std.mem.Allocator,
 
-    pub fn init(win: *glfw.Window, alloc: std.mem.Allocator) Keyboard {
-        const res: Keyboard = .{ .currIdx = 0, .prevIdx = 1, .keyBuffers = .{ KeyboardState.init(), KeyboardState.init() }, .window = win, .allocator = alloc };
+    pub fn init() Keyboard {
+        const res: Keyboard = .{ .currIdx = 0, .prevIdx = 1, .keyBuffers = .{ KeyboardState.init(), KeyboardState.init() } };
 
         return res;
     }
@@ -154,7 +170,7 @@ pub const Keyboard = struct {
         return &self.keyBuffers[self.prevIdx];
     }
 
-    pub fn update(self: *Keyboard) void { //deltaUs: i64) void {
+    pub fn update(self: *Keyboard, window: *glfw.Window) void { //deltaUs: i64) void {
         const temp = self.currIdx;
         self.currIdx = self.prevIdx;
         self.prevIdx = temp;
@@ -168,7 +184,7 @@ pub const Keyboard = struct {
         comptime var keyIdx = 0;
         inline for (enumTypeInfo.fields) |field| {
             const enumValue = @field(glfw.Key, field.name);
-            curr.setIdx(keyIdx, self.window.getKey(enumValue) == .press);
+            curr.setIdx(keyIdx, window.getKey(enumValue) == .press);
             keyIdx += 1;
         }
 
@@ -193,10 +209,24 @@ pub const Keyboard = struct {
         return (!self.currKeys().downIdx(keyIdx) and self.prevKeys().downIdx(keyIdx));
     }
 
-    // pub fn text(self: *Keyboard, buf: []u8) usize {
-    //     var idx: usize = 0;
-    //     for()
-    // }
+    pub fn text(self: *Keyboard, buf: []u8) usize {
+        const shiftDown = self.shift();
+        var bufIdx: usize = 0;
+
+        const enumTypeInfo = @typeInfo(glfw.Key).@"enum";
+        inline for (enumTypeInfo.fields) |field| {
+            const enumValue = @field(glfw.Key, field.name);
+            if (self.pressed(enumValue)) {
+                if (charFromKey(enumValue, shiftDown)) |c| {
+                    buf[bufIdx] = c;
+                    bufIdx += 1;
+                    if (bufIdx >= buf.len) break;
+                }
+            }
+        }
+
+        return bufIdx;
+    }
 };
 
 // ----------------------------------------------------------------------------

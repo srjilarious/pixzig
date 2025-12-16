@@ -86,8 +86,6 @@ pub const App = struct {
             std.debug.print("FPS: {}\n", .{self.fps.fps()});
         }
 
-        eng.keyboard.update();
-
         if (eng.keyboard.pressed(.one)) {
             std.debug.print("one!\n", .{});
             self.states.setCurrState(.StateA);

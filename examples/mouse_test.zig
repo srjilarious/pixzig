@@ -55,7 +55,6 @@ pub const App = struct {
             std.debug.print("FPS: {}\n", .{self.fps.fps()});
         }
 
-        eng.keyboard.update();
         self.mouse.update();
 
         const mousePos = self.mouse.pos().asVec2I();

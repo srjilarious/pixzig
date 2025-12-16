@@ -78,9 +78,6 @@ pub const App = struct {
             std.debug.print("FPS: {}\n", .{self.fps.fps()});
         }
 
-        // std.log.debug("update: b\n",.{});
-        eng.keyboard.update();
-
         self.actor.update(30, &self.spr);
 
         if (eng.keyboard.pressed(.up)) {

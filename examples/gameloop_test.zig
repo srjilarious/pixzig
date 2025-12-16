@@ -35,10 +35,6 @@ pub const App = struct {
             std.debug.print("FPS: {}\n", .{self.fps.fps()});
         }
 
-        // std.log.debug("update: b\n",.{});
-        eng.keyboard.update();
-
-        // std.log.debug("update: c\n",.{});
         if (eng.keyboard.pressed(.one)) std.debug.print("one!\n", .{});
         if (eng.keyboard.pressed(.two)) std.debug.print("two!\n", .{});
         if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
