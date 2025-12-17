@@ -209,3 +209,35 @@ pub fn charFromKeyTest() !void {
     try testz.expectEqual(input.charFromKey(.F1, false), null);
     try testz.expectEqual(input.charFromKey(.F1, true), null);
 }
+
+pub fn textInputTest_1() !void {
+    var kb = input.Keyboard.init();
+    kb.currKeys().set(.a, true);
+    kb.currKeys().set(.left_shift, true);
+    var buff: [5]u8 = undefined;
+    const len = kb.text(buff[0..]);
+    try testz.expectEqual(len, 1);
+    try testz.expectEqualStr(buff[0..len], "A");
+}
+
+pub fn textInputTest_2() !void {
+    var kb = input.Keyboard.init();
+    kb.currKeys().set(.t, true);
+    kb.currKeys().set(.g, true);
+    kb.currKeys().set(.right_shift, true);
+    var buff: [5]u8 = undefined;
+    const len = kb.text(buff[0..]);
+    try testz.expectEqual(len, 2);
+    try testz.expectEqualStr(buff[0..len], "GT");
+}
+
+pub fn textInputTest_3() !void {
+    var kb = input.Keyboard.init();
+    kb.currKeys().set(.t, true);
+    kb.currKeys().set(.g, true);
+    kb.currKeys().set(.right_shift, true);
+    var buff: [1]u8 = undefined;
+    const len = kb.text(buff[0..]);
+    try testz.expectEqual(len, 1);
+    try testz.expectEqualStr(buff[0..len], "G");
+}

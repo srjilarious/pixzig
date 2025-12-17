@@ -123,6 +123,10 @@ pub const KeyboardState = struct {
         }
     }
 
+    pub fn clear(self: *KeyboardState) void {
+        self.keys.setRangeValue(.{ .start = 0, .end = NumKeys }, false);
+    }
+
     pub fn modifiers(self: *const KeyboardState) KeyModifier {
         return .{
             .alt = self.down(.left_alt) or self.down(.right_alt),
@@ -170,16 +174,13 @@ pub const Keyboard = struct {
         return &self.keyBuffers[self.prevIdx];
     }
 
-    pub fn update(self: *Keyboard, window: *glfw.Window) void { //deltaUs: i64) void {
+    pub fn update(self: *Keyboard, window: *glfw.Window) void {
         const temp = self.currIdx;
         self.currIdx = self.prevIdx;
         self.prevIdx = temp;
 
-        var curr = self.currKeys();
-        //const prev = self.prevKeys();
-        // curr.keys.setRangeValue(.{.start=0, .end=NumKeys}, false);
-
         // Update the current keys
+        var curr = self.currKeys();
         const enumTypeInfo = @typeInfo(glfw.Key).@"enum";
         comptime var keyIdx = 0;
         inline for (enumTypeInfo.fields) |field| {
@@ -187,8 +188,6 @@ pub const Keyboard = struct {
             curr.setIdx(keyIdx, window.getKey(enumValue) == .press);
             keyIdx += 1;
         }
-
-        // curr.keys.setUnion(prev.keys);
     }
 
     pub fn up(self: *Keyboard, key: glfw.Key) bool {
@@ -210,7 +209,7 @@ pub const Keyboard = struct {
     }
 
     pub fn text(self: *Keyboard, buf: []u8) usize {
-        const shiftDown = self.shift();
+        const shiftDown = self.currKeys().shift();
         var bufIdx: usize = 0;
 
         const enumTypeInfo = @typeInfo(glfw.Key).@"enum";
