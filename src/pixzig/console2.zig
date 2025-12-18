@@ -11,7 +11,10 @@ const scripting = @import("./scripting.zig");
 const ScriptEngine = scripting.ScriptEngine;
 const TextRenderer = @import("./renderer/text.zig").TextRenderer;
 const ShapeBatchQueue = @import("./renderer/shape.zig").ShapeBatchQueue;
-const Color = @import("./common.zig").Color;
+const common = @import("./common.zig");
+const Vec2I = common.Vec2I;
+const Color = common.Color;
+const Keyboard = @import("./input.zig").Keyboard;
 
 pub const ConsoleOpts = struct {
     numLogLines: usize = 2000,
@@ -28,6 +31,7 @@ pub const Console = struct {
     enabled: bool,
     shouldFocus: bool,
     inputBuffer: [:0]u8,
+    cursor: usize,
     storedCommandBuffer: [:0]u8,
 
     // Rendering members
@@ -54,6 +58,7 @@ pub const Console = struct {
             .enabled = opts.enabledByDefault,
             .shouldFocus = true,
             .inputBuffer = try alloc.allocSentinel(u8, 256, 0),
+            .cursor = 0,
             .storedCommandBuffer = try alloc.allocSentinel(u8, 256, 0),
         };
 
@@ -189,16 +194,46 @@ pub const Console = struct {
         @memset(self.inputBuffer, 0);
     }
 
+    pub fn update(self: *Console, kb: *Keyboard) void {
+        var buf: [4]u8 = undefined;
+        const num = kb.text(&buf);
+        for (0..num) |idx| {
+            // TODO: handle cursor in middle of string
+            self.inputBuffer[self.cursor] = buf[idx];
+            self.cursor += 1;
+        }
+
+        // TODO: Handle left/right to move cursor
+        // TODO: Handle backspace and delete
+    }
+
     pub fn draw(self: *Console) void {
         self.shapeRenderer.drawFilledRect(
             .fromPosSize(10, 10, 640, 400),
             Color.from(0, 0, 0, 200),
         );
 
+        var pos: Vec2I = .{ .x = 20, .y = 20 };
+        for (0..self.logBuffer.items.len) |idx| {
+            const sz = self.textRenderer.drawString(
+                self.logBuffer.items[idx],
+                pos,
+                //Color.from(255, 255, 255, 255),
+            );
+            pos.y += sz.y;
+        }
+
+        pos.y += 20;
+        const pSz = self.textRenderer.drawString(
+            ">> ",
+            pos,
+            // Color.from(200, 255, 200, 255),
+        );
+        pos.x += pSz.x;
         _ = self.textRenderer.drawString(
-            "Console (not implemented yet)",
-            .{ .x = 20, .y = 20 },
-            //Color.from(255, 255, 255, 255),
+            self.inputBuffer[0..self.cursor],
+            pos,
+            // Color.from(255, 255, 255, 255),
         );
 
         // if (zgui.begin("Console", .{ .flags = .{ .no_scrollbar = true } })) {

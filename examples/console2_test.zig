@@ -78,6 +78,8 @@ pub const App = struct {
         if (eng.keyboard.pressed(.escape)) {
             return false;
         }
+
+        self.cons.update(&eng.keyboard);
         return true;
     }
 
