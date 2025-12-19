@@ -32,6 +32,7 @@ pub const Console = struct {
     shouldFocus: bool,
     inputBuffer: [:0]u8,
     cursor: usize,
+    inputMax: usize,
     storedCommandBuffer: [:0]u8,
 
     // Rendering members
@@ -59,6 +60,7 @@ pub const Console = struct {
             .shouldFocus = true,
             .inputBuffer = try alloc.allocSentinel(u8, 256, 0),
             .cursor = 0,
+            .inputMax = 0,
             .storedCommandBuffer = try alloc.allocSentinel(u8, 256, 0),
         };
 
@@ -165,6 +167,9 @@ pub const Console = struct {
     }
 
     fn runCurrentInput(self: *Console) !void {
+        // Make sure to null terminate the input buffer.
+        self.inputBuffer[self.inputMax] = 0;
+
         std.debug.print("Running: {s}\n", .{self.inputBuffer});
 
         var addToHistory: bool = false;
@@ -192,6 +197,8 @@ pub const Console = struct {
 
         // Clear the current input buffer.
         @memset(self.inputBuffer, 0);
+        self.cursor = 0;
+        self.inputMax = 0;
     }
 
     pub fn update(self: *Console, kb: *Keyboard) void {
@@ -201,10 +208,41 @@ pub const Console = struct {
             // TODO: handle cursor in middle of string
             self.inputBuffer[self.cursor] = buf[idx];
             self.cursor += 1;
+            self.inputMax += 1;
         }
 
         // TODO: Handle left/right to move cursor
         // TODO: Handle backspace and delete
+
+        // Handle moving through history
+        if (kb.pressed(.up)) {
+            if (self.historyIndex == -1) {
+                @memcpy(self.storedCommandBuffer, self.inputBuffer);
+                self.historyIndex = @intCast(self.history.items.len - 1);
+            } else if (self.historyIndex > 0) {
+                self.historyIndex -= 1;
+            }
+
+            const histIndex: usize = @intCast(self.historyIndex);
+            @memcpy(self.inputBuffer, self.history.items[histIndex]);
+        } else if (kb.pressed(.down)) {
+            if (self.historyIndex != -1) {
+                self.historyIndex += 1;
+
+                if (self.historyIndex >= self.history.items.len) {
+                    self.historyIndex = -1;
+                    @memcpy(self.inputBuffer, self.storedCommandBuffer);
+                } else {
+                    const histIndex: usize = @intCast(self.historyIndex);
+                    @memcpy(self.inputBuffer, self.history.items[histIndex]);
+                }
+            }
+        }
+
+        // Handle running command.
+        if (kb.pressed(.enter)) {
+            self.runCurrentInput() catch {};
+        }
     }
 
     pub fn draw(self: *Console) void {
@@ -223,7 +261,7 @@ pub const Console = struct {
             pos.y += sz.y;
         }
 
-        pos.y += 20;
+        pos.y += 50;
         const pSz = self.textRenderer.drawString(
             ">> ",
             pos,
@@ -235,46 +273,6 @@ pub const Console = struct {
             pos,
             // Color.from(255, 255, 255, 255),
         );
-
-        // if (zgui.begin("Console", .{ .flags = .{ .no_scrollbar = true } })) {
-        //     const currSize = zgui.getWindowSize();
-        //     const fontSize = zgui.getFontSize();
-        //     _ = zgui.beginChild("ConsoleTest", .{ .w = currSize[0] - 25, .h = currSize[1] - 3 * fontSize - 5, .window_flags = .{ .always_vertical_scrollbar = true } });
-
-        //     for (0..self.logBuffer.items.len) |idx| {
-        //         zgui.pushIntId(@intCast(idx));
-        //         zgui.textWrapped("{s}", .{self.logBuffer.items[idx]});
-        //         zgui.popId();
-        //     }
-
-        //     if (self.shouldFocus) {
-        //         zgui.setScrollHereY(.{});
-        //     }
-
-        //     zgui.endChild();
-
-        //     const historyLen = self.history.items.len;
-        //     if (self.historyIndex == -1 or historyLen == 0) {
-        //         zgui.text(">> ", .{});
-        //     } else {
-        //         const currIdx = @as(i32, @intCast(historyLen)) - self.historyIndex;
-        //         zgui.text("[{}/{}] >> ", .{ currIdx, historyLen });
-        //     }
-
-        //     zgui.sameLine(.{});
-        //     if (self.shouldFocus) {
-        //         zgui.setKeyboardFocusHere(0);
-        //         self.shouldFocus = false;
-        //     }
-
-        //     zgui.pushItemWidth(-1);
-        //     if (zgui.inputText("##", .{ .buf = self.inputBuffer, .flags = .{ .enter_returns_true = true, .callback_history = true }, .callback = inputCallback, .user_data = self })) {
-        //         self.runCurrentInput() catch {};
-        //         self.shouldFocus = true;
-        //     }
-        //     zgui.popItemWidth();
-        // }
-        // zgui.end();
     }
 
     // fn inputCallback(data: *zgui.InputTextCallbackData) i32 {
