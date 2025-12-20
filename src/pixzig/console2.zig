@@ -14,6 +14,7 @@ const ShapeBatchQueue = @import("./renderer/shape.zig").ShapeBatchQueue;
 const common = @import("./common.zig");
 const Vec2I = common.Vec2I;
 const Color = common.Color;
+const RectF = common.RectF;
 const Keyboard = @import("./input.zig").Keyboard;
 
 pub const ConsoleOpts = struct {
@@ -269,10 +270,13 @@ pub const Console = struct {
         );
         pos.x += pSz.x;
         _ = self.textRenderer.drawString(
-            self.inputBuffer[0..self.cursor],
+            self.inputBuffer[0..self.inputMax],
             pos,
             // Color.from(255, 255, 255, 255),
         );
+
+        const preSize = self.textRenderer.measureString(self.inputBuffer[0..self.cursor]);
+        self.shapeRenderer.drawFilledRect(RectF.fromPosSize(pos.x + preSize.x, pos.y + self.textRenderer.atlas.?.maxY, 10, 3), Color.from(255, 255, 100, 255));
     }
 
     // fn inputCallback(data: *zgui.InputTextCallbackData) i32 {

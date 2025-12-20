@@ -368,7 +368,7 @@ pub const TextRenderer = struct {
         var height: i32 = 0;
 
         for (text) |c| {
-            const charDataPtr = self.atlas.chars.get(@intCast(c));
+            const charDataPtr = self.atlas.?.chars.get(@intCast(c));
             if (charDataPtr == null) continue;
 
             const charData = charDataPtr.?;
