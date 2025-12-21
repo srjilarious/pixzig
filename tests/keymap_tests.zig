@@ -241,3 +241,12 @@ pub fn textInputTest_3() !void {
     try testz.expectEqual(len, 1);
     try testz.expectEqualStr(buff[0..len], "G");
 }
+
+pub fn textInputTest_4() !void {
+    var kb = input.Keyboard.init();
+    kb.currKeys().set(.space, true);
+    var buff: [1]u8 = undefined;
+    const len = kb.text(buff[0..]);
+    try testz.expectEqual(len, 1);
+    try testz.expectEqualStr(buff[0..len], " ");
+}

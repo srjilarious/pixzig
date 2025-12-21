@@ -213,6 +213,16 @@ pub const Console = struct {
         }
 
         // TODO: Handle left/right to move cursor
+        if (kb.pressed(.left)) {
+            if (self.cursor > 0) {
+                self.cursor -= 1;
+            }
+        } else if (kb.pressed(.right)) {
+            if (self.cursor < self.inputMax - 1) {
+                self.cursor += 1;
+            }
+        }
+
         // TODO: Handle backspace and delete
 
         // Handle moving through history

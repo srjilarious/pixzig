@@ -21,7 +21,7 @@ fn getIndexForKey(key: glfw.Key) usize {
 
 pub fn charFromKey(key: glfw.Key, shift: bool) ?u8 {
     const keyInt = @intFromEnum(key);
-    if (keyInt > @intFromEnum(glfw.Key.space) and keyInt <= @intFromEnum(glfw.Key.grave_accent)) {
+    if (keyInt >= @intFromEnum(glfw.Key.space) and keyInt <= @intFromEnum(glfw.Key.grave_accent)) {
         if (!shift) {
             if (keyInt >= 'A' and keyInt <= 'Z') {
                 // Convert to lower case.
@@ -68,6 +68,7 @@ pub fn charFromKey(key: glfw.Key, shift: bool) ?u8 {
                 .nine => '(',
                 .zero => ')',
 
+                .space => ' ',
                 .apostrophe => '"',
                 .comma => '<',
                 .minus => '-',
