@@ -223,7 +223,18 @@ pub const Console = struct {
             }
         }
 
-        // TODO: Handle backspace and delete
+        // Handle backspace
+        if (kb.pressed(.backspace) and self.cursor > 0) {
+            for (self.cursor..self.inputMax) |idx| {
+                self.inputBuffer[idx - 1] = self.inputBuffer[idx];
+            }
+            // @memcpy(self.inputBuffer[self.cursor - 1 .. self.inputMax], self.inputBuffer[self.cursor .. self.inputMax - 1]);
+            self.inputBuffer[self.inputMax] = 0;
+            self.inputMax -= 1;
+            self.cursor -= 1;
+        }
+
+        // TODO: Handle delete
 
         // Handle moving through history
         if (kb.pressed(.up)) {
