@@ -234,7 +234,8 @@ pub const Console = struct {
             self.cursor -= 1;
         }
 
-        // TODO: Handle delete
+        // Handle delete
+        if (kb.pressed(.delete) and self.cursor < self.inputMax) {}
 
         // Handle moving through history
         if (kb.pressed(.up)) {
@@ -283,21 +284,21 @@ pub const Console = struct {
             pos.y += sz.y;
         }
 
-        pos.y += 50;
+        const maxY = self.textRenderer.atlas.?.maxY;
         const pSz = self.textRenderer.drawString(
             ">> ",
-            pos,
+            .{ .x = pos.x, .y = 400 - maxY },
             // Color.from(200, 255, 200, 255),
         );
         pos.x += pSz.x;
         _ = self.textRenderer.drawString(
             self.inputBuffer[0..self.inputMax],
-            pos,
+            .{ .x = pos.x, .y = 400 - maxY },
             // Color.from(255, 255, 255, 255),
         );
 
         const preSize = self.textRenderer.measureString(self.inputBuffer[0..self.cursor]);
-        self.shapeRenderer.drawFilledRect(RectF.fromPosSize(pos.x + preSize.x, pos.y + self.textRenderer.atlas.?.maxY, 10, 3), Color.from(255, 255, 100, 255));
+        self.shapeRenderer.drawFilledRect(RectF.fromPosSize(pos.x + preSize.x, 400, 10, 3), Color.from(255, 255, 100, 255));
     }
 
     // fn inputCallback(data: *zgui.InputTextCallbackData) i32 {
