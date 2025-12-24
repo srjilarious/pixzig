@@ -35,6 +35,8 @@ pub const Console = struct {
     cursor: usize,
     inputMax: usize,
     storedCommandBuffer: [:0]u8,
+    lineOffs: usize = 0,
+    linesToDisplay: usize = 12,
 
     // Rendering members
     shapeRenderer: *ShapeBatchQueue,
@@ -62,6 +64,7 @@ pub const Console = struct {
             .inputBuffer = try alloc.allocSentinel(u8, 256, 0),
             .cursor = 0,
             .inputMax = 0,
+            .lineOffs = 0,
             .storedCommandBuffer = try alloc.allocSentinel(u8, 256, 0),
         };
 
@@ -143,6 +146,10 @@ pub const Console = struct {
         }
 
         try self.logBuffer.append(self.alloc, new_msg);
+
+        if (self.logBuffer.items.len > self.linesToDisplay) {
+            self.lineOffs += 1;
+        }
     }
 
     fn log(lua: *Lua) i32 {
@@ -275,7 +282,7 @@ pub const Console = struct {
         );
 
         var pos: Vec2I = .{ .x = 20, .y = 20 };
-        for (0..self.logBuffer.items.len) |idx| {
+        for (self.lineOffs..@min(self.lineOffs + self.linesToDisplay, self.logBuffer.items.len)) |idx| {
             const sz = self.textRenderer.drawString(
                 self.logBuffer.items[idx],
                 pos,
