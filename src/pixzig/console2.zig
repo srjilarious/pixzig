@@ -36,7 +36,7 @@ pub const Console = struct {
     inputMax: usize,
     storedCommandBuffer: [:0]u8,
     lineOffs: usize = 0,
-    linesToDisplay: usize = 12,
+    linesToDisplay: usize = 24,
 
     // Rendering members
     shapeRenderer: *ShapeBatchQueue,
@@ -219,7 +219,7 @@ pub const Console = struct {
             self.inputMax += 1;
         }
 
-        // TODO: Handle left/right to move cursor
+        // Handle moving the cursor left/right
         if (kb.pressed(.left)) {
             if (self.cursor > 0) {
                 self.cursor -= 1;
@@ -266,6 +266,17 @@ pub const Console = struct {
                     const histIndex: usize = @intCast(self.historyIndex);
                     @memcpy(self.inputBuffer, self.history.items[histIndex]);
                 }
+            }
+        }
+
+        // Handle scrolling up/down.
+        if (kb.pressed(.page_up)) {
+            if (self.lineOffs > 0) {
+                self.lineOffs -= 1;
+            }
+        } else if (kb.pressed(.page_down)) {
+            if (self.lineOffs + self.linesToDisplay < self.logBuffer.items.len) {
+                self.lineOffs += 1;
             }
         }
 
