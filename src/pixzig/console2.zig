@@ -212,11 +212,21 @@ pub const Console = struct {
     pub fn update(self: *Console, kb: *Keyboard) void {
         var buf: [4]u8 = undefined;
         const num = kb.text(&buf);
-        for (0..num) |idx| {
-            // TODO: handle cursor in middle of string
-            self.inputBuffer[self.cursor] = buf[idx];
-            self.cursor += 1;
-            self.inputMax += 1;
+        if (num > 0) {
+            // Move the end of the buffer forward by the number of new chars.
+            if (self.cursor < self.inputMax) {
+                const toEndNum = self.inputMax - self.cursor;
+                for (0..toEndNum) |eidx| {
+                    const cidx = self.inputMax - eidx - 1;
+                    self.inputBuffer[cidx + num] = self.inputBuffer[cidx];
+                }
+            }
+
+            for (0..num) |idx| {
+                self.inputBuffer[self.cursor] = buf[idx];
+                self.cursor += 1;
+                self.inputMax += 1;
+            }
         }
 
         // Handle moving the cursor left/right
@@ -225,7 +235,7 @@ pub const Console = struct {
                 self.cursor -= 1;
             }
         } else if (kb.pressed(.right)) {
-            if (self.cursor < self.inputMax - 1) {
+            if (self.cursor < self.inputMax) {
                 self.cursor += 1;
             }
         }
