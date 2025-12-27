@@ -36,7 +36,7 @@ pub const Console = struct {
     inputMax: usize,
     storedCommandBuffer: [:0]u8,
     lineOffs: usize = 0,
-    linesToDisplay: usize = 24,
+    linesToDisplay: usize = 36,
 
     // Rendering members
     shapeRenderer: *ShapeBatchQueue,
@@ -245,7 +245,7 @@ pub const Console = struct {
         if (kb.pressed(.delete) and self.cursor < self.inputMax) {}
 
         // Handle moving through history
-        if (kb.pressed(.up)) {
+        if (kb.pressed(.up) and self.history.items.len > 0) {
             if (self.historyIndex == -1) {
                 @memcpy(self.storedCommandBuffer, self.inputBuffer);
                 self.historyIndex = @intCast(self.history.items.len - 1);
@@ -255,7 +255,7 @@ pub const Console = struct {
 
             const histIndex: usize = @intCast(self.historyIndex);
             @memcpy(self.inputBuffer, self.history.items[histIndex]);
-        } else if (kb.pressed(.down)) {
+        } else if (kb.pressed(.down) and self.history.items.len > 0) {
             if (self.historyIndex != -1) {
                 self.historyIndex += 1;
 
@@ -287,36 +287,59 @@ pub const Console = struct {
     }
 
     pub fn draw(self: *Console) void {
+        const maxY = self.textRenderer.atlas.?.maxY;
+
+        const ySpaceForLines: i32 = @as(i32, @intCast(self.linesToDisplay)) * maxY;
+        const padding: Vec2I = .{ .x = 10, .y = 10 };
+        const offs: Vec2I = .{ .x = 10, .y = 10 };
         self.shapeRenderer.drawFilledRect(
-            .fromPosSize(10, 10, 640, 400),
+            .fromPosSize(
+                offs.x,
+                offs.y,
+                800 - 2 * offs.x,
+                ySpaceForLines + maxY + padding.y * 2,
+            ),
             Color.from(0, 0, 0, 200),
         );
 
-        var pos: Vec2I = .{ .x = 20, .y = 20 };
+        var pos: Vec2I = .{
+            .x = offs.x + padding.x,
+            .y = offs.y + padding.y,
+        };
         for (self.lineOffs..@min(self.lineOffs + self.linesToDisplay, self.logBuffer.items.len)) |idx| {
-            const sz = self.textRenderer.drawString(
+            _ = self.textRenderer.drawString(
                 self.logBuffer.items[idx],
                 pos,
                 //Color.from(255, 255, 255, 255),
             );
-            pos.y += sz.y;
+            pos.y += maxY;
         }
 
-        const maxY = self.textRenderer.atlas.?.maxY;
         const pSz = self.textRenderer.drawString(
             ">> ",
-            .{ .x = pos.x, .y = 400 - maxY },
+            .{
+                .x = pos.x,
+                .y = offs.y + ySpaceForLines + padding.y,
+            },
             // Color.from(200, 255, 200, 255),
         );
         pos.x += pSz.x;
         _ = self.textRenderer.drawString(
             self.inputBuffer[0..self.inputMax],
-            .{ .x = pos.x, .y = 400 - maxY },
+            .{
+                .x = pos.x,
+                .y = offs.y + ySpaceForLines + padding.y,
+            },
             // Color.from(255, 255, 255, 255),
         );
 
         const preSize = self.textRenderer.measureString(self.inputBuffer[0..self.cursor]);
-        self.shapeRenderer.drawFilledRect(RectF.fromPosSize(pos.x + preSize.x, 400, 10, 3), Color.from(255, 255, 100, 255));
+        self.shapeRenderer.drawFilledRect(RectF.fromPosSize(
+            pos.x + preSize.x,
+            offs.y + ySpaceForLines + padding.y + maxY,
+            10,
+            3,
+        ), Color.from(255, 255, 100, 255));
     }
 
     // fn inputCallback(data: *zgui.InputTextCallbackData) i32 {
