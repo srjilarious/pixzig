@@ -19,6 +19,7 @@ pub const resources = @import("./resources.zig");
 pub const sprites = @import("./renderer/sprites.zig");
 pub const shaders = @import("./renderer/shaders.zig");
 pub const textures = @import("./renderer/textures.zig");
+pub const pixel_buffer = @import("./renderer/pixel_buffer.zig");
 pub const renderer = @import("./renderer.zig");
 pub const utils = @import("./utils.zig");
 pub const gamestate = @import("./gamestate.zig");

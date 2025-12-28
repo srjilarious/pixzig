@@ -91,6 +91,8 @@ pub fn build(b: *std.Build) void {
         .{ .name = "bitmap_text_rendering", .path = "examples/bitmap_text_rendering.zig", .assets = &.{
             "font5r.png",
         } },
+        .{ .name = "pixel_buffer_test", .path = "examples/pixel_buffer_test.zig", .assets = &.{} },
+        // Unit tests
         .{
             .name = "tests",
             .path = "tests/main.zig",

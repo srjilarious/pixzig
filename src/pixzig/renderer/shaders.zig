@@ -89,9 +89,23 @@ pub const TextPixelShader_Web: ShaderCode =
     \\ }
 ;
 
+
+pub const PixBuffVertexShader: ShaderCode =
+    \\#version 300 es
+    \\in vec2 a_pos;
+    \\out vec2 Texcoord; // Pass texture coordinate to fragment shader
+    \\ 
+    \\void main() {
+    \\    gl_Position = vec4(a_pos, 0.0, 1.0);
+    \\    Texcoord = vec2(a_pos.x+1.0, 1.0-a_pos.y)*0.5; // Pass texture coordinate to fragment shader
+    \\}
+;
+
+
 pub const ColorShader = "color_shader";
 pub const TextureShader = "texture_shader";
 pub const FontShader = "font_shader";
+pub const PixelBuffShader = "pixel_buffer_shader";
 
 pub const Shader = struct {
     program: u32 = 0,
