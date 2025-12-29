@@ -13,6 +13,7 @@ const TextRenderer = @import("./renderer/text.zig").TextRenderer;
 const ShapeBatchQueue = @import("./renderer/shape.zig").ShapeBatchQueue;
 const common = @import("./common.zig");
 const Vec2I = common.Vec2I;
+const Vec2U = common.Vec2U;
 const Color = common.Color;
 const RectF = common.RectF;
 const Keyboard = @import("./input.zig").Keyboard;
@@ -20,6 +21,10 @@ const Keyboard = @import("./input.zig").Keyboard;
 pub const ConsoleOpts = struct {
     numLogLines: usize = 2000,
     enabledByDefault: bool = true,
+    // Pixel width of the display area, less offset on either side.
+    displaySize: Vec2U = .{ .x = 800, .y = 600 },
+    padding: Vec2I = .{ .x = 10, .y = 10 },
+    offs: Vec2I = .{ .x = 10, .y = 10 },
 };
 
 pub const Console = struct {
@@ -34,9 +39,9 @@ pub const Console = struct {
     inputBuffer: [:0]u8,
     cursor: usize,
     inputMax: usize,
+    linesToDisplay: usize,
     storedCommandBuffer: [:0]u8,
     lineOffs: usize = 0,
-    linesToDisplay: usize = 36,
 
     // Rendering members
     shapeRenderer: *ShapeBatchQueue,
@@ -50,6 +55,12 @@ pub const Console = struct {
         opts: ConsoleOpts,
     ) !*Console {
         const console: *Console = try alloc.create(Console);
+
+        const maxY: usize = @intCast(textRenderer.atlas.?.maxY);
+        const maxDispY: usize = opts.displaySize.y - @as(usize, @intCast(2 * opts.padding.y - 2 * opts.offs.y));
+        // -2 accounts for the input line.
+        const linesToDisplay: usize = @as(usize, @intCast(maxDispY)) / @as(usize, maxY) - 3;
+
         console.* = .{
             .alloc = alloc,
             .scriptEng = scriptEng,
@@ -65,6 +76,7 @@ pub const Console = struct {
             .cursor = 0,
             .inputMax = 0,
             .lineOffs = 0,
+            .linesToDisplay = linesToDisplay,
             .storedCommandBuffer = try alloc.allocSentinel(u8, 256, 0),
         };
 
@@ -300,8 +312,10 @@ pub const Console = struct {
         const maxY = self.textRenderer.atlas.?.maxY;
 
         const ySpaceForLines: i32 = @as(i32, @intCast(self.linesToDisplay)) * maxY;
-        const padding: Vec2I = .{ .x = 10, .y = 10 };
-        const offs: Vec2I = .{ .x = 10, .y = 10 };
+        const padding: Vec2I = self.opts.padding;
+        //.{ .x = 10, .y = 10 };
+        const offs: Vec2I = self.opts.offs;
+        //.{ .x = 10, .y = 10 };
         self.shapeRenderer.drawFilledRect(
             .fromPosSize(
                 offs.x,
