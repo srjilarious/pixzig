@@ -3,7 +3,6 @@ const builtin = @import("builtin");
 const pixzig = @import("pixzig");
 const glfw = pixzig.glfw;
 const zmath = pixzig.zmath;
-const zgui = pixzig.zgui;
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;

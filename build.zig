@@ -79,9 +79,6 @@ pub fn build(b: *std.Build) void {
             "mario_grassish2.png",
         } },
         .{ .name = "grid_render", .path = "examples/grid_render.zig", .assets = &.{} },
-        .{ .name = "console_test", .path = "examples/console_test.zig", .assets = &.{
-            "Roboto-Medium.ttf",
-        } },
         .{ .name = "console2_test", .path = "examples/console2_test.zig", .assets = &.{
             "Roboto-Medium.ttf",
         } },
@@ -262,18 +259,18 @@ fn buildEngine(
     pixeng.addImport("zmath", math_mod);
 
     // GUI
-    const zgui = b.dependency("zgui", .{
-        .target = target,
-        .backend = .glfw_opengl3,
-        .with_freetype = false,
-    });
-    const zgui_mod = zgui.module("root");
-    pixeng.addImport("zgui", zgui_mod);
-    if (target.result.os.tag == .emscripten) {
-        const gui_lib = zgui.artifact("imgui");
-        addArchIncludes(b, target, optimize, gui_lib) catch unreachable;
-        engine_lib.linkLibrary(gui_lib);
-    }
+    // const zgui = b.dependency("zgui", .{
+    //     .target = target,
+    //     .backend = .glfw_opengl3,
+    //     .with_freetype = false,
+    // });
+    // const zgui_mod = zgui.module("root");
+    // pixeng.addImport("zgui", zgui_mod);
+    // if (target.result.os.tag == .emscripten) {
+    //     const gui_lib = zgui.artifact("imgui");
+    //     addArchIncludes(b, target, optimize, gui_lib) catch unreachable;
+    //     engine_lib.linkLibrary(gui_lib);
+    // }
 
     // Lua
     const ziglua = b.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
@@ -417,12 +414,12 @@ pub fn buildExample(
             );
             emcc_command.addArg(obj_path);
 
-            const zgui = pixeng_mod.owner.dependency("zgui", .{
-                .target = target,
-                .backend = .glfw_opengl3,
-            });
-            const gui_dep = zgui.artifact("imgui");
-            emcc_command.addFileArg(gui_dep.getEmittedBin());
+            // const zgui = pixeng_mod.owner.dependency("zgui", .{
+            //     .target = target,
+            //     .backend = .glfw_opengl3,
+            // });
+            // const gui_dep = zgui.artifact("imgui");
+            // emcc_command.addFileArg(gui_dep.getEmittedBin());
 
             // Lua
             const ziglua = pixeng_mod.owner.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });

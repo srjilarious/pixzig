@@ -6,7 +6,7 @@ pub const stbi = @import("zstbi");
 pub const zopengl = @import("zopengl");
 pub const gl = zopengl.bindings;
 pub const zmath = @import("zmath");
-pub const zgui = @import("zgui");
+// pub const zgui = @import("zgui");
 pub const ziglua = @import("ziglua");
 pub const flecs = @import("zflecs");
 pub const xml = @import("xml");
@@ -24,7 +24,7 @@ pub const renderer = @import("./renderer.zig");
 pub const utils = @import("./utils.zig");
 pub const gamestate = @import("./gamestate.zig");
 pub const scripting = @import("./scripting.zig");
-pub const console = @import("./console.zig");
+// pub const console = @import("./console.zig");
 pub const console2 = @import("./console2.zig");
 pub const collision = @import("./collision.zig");
 pub const a_star = @import("./a_star.zig");
@@ -43,7 +43,6 @@ pub const Color = common.Color;
 pub const Color8 = common.Color8;
 
 pub const PixzigEngineOptions = struct {
-    withGui: bool = false,
     defaultIcon: bool = true,
     gameScale: f32 = 1.0,
     rendererOpts: renderer.RendererOptions = .{},
@@ -211,13 +210,13 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 break :scaleFactor @max(scale[0], scale[1]);
             };
 
-            if (engOpts.withGui) {
-                std.log.info("Initializing GUI system.", .{});
-                zgui.init(allocator);
-                zgui.getStyle().scaleAllSizes(scaleFactor);
-                zgui.backend.initWithGlSlVersion(window, "#version 300 es");
-                // zgui.backend.initOpenGL(window);
-            }
+            // if (engOpts.withGui) {
+            //     std.log.info("Initializing GUI system.", .{});
+            //     zgui.init(allocator);
+            //     zgui.getStyle().scaleAllSizes(scaleFactor);
+            //     zgui.backend.initWithGlSlVersion(window, "#version 300 es");
+            //     // zgui.backend.initOpenGL(window);
+            // }
 
             std.log.debug("Initializing STBI.", .{});
             stbi.init(allocator);
@@ -261,10 +260,10 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             stbi.deinit();
             self.resources.deinit();
 
-            if (engOpts.withGui) {
-                zgui.backend.deinit();
-                zgui.deinit();
-            }
+            // if (engOpts.withGui) {
+            //     zgui.backend.deinit();
+            //     zgui.deinit();
+            // }
 
             self.window.destroy();
             glfw.terminate();

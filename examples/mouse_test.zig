@@ -1,7 +1,7 @@
 // zig fmt: off
 const std = @import("std");
 const builtin = @import("builtin");
-const zgui = @import("zgui");
+// const zgui = @import("zgui");
 const zmath = @import("zmath"); 
 const glfw = @import("zglfw");
 const gl = @import("zopengl").bindings;
