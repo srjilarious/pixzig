@@ -78,7 +78,7 @@ pub const App = struct {
             return false;
         }
 
-        self.cons.update(&eng.keyboard);
+        self.cons.update(eng.window, &eng.keyboard);
         return true;
     }
 

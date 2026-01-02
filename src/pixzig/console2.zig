@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const ziglua = @import("ziglua");
-
+const glfw = @import("zglfw");
 const Lua = ziglua.Lua;
 
 const utils = @import("./utils.zig");
@@ -221,8 +221,54 @@ pub const Console = struct {
         self.inputMax = 0;
     }
 
-    pub fn update(self: *Console, kb: *Keyboard) void {
+    pub fn update(self: *Console, win: *glfw.Window, kb: *Keyboard) void {
         var buf: [4]u8 = undefined;
+
+        // Handle modified keys.
+        if (kb.currKeys().ctrl()) {
+            // Ctrl+C to copy input.
+            if (kb.pressed(.c)) {
+                // Ensure zero termination.
+                self.inputBuffer[self.inputMax] = 0;
+                win.setClipboardString(self.inputBuffer);
+            }
+            // Ctrl+V to paste input.
+            else if (kb.pressed(.v)) {
+                if (win.getClipboardString()) |clipStr| {
+                    const clipSlice = utils.cStrToSlice(clipStr);
+                    const clipLen = clipSlice.len;
+
+                    // Move the end of the buffer forward by the number of new chars.
+                    if (self.cursor < self.inputMax) {
+                        const toEndNum = self.inputMax - self.cursor;
+                        for (0..toEndNum) |eidx| {
+                            const cidx = self.inputMax - eidx - 1;
+                            self.inputBuffer[cidx + clipLen] = self.inputBuffer[cidx];
+                        }
+                    }
+
+                    for (0..clipLen) |idx| {
+                        self.inputBuffer[self.cursor] = clipSlice[idx];
+                        self.cursor += 1;
+                        self.inputMax += 1;
+                    }
+                }
+            }
+            // Ctrl+L to clear input.
+            else if (kb.pressed(.l)) {
+                @memset(self.inputBuffer, 0);
+                self.cursor = 0;
+                self.inputMax = 0;
+            }
+            return;
+        }
+
+        // Other modifiers make us bail out.
+        if (kb.currKeys().alt() or kb.currKeys().super()) {
+            return;
+        }
+
+        // Fall through to standard keyboard handling.
         const num = kb.text(&buf);
         if (num > 0) {
             // Move the end of the buffer forward by the number of new chars.
