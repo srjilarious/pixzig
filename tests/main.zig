@@ -19,6 +19,7 @@ const Tests = testz.discoverTests(.{
     testz.Group{ .name = "Sprite Tests", .tag = "sprite", .mod = @import("./sprite_tests.zig") },
     testz.Group{ .name = "Scripting Tests", .tag = "script", .mod = @import("./scripting_tests.zig") },
     testz.Group{ .name = "Font Tests", .tag = "font", .mod = @import("./font_tests.zig") },
+    testz.Group{ .name = "Event Tests", .tag = "event", .mod = @import("./event_tests.zig") },
 }, .{});
 
 pub fn main() !void {

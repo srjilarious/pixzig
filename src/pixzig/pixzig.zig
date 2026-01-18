@@ -14,6 +14,7 @@ pub const stb_tt = @import("stb_truetype");
 
 pub const common = @import("./common.zig");
 pub const input = @import("./input.zig");
+pub const events = @import("./events.zig");
 pub const tile = @import("./tile.zig");
 pub const resources = @import("./resources.zig");
 pub const sprites = @import("./renderer/sprites.zig");
