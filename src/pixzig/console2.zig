@@ -224,6 +224,8 @@ pub const Console = struct {
     pub fn update(self: *Console, win: *glfw.Window, kb: *Keyboard) void {
         var buf: [4]u8 = undefined;
 
+        if (!self.enabled) return;
+
         // Handle modified keys.
         if (kb.currKeys().ctrl()) {
             // Ctrl+C to copy input.

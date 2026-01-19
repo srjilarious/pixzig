@@ -50,6 +50,21 @@ pub const Delay = struct {
     }
 };
 
+pub const DelayF = struct {
+    curr: f64 = 0,
+    max: f64,
+
+    pub fn update(self: *DelayF, num: f64) bool {
+        self.curr += num;
+        if (self.curr > self.max) {
+            self.curr = 0;
+            return true;
+        }
+
+        return false;
+    }
+};
+
 pub fn cStrToSlice(c_str: [*:0]const u8) []const u8 {
     const length = std.mem.len(c_str);
     return c_str[0..length];

@@ -285,7 +285,7 @@ pub const Mouse = struct {
         return res;
     }
 
-    pub fn update(self: *Mouse) void { //deltaUs: i64) void {
+    pub fn update(self: *Mouse) void {
         const temp = self.currIdx;
         self.currIdx = self.prevIdx;
         self.prevIdx = temp;

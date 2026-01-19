@@ -58,12 +58,12 @@ pub fn GameStateMgr(comptime Engine: type, comptime StateKeysType: type, comptim
             }
         }
 
-        pub fn update(self: *Self, eng: *Engine, deltaUs: f64) bool {
+        pub fn update(self: *Self, eng: *Engine, deltaMs: f64) bool {
             inline for (0..States.len) |idx| {
                 if (self.currStateIdx == idx) {
                     const stateType = States[idx];
                     const statePtr: *stateType = @ptrCast(@alignCast(self.states[idx]));
-                    return statePtr.update(eng, deltaUs);
+                    return statePtr.update(eng, deltaMs);
                 }
             }
             return false;
