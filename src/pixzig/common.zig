@@ -93,6 +93,7 @@ pub const RectF = struct {
             .b = self.b - amount,
         };
     }
+
     pub fn ensureSize(self: *RectF, w: i32, h: i32) void {
         const wF = @as(f32, @floatFromInt(w));
         const hF = @as(f32, @floatFromInt(h));
@@ -131,6 +132,13 @@ pub const RectF = struct {
         self.r = x + w;
         self.b = y + h;
     }
+
+    pub fn intersects(self: *const RectF, other: *const RectF) bool {
+        return self.l < other.r and
+            self.r > other.l and
+            self.t < other.b and
+            self.b > other.t;
+    }
 };
 
 pub const RectI = struct {
@@ -160,6 +168,13 @@ pub const RectI = struct {
         const w: usize = @intCast(self.width());
         const h: usize = @intCast(self.height());
         return .{ .x = w, .y = h };
+    }
+
+    pub fn intersects(self: *const RectI, other: *const RectI) bool {
+        return self.l < other.r and
+            self.r > other.l and
+            self.t < other.b and
+            self.b > other.t;
     }
 };
 
