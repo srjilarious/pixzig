@@ -147,6 +147,13 @@ pub const Object = struct {
         if (classOpt != null) {
             obj.class = try alloc.dupe(u8, classOpt.?);
         }
+        // Also allow the variable to be called type
+        else {
+            const typeOpt = node.getAttribute("type");
+            if (typeOpt != null) {
+                obj.class = try alloc.dupe(u8, typeOpt.?);
+            }
+        }
 
         // Get any props from the object.
         const propsNodeOpt = node.findChildByTag("properties");
