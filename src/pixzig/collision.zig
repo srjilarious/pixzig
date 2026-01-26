@@ -48,6 +48,15 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             try self.grid.resize(self.alloc, sz.x * sz.y);
         }
 
+        pub fn reset(self: *Self) void {
+            const gridLen = self.gridSize.x * self.gridSize.y;
+            for (0..gridLen) |idx| {
+                for (0..maxItemsPerCell) |subIdx| {
+                    self.grid.items[idx][subIdx] = null;
+                }
+            }
+        }
+
         pub fn insert(self: *Self, pixelPos: Vec2U, obj: T) !void {
             const cx: usize = @as(usize, @intCast(pixelPos.x)) / self.cellSize.x;
             const cy: usize = @as(usize, @intCast(pixelPos.y)) / self.cellSize.y;
