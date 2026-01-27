@@ -3,7 +3,7 @@ const ziglua = @import("ziglua");
 
 const Lua = ziglua.Lua;
 
-const LuaFunc = fn (*Lua) i32;
+pub const LuaFunc = fn (*Lua) i32;
 pub const ScriptEngine = struct {
     lua: *Lua,
 
