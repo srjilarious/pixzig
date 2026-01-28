@@ -180,7 +180,7 @@ pub const FrameSequenceManager = struct {
         var iterator = self.sequences.iterator();
         while (iterator.next()) |kv| {
             self.alloc.free(kv.key_ptr.*);
-            kv.value_ptr.deinit();
+            kv.value_ptr.*.deinit();
             self.alloc.destroy(kv.value_ptr.*);
         }
         self.sequences.deinit();

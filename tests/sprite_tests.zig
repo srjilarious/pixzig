@@ -33,6 +33,8 @@ pub fn frameSequenceFileLoadTest() !void {
     ;
 
     var seqMgr = try FrameSequenceManager.init(alloc);
+    defer seqMgr.deinit();
+
     var tm = try createDummyTextureManager(alloc);
     try seqMgr.loadSequence(jsonStr, &tm);
     try testz.expectEqual(seqMgr.sequences.count(), 1);
