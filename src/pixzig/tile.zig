@@ -327,6 +327,32 @@ pub const TileSet = struct {
 
         return &self.tiles.items[idx];
     }
+
+    const TileSetIterator = struct {
+        parent: *const TileSet,
+        class: ?[]const u8 = null,
+        index: usize = 0,
+
+        pub fn init(parent: *const TileSet) TileSetIterator {
+            return .{ .parent = parent };
+        }
+
+        pub fn next(self: *TileSetIterator) ?*Tile {
+            while (self.index < self.parent.tiles.items.len) {
+                const currItem = &self.parent.tiles.items[self.index];
+
+                // Case where we aren't filtering by class name.
+                self.index += 1;
+                return currItem;
+            }
+
+            return null;
+        }
+    };
+
+    pub fn iterator(self: *const TileSet) TileSetIterator {
+        return TileSetIterator.init(self);
+    }
 };
 
 pub const ObjectGroup = struct {
