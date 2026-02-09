@@ -1337,8 +1337,8 @@ pub fn init() *world_t {
     assert(num_worlds == 0);
 
     if (num_worlds == 0) {
-        EcsAllocator.gpa = .{};
-        EcsAllocator.allocator = EcsAllocator.gpa.?.allocator();
+        //EcsAllocator.gpa = .{};
+        EcsAllocator.allocator = std.heap.c_allocator; //EcsAllocator.gpa.?.allocator();
 
         os.ecs_os_api.malloc_ = &EcsAllocator.alloc;
         os.ecs_os_api.free_ = &EcsAllocator.free;
@@ -1446,8 +1446,8 @@ pub fn fini(world: *world_t) i32 {
     component_ids_hm.clearRetainingCapacity();
 
     if (num_worlds == 0) {
-        _ = EcsAllocator.gpa.?.deinit();
-        EcsAllocator.gpa = null;
+        // _ = EcsAllocator.gpa.?.deinit();
+        // EcsAllocator.gpa = null;
         EcsAllocator.allocator = null;
     }
 
@@ -1882,7 +1882,7 @@ extern fn ecs_modified_id(world: *world_t, entity: entity_t, component: id_t) vo
 
 /// `pub fn set_id(world: *world_t, entity: entity_t, component: id_t, size: usize, ptr: ?*const anyopaque) entity_t`
 pub const set_id = ecs_set_id;
-extern fn ecs_set_id(world: *world_t, entity: entity_t, component: id_t, size: usize, ptr: ?*const anyopaque) entity_t;
+extern fn ecs_set_id(world: *world_t, entity: entity_t, component: id_t, size: usize, ptr: ?*const anyopaque) void;
 //--------------------------------------------------------------------------------------------------
 //
 // Functions for testing and modifying entity liveliness.
@@ -3112,8 +3112,8 @@ pub fn typeName(comptime T: type) @TypeOf(@typeName(T)) {
 // Function wrappers (ecs_* macros in flecs)
 //
 //--------------------------------------------------------------------------------------------------
-pub fn set(world: *world_t, entity: entity_t, comptime T: type, val: T) entity_t {
-    return ecs_set_id(world, entity, id(T), @sizeOf(T), @as(*const anyopaque, @ptrCast(&val)));
+pub fn set(world: *world_t, entity: entity_t, comptime T: type, val: T) void {
+    ecs_set_id(world, entity, id(T), @sizeOf(T), @as(*const anyopaque, @ptrCast(&val)));
 }
 
 pub fn get(world: *const world_t, entity: entity_t, comptime T: type) ?*const T {
