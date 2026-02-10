@@ -46,6 +46,8 @@ pub const App = struct {
 
         const tex = try eng.resources.addSubTexture(bigtex, "guy", RectF.fromCoords(192, 64, 32, 32, 512, 512));
 
+        std.log.info("Initializing world.\n", .{});
+
         const world = flecs.init();
 
         std.log.info("Finished world init.", .{});
@@ -83,8 +85,11 @@ pub const App = struct {
         };
 
         std.log.info("Spawning 50 entities...", .{});
+        std.log.info("  - Creating prng", .{});
+        var prng = std.Random.DefaultPrng.init(0xdeadbeef);
+        var random = prng.random();
         for (0..50) |_| {
-            app.spawn(1, 10, 50, true);
+            app.spawn(&random, 1, 10, 50, true);
         }
 
         std.log.info("Done initializing the app.", .{});
@@ -97,7 +102,7 @@ pub const App = struct {
         self.alloc.destroy(self);
     }
 
-    pub fn spawn(self: *App, which: usize, x: i32, y: i32, val: bool) void {
+    pub fn spawn(self: *App, random: *std.Random, which: usize, x: i32, y: i32, val: bool) void {
         std.log.info("Creating entity", .{});
         const ent = flecs.new_id(self.world);
         _ = which;
@@ -108,23 +113,16 @@ pub const App = struct {
 
         spr.setPos(x, y);
         std.log.info("  - Setting sprite", .{});
-        _ = flecs.set(self.world, ent, Sprite, spr);
-
-        std.log.info("  - Creating prng", .{});
-        var prng = std.Random.DefaultPrng.init(blk: {
-            var seed: u64 = undefined;
-            std.posix.getrandom(std.mem.asBytes(&seed)) catch unreachable;
-            break :blk seed;
-        });
+        flecs.set(self.world, ent, Sprite, spr);
 
         std.log.info("  - Creating velocity component", .{});
-        const vel = Velocity{ .speed = .{ .x = 2 * prng.random().floatNorm(f32), .y = 2 * prng.random().floatNorm(f32) } };
+        const vel = Velocity{ .speed = .{ .x = 2 * random.floatNorm(f32), .y = 2 * random.floatNorm(f32) } };
 
-        _ = flecs.set(self.world, ent, Velocity, vel);
+        flecs.set(self.world, ent, Velocity, vel);
 
         if (val) {
             std.log.info("  - Setting debug outline.", .{});
-            _ = flecs.set(self.world, ent, DebugOutline, .{ .color = Color.from(100, 255, 200, 220) });
+            flecs.set(self.world, ent, DebugOutline, .{ .color = Color.from(100, 255, 200, 220) });
         }
     }
 

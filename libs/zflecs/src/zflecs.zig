@@ -2853,7 +2853,8 @@ extern fn ecs_using_task_threads(world: *world_t) bool;
 // We need to reset those ids to zero when the world is destroyed
 // (we do this in `pub fn fini(world: *world_t) i32`).
 var num_worlds: u32 = 0;
-var component_ids_hm = std.AutoHashMap(*id_t, u0).init(std.heap.page_allocator);
+// PIXZIG: Changed to C Allocator
+var component_ids_hm = std.AutoHashMap(*id_t, u0).init(std.heap.c_allocator); //std.heap.page_allocator);
 
 pub fn COMPONENT(world: *world_t, comptime T: type) void {
     if (@sizeOf(T) == 0)
@@ -3168,8 +3169,8 @@ pub fn cast_mut(comptime T: type, val: ?*anyopaque) *T {
     return @as(*T, @ptrCast(@alignCast(val)));
 }
 
-pub fn singleton_set(world: *world_t, comptime T: type, val: T) entity_t {
-    return set(world, id(T), T, val);
+pub fn singleton_set(world: *world_t, comptime T: type, val: T) void {
+    set(world, id(T), T, val);
 }
 
 pub fn singleton_get(world: *world_t, comptime T: type) ?*const T {
