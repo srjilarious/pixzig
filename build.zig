@@ -55,6 +55,13 @@ pub fn build(b: *std.Build) void {
         extraMods: []const []const u8 = &.{},
         buildForWeb: bool = true,
     }{
+        .{
+            .name = "audio_test",
+            .path = "examples/audio_test.zig",
+            .assets = &.{
+                "laserShoot.wav",
+            },
+        },
         .{ .name = "tile_load_test", .path = "examples/tile_load_test.zig", .assets = &.{
             "mario_grassish2.png",
             "level1a.tmx",
@@ -257,6 +264,11 @@ fn buildEngine(
     const zmath = b.dependency("zmath", .{ .target = target });
     const math_mod = zmath.module("root");
     pixeng.addImport("zmath", math_mod);
+
+    // Audio
+    const zaudio = b.dependency("zaudio", .{});
+    pixeng.addImport("zaudio", zaudio.module("root"));
+    engine_lib.linkLibrary(zaudio.artifact("miniaudio"));
 
     // GUI
     // const zgui = b.dependency("zgui", .{

@@ -6,6 +6,7 @@ pub const stbi = @import("zstbi");
 pub const zopengl = @import("zopengl");
 pub const gl = zopengl.bindings;
 pub const zmath = @import("zmath");
+pub const zaudio = @import("zaudio");
 // pub const zgui = @import("zgui");
 pub const ziglua = @import("ziglua");
 pub const flecs = @import("zflecs");
