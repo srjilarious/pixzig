@@ -21,8 +21,9 @@
 
         },
         .zaudio = .{
-            .url = "git+https://github.com/zig-gamedev/zaudio.git#bb93ad665b89e302d4515a36b44cb8e73eaf6766",
-            .hash = "zaudio-0.11.0-dev-_M-91kHvPwAlW8MCRI4XiTbTeihqB8Zspgiuw-6Gqgdz",
+            .path = "libs/zaudio",
+            // .url = "git+https://github.com/zig-gamedev/zaudio.git#bb93ad665b89e302d4515a36b44cb8e73eaf6766",
+            // .hash = "zaudio-0.11.0-dev-_M-91kHvPwAlW8MCRI4XiTbTeihqB8Zspgiuw-6Gqgdz",
         },
         .zopengl = .{
             .url = "git+https://github.com/zig-gamedev/zopengl.git#33ae578d91692c814e7d6b4b42573142475f68d0",

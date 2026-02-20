@@ -161,33 +161,6 @@ pub fn build(b: *std.Build) void {
 
             const zstbi = b.dependency("zstbi", .{ .target = target });
             spack.root_module.addImport("zstbi", zstbi.module("root"));
-
-            // Unit tests
-            // const tests_mod = b.createModule(.{
-            //     .root_source_file = b.path("tests/main.zig"),
-            //     .target = target,
-            //     .optimize = optimize,
-            // });
-            // const tests = buildExample(
-            //     b,
-            //     target,
-            //     optimize,
-            //     engDat.engine_lib,
-            //     engDat.pixeng_mod,
-            //     "tests",
-            //     tests_mod,
-            //     &.{
-            //         "Roboto-Medium.ttf",
-            //     },
-            // );
-            // const testzMod = b.dependency("testz", .{});
-            // tests.root_module.addImport("testz", testzMod.module("testz"));
-            // const install_exe = b.addInstallArtifact(tests, .{
-            //     .dest_dir = .{
-            //         .override = .{ .custom = b.pathJoin(&.{ "bin", "tests" }) },
-            //     },
-            // });
-            // build_all_step.dependOn(&install_exe.step);
         }
     }
 
@@ -269,20 +242,6 @@ fn buildEngine(
     const zaudio = b.dependency("zaudio", .{});
     pixeng.addImport("zaudio", zaudio.module("root"));
     engine_lib.linkLibrary(zaudio.artifact("miniaudio"));
-
-    // GUI
-    // const zgui = b.dependency("zgui", .{
-    //     .target = target,
-    //     .backend = .glfw_opengl3,
-    //     .with_freetype = false,
-    // });
-    // const zgui_mod = zgui.module("root");
-    // pixeng.addImport("zgui", zgui_mod);
-    // if (target.result.os.tag == .emscripten) {
-    //     const gui_lib = zgui.artifact("imgui");
-    //     addArchIncludes(b, target, optimize, gui_lib) catch unreachable;
-    //     engine_lib.linkLibrary(gui_lib);
-    // }
 
     // Lua
     const ziglua = b.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
