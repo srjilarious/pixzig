@@ -40,20 +40,26 @@ pub fn build(b: *std.Build) void {
         miniaudio_lib.linkSystemLibrary("dl");
     }
 
+    const is_emscripten = target.result.os.tag == .emscripten;
+
     miniaudio.addCSourceFile(.{
         .file = b.path("src/zaudio.c"),
-        .flags = &.{"-std=c99"},
+        .flags = &.{
+            if (is_emscripten) "" else "-std=c99",
+            "-fno-sanitize=undefined",
+        },
     });
     miniaudio.addCSourceFile(.{
         .file = b.path("libs/miniaudio/miniaudio.c"),
         .flags = &.{
-            "-DMA_NO_WEBAUDIO",
+            // "-DMA_NO_WEBAUDIO",
             "-DMA_NO_NULL",
             "-DMA_NO_JACK",
             "-DMA_NO_DSOUND",
             "-DMA_NO_WINMM",
-            "-std=c99",
             "-fno-sanitize=undefined",
+            if (is_emscripten) "" else "-std=c99",
+            // if (is_emscripten) "-DMA_ENABLE_AUDIO_WORKLETS" else "",
             if (target.result.os.tag == .macos) "-DMA_NO_RUNTIME_LINKING" else "",
         },
     });

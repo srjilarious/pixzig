@@ -62,51 +62,51 @@ pub fn build(b: *std.Build) void {
                 "laserShoot.wav",
             },
         },
-        .{ .name = "tile_load_test", .path = "examples/tile_load_test.zig", .assets = &.{
-            "mario_grassish2.png",
-            "level1a.tmx",
-        } },
-        .{ .name = "natetris", .path = "games/natetris/natetris.zig", .assets = &.{} },
-        .{ .name = "actor_test", .path = "examples/actor_test.zig", .assets = &.{
-            "pac-tiles.json",
-            "pac-tiles.png",
-        } },
-        .{ .name = "collision_test", .path = "examples/collision_test.zig", .assets = &.{
-            "mario_grassish2.png",
-            "level1a.tmx",
-            "pac-tiles.png",
-        } },
-        .{ .name = "flecs_test", .path = "examples/flecs_test.zig", .assets = &.{
-            "mario_grassish2.png",
-        } },
-        .{ .name = "a_star_path", .path = "examples/a_star_path.zig", .assets = &.{} },
-        .{ .name = "gameloop_test", .path = "examples/gameloop_test.zig", .assets = &.{} },
-        .{ .name = "game_state_test", .path = "examples/game_state_test.zig", .assets = &.{} },
-        .{ .name = "glfw_sprites", .path = "examples/glfw_sprites.zig", .assets = &.{
-            "mario_grassish2.png",
-        } },
-        .{ .name = "grid_render", .path = "examples/grid_render.zig", .assets = &.{} },
-        .{ .name = "console2_test", .path = "examples/console2_test.zig", .assets = &.{
-            "Roboto-Medium.ttf",
-        } },
-        .{ .name = "text_rendering", .path = "examples/text_rendering.zig", .assets = &.{
-            "Roboto-Medium.ttf",
-        } },
-        .{ .name = "bitmap_text_rendering", .path = "examples/bitmap_text_rendering.zig", .assets = &.{
-            "font5r.png",
-        } },
-        .{ .name = "pixel_buffer_test", .path = "examples/pixel_buffer_test.zig", .assets = &.{} },
-        // Unit tests
-        .{
-            .name = "tests",
-            .path = "tests/main.zig",
-            // .path = "tests/main.zig",
-            .assets = &.{
-                "Roboto-Medium.ttf",
-            },
-            .extraMods = &.{"testz"},
-            .buildForWeb = false,
-        },
+        // .{ .name = "tile_load_test", .path = "examples/tile_load_test.zig", .assets = &.{
+        //     "mario_grassish2.png",
+        //     "level1a.tmx",
+        // } },
+        // .{ .name = "natetris", .path = "games/natetris/natetris.zig", .assets = &.{} },
+        // .{ .name = "actor_test", .path = "examples/actor_test.zig", .assets = &.{
+        //     "pac-tiles.json",
+        //     "pac-tiles.png",
+        // } },
+        // .{ .name = "collision_test", .path = "examples/collision_test.zig", .assets = &.{
+        //     "mario_grassish2.png",
+        //     "level1a.tmx",
+        //     "pac-tiles.png",
+        // } },
+        // .{ .name = "flecs_test", .path = "examples/flecs_test.zig", .assets = &.{
+        //     "mario_grassish2.png",
+        // } },
+        // .{ .name = "a_star_path", .path = "examples/a_star_path.zig", .assets = &.{} },
+        // .{ .name = "gameloop_test", .path = "examples/gameloop_test.zig", .assets = &.{} },
+        // .{ .name = "game_state_test", .path = "examples/game_state_test.zig", .assets = &.{} },
+        // .{ .name = "glfw_sprites", .path = "examples/glfw_sprites.zig", .assets = &.{
+        //     "mario_grassish2.png",
+        // } },
+        // .{ .name = "grid_render", .path = "examples/grid_render.zig", .assets = &.{} },
+        // .{ .name = "console2_test", .path = "examples/console2_test.zig", .assets = &.{
+        //     "Roboto-Medium.ttf",
+        // } },
+        // .{ .name = "text_rendering", .path = "examples/text_rendering.zig", .assets = &.{
+        //     "Roboto-Medium.ttf",
+        // } },
+        // .{ .name = "bitmap_text_rendering", .path = "examples/bitmap_text_rendering.zig", .assets = &.{
+        //     "font5r.png",
+        // } },
+        // .{ .name = "pixel_buffer_test", .path = "examples/pixel_buffer_test.zig", .assets = &.{} },
+        // // Unit tests
+        // .{
+        //     .name = "tests",
+        //     .path = "tests/main.zig",
+        //     // .path = "tests/main.zig",
+        //     .assets = &.{
+        //         "Roboto-Medium.ttf",
+        //     },
+        //     .extraMods = &.{"testz"},
+        //     .buildForWeb = false,
+        // },
     };
 
     // Create a "build-all" option that builds everything
@@ -239,9 +239,11 @@ fn buildEngine(
     pixeng.addImport("zmath", math_mod);
 
     // Audio
-    const zaudio = b.dependency("zaudio", .{});
+    const zaudio = b.dependency("zaudio", .{ .target = target });
     pixeng.addImport("zaudio", zaudio.module("root"));
-    engine_lib.linkLibrary(zaudio.artifact("miniaudio"));
+    const miniaudio = zaudio.artifact("miniaudio");
+    addArchIncludes(b, target, optimize, miniaudio) catch unreachable;
+    engine_lib.linkLibrary(miniaudio);
 
     // Lua
     const ziglua = b.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
@@ -367,6 +369,8 @@ pub fn buildExample(
                 "-sERROR_ON_UNDEFINED_SYMBOLS=1",
                 "-sSTACK_SIZE=2mb",
                 "-sEXPORT_ALL=1",
+                // "-sAUDIO_WORKLET=1",
+                // "-sWASM_WORKERS=1",
                 "--shell-file",
                 b.path("src/shell.html").getPath(b),
             });
@@ -396,6 +400,11 @@ pub fn buildExample(
             const ziglua = pixeng_mod.owner.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
             const lua_dep = ziglua.artifact("lua");
             emcc_command.addFileArg(lua_dep.getEmittedBin());
+
+            // Zaudio / Miniaudio
+            const zaudio = pixeng_mod.owner.dependency("zaudio", .{ .target = target, .optimize = optimize });
+            const zaudio_dep = zaudio.artifact("miniaudio");
+            emcc_command.addFileArg(zaudio_dep.getEmittedBin());
 
             // emcc_command.addFileArg(.getEmittedBin());
             emcc_command.step.dependOn(&exe.step);

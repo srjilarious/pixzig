@@ -19,29 +19,41 @@ pub const std_options = pixzig.system.std_options;
 const AppRunner = pixzig.PixzigAppRunner(App, .{});
 
 pub const App = struct {
+    alloc: std.mem.Allocator,
     testVal: i32,
     audioEngine: *zaudio.Engine,
     sample: *zaudio.Sound,
     fps: FpsCounter,
     delay: Delay = .{ .max = 120 },
 
-    pub fn init(allocator: std.mem.Allocator) !App {
+    pub fn init(allocator: std.mem.Allocator) !*App {
+        std.log.info("Initializing zaudio.", .{});
         zaudio.init(allocator);
 
+        std.log.info("Intialized zaudio.", .{});
+
         const engine = try zaudio.Engine.create(null);
+
+        std.log.info("Created audio engine.", .{});
 
         const sample = try engine.createSoundFromFile(
             "assets/laserShoot.wav",
             .{},
         );
 
-        return .{ .testVal = 123, .audioEngine = engine, .sample = sample, .fps = FpsCounter.init() };
+        std.log.info("Finished loading sample.", .{});
+
+        const app = try allocator.create(App);
+        app.* = .{ .alloc = allocator, .testVal = 123, .audioEngine = engine, .sample = sample, .fps = FpsCounter.init() };
+
+        return app; //.{ .testVal = 123, .audioEngine = engine, .sample = sample, .fps = FpsCounter.init() };
     }
 
     pub fn deinit(self: *App) void {
         self.sample.destroy();
         self.audioEngine.destroy();
         zaudio.deinit();
+        self.alloc.destroy(self);
     }
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
@@ -84,8 +96,8 @@ pub fn main() !void {
     const alloc = std.heap.c_allocator;
 
     const appRunner = try AppRunner.init("Pixzig Game Loop Example.", alloc, .{});
-    var app = try App.init(alloc);
+    const app = try App.init(alloc);
 
     glfw.swapInterval(0);
-    appRunner.run(&app);
+    appRunner.run(app);
 }
