@@ -16,43 +16,52 @@ const FpsCounter = pixzig.utils.FpsCounter;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.PixzigAppRunner(App, .{ .audioOpts = .{ .enabled = true } });
 
 pub const App = struct {
     alloc: std.mem.Allocator,
     testVal: i32,
-    audioEngine: *zaudio.Engine,
-    sample: *zaudio.Sound,
+    // audioEngine: *zaudio.Engine,
+    // sample: *zaudio.Sound,
     fps: FpsCounter,
     delay: Delay = .{ .max = 120 },
 
-    pub fn init(allocator: std.mem.Allocator) !*App {
-        std.log.info("Initializing zaudio.", .{});
-        zaudio.init(allocator);
+    pub fn init(allocator: std.mem.Allocator, engine: *AppRunner.Engine) !*App {
+        // std.log.info("Initializing zaudio.", .{});
+        // zaudio.init(allocator);
 
-        std.log.info("Intialized zaudio.", .{});
+        // std.log.info("Intialized zaudio.", .{});
 
-        const engine = try zaudio.Engine.create(null);
+        // const engine = try zaudio.Engine.create(null);
 
-        std.log.info("Created audio engine.", .{});
+        // std.log.info("Created audio engine.", .{});
 
-        const sample = try engine.createSoundFromFile(
-            "assets/laserShoot.wav",
-            .{},
-        );
+        // const sample = try engine.createSoundFromFile(
+        //     "assets/laserShoot.wav",
+        //     .{},
+        // );
 
-        std.log.info("Finished loading sample.", .{});
+        // std.log.info("Finished loading sample.", .{});
+
+        engine.audio.loadSound("laserShoot", "assets/laserShoot.wav") catch |err| {
+            std.debug.print("Error loading sound: {}\n", .{err});
+        };
 
         const app = try allocator.create(App);
-        app.* = .{ .alloc = allocator, .testVal = 123, .audioEngine = engine, .sample = sample, .fps = FpsCounter.init() };
+        app.* = .{
+            .alloc = allocator,
+            .testVal = 123,
+            // .audioEngine = engine, .sample = sample,
+            .fps = FpsCounter.init(),
+        };
 
         return app; //.{ .testVal = 123, .audioEngine = engine, .sample = sample, .fps = FpsCounter.init() };
     }
 
     pub fn deinit(self: *App) void {
-        self.sample.destroy();
-        self.audioEngine.destroy();
-        zaudio.deinit();
+        // self.sample.destroy();
+        // self.audioEngine.destroy();
+        // zaudio.deinit();
         self.alloc.destroy(self);
     }
 
@@ -66,9 +75,13 @@ pub const App = struct {
         if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
         if (eng.keyboard.pressed(.left)) {
             std.debug.print("Left!\n", .{});
-            self.sample.start() catch |err| {
+            eng.audio.playSound("laserShoot") catch |err| {
                 std.debug.print("Error playing sound: {}\n", .{err});
             };
+
+            // self.sample.start() catch |err| {
+            //     std.debug.print("Error playing sound: {}\n", .{err});
+            // };
             self.testVal -= 1;
         }
         if (eng.keyboard.pressed(.right)) {
@@ -96,7 +109,7 @@ pub fn main() !void {
     const alloc = std.heap.c_allocator;
 
     const appRunner = try AppRunner.init("Pixzig Game Loop Example.", alloc, .{});
-    const app = try App.init(alloc);
+    const app = try App.init(alloc, appRunner.engine);
 
     glfw.swapInterval(0);
     appRunner.run(app);

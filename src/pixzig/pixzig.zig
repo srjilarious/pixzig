@@ -32,6 +32,7 @@ pub const collision = @import("./collision.zig");
 pub const a_star = @import("./a_star.zig");
 pub const system = @import("./system.zig");
 pub const assets = @import("./assets.zig");
+pub const audio = @import("./audio.zig");
 
 pub const Texture = textures.Texture;
 pub const TextureImage = textures.TextureImage;
@@ -48,6 +49,7 @@ pub const PixzigEngineOptions = struct {
     defaultIcon: bool = true,
     gameScale: f32 = 1.0,
     rendererOpts: renderer.RendererOptions = .{},
+    audioOpts: audio.AudioOptions = .{},
 };
 
 pub const PixzigEngineInitOptions = struct {
@@ -154,6 +156,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         resources: ResourceManager,
         keyboard: input.Keyboard,
         renderer: Renderer = undefined,
+        audio: audio.AudioEngine = undefined,
 
         const Self = @This();
         pub const Renderer = renderer.Renderer(engOpts.rendererOpts);
@@ -193,6 +196,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             glfw.makeContextCurrent(window);
             glfw.swapInterval(1);
 
+            // ----------------------------------------------------------------
             std.log.info("Loading OpenGL profile.", .{});
             if (builtin.target.os.tag == .emscripten) {
                 try zopengl.loadEsProfile(glfw.getProcAddress, gl_major, gl_minor);
@@ -207,23 +211,11 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             std.log.info("GL Version: {s}", .{glVersion});
             std.log.info("GLSL Version: {s}", .{glslVersion});
 
+            // ----------------------------------------------------------------
             const scaleFactor = scaleFactor: {
                 const scale = window.getContentScale();
                 break :scaleFactor @max(scale[0], scale[1]);
             };
-
-            // if (engOpts.withGui) {
-            //     std.log.info("Initializing GUI system.", .{});
-            //     zgui.init(allocator);
-            //     zgui.getStyle().scaleAllSizes(scaleFactor);
-            //     zgui.backend.initWithGlSlVersion(window, "#version 300 es");
-            //     // zgui.backend.initOpenGL(window);
-            // }
-
-            std.log.debug("Initializing STBI.", .{});
-            stbi.init(allocator);
-
-            std.log.info("Pixzig Engine Initialized.", .{});
 
             // Create a default 2D orthogrpaphic projection matrix fitting the window.
             // Also allow scaling the game content with engOpts.gameScale.
@@ -236,6 +228,11 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 1000,
             ));
 
+            // ----------------------------------------------------------------
+            std.log.debug("Initializing STBI.", .{});
+            stbi.init(allocator);
+
+            // ----------------------------------------------------------------
             const eng = try allocator.create(Self);
             eng.* = .{
                 .window = window,
@@ -245,15 +242,24 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 .projMat = projMat,
                 .resources = ResourceManager.init(allocator),
                 .keyboard = input.Keyboard.init(),
-                .renderer = undefined,
             };
 
+            // ----------------------------------------------------------------
+            std.log.info("Initializing Renderer.", .{});
             eng.renderer = try Renderer.init(allocator, &eng.resources, options.renderInitOpts);
             if (engOpts.defaultIcon) {
                 std.log.debug("Setting default window icon.", .{});
                 var defaultIcon = std.io.Reader.fixed(assets.icon48x48);
                 try eng.setIcon(&defaultIcon);
             }
+
+            // ----------------------------------------------------------------
+            if (engOpts.audioOpts.enabled) {
+                std.log.info("Initializing Audio Engine.", .{});
+                eng.audio = try audio.AudioEngine.init(allocator);
+            }
+
+            std.log.info("Pixzig Engine Initialized.", .{});
 
             return eng;
         }
@@ -262,13 +268,12 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             stbi.deinit();
             self.resources.deinit();
 
-            // if (engOpts.withGui) {
-            //     zgui.backend.deinit();
-            //     zgui.deinit();
-            // }
-
             self.window.destroy();
             glfw.terminate();
+
+            if (engOpts.audioOpts.enabled) {
+                self.audio.deinit();
+            }
 
             self.allocator.destroy(self);
         }
