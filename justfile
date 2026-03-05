@@ -2,8 +2,8 @@ alias b := build
 alias bw := build_web
 alias rw := run_web
 
-build EX:
-	zig build {{EX}}
+build EX *OPTS:
+	zig build {{EX}} {{OPTS}}
 
 build_web:
 	zig build -Dtarget=wasm32-emscripten --sysroot /home/jeffdw/.cache/emscripten/sysroot
