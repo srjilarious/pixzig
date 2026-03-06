@@ -77,7 +77,8 @@ pub fn AStarPathFinder(comptime CheckContext: type) type {
         alloc: std.mem.Allocator,
         checker: CheckContext,
 
-        pub fn init(checker: CheckContext, alloc: std.mem.Allocator, size: Vec2I) !@This() {
+        const Self = @This();
+        pub fn init(checker: CheckContext, alloc: std.mem.Allocator, size: Vec2I) !Self {
             if (size.x < 0 or size.y < 0) return error.NegativeBoundsGiven;
 
             var locDataArr: LocDataArray = .{};
@@ -95,7 +96,7 @@ pub fn AStarPathFinder(comptime CheckContext: type) type {
             return @floatFromInt(@abs(a.x - b.x) + @abs(a.y - b.y));
         }
 
-        fn locData(self: *@This(), pos: TileLoc) ?*LocData {
+        fn locData(self: *Self, pos: TileLoc) ?*LocData {
             if (pos.x < 0 or pos.x >= self.size.x or pos.y < 0 or pos.y >= self.size.y) {
                 return null;
             }
@@ -104,7 +105,7 @@ pub fn AStarPathFinder(comptime CheckContext: type) type {
             return &self.locDataArr.items[index];
         }
 
-        pub fn findPath(self: *@This(), start: TileLoc, goal: TileLoc, path: *Path) !void {
+        pub fn findPath(self: *Self, start: TileLoc, goal: TileLoc, path: *Path) !void {
             var frontier = AStarPriorityQueue.init(self.alloc, .{});
             try frontier.add(.{ .location = start, .score = 0.0 });
             @memset(self.locDataArr.items, LocData{});

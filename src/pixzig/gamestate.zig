@@ -16,7 +16,7 @@ pub fn GameStateMgr(comptime Engine: type, comptime StateKeysType: type, comptim
 
         const Self = @This();
 
-        pub fn init(states: []*anyopaque) @This() {
+        pub fn init(states: []*anyopaque) Self {
 
             // const enumTypeInfo = @typeInfo(StateKeysType);
 

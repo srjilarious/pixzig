@@ -54,7 +54,7 @@ pub fn Renderer(opts: RendererOptions) type {
             fontAtlas: ?FontAtlas = null,
         };
 
-        pub fn init(alloc: std.mem.Allocator, resMgr: *ResourceManager, initOpts: RendererInitOpts) !@This() {
+        pub fn init(alloc: std.mem.Allocator, resMgr: *ResourceManager, initOpts: RendererInitOpts) !Self {
             var rend = try alloc.create(Impl);
 
             std.log.info("Initializing shaders.", .{});
