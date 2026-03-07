@@ -381,13 +381,15 @@ pub fn buildExample(
             }
 
             emcc_command.addFileArg(exe.getEmittedBin());
-            // emcc_command.addFileArg(engine_lib.getEmittedBin());
-            // We setup the engine in an emscripten build to output a `web/engine.o` to link against
-            const obj_path = pixeng_mod.owner.getInstallPath(
-                .prefix,
-                "web/pixzig.o",
-            );
-            emcc_command.addArg(obj_path);
+            if (engine_lib) |lib| {
+                emcc_command.addFileArg(lib.getEmittedBin());
+            } else {
+                const obj_path = pixeng_mod.owner.getInstallPath(
+                    .prefix,
+                    "web/pixzig.o",
+                );
+                emcc_command.addArg(obj_path);
+            }
 
             // const zgui = pixeng_mod.owner.dependency("zgui", .{
             //     .target = target,
@@ -411,9 +413,12 @@ pub fn buildExample(
 
             const install = emcc_command;
             b.default_step.dependOn(&install.step);
+
+            const build_step = b.step(name, "Build web example");
+            build_step.dependOn(&install.step);
         },
         else => {
-            _ = engine_lib;
+            // _ = engine_lib;
             //exe.linkLibrary(engine_lib.?);
 
             const path = b.pathJoin(&.{ "bin", name });
