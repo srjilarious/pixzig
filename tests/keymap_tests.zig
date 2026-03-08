@@ -4,6 +4,7 @@ const input = @import("pixzig").input;
 const KeyMap = input.KeyMap;
 const KeyChordPiece = input.KeyChordPiece;
 const KeyboardState = input.KeyboardState;
+const ChordTree = input.ChordTree;
 
 pub fn keyboardStateTest() !void {
     var kbState = KeyboardState.init();
@@ -210,6 +211,10 @@ pub fn charFromKeyTest() !void {
     try testz.expectEqual(input.charFromKey(.F1, true), null);
 }
 
+// ----------------------------------------------------------------------------
+// Text input tests.
+// ----------------------------------------------------------------------------
+
 pub fn textInputTest_1() !void {
     var kb = input.Keyboard.init();
     kb.currKeys().set(.a, true);
@@ -249,4 +254,130 @@ pub fn textInputTest_4() !void {
     const len = kb.text(buff[0..]);
     try testz.expectEqual(len, 1);
     try testz.expectEqualStr(buff[0..len], " ");
+}
+
+// ----------------------------------------------------------------------------
+// Reset tests
+// ----------------------------------------------------------------------------
+
+// After triggering a chord and releasing the key, an explicit reset() should
+// leave the keymap in a clean state so the next update returns .none.
+pub fn resetStopsRepeatTest() !void {
+    var kmap = try KeyMap.init(std.heap.page_allocator);
+    defer kmap.deinit();
+
+    _ = try kmap.addKeyChord(.{ .ctrl = true }, .a, "testThing", null);
+    var kbState = KeyboardState.init();
+    kbState.set(.a, true);
+    kbState.set(.right_control, true);
+
+    const res = kmap.update(&kbState, 1000);
+    try testz.expectEqualStr(res.triggered.func.?, "testThing");
+
+    // Release key, then explicitly reset.
+    kbState.set(.a, false);
+    kmap.reset();
+
+    // Should be .none — not a spurious repeat or re-trigger.
+    const res2 = kmap.update(&kbState, 1000);
+    try testz.expectEqual(res2, input.ChordUpdateResult.none);
+}
+
+// After advancing mid-way through a two-key sequence, reset() should bring
+// the state back to root so the second key alone no longer triggers.
+pub fn resetMidSequenceTest() !void {
+    var kmap = try KeyMap.init(std.heap.page_allocator);
+    defer kmap.deinit();
+
+    _ = try kmap.addTwoKeyChord(.{ .ctrl = true }, .k, .l, "testThing", null);
+    var kbState = KeyboardState.init();
+
+    // Advance to intermediate node with Ctrl+K.
+    kbState.set(.k, true);
+    kbState.set(.right_control, true);
+    const res1 = kmap.update(&kbState, 1000);
+    try testz.expectEqual(res1, input.ChordUpdateResult.none);
+
+    // Reset mid-sequence.
+    kbState.set(.k, false);
+    kmap.reset();
+
+    // Ctrl+L alone should not trigger — back at root, not the intermediate node.
+    kbState.set(.l, true);
+    const res2 = kmap.update(&kbState, 1000);
+    try testz.expectEqual(res2, input.ChordUpdateResult.none);
+}
+
+// After triggering and calling reset() while the key is still held, the next
+// update should trigger immediately without waiting for InitialRepeatRate.
+// This distinguishes reset from the normal hold-to-repeat path.
+pub fn resetAllowsImmediateRetriggerTest() !void {
+    var kmap = try KeyMap.init(std.heap.page_allocator);
+    defer kmap.deinit();
+
+    _ = try kmap.addKeyChord(.{ .ctrl = true }, .a, "testThing", null);
+    var kbState = KeyboardState.init();
+    kbState.set(.a, true);
+    kbState.set(.right_control, true);
+
+    // Initial trigger.
+    const res1 = kmap.update(&kbState, 1000);
+    try testz.expectEqualStr(res1.triggered.func.?, "testThing");
+
+    // Reset while key still held.
+    kmap.reset();
+
+    // Should trigger immediately on the next update — no InitialRepeatRate wait.
+    const res2 = kmap.update(&kbState, 1000);
+    try testz.expectEqualStr(res2.triggered.func.?, "testThing");
+}
+
+// After the timeout elapses mid-sequence, update() should return .reset and
+// the keymap should be back at root (second key alone no longer triggers).
+pub fn timeoutReturnsResetResultTest() !void {
+    var kmap = try KeyMap.init(std.heap.page_allocator);
+    defer kmap.deinit();
+
+    _ = try kmap.addTwoKeyChord(.{ .ctrl = true }, .k, .l, "testThing", null);
+    var kbState = KeyboardState.init();
+
+    // Advance to intermediate node.
+    kbState.set(.k, true);
+    kbState.set(.right_control, true);
+    _ = kmap.update(&kbState, 1000);
+    kbState.set(.k, false);
+
+    // Burn past the timeout with a single large elapsed value.
+    const res = kmap.update(&kbState, input.DefaultChordTimeoutUs + 1);
+    try testz.expectEqual(res, input.ChordUpdateResult.reset);
+
+    // After timeout, the second key alone should not trigger (back at root).
+    kbState.set(.l, true);
+    const res2 = kmap.update(&kbState, 1000);
+    try testz.expectEqual(res2, input.ChordUpdateResult.none);
+}
+
+// ----------------------------------------------------------------------------
+// context storage tests 
+// ----------------------------------------------------------------------------
+
+// A non-null context string passed to ChordTree.init should be stored and
+// independently allocated (pointer differs from the original).
+pub fn chordTreeContextStoredTest() !void {
+    const name: []const u8 = "my_context";
+    var tree = try ChordTree.init(std.heap.page_allocator, name);
+    defer tree.deinit();
+
+    try testz.expectTrue(tree.context != null);
+    try testz.expectEqualStr(tree.context.?, "my_context");
+    // Verify the string was duped, not just the original pointer stored.
+    try testz.expectTrue(tree.context.?.ptr != name.ptr);
+}
+
+// A null context passed to ChordTree.init should result in a null stored context.
+pub fn chordTreeNullContextTest() !void {
+    var tree = try ChordTree.init(std.heap.page_allocator, null);
+    defer tree.deinit();
+
+    try testz.expectEqual(tree.context, null);
 }

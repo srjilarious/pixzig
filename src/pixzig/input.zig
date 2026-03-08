@@ -482,7 +482,7 @@ pub const ChordTree = struct {
 
     pub fn init(alloc: std.mem.Allocator, context: ?[]const u8) !ChordTree {
         var ctxt: ?[]const u8 = null;
-        if (ctxt != null) {
+        if (context != null) {
             ctxt = try alloc.dupe(u8, context.?);
         }
 
@@ -502,7 +502,7 @@ pub const ChordTree = struct {
 
     pub fn deinit(self: *ChordTree) void {
         if (self.context != null) {
-            self.alloc.free(self.context);
+            self.alloc.free(self.context.?);
         }
 
         self.rootChord.deinit();
@@ -634,6 +634,10 @@ pub const KeyMap = struct {
 
     pub fn update(self: *KeyMap, kbState: *const KeyboardState, elapsedUs: f64) ChordUpdateResult {
         return self.chords.update(kbState, elapsedUs);
+    }
+
+    pub fn reset(self: *KeyMap) void {
+        self.chords.reset();
     }
 
     // pub fn printKeyMap(self: *KeyMap) void {
