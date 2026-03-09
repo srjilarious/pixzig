@@ -81,6 +81,7 @@ pub fn build(b: *std.Build) void {
         } },
         .{ .name = "a_star_path", .path = "examples/a_star_path.zig", .assets = &.{} },
         .{ .name = "gameloop_test", .path = "examples/gameloop_test.zig", .assets = &.{} },
+        .{ .name = "gamepad_test", .path = "examples/gamepad_test.zig", .assets = &.{} },
         .{ .name = "game_state_test", .path = "examples/game_state_test.zig", .assets = &.{} },
         .{ .name = "glfw_sprites", .path = "examples/glfw_sprites.zig", .assets = &.{
             "mario_grassish2.png",
