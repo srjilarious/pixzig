@@ -20,14 +20,14 @@ const Colors = struct {
 };
 
 const ButtonColors = [_]struct { btn: glfw.Gamepad.Button, color: Colors }{
-    .{ .btn = .a,             .color = .{ .r = 0.8, .g = 0.1, .b = 0.1 } }, // A  → red
-    .{ .btn = .b,             .color = .{ .r = 0.1, .g = 0.8, .b = 0.1 } }, // B  → green
-    .{ .btn = .x,             .color = .{ .r = 0.1, .g = 0.1, .b = 0.8 } }, // X  → blue
-    .{ .btn = .y,             .color = .{ .r = 0.8, .g = 0.8, .b = 0.1 } }, // Y  → yellow
-    .{ .btn = .left_bumper,   .color = .{ .r = 0.1, .g = 0.8, .b = 0.8 } }, // LB → cyan
-    .{ .btn = .right_bumper,  .color = .{ .r = 0.8, .g = 0.1, .b = 0.8 } }, // RB → magenta
-    .{ .btn = .start,         .color = .{ .r = 0.9, .g = 0.9, .b = 0.9 } }, // Start → white
-    .{ .btn = .back,          .color = .{ .r = 0.2, .g = 0.2, .b = 0.2 } }, // Back  → dark gray
+    .{ .btn = .a, .color = .{ .r = 0.8, .g = 0.1, .b = 0.1 } }, // A  → red
+    .{ .btn = .b, .color = .{ .r = 0.1, .g = 0.8, .b = 0.1 } }, // B  → green
+    .{ .btn = .x, .color = .{ .r = 0.1, .g = 0.1, .b = 0.8 } }, // X  → blue
+    .{ .btn = .y, .color = .{ .r = 0.8, .g = 0.8, .b = 0.1 } }, // Y  → yellow
+    .{ .btn = .left_bumper, .color = .{ .r = 0.1, .g = 0.8, .b = 0.8 } }, // LB → cyan
+    .{ .btn = .right_bumper, .color = .{ .r = 0.8, .g = 0.1, .b = 0.8 } }, // RB → magenta
+    .{ .btn = .start, .color = .{ .r = 0.9, .g = 0.9, .b = 0.9 } }, // Start → white
+    .{ .btn = .back, .color = .{ .r = 0.2, .g = 0.2, .b = 0.2 } }, // Back  → dark gray
 };
 
 pub const App = struct {
@@ -51,14 +51,14 @@ pub const App = struct {
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if (self.fps.update(delta)) {
-            std.debug.print("FPS: {}\n", .{self.fps.fps()});
+            std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
         self.gamepad.update();
 
         if (!self.gamepad.isConnected()) {
             if (self.printDelay.update(1)) {
-                std.debug.print("No gamepad connected on joystick 0.\n", .{});
+                std.log.warn("No gamepad connected on joystick 0.", .{});
             }
         } else {
             // Apply the color for whichever button is held.
@@ -70,8 +70,8 @@ pub const App = struct {
 
             // Print axis values periodically.
             if (self.printDelay.update(1)) {
-                std.debug.print(
-                    "LStick ({d:.2}, {d:.2})  RStick ({d:.2}, {d:.2})  Triggers L={d:.2} R={d:.2}\n",
+                std.log.debug(
+                    "LStick ({d:.2}, {d:.2})  RStick ({d:.2}, {d:.2})  Triggers L={d:.2} R={d:.2}",
                     .{
                         self.gamepad.axis(.left_x),
                         self.gamepad.axis(.left_y),

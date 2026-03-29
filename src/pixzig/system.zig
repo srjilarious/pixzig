@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const web = @import("./web.zig");
+const c = @cImport(@cInclude("time.h"));
 
 // Either the default panic handler or an emscripten capable one.
 pub const panic = if (builtin.os.tag == .emscripten) web.panic else std.debug.FullPanic(std.debug.defaultPanic);
@@ -10,6 +11,49 @@ pub const std_options = blk: {
     if (builtin.os.tag == .emscripten) {
         break :blk std.Options{ .logFn = web.log };
     } else {
-        break :blk std.Options{ .logFn = std.log.defaultLog };
+        break :blk std.Options{ .logFn = nativeLog };
     }
 };
+
+fn nativeLog(
+    comptime level: std.log.Level,
+    comptime scope: @Type(.enum_literal),
+    comptime format: []const u8,
+    args: anytype,
+) void {
+    const level_color = comptime switch (level) {
+        .err => "\x1b[31;1m",
+        .warn => "\x1b[33;1m",
+        .info => "\x1b[32;1m",
+        .debug => "\x1b[36;1m",
+    };
+    const level_char = comptime switch (level) {
+        .err => "E",
+        .warn => "W",
+        .info => "I",
+        .debug => "D",
+    };
+    const scope_prefix = comptime if (scope == .default) "" else "(" ++ @tagName(scope) ++ ") ";
+
+    const ms = std.time.milliTimestamp();
+    const ms_part: u32 = @intCast(@mod(ms, 1000));
+    const t: c.time_t = @intCast(@divFloor(ms, 1000));
+    var tm: c.struct_tm = undefined;
+    _ = c.localtime_r(&t, &tm);
+    const h: u32 = @intCast(tm.tm_hour);
+    const min: u32 = @intCast(tm.tm_min);
+    const sec: u32 = @intCast(tm.tm_sec);
+
+    var buffer: [256]u8 = undefined;
+    const w = std.debug.lockStderrWriter(&buffer);
+    defer std.debug.unlockStderrWriter();
+    nosuspend {
+        w.print(
+            "\x1b[2m{d:0>2}:{d:0>2}:{d:0>2}.{d:0>3}\x1b[0m " ++
+                level_color ++ level_char ++ "\x1b[0m " ++
+                scope_prefix,
+            .{ h, min, sec, ms_part },
+        ) catch return;
+        w.print(format ++ "\x1b[0m\n", args) catch return;
+    }
+}
