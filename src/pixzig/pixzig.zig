@@ -33,6 +33,7 @@ pub const a_star = @import("./a_star.zig");
 pub const system = @import("./system.zig");
 pub const assets = @import("./assets.zig");
 pub const audio = @import("./audio.zig");
+pub const sequencer = @import("./sequencer.zig");
 
 pub const Texture = textures.Texture;
 pub const TextureImage = textures.TextureImage;
