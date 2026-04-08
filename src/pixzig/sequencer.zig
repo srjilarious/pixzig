@@ -7,9 +7,13 @@
 // running concurrently.
 
 const std = @import("std");
-const pixzig = @import("pixzig");
-const Vec2F = pixzig.common.Vec2F;
-const Color = pixzig.Color;
+const common = @import("./common.zig");
+const sprites = @import("./renderer/sprites.zig");
+const flecs = @import("zflecs");
+const Vec2F = common.Vec2F;
+const Color = common.Color;
+const Sprite = sprites.Sprite;
+const Actor = sprites.Actor;
 
 pub const MAX_NAME_LEN = 64;
 
@@ -110,6 +114,118 @@ pub const ParallelStep = struct {
             subStep.vtable.deinit(subStep, alloc);
         }
         self.subSteps.deinit(alloc);
+        alloc.destroy(self);
+    }
+};
+
+// ----------------------------------------------------------------------------
+/// Lerps a Sprite's position from its location on first tick to `target`
+/// over `durationMs`. Captures start position lazily on the first update call.
+pub const MoveToStep = struct {
+    world: *flecs.world_t,
+    entityId: flecs.entity_t,
+    target: Vec2F,
+    durationMs: f64,
+    elapsedMs: f64,
+    startPos: ?Vec2F,
+
+    const vtable: Step.VTable = .{
+        .update = update,
+        .deinit = deinit,
+    };
+
+    pub fn init(
+        alloc: std.mem.Allocator,
+        world: *flecs.world_t,
+        entityId: flecs.entity_t,
+        target: Vec2F,
+        durationMs: f64,
+    ) !Step {
+        const ptr = try alloc.create(MoveToStep);
+        ptr.* = .{
+            .world = world,
+            .entityId = entityId,
+            .target = target,
+            .durationMs = durationMs,
+            .elapsedMs = 0,
+            .startPos = null,
+        };
+        return .{ .ptr = ptr, .vtable = &vtable, .done = false };
+    }
+
+    pub fn update(step: *Step, deltaMs: f64) f64 {
+        const self: *MoveToStep = @ptrCast(@alignCast(step.ptr));
+        const spr = flecs.get_mut(self.world, self.entityId, Sprite) orelse {
+            step.done = true;
+            return -1.0;
+        };
+
+        // Lazy-capture start position on the first tick.
+        if (self.startPos == null) {
+            self.startPos = .{ .x = spr.dest.l, .y = spr.dest.t };
+        }
+
+        self.elapsedMs += deltaMs;
+        const t: f32 = @floatCast(@min(self.elapsedMs / self.durationMs, 1.0));
+        const start = self.startPos.?;
+        const x = start.x + t * (self.target.x - start.x);
+        const y = start.y + t * (self.target.y - start.y);
+        spr.setPos(@intFromFloat(x), @intFromFloat(y));
+        flecs.modified(self.world, self.entityId, Sprite);
+
+        const timeLeft = self.durationMs - self.elapsedMs;
+        step.done = timeLeft <= 0;
+        return timeLeft;
+    }
+
+    pub fn deinit(step: *Step, alloc: std.mem.Allocator) void {
+        const self: *MoveToStep = @ptrCast(@alignCast(step.ptr));
+        alloc.destroy(self);
+    }
+};
+
+// ----------------------------------------------------------------------------
+/// Immediately switches an entity's Actor animation state. Fire-and-forget;
+/// completes in zero time. The state name slice is owned and freed by the step.
+pub const SetActorStateStep = struct {
+    world: *flecs.world_t,
+    entityId: flecs.entity_t,
+    stateName: []u8,
+
+    const vtable: Step.VTable = .{
+        .update = update,
+        .deinit = deinit,
+    };
+
+    pub fn init(
+        alloc: std.mem.Allocator,
+        world: *flecs.world_t,
+        entityId: flecs.entity_t,
+        stateName: []const u8,
+    ) !Step {
+        const ptr = try alloc.create(SetActorStateStep);
+        ptr.* = .{
+            .world = world,
+            .entityId = entityId,
+            .stateName = try alloc.dupe(u8, stateName),
+        };
+        return .{ .ptr = ptr, .vtable = &vtable, .done = false };
+    }
+
+    pub fn update(step: *Step, deltaMs: f64) f64 {
+        _ = deltaMs;
+        const self: *SetActorStateStep = @ptrCast(@alignCast(step.ptr));
+        if (flecs.get_mut(self.world, self.entityId, Actor)) |actor| {
+            actor.setState(self.stateName);
+            flecs.modified(self.world, self.entityId, Actor);
+        }
+        step.done = true;
+        return -1.0;
+    }
+
+    pub fn deinit(step: *Step, alloc: std.mem.Allocator) void {
+        const self: *SetActorStateStep = @ptrCast(@alignCast(step.ptr));
+        alloc.free(self.stateName);
         alloc.destroy(self);
     }
 };
