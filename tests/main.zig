@@ -22,6 +22,8 @@ const Tests = testz.discoverTests(.{
     testz.Group{ .name = "Event Tests", .tag = "event", .mod = @import("./event_tests.zig") },
     testz.Group{ .name = "Common Tests", .tag = "common", .mod = @import("./common_tests.zig") },
     testz.Group{ .name = "Sequencer Tests", .tag = "seq", .mod = @import("./sequencer_tests.zig") },
+    testz.Group{ .name = "Utils Tests", .tag = "utils", .mod = @import("./utils_tests.zig") },
+    testz.Group{ .name = "GameState Tests", .tag = "gamestate", .mod = @import("./gamestate_tests.zig") },
 }, .{});
 
 pub fn main() !void {
