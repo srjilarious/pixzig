@@ -74,6 +74,7 @@ pub fn build(b: *std.Build) void {
         .{ .name = "sequencer_test", .path = "examples/sequencer_test.zig", .assets = &.{
             "pac-tiles.json",
             "pac-tiles.png",
+            "circle_move.lua",
         } },
         .{ .name = "collision_test", .path = "examples/collision_test.zig", .assets = &.{
             "mario_grassish2.png",
@@ -172,6 +173,7 @@ pub fn build(b: *std.Build) void {
             b.step("docs", "Docs").dependOn(zkdocs.addDocsStep(b, .{
                 .root = "src/pixzig/pixzig.zig",
                 .name = "Pixzig",
+                .out = "docs-out",
             }));
         }
     }

@@ -6,6 +6,7 @@ const flecs = pixzig.flecs;
 const Sprite = pixzig.sprites.Sprite;
 const Actor = pixzig.sprites.Actor;
 const RectF = pixzig.RectF;
+const ScriptEngine = pixzig.scripting.ScriptEngine;
 
 // Build a minimal flecs world with the given component types registered.
 // Caller owns the world and must call `_ = flecs.fini(world)` when done.
@@ -199,4 +200,134 @@ pub fn setActorStateStepCompletesWithActorTest() !void {
 
     try testz.expectTrue(sequence.update(16.0));
     try testz.expectTrue(sequence.done);
+}
+
+// ---------------------------------------------------------------------------
+// Lua scripting bridge tests
+// ---------------------------------------------------------------------------
+
+// A Lua script that calls seq_new / seq_wait / seq_play should produce a
+// sequence in the player that finishes after the declared wait duration.
+pub fn luaSeqWaitBuildsAndRunsTest() !void {
+    const alloc = std.heap.page_allocator;
+    const world = makeWorld(.{Sprite});
+    defer _ = flecs.fini(world);
+
+    var player = seq.SequencePlayer.init(alloc);
+    defer player.deinit();
+
+    var seqCtx = seq.SeqScriptingContext.init(alloc, world, &player);
+    defer seqCtx.deinit();
+
+    var scriptEng = try ScriptEngine.init(alloc);
+    defer scriptEng.deinit();
+
+    seqCtx.bindToLua(scriptEng.lua);
+
+    const script: [:0]const u8 =
+        \\local h = seq_new()
+        \\seq_wait(h, 100)
+        \\seq_play(h)
+    ;
+    try scriptEng.run(script);
+
+    // Sequence submitted to player.
+    try testz.expectEqual(player.sequences.items.len, 1);
+
+    // Partial update — not yet done.
+    player.update(50.0);
+    try testz.expectEqual(player.sequences.items.len, 1);
+
+    // Full duration — sequence completes and is removed.
+    player.update(50.0);
+    try testz.expectEqual(player.sequences.items.len, 0);
+}
+
+// A Lua script using seq_move_to should drive the entity to the target position.
+pub fn luaSeqMoveToReachesTargetTest() !void {
+    const alloc = std.heap.page_allocator;
+    const world = makeWorld(.{Sprite});
+    defer _ = flecs.fini(world);
+
+    const entity = flecs.new_entity(world, "luamove");
+    flecs.set(world, entity, Sprite, makeSprite(0, 0));
+
+    var player = seq.SequencePlayer.init(alloc);
+    defer player.deinit();
+
+    var seqCtx = seq.SeqScriptingContext.init(alloc, world, &player);
+    defer seqCtx.deinit();
+
+    var scriptEng = try ScriptEngine.init(alloc);
+    defer scriptEng.deinit();
+
+    seqCtx.bindToLua(scriptEng.lua);
+
+    // Push entity ID as a Lua global so the script can reference it.
+    scriptEng.lua.pushInteger(@intCast(entity));
+    scriptEng.lua.setGlobal("test_entity");
+
+    const script: [:0]const u8 =
+        \\local h = seq_new()
+        \\seq_move_to(h, test_entity, 80, 48, 100)
+        \\seq_play(h)
+    ;
+    try scriptEng.run(script);
+
+    try testz.expectEqual(player.sequences.items.len, 1);
+
+    // Single update covers the full duration.
+    player.update(100.0);
+    try testz.expectEqual(player.sequences.items.len, 0);
+
+    const spr = flecs.get(world, entity, Sprite).?;
+    try testz.expectEqual(spr.dest.l, 80.0);
+    try testz.expectEqual(spr.dest.t, 48.0);
+}
+
+// Multiple steps built from Lua run sequentially in the correct order.
+pub fn luaSeqMultipleStepsRunInOrderTest() !void {
+    const alloc = std.heap.page_allocator;
+    const world = makeWorld(.{Sprite});
+    defer _ = flecs.fini(world);
+
+    const entity = flecs.new_entity(world, "luamulti");
+    flecs.set(world, entity, Sprite, makeSprite(0, 0));
+
+    var player = seq.SequencePlayer.init(alloc);
+    defer player.deinit();
+
+    var seqCtx = seq.SeqScriptingContext.init(alloc, world, &player);
+    defer seqCtx.deinit();
+
+    var scriptEng = try ScriptEngine.init(alloc);
+    defer scriptEng.deinit();
+
+    seqCtx.bindToLua(scriptEng.lua);
+
+    scriptEng.lua.pushInteger(@intCast(entity));
+    scriptEng.lua.setGlobal("test_entity");
+
+    // Two sequential moves: first to (50, 0), then to (50, 50).
+    const script: [:0]const u8 =
+        \\local h = seq_new()
+        \\seq_move_to(h, test_entity, 50, 0, 100)
+        \\seq_move_to(h, test_entity, 50, 50, 100)
+        \\seq_play(h)
+    ;
+    try scriptEng.run(script);
+
+    // After first move duration — entity at (50, 0), second step not yet done.
+    player.update(100.0);
+    try testz.expectEqual(player.sequences.items.len, 1);
+    const spr_mid = flecs.get(world, entity, Sprite).?;
+    try testz.expectEqual(spr_mid.dest.l, 50.0);
+    try testz.expectEqual(spr_mid.dest.t, 0.0);
+
+    // After second move duration — entity at (50, 50), sequence removed.
+    player.update(100.0);
+    try testz.expectEqual(player.sequences.items.len, 0);
+    const spr_end = flecs.get(world, entity, Sprite).?;
+    try testz.expectEqual(spr_end.dest.l, 50.0);
+    try testz.expectEqual(spr_end.dest.t, 50.0);
 }

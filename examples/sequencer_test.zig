@@ -3,6 +3,7 @@ const pixzig = @import("pixzig");
 const glfw = pixzig.glfw;
 const flecs = pixzig.flecs;
 const seq = pixzig.sequencer;
+const scripting = pixzig.scripting;
 
 const Frame = pixzig.sprites.Frame;
 const FrameSequence = pixzig.sprites.FrameSequence;
@@ -78,6 +79,8 @@ pub const App = struct {
     entity: flecs.entity_t,
     seqMgr: FrameSequenceManager,
     seqPlayer: seq.SequencePlayer,
+    seqCtx: seq.SeqScriptingContext,
+    scriptEng: scripting.ScriptEngine,
     flashState: FlashState,
     fps: FpsCounter,
 
@@ -90,6 +93,7 @@ pub const App = struct {
         app.flashState = .{};
         app.seqPlayer = seq.SequencePlayer.init(alloc);
         app.seqMgr = try FrameSequenceManager.init(alloc);
+        app.scriptEng = try scripting.ScriptEngine.init(alloc);
 
         // --- Build frame sequences ---
         const right_seq = try FrameSequence.init(alloc, &[_]Frame{
@@ -127,10 +131,16 @@ pub const App = struct {
         actor.setState("right");
         flecs.set(app.world, app.entity, Actor, actor);
 
+        // --- Set up scripting context and bind Lua functions ---
+        app.seqCtx = seq.SeqScriptingContext.init(alloc, app.world, &app.seqPlayer);
+        app.seqCtx.bindToLua(app.scriptEng.lua);
+
         return app;
     }
 
     pub fn deinit(self: *App) void {
+        self.seqCtx.deinit();
+        self.scriptEng.deinit();
         // Free the Actor's StringHashMap before destroying the world.
         if (flecs.get_mut(self.world, self.entity, Actor)) |actor| {
             actor.deinit();
@@ -139,6 +149,17 @@ pub const App = struct {
         self.seqPlayer.deinit();
         self.seqMgr.deinit();
         self.alloc.destroy(self);
+    }
+
+    fn runCircle(self: *App) !void {
+        const spr = flecs.get(self.world, self.entity, Sprite) orelse return;
+        self.scriptEng.lua.pushInteger(@intCast(self.entity));
+        self.scriptEng.lua.setGlobal("player_entity");
+        self.scriptEng.lua.pushNumber(@floatCast(spr.dest.l));
+        self.scriptEng.lua.setGlobal("player_x");
+        self.scriptEng.lua.pushNumber(@floatCast(spr.dest.t));
+        self.scriptEng.lua.setGlobal("player_y");
+        try self.scriptEng.runScript("assets/circle_move.lua");
     }
 
     fn queueMove(self: *App, dir: []const u8, dx: f32, dy: f32) !void {
@@ -187,6 +208,10 @@ pub const App = struct {
                 self.queueMove("down", 0, 16) catch {};
             } else if (eng.keyboard.pressed(.up)) {
                 self.queueMove("up", 0, -16) catch {};
+            } else if (eng.keyboard.pressed(.c)) {
+                self.runCircle() catch |err| {
+                    std.log.err("circle_move.lua error: {}", .{err});
+                };
             }
         }
 
