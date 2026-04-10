@@ -71,6 +71,10 @@ pub fn build(b: *std.Build) void {
             "pac-tiles.json",
             "pac-tiles.png",
         } },
+        .{ .name = "sequencer_test", .path = "examples/sequencer_test.zig", .assets = &.{
+            "pac-tiles.json",
+            "pac-tiles.png",
+        } },
         .{ .name = "collision_test", .path = "examples/collision_test.zig", .assets = &.{
             "mario_grassish2.png",
             "level1a.tmx",

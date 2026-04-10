@@ -380,7 +380,7 @@ pub const SequencePlayer = struct {
             while (i < self.sequences.items.len) {
                 if (self.sequences.items[i].done) {
                     self.sequences.items[i].deinit(self.alloc);
-                    self.sequences.swapRemove(i);
+                    _ = self.sequences.swapRemove(i);
                 } else {
                     i += 1;
                 }
