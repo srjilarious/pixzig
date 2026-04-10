@@ -162,6 +162,13 @@ pub fn build(b: *std.Build) void {
 
             const zstbi = b.dependency("zstbi", .{ .target = target });
             spack.root_module.addImport("zstbi", zstbi.module("root"));
+
+            // Pixzig docs step
+            const zkdocs = @import("zkdocs");
+            b.step("docs", "Docs").dependOn(zkdocs.addDocsStep(b, .{
+                .root = "src/pixzig/pixzig.zig",
+                .name = "Pixzig",
+            }));
         }
     }
 

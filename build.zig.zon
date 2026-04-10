@@ -9,6 +9,9 @@
             // .hash = "testz-0.6.1-abaPyQtkCAAghoY_EDIMufyF8KnRVrtTP0pThw3wVLaA",
             .path = "../testz",
         },
+        .zkdocs = .{
+            .path = "../zkdocs",
+        },
         .zargunaught = .{
             // .url = "https://github.com/srjilarious/zargunaught/archive/refs/tags/v0.6.1.tar.gz",
             // .hash = "zargunaught-0.6.1-aoeNI3HYAADx21bVdg26S1NSvQmFW3_FWmtEexscYm1x",
