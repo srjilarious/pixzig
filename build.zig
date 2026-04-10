@@ -174,6 +174,8 @@ pub fn build(b: *std.Build) void {
                 .root = "src/pixzig/pixzig.zig",
                 .name = "Pixzig",
                 .out = "docs-out",
+                .docs = "docs/guides.json",
+                .emoji = "noto",
             }));
         }
     }

@@ -1,0 +1,9 @@
+[
+  { "title": "Getting Started",  "src": "getting-started.md" },
+  { "title": "App Runner Model", "src": "app-runner.md" },
+  { "title": "Rendering",        "src": "rendering.md" },
+  { "title": "Input Handling",   "src": "input.md" },
+  { "title": "Game States",      "src": "game-states.md" },
+  { "title": "Scripting",        "src": "scripting.md" },
+  { "title": "Sequences",        "src": "sequences.md" }
+]
