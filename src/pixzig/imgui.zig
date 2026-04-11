@@ -175,12 +175,10 @@ pub const UiContext = struct {
     /// Latch keyboard and mouse input for this update step.
     /// Must be called from app.update(), after mouse.update().
     pub fn update(self: *UiContext) void {
-        // Snapshot mouse position in render coordinates
+        // Store raw GLFW logical pixel coordinates (0..window_width, 0..window_height).
+        // testHot() compensates for scale_factor when comparing against render rects.
         const mp = self.mouse.pos();
-        self.mouse_pos = .{
-            .x = mp.x / self.scale_factor,
-            .y = mp.y / self.scale_factor,
-        };
+        self.mouse_pos = mp;
         self.left_down = self.mouse.down(.left);
         if (self.mouse.pressed(.left)) self.left_pressed = true;
         if (self.mouse.released(.left)) self.left_released = true;
@@ -368,7 +366,11 @@ pub const UiContext = struct {
     // ----------------------------------------------------------
 
     fn testHot(self: *UiContext, id: u64, rect: RectF) bool {
-        const mp = self.mouse_pos;
+        // mouse_pos is in GLFW logical pixels [0, window_w].
+        // Widget rects are in render pixels [0, window_w * sf].
+        // Multiply cursor by sf to bring it into render space for comparison.
+        const sf = self.scale_factor;
+        const mp = Vec2F{ .x = self.mouse_pos.x * sf, .y = self.mouse_pos.y * sf };
         const over = mp.x >= rect.l and mp.x < rect.r and
             mp.y >= rect.t and mp.y < rect.b;
         if (over) self.hot_id = id;

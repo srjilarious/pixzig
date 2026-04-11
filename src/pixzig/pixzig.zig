@@ -259,18 +259,28 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             std.log.info("GLSL Version: {s}", .{glslVersion});
 
             // ----------------------------------------------------------------
-            const scaleFactor = scaleFactor: {
-                const scale = window.getContentScale();
-                break :scaleFactor @max(scale[0], scale[1]);
-            };
+            // Use framebuffer size (physical pixels) rather than getContentScale(),
+            // because getContentScale() can disagree with the actual framebuffer
+            // dimensions on Wayland with fractional scaling, causing a viewport gap.
+            const fb_size = window.getFramebufferSize();
+            const fb_w: f32 = @floatFromInt(fb_size[0]);
+            const fb_h: f32 = @floatFromInt(fb_size[1]);
+            const win_w: f32 = @floatFromInt(options.windowSize.x);
+            const win_h: f32 = @floatFromInt(options.windowSize.y);
+            const scaleFactor = @max(fb_w / win_w, fb_h / win_h);
+
+            // Ensure the GL viewport covers the entire framebuffer.
+            // Without an explicit call the default may be set to the logical
+            // window size on Wayland, leaving a blank strip at the top.
+            gl.viewport(0, 0, @intCast(fb_size[0]), @intCast(fb_size[1]));
 
             // Create a default 2D orthogrpaphic projection matrix fitting the window.
             // Also allow scaling the game content with engOpts.gameScale.
             const projMat = zmath.mul(zmath.scaling(engOpts.gameScale, engOpts.gameScale, 1.0), zmath.orthographicOffCenterLhGl(
                 0,
-                @as(f32, @floatFromInt(options.windowSize.x)) * scaleFactor,
+                fb_w,
                 0,
-                @as(f32, @floatFromInt(options.windowSize.y)) * scaleFactor,
+                fb_h,
                 -0.1,
                 1000,
             ));
