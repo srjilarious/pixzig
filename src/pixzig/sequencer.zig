@@ -280,13 +280,9 @@ pub const Sequence = struct {
 };
 
 // ----------------------------------------------------------------------------
-/// Returned from SequencePlayer.getFlashState() so ffme.zig can render it.
-// pub const FlashState = struct {
-//     color: Color,
-//     active: bool,
-// };
-
-// ----------------------------------------------------------------------------
+/// Manages a list of sequences and handles updating each sequence and cleaning
+/// up finished ones. Games should have one global SequencePlayer that they
+/// update every tick and add sequences to as needed.
 pub const SequencePlayer = struct {
     alloc: std.mem.Allocator,
     sequences: std.ArrayList(Sequence),
@@ -310,6 +306,8 @@ pub const SequencePlayer = struct {
         try self.sequences.append(self.alloc, seq);
     }
 
+    /// Update all sequences, and remove any that finished this tick
+    /// calling deinit on each finished sequence to free its memory.
     pub fn update(self: *SequencePlayer, deltaMs: f64) void {
         var seqFinished = false;
         for (self.sequences.items) |*seq| {

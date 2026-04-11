@@ -19,6 +19,10 @@ const Rotate = common.Rotate;
 const Texture = textures.Texture;
 const Shader = shaders.Shader;
 
+/// SpriteBatchQueue lets the user queue up multiple sprites to draw in one go.
+/// It uses buffers for vertices, texture coords and indices to make a single draw
+/// call.  This entire batch is drawn via the `flush` call which will happen on
+/// render, switching the current texture, or drawing more than C.MaxSprites.
 pub const SpriteBatchQueue = struct {
     shader: *const Shader,
     vao: u32 = 0,
@@ -43,6 +47,7 @@ pub const SpriteBatchQueue = struct {
     texture: ?*Texture = null,
     begun: bool = false,
 
+    /// Initializes the SpriteBatchQueue, creating the buffers and OpenGL objects needed.
     pub fn init(alloc: std.mem.Allocator, shader: *const Shader) !SpriteBatchQueue {
         var batch = SpriteBatchQueue{ .allocator = alloc, .shader = shader };
 
@@ -77,6 +82,7 @@ pub const SpriteBatchQueue = struct {
         return batch;
     }
 
+    /// Cleans up the OpenGL objects associated with the SpriteBatchQueue and fress the buffer memory.
     pub fn deinit(self: *SpriteBatchQueue) void {
         gl.deleteBuffers(1, &self.vboVertices);
         gl.deleteBuffers(1, &self.vboTexCoords);
@@ -86,6 +92,7 @@ pub const SpriteBatchQueue = struct {
         self.allocator.free(self.indices);
     }
 
+    /// Begins a new render frame, setting the Model-View-Projection matrix to use.
     pub fn begin(self: *SpriteBatchQueue, mvp: zmath.Mat) void {
         if (self.begun) {
             self.end();
@@ -94,10 +101,12 @@ pub const SpriteBatchQueue = struct {
         self.mvpArr = zmath.matToArr(mvp);
     }
 
+    // Enqueues drawing a `Sprite`
     pub fn drawSprite(self: *SpriteBatchQueue, sprite: *Sprite) void {
         self.draw(sprite.texture, sprite.dest, sprite.src_coords, sprite.rotate);
     }
 
+    /// Enqueues drawing a portion of a texture to the screen, with optional 90deg rotation or flips.
     pub fn draw(self: *SpriteBatchQueue, texture: *Texture, dest: RectF, srcCoords: RectF, rot: Rotate) void {
         std.debug.assert(self.begun);
 
@@ -221,11 +230,14 @@ pub const SpriteBatchQueue = struct {
         self.currNumSprites += 1;
     }
 
+    // Ends the current batch and flushes any sprites to the screen.
     pub fn end(self: *SpriteBatchQueue) void {
         self.flush();
         self.begun = false;
     }
 
+    /// Draws the current contents of the queue to the screen.
+    /// This assumes we have called `begin` beforehand.
     fn flush(self: *SpriteBatchQueue) void {
         std.debug.assert(self.begun);
 

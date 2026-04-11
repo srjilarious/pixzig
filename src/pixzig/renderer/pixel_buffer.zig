@@ -6,6 +6,8 @@ const shaders = @import("shaders.zig");
 const Shader = shaders.Shader;
 const ResourceManager = @import("../resources.zig").ResourceManager;
 
+/// A 2d buffer of pixels that can be used for old school effects, emulators, etc.
+/// It uses a texture and provides clearing and setting pixels.
 pub const PixelBuffer = struct {
     texId: c_uint,
     vbo: c_uint,
@@ -14,6 +16,9 @@ pub const PixelBuffer = struct {
     pixels: []u8,
     allocator: std.mem.Allocator,
 
+    /// Allocates the pixel memory and texture ID where the buffer contents
+    /// will be loaded each call to `render`.  It also sets up the shader
+    /// if needed using the resource manager and creates a VBO
     pub fn init(
         allocator: std.mem.Allocator,
         res: *ResourceManager,
@@ -85,13 +90,14 @@ pub const PixelBuffer = struct {
         return self;
     }
 
+    /// Frees the pixel buffer, texture and VBO.
     pub fn deinit(self: *PixelBuffer) void {
         self.allocator.free(self.pixels);
         gl.deleteTexture(self.texture);
         gl.deleteBuffer(self.vbo);
-        gl.deleteProgram(self.shader_program);
     }
 
+    /// Sets the pixel at x, y to the RGB value (r, g, b)
     pub fn setPixel(self: *PixelBuffer, x: usize, y: usize, r: u8, g: u8, b: u8) void {
         if (x >= self.size.x or y >= self.size.y) return;
         const index = (y * self.size.x + x) * 3;
@@ -100,6 +106,7 @@ pub const PixelBuffer = struct {
         self.pixels[index + 2] = b;
     }
 
+    /// Clears the entire buffer to (r, g, b)
     pub fn clear(self: *PixelBuffer, r: u8, g: u8, b: u8) void {
         var i: usize = 0;
         while (i < self.pixels.len) : (i += 3) {
@@ -109,6 +116,8 @@ pub const PixelBuffer = struct {
         }
     }
 
+    /// Uploads the current pixel buffer and draws the texture as a fullscreen quad
+    /// via the VBO setup during init.
     pub fn render(self: *PixelBuffer) void {
         // Upload pixel data to texture
         gl.bindTexture(gl.TEXTURE_2D, self.texId);
