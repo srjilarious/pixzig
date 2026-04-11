@@ -44,6 +44,7 @@ pub const tile = @import("./tile.zig");
 pub const gamestate = @import("./gamestate.zig");
 pub const scripting = @import("./scripting.zig");
 pub const console2 = @import("./console2.zig");
+pub const imgui = @import("./imgui.zig");
 pub const collision = @import("./collision.zig");
 pub const a_star = @import("./a_star.zig");
 pub const assets = @import("./assets.zig");

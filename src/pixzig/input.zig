@@ -303,7 +303,11 @@ pub const Mouse = struct {
             btnIdx += 1;
         }
 
-        state.setPos(self.window.getCursorPos());
+        const cursorPos = self.window.getCursorPos();
+        // const contentScale = self.window.getContentScale();
+        // cursorPos[0] /= contentScale[0];
+        // cursorPos[1] /= contentScale[1];
+        state.setPos(cursorPos);
     }
 
     fn curr(self: *Mouse) *MouseState {
