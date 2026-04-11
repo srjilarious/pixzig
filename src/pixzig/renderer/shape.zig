@@ -43,6 +43,8 @@ pub const ShapeBatchQueue = struct {
     mvpArr: [16]f32 = undefined,
     begun: bool = false,
 
+    /// Creates buffers to contain the draw primitives and OpenGL VBOs to execute the draw
+    /// commands with in a batch.
     pub fn init(alloc: std.mem.Allocator, shader: *const Shader) !ShapeBatchQueue {
         var batch = ShapeBatchQueue{
             .allocator = alloc,
@@ -79,6 +81,7 @@ pub const ShapeBatchQueue = struct {
         return batch;
     }
 
+    /// Frees our OpenGL VBO resources and the internal buffers we use to queue up shapes.
     pub fn deinit(self: *ShapeBatchQueue) void {
         gl.deleteBuffers(1, &self.vboVertices);
         gl.deleteBuffers(1, &self.vboColorCoords);
@@ -88,6 +91,7 @@ pub const ShapeBatchQueue = struct {
         self.allocator.free(self.indices);
     }
 
+    /// Begins a draw cycle for the shape batch, must be matched with a call to `end`
     pub fn begin(self: *ShapeBatchQueue, mvp: zmath.Mat) void {
         if (self.begun) {
             self.end();
@@ -97,6 +101,7 @@ pub const ShapeBatchQueue = struct {
         self.mvpArr = zmath.matToArr(mvp);
     }
 
+    /// Draws a filled rectangle with the given color.
     pub fn drawFilledRect(self: *ShapeBatchQueue, dest: RectF, color: Color) void {
         std.debug.assert(self.begun);
 
@@ -150,7 +155,7 @@ pub const ShapeBatchQueue = struct {
         self.currNumSprites += 1;
     }
 
-    // This draw a rect with the bounds being dest with it encroaching in by lineWidth
+    /// This draw a rect with the bounds being dest with it encroaching in by lineWidth
     pub fn drawRect(self: *ShapeBatchQueue, dest: RectF, color: Color, lineWidth: u8) void {
         std.debug.assert(self.begun);
 
@@ -192,7 +197,7 @@ pub const ShapeBatchQueue = struct {
         self.drawFilledRect(bottomRect, color);
     }
 
-    // This moves the outline of the rect to enclose the dest by lineWidth.
+    /// This moves the outline of the rect to enclose the dest by lineWidth.
     pub fn drawEnclosingRect(self: *ShapeBatchQueue, dest: RectF, color: Color, lineWidth: u8) void {
         std.debug.assert(self.begun);
 
@@ -234,6 +239,7 @@ pub const ShapeBatchQueue = struct {
         self.drawFilledRect(bottomRect, color);
     }
 
+    /// Finishes a draw cycle with the shape batch, executing the draw calls.
     pub fn end(self: *ShapeBatchQueue) void {
         self.flush();
         self.begun = false;

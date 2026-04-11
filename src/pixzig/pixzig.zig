@@ -1,3 +1,17 @@
+//! The top-level Pixzig module.  This is the main entry point for users of
+//! the engine, and it re-exports all the main components of the engine, such
+//! as the renderer, audio engine, resource manager, etc.  It also defines the
+//! main application runner structure `PixzigAppRunner` and the core engine
+//! structure `PixzigEngine`.  The `PixzigAppRunner` is the recommended way
+//! to set up and run a Pixzig application, as it handles the main loop and
+//! resource cleanup for both desktop and web builds properly.  The
+//! `PixzigEngine` provides access to the various subsystems of the engine
+//! and is passed to the application update and render functions each frame.
+//!
+//! The `PixzigEngineOptions` and `PixzigEngineInitOptions` structures allow
+//! configuring the engine at compile time and runtime, respectively, so that
+//! unused features can be stripped out by the compiler and the engine can be
+//! tailored to the needs of the application.
 const std = @import("std");
 const builtin = @import("builtin");
 pub const glfw = @import("zglfw");
@@ -14,26 +28,25 @@ pub const xml = @import("xml");
 pub const stb_tt = @import("stb_truetype");
 
 pub const common = @import("./common.zig");
-pub const input = @import("./input.zig");
-pub const events = @import("./events.zig");
-pub const tile = @import("./tile.zig");
-pub const resources = @import("./resources.zig");
-pub const sprites = @import("./renderer/sprites.zig");
+pub const utils = @import("./utils.zig");
 pub const shaders = @import("./renderer/shaders.zig");
 pub const textures = @import("./renderer/textures.zig");
-pub const pixel_buffer = @import("./renderer/pixel_buffer.zig");
+pub const input = @import("./input.zig");
+pub const events = @import("./events.zig");
+pub const resources = @import("./resources.zig");
 pub const renderer = @import("./renderer.zig");
-pub const utils = @import("./utils.zig");
+pub const sprites = @import("./renderer/sprites.zig");
+pub const pixel_buffer = @import("./renderer/pixel_buffer.zig");
+pub const audio = @import("./audio.zig");
+pub const sequencer = @import("./sequencer.zig");
+pub const system = @import("./system.zig");
+pub const tile = @import("./tile.zig");
 pub const gamestate = @import("./gamestate.zig");
 pub const scripting = @import("./scripting.zig");
-// pub const console = @import("./console.zig");
 pub const console2 = @import("./console2.zig");
 pub const collision = @import("./collision.zig");
 pub const a_star = @import("./a_star.zig");
-pub const system = @import("./system.zig");
 pub const assets = @import("./assets.zig");
-pub const audio = @import("./audio.zig");
-pub const sequencer = @import("./sequencer.zig");
 
 pub const Texture = textures.Texture;
 pub const TextureImage = textures.TextureImage;
@@ -46,6 +59,12 @@ pub const RectF = common.RectF;
 pub const Color = common.Color;
 pub const Color8 = common.Color8;
 
+/// Compile-time options for configuring the Pixzig Engine.  These options
+/// allow enabling or disabling features of the engine at compile time, so
+/// that unused code can be stripped out by the compiler. For example, if
+/// audio is not needed, setting `audioOpts.enabled` to false will prevent
+/// the audio engine handling code blocks in the engine from being included
+/// in the final binary.
 pub const PixzigEngineOptions = struct {
     defaultIcon: bool = true,
     gameScale: f32 = 1.0,
@@ -53,6 +72,12 @@ pub const PixzigEngineOptions = struct {
     audioOpts: audio.AudioOptions = .{},
 };
 
+/// Runtime initialization options for the Pixzig Engine.  These options are
+/// provided when initializing the engine and can be used to configure things
+/// like fullscreen mode, window size, etc.  These options are separate from
+/// the compile-time `PixzigEngineOptions` since they may need to be
+/// determined at runtime (e.g. based on user input or platform capabilities)
+/// rather than at compile time.
 pub const PixzigEngineInitOptions = struct {
     fullscreen: bool = false,
     windowSize: Vec2I = .{ .x = 800, .y = 600 },

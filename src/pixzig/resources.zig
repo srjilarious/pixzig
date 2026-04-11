@@ -18,6 +18,12 @@ const Color8 = common.Color8;
 const RectF = common.RectF;
 const RectI = common.RectI;
 
+/// A structure for managing game resources, particularly rendering ones:
+/// textures, shaders and texture atlases. The resource manager is responsible
+/// for loading and unloading these resources, as well as providing access to
+/// them for the rest of the application. It also handles deallocating them
+/// and their OpenGL resources, if any, when the resource manager is
+/// deinitialized.
 pub const ResourceManager = struct {
     textures: std.ArrayList(TextureImage),
     shaders: std.ArrayList(*Shader),
@@ -25,6 +31,8 @@ pub const ResourceManager = struct {
     alloc: std.mem.Allocator,
 
     const Self = @This();
+
+    /// Initializes the resource manager.
     pub fn init(alloc: std.mem.Allocator) Self {
         return .{
             .textures = .{},
@@ -34,6 +42,7 @@ pub const ResourceManager = struct {
         };
     }
 
+    // Deinitializes the resource manager, freeing all resources and their OpenGL resources.
     pub fn deinit(self: *Self) void {
         for (self.textures.items) |t| {
             gl.deleteTextures(1, &t.texture);
@@ -49,7 +58,41 @@ pub const ResourceManager = struct {
         self.atlas.deinit();
     }
 
-    pub fn createTextureImageFromChars(self: *Self, name: []const u8, width: usize, height: usize, chars: []const u8, mapping: []const CharToColor) !*Texture {
+    /// Creates a texture from a character buffer, where each character is mapped
+    /// to a color. This is useful for creating textures from ASCII art or other
+    /// character-based representations.  This can be helpful for making games with
+    /// simple retro textures embedded in the source itself.
+    ///
+    /// An example:
+    /// ```zig
+    /// const blockChars =
+    ///     \\=------=
+    ///     \\-..####-
+    ///     \\-.####=-
+    ///     \\-#####=-
+    ///     \\-#####=-
+    ///     \\-#####=-
+    ///     \\-##===@-
+    ///     \\=------=
+    ///     ;
+    ///
+    ///     const tex = try eng.resources.createTextureImageFromChars("test", 8, 8, blockChars, &[_]CharToColor{
+    ///         .{ .char = '#', .color = Color8.from(40, 255, 40, 255) },
+    ///         .{ .char = '-', .color = Color8.from(100, 100, 200, 255) },
+    ///         .{ .char = '=', .color = Color8.from(100, 100, 100, 255) },
+    ///         .{ .char = '.', .color = Color8.from(240, 240, 240, 255) },
+    ///         .{ .char = '@', .color = Color8.from(30, 155, 30, 255) },
+    ///         .{ .char = ' ', .color = Color8.from(0, 0, 0, 0) },
+    ///     });
+    /// ```
+    pub fn createTextureImageFromChars(
+        self: *Self,
+        name: []const u8,
+        width: usize,
+        height: usize,
+        chars: []const u8,
+        mapping: []const CharToColor,
+    ) !*Texture {
         // Generate the color buffer, mapping chars to their given colors.
         var buffer: []u8 = try self.alloc.alloc(u8, width * height * 4);
         defer self.alloc.free(buffer);
@@ -90,7 +133,18 @@ pub const ResourceManager = struct {
         return try self.loadTextureFromBuffer(name, width, height, buffer);
     }
 
-    pub fn loadTextureFromBuffer(self: *Self, name: []const u8, width: usize, height: usize, buffer: []u8) !*Texture {
+    /// Loads an RGBA texture from a raw buffer. The buffer should be in RGBA
+    /// format, with 4 bytes per pixel. The name is the name that the texture
+    /// will be stored with in the resource manager, and is used to access the
+    /// texture later with `getTexture`. The width and height are the dimensions
+    /// of the texture and must match the buffer size.
+    pub fn loadTextureFromBuffer(
+        self: *Self,
+        name: []const u8,
+        width: usize,
+        height: usize,
+        buffer: []u8,
+    ) !*Texture {
         var texture: c_uint = undefined;
         gl.genTextures(1, &texture);
         gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -114,21 +168,38 @@ pub const ResourceManager = struct {
         return self.atlas.getPtr(baseName).?;
     }
 
-    // TODO: Add error handler.
-    pub fn loadTexture(self: *Self, name: []const u8, file_path: []const u8) !*Texture {
+    /// Loads a texture from a file path. The name is the base name of the
+    /// file, without the extension, so "player" would match "player.png".
+    /// The texture is stored in the atlas with the base name, so it can be
+    /// accessed with `getTexture` using that name.  The file type is
+    /// determined from the file extension, and should be a type supported
+    /// by the `stbi` library, such as png or jpg.
+    pub fn loadTexture(
+        self: *Self,
+        name: []const u8,
+        file_path: []const u8,
+    ) !*Texture {
         std.log.info("Loading image '{s}' from '{s}'\n", .{ name, file_path });
         const nt_file_path = try self.alloc.dupeZ(u8, file_path);
-        defer self.alloc.free(nt_file_path);
+        errdefer self.alloc.free(nt_file_path);
 
         // Try to load an image
         var image = try stbi.Image.loadFromFile(nt_file_path, 0);
-        defer image.deinit();
+        errdefer image.deinit();
 
         std.log.info("Loaded image '{s}', width={}, height={}\n", .{ name, image.width, image.height });
 
         return try self.loadTextureFromBuffer(name, image.width, image.height, image.data);
     }
 
+    /// Loads a texture atlas from a base name. This looks for a .png and
+    /// .json file with the given base name, and loads the texture and
+    /// subtextures specified in the json file. The json file should be in the
+    /// format of a `SpackFile`, which is the format used by our internal
+    /// `TexturePacker` tool.
+    ///
+    /// The subtextures are stored in the atlas with their names from the json
+    /// file, so they can be accessed with `getTexture` using those names.
     pub fn loadAtlas(self: *Self, baseName: []const u8) !usize {
         const imageName = try utils.addExtension(self.alloc, baseName, ".png");
         defer self.alloc.free(imageName);
@@ -168,11 +239,25 @@ pub const ResourceManager = struct {
         return num;
     }
 
-    pub fn addSubTexture(self: *Self, tex: *Texture, name: []const u8, coords: RectF) !*Texture {
+    /// Adds a subtexture to the manager. This is useful for adding a named
+    /// texture from a region of a larger generated texture.  Coordinates are
+    /// in UV space, so (0, 0) is the top left of the texture and (1, 1) is
+    /// the bottom right of the texture.
+    pub fn addSubTexture(
+        self: *Self,
+        tex: *Texture,
+        name: []const u8,
+        coords: RectF,
+    ) !*Texture {
         try self.atlas.put(try self.alloc.dupe(u8, name), tex.sub(coords));
         return self.atlas.getPtr(name).?;
     }
 
+    /// Gets a texture by name. Returns an error if no texture with that name
+    /// exists. The name is the base name of the file, without the extension,
+    /// so "player" would match "player.png" and "player.json" in the case of
+    /// an atlas.  Textures within an atlas are accessed by the name specified
+    /// with the json.
     pub fn getTexture(self: *Self, name: []const u8) !*Texture {
         const tex = self.atlas.getPtr(name);
         if (tex == null) {
@@ -181,6 +266,8 @@ pub const ResourceManager = struct {
         return tex.?;
     }
 
+    /// Gets a shader by name. Returns an error if no shader with that name
+    /// exists.
     pub fn getShaderByName(self: *Self, name: []const u8) !*const Shader {
         for (self.shaders.items) |s| {
             if (s.name != null and std.mem.eql(u8, name, s.name.?)) {
@@ -191,6 +278,9 @@ pub const ResourceManager = struct {
         return error.NoShaderWithThatName;
     }
 
+    /// Loads a shader from vertex and fragment shader source code, and stores
+    /// it in the resource manager with the given name. If a shader with that
+    /// name already exists, it is returned instead of loading a new one.
     pub fn loadShader(
         self: *Self,
         name: []const u8,

@@ -5,6 +5,9 @@ const stbi = @import("zstbi");
 const gl = @import("zopengl").bindings;
 const zmath = @import("zmath");
 
+pub const constants = @import("./renderer/constants.zig");
+pub const sprite_batch = @import("./renderer/sprite_batch.zig");
+pub const shape = @import("./renderer/shape.zig");
 pub const stb_tt = @import("stb_truetype");
 
 const textMod = @import("./renderer/text.zig");
@@ -24,8 +27,8 @@ const ResourceManager = resources.ResourceManager;
 const Shader = shaders.Shader;
 pub const FontAtlas = textMod.FontAtlas;
 
-pub const SpriteBatchQueue = @import("./renderer/sprite_batch.zig").SpriteBatchQueue;
-pub const ShapeBatchQueue = @import("./renderer/shape.zig").ShapeBatchQueue;
+pub const SpriteBatchQueue = sprite_batch.SpriteBatchQueue;
+pub const ShapeBatchQueue = shape.ShapeBatchQueue;
 pub const TextRenderer = textMod.TextRenderer;
 
 pub const RendererOptions = struct {

@@ -1,6 +1,50 @@
-// An event bus for letting different systems communicate.
 const std = @import("std");
 
+/// A generic event bus system for letting different systems witin an
+/// application communicate ina decoupled fashion.
+///
+/// Each subscriber calls `EventBus.subscribe` with a callback and a context pointer. The callback is called with the context pointer and the event data when an event is emitted.  Generally the event type is a union(enum) so that different events can have different data associated with them. The context pointer is used to allow the callback to have some state, such as a pointer to the system that is subscribing to the event.
+///
+/// Here's an example of how you can use the event bus:
+/// ```zig
+/// pub const GhostEatenData = struct {
+///     ghost_entity: flecs.entity_t,
+/// };
+///
+/// pub const GameEvent = union(enum) {
+///     PowerDotEaten: void,
+///     PowerDotFinished: void,
+///     GhostEaten: GhostEatenData,
+/// };
+///
+/// pub const GameEventBus = pixzig.events.EventBus(GameEvent);
+/// ```
+///
+/// Then, to subscribe to an event:
+/// ```zig
+/// pub const GhostSystem  = struct {
+/// pub fn onGameEvent(selfAO: *anyopaque, event: *GameEvent) void {
+///         const self: *Self = @ptrCast(@alignCast(selfAO));
+///         switch (event.*) {
+///             .PowerDotEaten => {
+///                 std.log.info("GhostControl handling PowerDotEaten event!", .{});
+///                 // ...
+///             },
+///             .PowerDotFinished => {
+///                 std.log.info("Ghost control handling PowerDotFinished event!", .{});
+///                 // ...
+///             },
+///             .GhostEaten => |ge| {
+///                 std.log.info("Ghost control handling GhostEaten event for entity: {}", .{ge.ghost_entity});
+///                 const ghost_ent = ge.ghost_entity;
+///
+///                 // ...
+///             },
+///             // else => {}, // In this case we handled all the game events.
+///         }
+///     }
+/// }
+/// ```
 pub fn EventBus(EventType: type) type {
     return struct {
         allocator: std.mem.Allocator,

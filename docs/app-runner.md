@@ -1,6 +1,6 @@
 # App Runner Model
 
-Every pixzig game is structured around `PixzigAppRunner`, a generic type that owns the window, renderer, input devices, and game loop. You parameterise it once with your app type and engine options, then implement four methods on your app struct.
+Pixzig applications almost always utilize a `PixzigAppRunner`, a generic structure that allows you to provide your own application context and runs runs the fixed-time-step game loop for you, working on both desktop and web builds.  It sets up the engine for you and calls your `update` and `render` methods for you.
 
 ## Creating the AppRunner
 
@@ -32,20 +32,14 @@ pub fn main() !void {
 }
 ```
 
-`AppRunner.init` creates the GLFW window, loads OpenGL, and initialises every subsystem listed in `PixzigEngineOptions`. `appRunner.run(app)` blocks until the window closes, then calls `app.deinit()` and cleans up.
+`AppRunner.init` initializes the engine, which creates the GLFW window, loads OpenGL, and sets up components like the `ResourceManager` and `SoundEngine` (if audio is enabled in your `PixzigEngineOptions`). Calling `appRunner.run(app)` blocks until the window closes, then calls `app.deinit()` and cleans up the engine and various resources.
 
 ## The App Interface
 
-Your app struct must provide exactly these four public methods:
+Your app struct must provide the `update` and `render` public methods, with the following signatures, otherwise you'll get a compile time error when the `AppRunner` game loop tries to call them on your struct:
 
 ```zig
 pub const App = struct {
-    // Called once. Allocate resources here, return a heap-allocated *App.
-    pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App { ... }
-
-    // Called once when the window closes. Free resources here.
-    pub fn deinit(self: *App) void { ... }
-
     // Called at a fixed rate of 120 Hz. Return false to exit.
     // delta is the step size in milliseconds (≈ 8.33 ms).
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool { ... }
@@ -54,6 +48,7 @@ pub const App = struct {
     pub fn render(self: *App, eng: *AppRunner.Engine) void { ... }
 };
 ```
+
 
 The engine reference `eng` gives you access to:
 

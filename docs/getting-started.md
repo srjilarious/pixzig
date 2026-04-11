@@ -38,9 +38,9 @@ const exe = pixzig.buildGame(b, target, optimize,
 );
 ```
 
-## Minimal Example
+## A Minimal Example
 
-The smallest working pixzig program creates an `AppRunner`, initialises an app struct, and hands control to the engine:
+The smallest working pixzig program creates an `AppRunner`, initialises an app struct, and hands control to the engine for the game loop:
 
 ```zig
 const std   = @import("std");
