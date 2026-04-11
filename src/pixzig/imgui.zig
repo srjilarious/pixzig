@@ -47,17 +47,26 @@ pub const Style = struct {
     button_disabled_text: Color = Color.from(100, 100, 100, 255),
     input_bg: Color = Color.from(20, 20, 25, 255),
     input_border: Color = Color.from(70, 70, 80, 255),
+    input_border_hover: Color = Color.from(100, 100, 120, 255),
     input_border_focused: Color = Color.from(100, 130, 200, 255),
     input_text: Color = Color.from(220, 220, 220, 255),
     input_cursor: Color = Color.from(180, 220, 255, 200),
     label_text: Color = Color.from(220, 220, 220, 255),
     text_area_bg: Color = Color.from(15, 15, 20, 255),
     text_area_border: Color = Color.from(60, 60, 70, 255),
+    slider_track: Color = Color.from(30, 30, 40, 255),
+    slider_fill: Color = Color.from(60, 100, 160, 255),
+    slider_thumb: Color = Color.from(100, 150, 220, 255),
+    slider_thumb_hover: Color = Color.from(130, 180, 255, 255),
+    slider_thumb_active: Color = Color.from(80, 120, 200, 255),
+    slider_text: Color = Color.from(220, 220, 220, 255),
     padding: Vec2I = .{ .x = 8, .y = 6 },
     item_spacing: i32 = 4,
     title_height: i32 = 22,
     button_height: i32 = 24,
     input_height: i32 = 24,
+    slider_height: i32 = 24,
+    slider_thumb_w: i32 = 10,
 };
 
 // ============================================================
@@ -510,7 +519,7 @@ pub const UiContext = struct {
 
         // Draw background + border
         self.shapes.drawFilledRect(rect, s.input_bg);
-        const border_col = if (focused) s.input_border_focused else s.input_border;
+        const border_col = if (focused) s.input_border_focused else if (over) s.input_border_hover else s.input_border;
         self.shapes.drawEnclosingRect(rect, border_col, 1);
 
         // Draw text
@@ -594,5 +603,95 @@ pub const UiContext = struct {
             });
             draw_y += line_h;
         }
+    }
+
+    // ----------------------------------------------------------
+    // slider
+    // ----------------------------------------------------------
+
+    /// Horizontal slider. `value` is clamped to [min_val, max_val].
+    /// Returns true if the value changed this frame.
+    pub fn slider(
+        self: *UiContext,
+        id: []const u8,
+        value: *f32,
+        min_val: f32,
+        max_val: f32,
+    ) bool {
+        const s = &self.style;
+        const uid = hashId(id);
+        const h: f32 = @floatFromInt(s.slider_height);
+        const w: f32 = self.contentWidth();
+        const rect = self.allocWidget(w, h);
+
+        const thumb_w: f32 = @floatFromInt(s.slider_thumb_w);
+        const track_l = rect.l + thumb_w / 2.0;
+        const track_r = rect.r - thumb_w / 2.0;
+        const track_range = track_r - track_l;
+        const val_range = max_val - min_val;
+
+        const over = self.testHot(uid, rect);
+
+        if (over and self.left_pressed) {
+            self.active_id = uid;
+            self.focus_id = uid;
+        }
+
+        var changed = false;
+        if (self.active_id == uid and self.left_down) {
+            const sf = self.scale_factor;
+            const mx = self.mouse_pos.x * sf;
+            const t = std.math.clamp((mx - track_l) / track_range, 0.0, 1.0);
+            const new_val = min_val + t * val_range;
+            if (new_val != value.*) {
+                value.* = new_val;
+                changed = true;
+            }
+        }
+
+        // Compute thumb center from current value
+        const t = std.math.clamp((value.* - min_val) / val_range, 0.0, 1.0);
+        const thumb_cx = track_l + t * track_range;
+        const track_cy = rect.t + h / 2.0;
+        const track_h: f32 = 4.0;
+
+        // Track background
+        self.shapes.drawFilledRect(rect, s.slider_track);
+        self.shapes.drawEnclosingRect(rect, s.window_border, 1);
+
+        // Filled portion (left of thumb)
+        self.shapes.drawFilledRect(.{
+            .l = track_l,
+            .t = track_cy - track_h / 2.0,
+            .r = thumb_cx,
+            .b = track_cy + track_h / 2.0,
+        }, s.slider_fill);
+
+        // Thumb
+        const thumb_col = if (self.active_id == uid)
+            s.slider_thumb_active
+        else if (over)
+            s.slider_thumb_hover
+        else
+            s.slider_thumb;
+
+        self.shapes.drawFilledRect(.{
+            .l = thumb_cx - thumb_w / 2.0,
+            .t = rect.t + 2.0,
+            .r = thumb_cx + thumb_w / 2.0,
+            .b = rect.b - 2.0,
+        }, thumb_col);
+
+        // Value label (right-aligned inside the track)
+        var val_buf: [24]u8 = undefined;
+        const val_str = std.fmt.bufPrint(&val_buf, "{d:.2}", .{value.*}) catch "?";
+        const ts = self.text.measureString(val_str);
+        const line_h: f32 = if (self.text.atlas) |a| @floatFromInt(a.maxY) else 16;
+        _ = self.text.drawString(val_str, .{
+            .x = @intFromFloat(rect.r - @as(f32, @floatFromInt(ts.x)) - @as(f32, @floatFromInt(s.padding.x))),
+            .y = @intFromFloat(track_cy - line_h / 2.0),
+        });
+
+        return changed;
     }
 };

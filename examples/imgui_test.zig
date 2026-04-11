@@ -45,6 +45,10 @@ pub const App = struct {
     // Counter shown in the window title
     click_count: u32,
 
+    // Slider values
+    slider_a: f32,
+    slider_b: f32,
+
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app = try alloc.create(App);
 
@@ -66,6 +70,8 @@ pub const App = struct {
             .log = std.ArrayListUnmanaged([]const u8){},
             .log_scroll = 0,
             .click_count = 0,
+            .slider_a = 0.5,
+            .slider_b = 25.0,
         };
 
         try app.addLog("GUI test started. Type something and press Submit.");
@@ -138,6 +144,23 @@ pub const App = struct {
             self.log.clearRetainingCapacity();
             self.log_scroll = 0;
             self.addLog("Log cleared.") catch {};
+        }
+
+        self.ui.spacing();
+
+        // --- Sliders ---
+        self.ui.label("Float (0.0 - 1.0):");
+        if (self.ui.slider("slider_a", &self.slider_a, 0.0, 1.0)) {
+            var buf: [64]u8 = undefined;
+            const msg = std.fmt.bufPrint(&buf, "slider_a = {d:.3}", .{self.slider_a}) catch "slider_a changed";
+            self.addLog(msg) catch {};
+        }
+
+        self.ui.label("Int range (0 - 100):");
+        if (self.ui.slider("slider_b", &self.slider_b, 0.0, 100.0)) {
+            var buf: [64]u8 = undefined;
+            const msg = std.fmt.bufPrint(&buf, "slider_b = {d:.0}", .{self.slider_b}) catch "slider_b changed";
+            self.addLog(msg) catch {};
         }
 
         self.ui.spacing();
