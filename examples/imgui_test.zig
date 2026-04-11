@@ -111,7 +111,7 @@ pub const App = struct {
         self.ui.begin();
 
         // Main demo window
-        const win_rect = RectF.fromPosSize(30, 30, 380, 460);
+        const win_rect = RectF.fromPosSize(30, 30, 380, 550);
         self.ui.beginWindow("demo_win", "Pixzig IMGUI Demo", win_rect);
 
         // --- Labels ---
@@ -172,8 +172,8 @@ pub const App = struct {
         self.ui.spacing();
 
         // --- Text area ---
-        self.ui.label("Log (Page Up/Down to scroll):");
-        self.ui.textArea("log_area", self.log.items, &self.log_scroll, 180);
+        self.ui.label("Log:");
+        self.ui.textArea("log_area", self.log.items, &self.log_scroll, self.ui.remainingHeight());
 
         self.ui.endWindow();
 

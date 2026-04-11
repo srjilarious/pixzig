@@ -67,6 +67,11 @@ pub const Style = struct {
     input_height: i32 = 24,
     slider_height: i32 = 24,
     slider_thumb_w: i32 = 10,
+    scrollbar_w: f32 = 8,
+    scrollbar_track: Color = Color.from(20, 20, 28, 255),
+    scrollbar_thumb: Color = Color.from(80, 80, 100, 255),
+    scrollbar_thumb_hover: Color = Color.from(110, 110, 140, 255),
+    scrollbar_thumb_active: Color = Color.from(60, 60, 80, 255),
 };
 
 // ============================================================
@@ -357,6 +362,16 @@ pub const UiContext = struct {
         return win.rect.r - win.rect.l - pad_x * 2.0;
     }
 
+    /// Returns the remaining vertical space inside the current window,
+    /// accounting for bottom padding. Useful for filling the rest of the
+    /// window with a text area or other expanding widget.
+    pub fn remainingHeight(self: *UiContext) f32 {
+        const win = self.curWin();
+        const pad_y: f32 = @floatFromInt(self.style.padding.y);
+        const remaining = win.rect.b - win.content_y - pad_y;
+        return @max(0, remaining);
+    }
+
     // ----------------------------------------------------------
     // ID hashing (FNV-1a)
     // ----------------------------------------------------------
@@ -554,7 +569,7 @@ pub const UiContext = struct {
     // textArea
     // ----------------------------------------------------------
 
-    /// Scrollable read-only text area.
+    /// Scrollable read-only text area with a vertical scrollbar.
     /// `lines` is the full list of lines; `scroll` is the top visible line index.
     /// `area_height` is the pixel height of the area widget.
     pub fn textArea(
@@ -566,17 +581,27 @@ pub const UiContext = struct {
     ) void {
         const s = &self.style;
         const uid = hashId(id);
+        const sb_uid = uid ^ 0x5343_0000_0000_0001; // scrollbar thumb ID
         const w: f32 = self.contentWidth();
         const rect = self.allocWidget(w, area_height);
 
-        _ = self.testHot(uid, rect);
-
         const line_h: i32 = if (self.text.atlas) |a| a.maxY else 16;
+        const line_hf: f32 = @floatFromInt(line_h);
         const pad_y: f32 = @floatFromInt(s.padding.y);
+        const pad_x: f32 = @floatFromInt(s.padding.x);
         const usable_h: f32 = area_height - pad_y * 2.0;
-        const lines_visible: usize = @intFromFloat(@floor(usable_h / @as(f32, @floatFromInt(line_h))));
+        const lines_visible: usize = @intFromFloat(@floor(usable_h / line_hf));
+        const scrollable = lines.len > lines_visible;
 
-        // Page Up/Down scrolling when hovered
+        // Scrollbar geometry
+        const sb_w = s.scrollbar_w;
+        const sb_rect = RectF{ .l = rect.r - sb_w, .t = rect.t, .r = rect.r, .b = rect.b };
+        const text_r = if (scrollable) rect.r - sb_w - 2.0 else rect.r;
+
+        // Hit-test the text body for page-up/down
+        const body_rect = RectF{ .l = rect.l, .t = rect.t, .r = text_r, .b = rect.b };
+        _ = self.testHot(uid, body_rect);
+
         if (self.hot_id == uid) {
             if (self.page_up_pressed and scroll.* > 0) {
                 scroll.* -= 1;
@@ -587,12 +612,29 @@ pub const UiContext = struct {
             }
         }
 
+        // Scrollbar interaction
+        if (scrollable) {
+            const max_scroll = lines.len - lines_visible;
+            const over_sb = self.testHot(sb_uid, sb_rect);
+            if (over_sb and self.left_pressed) self.active_id = sb_uid;
+            if (self.active_id == sb_uid and self.left_down) {
+                const thumb_h = @max((area_height * @as(f32, @floatFromInt(lines_visible))) /
+                    @as(f32, @floatFromInt(lines.len)), 12.0);
+                const travel = area_height - thumb_h;
+                const sf = self.scale_factor;
+                const my = self.mouse_pos.y * sf;
+                const t = std.math.clamp((my - sb_rect.t - thumb_h / 2.0) / travel, 0.0, 1.0);
+                scroll.* = @intFromFloat(t * @as(f32, @floatFromInt(max_scroll)));
+            }
+            // Clamp scroll in case lines shrunk
+            if (scroll.* > max_scroll) scroll.* = max_scroll;
+        }
+
         // Background + border
         self.shapes.drawFilledRect(rect, s.text_area_bg);
         self.shapes.drawEnclosingRect(rect, s.text_area_border, 1);
 
-        // Draw visible lines
-        const pad_x: f32 = @floatFromInt(s.padding.x);
+        // Draw visible lines (clipped to text column)
         var draw_y: i32 = @intFromFloat(rect.t + pad_y);
         const start = scroll.*;
         const end_idx = @min(start + lines_visible, lines.len);
@@ -602,6 +644,31 @@ pub const UiContext = struct {
                 .y = draw_y,
             });
             draw_y += line_h;
+        }
+
+        // Draw scrollbar
+        if (scrollable) {
+            const max_scroll = lines.len - lines_visible;
+            const thumb_h = @max((area_height * @as(f32, @floatFromInt(lines_visible))) /
+                @as(f32, @floatFromInt(lines.len)), 12.0);
+            const scroll_t = if (max_scroll > 0)
+                @as(f32, @floatFromInt(scroll.*)) / @as(f32, @floatFromInt(max_scroll))
+            else
+                0.0;
+            const travel = area_height - thumb_h;
+            const thumb_t = sb_rect.t + scroll_t * travel;
+            const thumb_rect = RectF{
+                .l = sb_rect.l + 1.0,
+                .t = thumb_t,
+                .r = sb_rect.r - 1.0,
+                .b = thumb_t + thumb_h,
+            };
+
+            self.shapes.drawFilledRect(sb_rect, s.scrollbar_track);
+            const is_active = self.active_id == sb_uid;
+            const is_hot = self.hot_id == sb_uid;
+            const thumb_col = if (is_active) s.scrollbar_thumb_active else if (is_hot) s.scrollbar_thumb_hover else s.scrollbar_thumb;
+            self.shapes.drawFilledRect(thumb_rect, thumb_col);
         }
     }
 
