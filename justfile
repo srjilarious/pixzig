@@ -2,6 +2,10 @@ alias t := test
 alias b := build
 alias bw := build_web
 alias rw := run_web
+alias d := docs
+
+docs :
+	zig build docs
 
 test *OPTS:
 	zig build tests -- {{OPTS}}

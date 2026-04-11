@@ -65,6 +65,18 @@ pub const web = if (builtin.os.tag == .emscripten) @import("./web.zig") else {};
 var g_EmscriptenRunnerRef: ?*anyopaque = null;
 var g_EmscriptenAppRef: ?*anyopaque = null;
 
+/// The main application looping handling structure.  This is the preferred way of setting up
+/// and using Pixzig.  You provide the application data structure and engine initialization
+/// options, and the PixzigAppRunner will handle the rest, including setting up the main loop and
+/// cleaning up resources on exit.
+///
+/// The application data structure should contain the game state and implement the update and
+/// render functions that will be called each frame.  Those functions should have the signatures:
+///
+/// ```zig
+///     fn update(self: *AppData, eng: *PixzigEngine, deltaTimeMs: f64) bool
+///     fn render(self: *AppData, eng: *PixzigEngine) void
+/// ```
 pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOptions) type {
     const AppStruct = struct {
         pub const Engine = PixzigEngine(engOpts);
@@ -147,6 +159,10 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
     return AppStruct;
 }
 
+/// The core Pixzig Engine structure.  It provides rendering, audio, input and resource management
+/// components.  The `engOpts` allow configuring the engine at comptime so that unused features can
+/// be stripped out by the compiler. For example, if audio is not needed, setting `audioOpts.enabled`
+/// to false will prevent the audio engine and related code from being included in the final binary.
 pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
     return struct {
         window: *glfw.Window,
@@ -162,6 +178,10 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         const Self = @This();
         pub const Renderer = renderer.Renderer(engOpts.rendererOpts);
 
+        /// Initializes the engine and its components.  In particular it creates the application
+        /// window and rendering context, loads the OpenGL profile, and sets up the default
+        /// projection matrix. The engine will be configured based on the provided `engInitOpts`
+        /// and `engOpts` parameters.
         pub fn init(title: [:0]const u8, allocator: std.mem.Allocator, options: PixzigEngineInitOptions) !*Self {
             try glfw.init();
 
@@ -265,6 +285,8 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             return eng;
         }
 
+        /// Frees engine resources and deinitializes subsystems.  This includes destroying the
+        /// application window.
         pub fn deinit(self: *Self) void {
             stbi.deinit();
             self.resources.deinit();
@@ -279,6 +301,10 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             self.allocator.destroy(self);
         }
 
+        /// Sets the application window icon. The provided `icon_data` should be a reader for
+        /// an image file in a format supported by STBI (e.g. PNG). The image will be loaded
+        /// and set as the window icon. This function is a no-op on web builds since setting
+        /// the favicon is outside the scope of the engine.
         pub fn setIcon(self: *Self, icon_data: *std.io.Reader) !void {
             if (builtin.os.tag != .emscripten) {
                 const data_buffer = try icon_data.readAlloc(self.allocator, icon_data.end);

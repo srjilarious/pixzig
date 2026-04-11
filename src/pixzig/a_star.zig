@@ -4,6 +4,7 @@ const tiles = @import("./tile.zig");
 
 const TileLayer = tiles.TileLayer;
 
+/// A location on a tilemap with helpers for checking relative positions.
 pub const TileLoc = struct {
     x: i32,
     y: i32,
@@ -38,6 +39,7 @@ const PathElem = struct {
     score: f32,
 };
 
+/// A list of tile locations representing a path from a start to a goal.
 pub const Path = std.ArrayList(TileLoc);
 
 const LocData = struct {
@@ -55,6 +57,8 @@ const AStarPriorityQueue = std.PriorityQueue(PathElem, EmptyContext, comparePath
 
 const LocDataArray = std.ArrayList(LocData);
 
+/// A basic tilemap path checker that uses the Tile core properties and checks for BlocksAll (i.e. any direction).
+/// This can be used as the CheckContext for AStarPathFinder for basic tile map use cases.
 pub const BasicTileMapPathChecker = struct {
     tileLayer: *const TileLayer,
 
@@ -70,6 +74,7 @@ pub const BasicTileMapPathChecker = struct {
     }
 };
 
+/// A* Pathfinding implementation for tilemaps. The CheckContext must provide a checkPosition(loc: TileLoc) bool function to determine if a tile can be pathwalked on.
 pub fn AStarPathFinder(comptime CheckContext: type) type {
     return struct {
         locDataArr: LocDataArray,
@@ -78,6 +83,8 @@ pub fn AStarPathFinder(comptime CheckContext: type) type {
         checker: CheckContext,
 
         const Self = @This();
+
+        /// Initializes the pathfinder with the provided size. The size is used for bounds checking and should be the size of the tilemap. The pathfinder will allocate internal data structures based on the size, so it is recommended to reuse a single pathfinder instance for multiple pathfinding calls on the same map.
         pub fn init(checker: CheckContext, alloc: std.mem.Allocator, size: Vec2I) !Self {
             if (size.x < 0 or size.y < 0) return error.NegativeBoundsGiven;
 
@@ -105,6 +112,9 @@ pub fn AStarPathFinder(comptime CheckContext: type) type {
             return &self.locDataArr.items[index];
         }
 
+        /// Finds a path from start to goal and appends the path locations to the provided path
+        /// list. The path will be from start to goal order.  If no path can be found, the path
+        /// list will be left with just the start location.
         pub fn findPath(self: *Self, start: TileLoc, goal: TileLoc, path: *Path) !void {
             var frontier = AStarPriorityQueue.init(self.alloc, .{});
             try frontier.add(.{ .location = start, .score = 0.0 });

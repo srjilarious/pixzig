@@ -1,11 +1,6 @@
-// A simple action sequencer for coordinating timed game events.
-// sequencer.zig — Action sequencer for coordinating timed game events.
-//
-// A Sequence is a root Track. A Track is a sequential list of Steps. A Step
-// can be a timed wait, a fire-and-forget screen flash, an actor-state change,
-// a move-to, a spawn-effect, or a Parallel that holds multiple sub-Tracks
-// running concurrently.
-
+/// An action sequencer for coordinating timed game events.
+/// Sequences are sequential sets of steps, with a ParallelStep for concurrent steps.
+/// Steps follow an OO pattern with a VTable in order to allow extension in games.
 const std = @import("std");
 const common = @import("./common.zig");
 const sprites = @import("./renderer/sprites.zig");
@@ -232,56 +227,6 @@ pub const SetActorStateStep = struct {
     }
 };
 
-//     pub fn deinitResources(self: *Step, alloc: std.mem.Allocator) void {
-//         switch (self.*) {
-//             .parallel => |*p| p.deinit(alloc),
-//             else => {},
-//         }
-//     }
-
-//     pub const WaitStep = struct {
-//         durationMs: f64,
-//     };
-
-//     pub const ScreenFlashStep = struct {
-//         color: Color,
-//         durationMs: f64,
-//     };
-
-//     pub const SetActorStateStep = struct {
-//         entityId: u64,
-//         stateName: [MAX_NAME_LEN]u8,
-//         stateNameLen: usize,
-//     };
-
-//     pub const MoveToStep = struct {
-//         entityId: u64,
-//         target: Vec2F,
-//         durationMs: f64,
-//     };
-
-//     pub const SpawnEffectStep = struct {
-//         pos: Vec2F,
-//         spriteName: [MAX_NAME_LEN]u8,
-//         spriteNameLen: usize,
-//         durationMs: f64,
-//     };
-
-//     /// ParallelStep holds heap-allocated sub-Tracks it owns completely.
-//     /// The pointer indirection (*Track) breaks the Step→Track→Step size cycle.
-//     pub const ParallelStep = struct {
-//         tracks: std.ArrayList(*Track),
-
-//         pub fn deinit(self: *ParallelStep, alloc: std.mem.Allocator) void {
-//             for (self.tracks.items) |track| {
-//                 track.deinit(alloc);
-//                 alloc.destroy(track);
-//             }
-//             self.tracks.deinit(alloc);
-//         }
-//     };
-// };
-
 // ----------------------------------------------------------------------------
 // A linear set of steps, finished when it's iterated through all of the steps.
 pub const Sequence = struct {
@@ -389,98 +334,6 @@ pub const SequencePlayer = struct {
             }
         }
     }
-
-    // fn seqTrack(self: *SequencePlayer, handle: SeqHandle) *Track {
-
-    //     return &self.sequences.items[handle].track;
-    // }
-
-    // pub fn addWait(self: *SequencePlayer, handle: SeqHandle, ms: f64) !void {
-    //     try self.seqTrack(handle).addStep(self.alloc, .{ .wait = .{ .durationMs = ms } });
-    // }
-
-    // pub fn addScreenFlash(self: *SequencePlayer, handle: SeqHandle, color: Color, durationMs: f64) !void {
-    //     try self.seqTrack(handle).addStep(self.alloc, .{
-    //         .screen_flash = .{ .color = color, .durationMs = durationMs },
-    //     });
-    // }
-
-    // pub fn addSetActorState(self: *SequencePlayer, handle: SeqHandle, entityId: u64, stateName: []const u8) !void {
-    //     var nameArr = [_]u8{0} ** MAX_NAME_LEN;
-    //     const copyLen = @min(stateName.len, MAX_NAME_LEN);
-    //     @memcpy(nameArr[0..copyLen], stateName[0..copyLen]);
-    //     try self.seqTrack(handle).addStep(self.alloc, .{ .set_actor_state = .{
-    //         .entityId = entityId,
-    //         .stateName = nameArr,
-    //         .stateNameLen = copyLen,
-    //     } });
-    // }
-
-    // pub fn addMoveTo(self: *SequencePlayer, handle: SeqHandle, entityId: u64, target: Vec2F, durationMs: f64) !void {
-    //     try self.seqTrack(handle).addStep(self.alloc, .{ .move_to = .{
-    //         .entityId = entityId,
-    //         .target = target,
-    //         .durationMs = durationMs,
-    //     } });
-    // }
-
-    // pub fn addSpawnEffect(self: *SequencePlayer, handle: SeqHandle, spriteName: []const u8, pos: Vec2F, durationMs: f64) !void {
-    //     var nameArr = [_]u8{0} ** MAX_NAME_LEN;
-    //     const copyLen = @min(spriteName.len, MAX_NAME_LEN);
-    //     @memcpy(nameArr[0..copyLen], spriteName[0..copyLen]);
-    //     try self.seqTrack(handle).addStep(self.alloc, .{ .spawn_effect = .{
-    //         .pos = pos,
-    //         .spriteName = nameArr,
-    //         .spriteNameLen = copyLen,
-    //         .durationMs = durationMs,
-    //     } });
-    // }
-
-    // /// Add a parallel step that runs trackPtrs concurrently.
-    // /// Ownership of the Track objects transfers to the parallel step.
-    // pub fn addParallel(self: *SequencePlayer, handle: SeqHandle, trackPtrs: []*Track) !void {
-    //     var par: Step.ParallelStep = .{ .tracks = .{} };
-    //     for (trackPtrs) |t| {
-    //         try par.tracks.append(self.alloc, t);
-    //     }
-    //     try self.seqTrack(handle).addStep(self.alloc, .{ .parallel = par });
-    // }
-
-    // /// Start playback of a sequence. Resets done flag so it can be replayed.
-    // pub fn playSequence(self: *SequencePlayer, handle: SeqHandle) void {
-    //     self.sequences.items[handle].active = true;
-    //     self.sequences.items[handle].done = false;
-    // }
-
-    // pub fn update(self: *SequencePlayer, deltaMs: f64) void {
-    //     // Tick the screen flash independently of sequences.
-    //     if (self.flashActive) {
-    //         self.flashRemainingMs -= deltaMs;
-    //         if (self.flashRemainingMs <= 0) {
-    //             self.flashActive = false;
-    //         }
-    //     }
-
-    //     for (self.sequences.items) |*seq| {
-    //         if (!seq.active or seq.done) continue;
-    //         updateTrack(self, &seq.track, deltaMs);
-    //         if (seq.track.done) {
-    //             seq.active = false;
-    //             seq.done = true;
-    //         }
-    //     }
-    // }
-
-    // /// Returns a FlashState for rendering. Alpha fades linearly over the flash duration.
-    // pub fn getFlashState(self: *const SequencePlayer) FlashState {
-    //     if (!self.flashActive) {
-    //         return .{ .color = .{ .r = 0, .g = 0, .b = 0, .a = 0 }, .active = false };
-    //     }
-    //     const progress: f32 = @floatCast(self.flashRemainingMs / self.flashTotalMs);
-    //     var color = self.flashColor;
-    //     color.a *= progress;
-    //     return .{ .color = color, .active = true };
-    // }
 };
 
 // ----------------------------------------------------------------------------
@@ -616,64 +469,3 @@ fn luaSeqPlay(lua: *Lua) i32 {
     }
     return 0;
 }
-
-// // ----------------------------------------------------------------------------
-// fn updateTrack(player: *SequencePlayer, track: *Track, deltaMs: f64) void {
-//     if (track.done) return;
-
-//     track.stepElapsedMs += deltaMs;
-
-//     while (track.currStep < track.steps.items.len) {
-//         const step = &track.steps.items[track.currStep];
-//         const completed = updateStep(player, step, track.stepElapsedMs, deltaMs);
-//         if (completed) {
-//             track.currStep += 1;
-//             track.stepElapsedMs = 0;
-//         } else {
-//             break;
-//         }
-//     }
-
-//     if (track.currStep >= track.steps.items.len) {
-//         track.done = true;
-//     }
-// }
-
-// // ----------------------------------------------------------------------------
-// /// Returns true when the step is finished and the track should advance.
-// fn updateStep(player: *SequencePlayer, step: *Step, elapsed: f64, deltaMs: f64) bool {
-//     switch (step.*) {
-//         .wait => |w| {
-//             return elapsed >= w.durationMs;
-//         },
-//         .screen_flash => |sf| {
-//             // Fire-and-forget: set the flash state and advance immediately.
-//             player.flashActive = true;
-//             player.flashColor = sf.color;
-//             player.flashRemainingMs = sf.durationMs;
-//             player.flashTotalMs = sf.durationMs;
-//             return true;
-//         },
-//         .set_actor_state => {
-//             // TODO: look up entity by entityId and switch animation state.
-//             return true;
-//         },
-//         .move_to => |mv| {
-//             // TODO: interpolate entity position towards mv.target over mv.durationMs.
-//             return elapsed >= mv.durationMs;
-//         },
-//         .spawn_effect => |se| {
-//             // TODO: spawn effect sprite se.spriteName at se.pos.
-//             return elapsed >= se.durationMs;
-//         },
-//         .parallel => |*par| {
-//             for (par.tracks.items) |subTrack| {
-//                 updateTrack(player, subTrack, deltaMs);
-//             }
-//             for (par.tracks.items) |subTrack| {
-//                 if (!subTrack.done) return false;
-//             }
-//             return true;
-//         },
-//     }
-// }
