@@ -171,11 +171,8 @@ pub fn build(b: *std.Build) void {
             // Pixzig docs step
             const zkdocs = @import("zkdocs");
             b.step("docs", "Docs").dependOn(zkdocs.addDocsStep(b, .{
-                .root = "src/pixzig/pixzig.zig",
-                .name = "Pixzig",
+                .conf = "docs/zkdocs.conf",
                 .out = "docs-out",
-                .docs = "docs/guides.json",
-                .emoji = "noto",
             }));
         }
     }
