@@ -5,17 +5,15 @@
     .paths = .{"src"},
     .dependencies = .{
         .testz = .{
-            // .url = "https://github.com/srjilarious/testz/archive/refs/tags/v0.6.1.tar.gz",
-            // .hash = "testz-0.6.1-abaPyQtkCAAghoY_EDIMufyF8KnRVrtTP0pThw3wVLaA",
-            .path = "../testz",
+            .url = "https://github.com/srjilarious/testz/archive/refs/tags/v1.1.0.tar.gz",
+            .hash = "testz-1.1.0-abaPyRr0CAD7nMXVE8c40UoSSUoeLQN_NQWoQjEivQ0T",
         },
         .zkdocs = .{
             .path = "../zkdocs",
         },
         .zargunaught = .{
-            // .url = "https://github.com/srjilarious/zargunaught/archive/refs/tags/v0.6.1.tar.gz",
-            // .hash = "zargunaught-0.6.1-aoeNI3HYAADx21bVdg26S1NSvQmFW3_FWmtEexscYm1x",
-            .path = "../zargunaught",
+            .url = "https://github.com/srjilarious/zargunaught/archive/refs/tags/v1.1.0.tar.gz",
+            .hash = "zargunaught-1.1.0-aoeNI7vdAAAufpOIoCb_JZo0nl2CwJNMi2y0vLhpVNIz",
         },
         .ziglua = .{
             .path = "libs/ziglua",
@@ -44,12 +42,6 @@
             .url = "git+https://github.com/zig-gamedev/zstbi.git#2c4b3100ccb7aed90ecc9439030899764e2a8d47",
             .hash = "zstbi-0.11.0-dev-L0Ea_yaWBwAHwFoCuyjkFyaiSsbjt4UOrkntR0c_nmzz",
         },
-        .zgui = .{
-            .path = "libs/zgui",
-            // .url = "https://github.com/zig-gamedev/zgui/archive/c16629e67e7bc1bca9a5c67d5123874c75f5374d.tar.gz",
-            // .hash = "12202063c813c1b95affa57d83a6a4817d9a4114bd9db052f87740f81b1843ceca09",
-        },
-        // .zaudio = .{ .path = "libs/zig-gamedev/libs/zaudio" },
         .zflecs = .{
             .path = "libs/zflecs",
             // .url = "https://github.com/zig-gamedev/zflecs/archive/fcde2da35ea43c289bc731c9a244417c176192d0.tar.gz",
