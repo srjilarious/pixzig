@@ -537,14 +537,16 @@ pub const UiContext = struct {
         const border_col = if (focused) s.input_border_focused else if (over) s.input_border_hover else s.input_border;
         self.shapes.drawEnclosingRect(rect, border_col, 1);
 
-        // Draw text
+        // Draw text clipped to the inner content rect so long strings don't
+        // overflow the box border.
         const pad_x: f32 = @floatFromInt(s.padding.x);
         const line_h: f32 = if (self.text.atlas) |a| @floatFromInt(a.maxY) else 16;
         const ty: i32 = @intFromFloat(rect.t + (h - line_h) / 2.0);
-        _ = self.text.drawString(buf[0..len.*], .{
+        const text_clip = RectF{ .l = rect.l + pad_x, .t = rect.t, .r = rect.r - pad_x, .b = rect.b };
+        _ = self.text.drawClippedString(buf[0..len.*], .{
             .x = @intFromFloat(rect.l + pad_x),
             .y = ty,
-        });
+        }, text_clip);
 
         // Blinking cursor
         if (focused) {
@@ -634,15 +636,17 @@ pub const UiContext = struct {
         self.shapes.drawFilledRect(rect, s.text_area_bg);
         self.shapes.drawEnclosingRect(rect, s.text_area_border, 1);
 
-        // Draw visible lines (clipped to text column)
+        // Draw visible lines clipped to the text column so long lines don't
+        // bleed into the scrollbar or past the border.
+        const line_clip = RectF{ .l = rect.l + pad_x, .t = rect.t, .r = text_r - pad_x, .b = rect.b };
         var draw_y: i32 = @intFromFloat(rect.t + pad_y);
         const start = scroll.*;
         const end_idx = @min(start + lines_visible, lines.len);
         for (start..end_idx) |i| {
-            _ = self.text.drawString(lines[i], .{
+            _ = self.text.drawClippedString(lines[i], .{
                 .x = @intFromFloat(rect.l + pad_x),
                 .y = draw_y,
-            });
+            }, line_clip);
             draw_y += line_h;
         }
 

@@ -362,6 +362,65 @@ pub const TextRenderer = struct {
         return drawSize;
     }
 
+    // Like drawString but clips character quads to `clip` in screen space.
+    // Partially-visible edge characters have their source UV rect trimmed to
+    // match so no bleed from adjacent atlas glyphs appears.
+    pub fn drawClippedString(self: *TextRenderer, text: []const u8, pos: Vec2I, clip: RectF) Vec2I {
+        var currX: i32 = pos.x;
+        var drawSize: Vec2I = .{ .x = 0, .y = 0 };
+
+        if (self.atlas == null) {
+            std.log.err("TextRenderer: No FontAtlas set. Cannot draw text.", .{});
+            return drawSize;
+        }
+
+        const posY = pos.y + self.atlas.?.maxY;
+        for (text) |c| {
+            const charDataPtr = self.atlas.?.chars.get(@intCast(c));
+            if (charDataPtr == null) continue;
+
+            const charData = charDataPtr.?;
+
+            if (charData.size.x > 0 and charData.size.y > 0) {
+                var dest = RectF.fromPosSize(
+                    currX + charData.bearing.x,
+                    posY - charData.bearing.y,
+                    charData.size.x,
+                    charData.size.y,
+                );
+                var src = charData.coords;
+
+                // Entirely left of clip — advance cursor but don't draw.
+                if (dest.r <= clip.l) {
+                    currX += @intCast(charData.advance);
+                    drawSize.x += @intCast(charData.advance);
+                    continue;
+                }
+                // Entirely right of clip — nothing further will be visible.
+                if (dest.l >= clip.r) break;
+
+                const uv_per_px = (src.r - src.l) / dest.width();
+
+                if (dest.l < clip.l) {
+                    src.l += (clip.l - dest.l) * uv_per_px;
+                    dest.l = clip.l;
+                }
+                if (dest.r > clip.r) {
+                    src.r -= (dest.r - clip.r) * uv_per_px;
+                    dest.r = clip.r;
+                }
+
+                self.spriteBatch.draw(&self.atlas.?.texture, dest, src, .none);
+            }
+
+            currX += @intCast(charData.advance);
+            drawSize.x += @intCast(charData.advance);
+            drawSize.y = @max(drawSize.y, charData.size.y);
+        }
+
+        return drawSize;
+    }
+
     // Helper function to measure text without drawing
     pub fn measureString(self: *TextRenderer, text: []const u8) Vec2I {
         var width: i32 = 0;
