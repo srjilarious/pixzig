@@ -58,7 +58,7 @@ pub const WaitStep = struct {
 };
 
 pub const ParallelStep = struct {
-    subSteps: std.ArrayList(Step),
+    subSteps: std.ArrayListUnmanaged(Step),
     const vtable: Step.VTable = .{
         .update = update,
         .deinit = deinit,
@@ -67,7 +67,7 @@ pub const ParallelStep = struct {
     pub fn init(alloc: std.mem.Allocator) !Step {
         const ptr = try alloc.create(ParallelStep);
         ptr.* = ParallelStep{
-            .subSteps = std.ArrayList(Step).init(alloc),
+            .subSteps = .{},
         };
         return .{
             .ptr = ptr,
