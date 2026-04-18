@@ -86,7 +86,7 @@ pub const ParallelStep = struct {
     pub fn init(alloc: std.mem.Allocator) !Step {
         const ptr = try alloc.create(ParallelStep);
         ptr.* = ParallelStep{
-            .subSteps = .{},
+            .subSteps = .empty,
         };
         return .{
             .ptr = ptr,
@@ -253,7 +253,7 @@ pub const Sequence = struct {
 
     pub fn init(alloc: std.mem.Allocator) Sequence {
         return .{
-            .steps = .{},
+            .steps = .empty,
             .alloc = alloc,
             .currStep = 0,
             .done = false,
@@ -305,7 +305,7 @@ pub const SequencePlayer = struct {
     pub fn init(alloc: std.mem.Allocator) SequencePlayer {
         return .{
             .alloc = alloc,
-            .sequences = .{},
+            .sequences = .empty,
         };
     }
 

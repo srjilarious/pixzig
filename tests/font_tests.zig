@@ -3,10 +3,12 @@ const testz = @import("testz");
 const pixzig = @import("pixzig");
 
 pub fn loadFontTest() !void {
-    const font_data = try std.fs.cwd().readFileAlloc(
-        std.heap.page_allocator,
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const font_data = try std.Io.Dir.cwd().readFileAlloc(
+        io,
         "assets/Roboto-Medium.ttf",
-        std.math.maxInt(usize),
+        std.heap.page_allocator,
+        .unlimited,
     );
     defer std.heap.page_allocator.free(font_data);
     var font_info = pixzig.stb_tt.c.stbtt_fontinfo{};

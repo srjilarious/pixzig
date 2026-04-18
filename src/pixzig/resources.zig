@@ -35,8 +35,8 @@ pub const ResourceManager = struct {
     /// Initializes the resource manager.
     pub fn init(alloc: std.mem.Allocator) Self {
         return .{
-            .textures = .{},
-            .shaders = .{},
+            .textures = .empty,
+            .shaders = .empty,
             .atlas = std.StringHashMap(Texture).init(alloc),
             .alloc = alloc,
         };
@@ -209,7 +209,8 @@ pub const ResourceManager = struct {
         defer self.alloc.free(jsonName);
 
         // Read entire file into memory
-        const file_contents = try std.fs.cwd().readFileAlloc(self.alloc, jsonName, std.math.maxInt(usize));
+        const io = std.Io.Threaded.global_single_threaded.io();
+        const file_contents = try std.Io.Dir.cwd().readFileAlloc(io, jsonName, self.alloc, .unlimited);
         defer self.alloc.free(file_contents);
 
         const parsed = try std.json.parseFromSlice(SpackFile, self.alloc, file_contents, .{});

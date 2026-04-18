@@ -138,8 +138,9 @@ pub fn main() !void {
     var spack = try SpackProcessor.init(alloc, .{.x = width, .y = height});
     defer spack.deinit();
 
+    const io = std.Io.Threaded.global_single_threaded.io();
     for(args.positional.items) |path| {
-        const metadata = try std.fs.cwd().statFile(path);
+        const metadata = try std.Io.Dir.cwd().statFile(io, path, .{});
 
         // Check if it's a file or a directory
         switch (metadata.kind) {
@@ -167,10 +168,10 @@ pub fn main() !void {
     const jsonName = try std.mem.concat(alloc, u8, &[_][]const u8{ output, ".json"});
     defer alloc.free(jsonName);
 
-    var file = try std.fs.cwd().createFile(jsonName, .{});
-    defer file.close();
+    var file = try std.Io.Dir.cwd().createFile(io, jsonName, .{});
+    defer file.close(io);
     var buffer: [2048]u8 = undefined;
-    var file_writer = file.writer(&buffer);
+    var file_writer = file.writer(io, &buffer);
 
     var write_stream: std.json.Stringify = .{
         .writer = &file_writer.interface,

@@ -21,7 +21,7 @@ fn addArchIncludes(b: *std.Build, target: std.Build.ResolvedTarget, optimize: st
             // };
 
             // dir.close();
-            dep.addIncludePath(.{ .cwd_relative = cache_include });
+            dep.root_module.addIncludePath(.{ .cwd_relative = cache_include });
         },
         else => {},
     }
@@ -220,7 +220,7 @@ fn buildEngine(
     };
 
     addArchIncludes(b, target, optimize, engine_lib) catch unreachable;
-    engine_lib.linkLibC();
+    engine_lib.root_module.link_libc = true;
 
     // GLFW
     const zglfw = b.dependency("zglfw", .{ .target = target });
@@ -228,7 +228,7 @@ fn buildEngine(
     pixeng.addImport("zglfw", zglfw_mod);
     if (target.result.os.tag != .emscripten) {
         const glfw_dep = zglfw.artifact("glfw");
-        engine_lib.linkLibrary(glfw_dep);
+        engine_lib.root_module.linkLibrary(glfw_dep);
     }
 
     // OpenGL bindings
@@ -242,7 +242,7 @@ fn buildEngine(
     pixeng.addImport("zflecs", zflecs_mod);
     const zflecs_lib = zflecs.artifact("flecs");
     addArchIncludes(b, target, optimize, zflecs_lib) catch unreachable;
-    engine_lib.linkLibrary(zflecs_lib);
+    engine_lib.root_module.linkLibrary(zflecs_lib);
 
     // Stbi
     const zstbi = b.dependency("zstbi", .{ .target = target });
@@ -259,19 +259,16 @@ fn buildEngine(
     pixeng.addImport("zaudio", zaudio.module("root"));
     const miniaudio = zaudio.artifact("miniaudio");
     addArchIncludes(b, target, optimize, miniaudio) catch unreachable;
-    engine_lib.linkLibrary(miniaudio);
+    engine_lib.root_module.linkLibrary(miniaudio);
 
     // Lua
     const ziglua = b.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
     ziglua.module("zlua").addIncludePath(.{ .cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include" });
-    ziglua.module("ziglua-c").addIncludePath(.{ .cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include" });
     const ziglua_mod = ziglua.module("zlua");
-    const ziglua_c_mod = ziglua.module("ziglua-c");
     pixeng.addImport("ziglua", ziglua_mod);
-    pixeng.addImport("ziglua-c", ziglua_c_mod);
     const lua_lib = ziglua.artifact("lua");
     addArchIncludes(b, target, optimize, lua_lib) catch unreachable;
-    engine_lib.linkLibrary(lua_lib);
+    engine_lib.root_module.linkLibrary(lua_lib);
 
     // XML for tilemap loading
     const xml = b.addModule("xml", .{ .root_source_file = b.path("libs/xml.zig") });

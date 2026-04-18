@@ -89,7 +89,7 @@ pub const Tile = struct {
         } else {
             // Lazy init string/value property list.
             if (self.properties == null) {
-                self.properties = .{};
+                self.properties = .empty;
             }
 
             const newName = try self.alloc.dupe(u8, name);
@@ -182,7 +182,7 @@ pub const Object = struct {
 
                 // Lazy init string/value property list.
                 if (obj.properties == null) {
-                    obj.properties = .{};
+                    obj.properties = .empty;
                 }
 
                 const newProp: Property = .{
@@ -273,7 +273,7 @@ pub const TileSet = struct {
 
     pub fn init(alloc: std.mem.Allocator) !TileSet {
         return .{
-            .tiles = .{},
+            .tiles = .empty,
             .tileSize = .{ .x = 0, .y = 0 },
             .textureSize = .{ .x = 0, .y = 0 },
             .columns = 0,
@@ -283,7 +283,7 @@ pub const TileSet = struct {
     }
 
     pub fn initEmpty(alloc: std.mem.Allocator, tileSize: Vec2I, textureSize: Vec2I, tileCount: usize) !TileSet {
-        var tiles: std.ArrayList(Tile) = .{};
+        var tiles: std.ArrayList(Tile) = .empty;
         const baseTile = Tile{ .core = Clear, .properties = null, .alloc = alloc };
         try tiles.appendNTimes(alloc, baseTile, tileCount);
 
@@ -386,7 +386,7 @@ pub const ObjectGroup = struct {
     const Self = @This();
 
     pub fn init(alloc: std.mem.Allocator) !Self {
-        return .{ .objects = .{}, .properties = .{}, .id = 0, .name = null, .alloc = alloc };
+        return .{ .objects = .empty, .properties = .empty, .id = 0, .name = null, .alloc = alloc };
     }
 
     pub fn initFromElement(alloc: std.mem.Allocator, node: *xml.Element) !Self {
@@ -542,8 +542,8 @@ pub const TileLayer = struct {
     /// Initializes an empty layer with no tiles, properties, or name.
     pub fn init(alloc: std.mem.Allocator) !TileLayer {
         return .{
-            .tiles = .{},
-            .properties = .{},
+            .tiles = .empty,
+            .properties = .empty,
             .size = .{ .x = 0, .y = 0 },
             .name = null,
             .tileset = null,
@@ -556,11 +556,11 @@ pub const TileLayer = struct {
     /// Initializes a layer with the given size and tile size, with all tiles
     /// set to -1.
     pub fn initEmpty(alloc: std.mem.Allocator, size: Vec2I, tileSize: Vec2I) !TileLayer {
-        var tilesArr: std.ArrayList(i32) = .{};
+        var tilesArr: std.ArrayList(i32) = .empty;
         try tilesArr.appendNTimes(alloc, -1, @intCast(size.x * size.y));
         return .{
             .tiles = tilesArr,
-            .properties = .{},
+            .properties = .empty,
             .size = size,
             .name = null,
             .tileset = null,
@@ -701,7 +701,7 @@ pub const TileMap = struct {
     /// Initializes an empty tile map with no tilesets, layers, or object
     /// groups.
     pub fn init(alloc: std.mem.Allocator) !TileMap {
-        return .{ .tilesets = .{}, .layers = .{}, .objectGroups = .{}, .alloc = alloc };
+        return .{ .tilesets = .empty, .layers = .empty, .objectGroups = .empty, .alloc = alloc };
     }
 
     /// Initializes a tile map from a Tiled map file. This will read the XML
@@ -725,7 +725,8 @@ pub const TileMap = struct {
     /// defined on tiles, layers, or objects will be stored as string key/value
     /// pairs in the `properties` field of the respective struct.
     pub fn initFromFile(filename: []const u8, alloc: std.mem.Allocator) !TileMap {
-        const fileContents = try std.fs.cwd().readFileAlloc(alloc, filename, MaxFilesize);
+        const io = std.Io.Threaded.global_single_threaded.io();
+        const fileContents = try std.Io.Dir.cwd().readFileAlloc(io, filename, alloc, .limited(MaxFilesize));
         defer alloc.free(fileContents);
 
         std.log.debug("Loaded tile map file contents.", .{});
@@ -841,7 +842,7 @@ const TileIndexMap = struct {
     pub fn init(alloc: std.mem.Allocator) Self {
         return .{
             .alloc = alloc,
-            .arr = .{},
+            .arr = .empty,
         };
     }
 

@@ -117,7 +117,7 @@ pub fn configure(
     //     lib.addCSourceFile(.{ .file = patched.output, .flags = &flags });
     // }
 
-    library.linkLibC();
+    library.root_module.link_libc = true;
 
     library.installHeader(upstream.path("src/lua.h"), "lua.h");
     library.installHeader(upstream.path("src/lualib.h"), "lualib.h");
@@ -125,7 +125,7 @@ pub fn configure(
     library.installHeader(upstream.path("src/luaconf.h"), "luaconf.h");
 
     if (lua_user_h) |user_h| {
-        library.addIncludePath(user_h.dirname());
+        library.root_module.addIncludePath(user_h.dirname());
         library.installHeader(user_h, user_header);
     }
 

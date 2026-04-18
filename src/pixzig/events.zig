@@ -65,7 +65,7 @@ pub fn EventBus(EventType: type) type {
         pub fn init(allocator: std.mem.Allocator) Self {
             return .{
                 .allocator = allocator,
-                .subscriptions = .{},
+                .subscriptions = .empty,
             };
         }
 

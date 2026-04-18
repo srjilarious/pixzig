@@ -238,7 +238,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                     break :blk null;
                 }
             };
-            const window = try glfw.Window.create(options.windowSize.x, options.windowSize.y, title, monitor);
+            const window = try glfw.createWindow(options.windowSize.x, options.windowSize.y, title, monitor, null);
             window.setSizeLimits(400, 400, -1, -1);
 
             glfw.makeContextCurrent(window);
@@ -307,7 +307,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             eng.renderer = try Renderer.init(allocator, &eng.resources, options.renderInitOpts);
             if (engOpts.defaultIcon) {
                 std.log.debug("Setting default window icon.", .{});
-                var defaultIcon = std.io.Reader.fixed(assets.icon48x48);
+                var defaultIcon = std.Io.Reader.fixed(assets.icon48x48);
                 try eng.setIcon(&defaultIcon);
             }
 
@@ -342,7 +342,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         /// an image file in a format supported by STBI (e.g. PNG). The image will be loaded
         /// and set as the window icon. This function is a no-op on web builds since setting
         /// the favicon is outside the scope of the engine.
-        pub fn setIcon(self: *Self, icon_data: *std.io.Reader) !void {
+        pub fn setIcon(self: *Self, icon_data: *std.Io.Reader) !void {
             if (builtin.os.tag != .emscripten) {
                 const data_buffer = try icon_data.readAlloc(self.allocator, icon_data.end);
                 defer self.allocator.free(data_buffer);

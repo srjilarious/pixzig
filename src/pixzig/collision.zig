@@ -42,7 +42,7 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
         /// cellSize. The grid is initialized with null values, indicating that
         /// there are no objects in any cells.
         pub fn init(alloc: std.mem.Allocator, gridSize: Vec2U, cellSize: Vec2U) !Self {
-            var grid: GridList = .{};
+            var grid: GridList = .empty;
             const gridLen = gridSize.x * gridSize.y;
             try grid.resize(alloc, gridLen);
             for (0..gridLen) |idx| {

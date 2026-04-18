@@ -105,7 +105,7 @@ pub const FrameSequence = struct {
     mode: AnimPlayMode,
 
     pub fn initEmpty(alloc: std.mem.Allocator) !FrameSequence {
-        const frames: std.ArrayList(Frame) = .{};
+        const frames: std.ArrayList(Frame) = .empty;
 
         return .{
             .frames = frames,
@@ -115,7 +115,7 @@ pub const FrameSequence = struct {
     }
 
     pub fn init(alloc: std.mem.Allocator, framesArr: []const Frame) !FrameSequence {
-        var frames: std.ArrayList(Frame) = .{};
+        var frames: std.ArrayList(Frame) = .empty;
         for (framesArr) |fr| {
             try frames.append(alloc, fr);
         }
@@ -201,7 +201,8 @@ pub const FrameSequenceManager = struct {
 
     pub fn loadSequenceFile(self: *Self, filename: []const u8, texMgr: *ResourceManager) !void {
         // Load file contents
-        const file_contents = try std.fs.cwd().readFileAlloc(self.alloc, filename, std.math.maxInt(usize));
+        const io = std.Io.Threaded.global_single_threaded.io();
+        const file_contents = try std.Io.Dir.cwd().readFileAlloc(io, filename, self.alloc, .unlimited);
         defer self.alloc.free(file_contents);
 
         // Load sequence

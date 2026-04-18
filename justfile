@@ -1,7 +1,8 @@
 alias t := test
 alias b := build
-alias bw := build_web
-alias rw := run_web
+alias bwin := build_win
+alias bweb := build_web
+alias rweb := run_web
 alias d := docs
 
 docs :
@@ -12,6 +13,9 @@ test *OPTS:
 
 build EX *OPTS:
 	zig build {{EX}} {{OPTS}}
+
+build_win EX *OPTS:
+	zig build -Dtarget=x86_64-windows {{EX}} {{OPTS}}
 
 build_web *EX:
 	zig build {{EX}} -Dtarget=wasm32-emscripten --sysroot /home/jeffdw/.cache/emscripten/sysroot

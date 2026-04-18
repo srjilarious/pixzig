@@ -105,7 +105,7 @@ pub fn AStarPathFinder(comptime CheckContext: type) type {
         pub fn init(checker: CheckContext, alloc: std.mem.Allocator, size: Vec2I) !Self {
             if (size.x < 0 or size.y < 0) return error.NegativeBoundsGiven;
 
-            var locDataArr: LocDataArray = .{};
+            var locDataArr: LocDataArray = .empty;
             const amount: usize = @intCast(size.x * size.y);
             try locDataArr.appendNTimes(alloc, LocData{}, amount);
             return .{
@@ -133,8 +133,9 @@ pub fn AStarPathFinder(comptime CheckContext: type) type {
         /// list. The path will be from start to goal order.  If no path can be found, the path
         /// list will be left with just the start location.
         pub fn findPath(self: *Self, start: TileLoc, goal: TileLoc, path: *Path) !void {
-            var frontier = AStarPriorityQueue.init(self.alloc, .{});
-            try frontier.add(.{ .location = start, .score = 0.0 });
+            var frontier = AStarPriorityQueue.initContext(.{});
+            defer frontier.deinit(self.alloc);
+            try frontier.push(self.alloc, .{ .location = start, .score = 0.0 });
             @memset(self.locDataArr.items, LocData{});
             path.clearRetainingCapacity();
 
@@ -145,7 +146,7 @@ pub fn AStarPathFinder(comptime CheckContext: type) type {
 
             // Explore the frontier
             while (frontier.count() > 0) {
-                const curr = frontier.remove();
+                const curr = frontier.pop().?;
                 if (curr.location.equals(goal)) {
                     break;
                 }
@@ -174,7 +175,7 @@ pub fn AStarPathFinder(comptime CheckContext: type) type {
                     {
                         nextLoc.?.costSoFar = newCost;
                         const priority = newCost + heuristic(nextTileLoc, goal);
-                        try frontier.add(.{ .location = nextTileLoc, .score = priority });
+                        try frontier.push(self.alloc, .{ .location = nextTileLoc, .score = priority });
                         nextLoc.?.cameFrom = curr.location;
                     }
                 }

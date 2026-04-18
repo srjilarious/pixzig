@@ -67,7 +67,7 @@ pub const App = struct {
             ),
             .input_buf = std.mem.zeroes([InputBufLen]u8),
             .input_len = 0,
-            .log = std.ArrayListUnmanaged([]const u8){},
+            .log = .empty,
             .log_scroll = 0,
             .click_count = 0,
             .slider_a = 0.5,

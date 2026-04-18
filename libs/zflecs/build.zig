@@ -657,11 +657,11 @@ pub fn build(b: *std.Build) void {
         .linkage = if (opt_use_shared) .dynamic else .static,
         .root_module = module,
     });
-    lib.linkLibC();
+    lib.root_module.link_libc = true;
     b.installArtifact(lib);
 
     if (target.result.os.tag == .windows) {
-        lib.linkSystemLibrary("ws2_32");
+        lib.root_module.linkSystemLibrary("ws2_32", .{});
     }
     const test_step = b.step("test", "Run zflecs tests");
 
@@ -676,9 +676,9 @@ pub fn build(b: *std.Build) void {
         .name = "zflecs-tests",
         .root_module = tests_module,
     });
-    tests.addIncludePath(b.path("libs/flecs"));
-    tests.linkLibrary(lib);
-    tests.linkLibC();
+    tests.root_module.addIncludePath(b.path("libs/flecs"));
+    tests.root_module.linkLibrary(lib);
+    tests.root_module.link_libc = true;
     b.installArtifact(tests);
 
     test_step.dependOn(&b.addRunArtifact(tests).step);

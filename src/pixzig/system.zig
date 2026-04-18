@@ -16,7 +16,7 @@ pub const std_options = blk: {
 
 fn nativeLog(
     comptime level: std.log.Level,
-    comptime scope: @Type(.enum_literal),
+    comptime scope: @EnumLiteral(),
     comptime format: []const u8,
     args: anytype,
 ) void {
@@ -34,7 +34,8 @@ fn nativeLog(
     };
     const scope_prefix = comptime if (scope == .default) "" else "(" ++ @tagName(scope) ++ ") ";
 
-    const ms = std.time.milliTimestamp();
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const ms = std.Io.Timestamp.now(io, .real).toMilliseconds();
     const ms_part: u32 = @intCast(@mod(ms, 1000));
     const total_secs: u64 = @intCast(@divFloor(ms, 1000));
     const secs_in_day = total_secs % 86400;
@@ -43,15 +44,15 @@ fn nativeLog(
     const sec: u32 = @intCast(secs_in_day % 60);
 
     var buffer: [256]u8 = undefined;
-    const w = std.debug.lockStderrWriter(&buffer);
-    defer std.debug.unlockStderrWriter();
+    const stderr = std.debug.lockStderr(&buffer);
+    defer std.debug.unlockStderr();
     nosuspend {
-        w.print(
+        stderr.file_writer.interface.print(
             "\x1b[2m{d:0>2}:{d:0>2}:{d:0>2}.{d:0>3}\x1b[0m " ++
                 level_color ++ level_char ++ "\x1b[0m " ++
                 scope_prefix,
             .{ h, min, sec, ms_part },
         ) catch return;
-        w.print(format ++ "\x1b[0m\n", args) catch return;
+        stderr.file_writer.interface.print(format ++ "\x1b[0m\n", args) catch return;
     }
 }

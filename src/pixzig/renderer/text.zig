@@ -148,7 +148,8 @@ pub const FontAtlas = struct {
 
     // Alternative init function that loads from file path (for non-WASM)
     pub fn initFromTtfFile(fontPath: []const u8, fontSize: f32, alloc: std.mem.Allocator) !FontAtlas {
-        const fontData = try std.fs.cwd().readFileAlloc(alloc, fontPath, std.math.maxInt(usize));
+        const io = std.Io.Threaded.global_single_threaded.io();
+        const fontData = try std.Io.Dir.cwd().readFileAlloc(io, fontPath, alloc, .unlimited);
         defer alloc.free(fontData);
 
         return initFromTtf(fontData, fontSize, alloc);

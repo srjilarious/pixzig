@@ -28,7 +28,7 @@ pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.
         .name = "minilua",
         .root_module = minilua_mod,
     });
-    minilua.linkLibC();
+    minilua.root_module.link_libc = true;
     // FIXME: remove branch when zig-0.15 is released and 0.14 can be dropped
     const builtin = @import("builtin");
     if (builtin.zig_version.major == 0 and builtin.zig_version.minor < 15) {
@@ -36,7 +36,7 @@ pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.
     } else {
         minilua.root_module.sanitize_c = .off;
     }
-    minilua.addCSourceFile(.{ .file = upstream.path("src/host/minilua.c") });
+    minilua.root_module.addCSourceFile(.{ .file = upstream.path("src/host/minilua.c") });
 
     // Generate the buildvm_arch.h file using minilua
     const dynasm_run = b.addRunArtifact(minilua);
@@ -113,7 +113,7 @@ pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.
         .name = "buildvm",
         .root_module = vm_mod,
     });
-    buildvm.linkLibC();
+    buildvm.root_module.link_libc = true;
     // FIXME: remove branch when zig-0.15 is released and 0.14 can be dropped
     if (builtin.zig_version.major == 0 and builtin.zig_version.minor < 15) {
         buildvm.root_module.sanitize_c = false;
@@ -131,7 +131,7 @@ pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.
         else => &.{},
     };
 
-    buildvm.addCSourceFiles(.{
+    buildvm.root_module.addCSourceFiles(.{
         .root = .{ .dependency = .{
             .dependency = upstream,
             .sub_path = "",
@@ -140,10 +140,10 @@ pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.
         .flags = buildvm_c_flags,
     });
 
-    buildvm.addIncludePath(upstream.path("src"));
-    buildvm.addIncludePath(upstream.path("src/host"));
-    buildvm.addIncludePath(buildvm_arch_h.dirname());
-    buildvm.addIncludePath(luajit_h.dirname());
+    buildvm.root_module.addIncludePath(upstream.path("src"));
+    buildvm.root_module.addIncludePath(upstream.path("src/host"));
+    buildvm.root_module.addIncludePath(buildvm_arch_h.dirname());
+    buildvm.root_module.addIncludePath(luajit_h.dirname());
 
     // Use buildvm to generate files and headers used in the final vm
     const buildvm_bcdef = b.addRunArtifact(buildvm);
@@ -208,19 +208,19 @@ pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.
     library.step.dependOn(&buildvm_folddef.step);
     library.step.dependOn(&buildvm_ljvm.step);
 
-    library.linkLibC();
+    library.root_module.link_libc = true;
 
     lib.addCMacro("LUAJIT_UNWIND_EXTERNAL", "");
 
     lib.linkSystemLibrary("unwind", .{});
 
-    library.addIncludePath(upstream.path("src"));
-    library.addIncludePath(luajit_h.dirname());
-    library.addIncludePath(bcdef_header.dirname());
-    library.addIncludePath(ffdef_header.dirname());
-    library.addIncludePath(libdef_header.dirname());
-    library.addIncludePath(recdef_header.dirname());
-    library.addIncludePath(folddef_header.dirname());
+    library.root_module.addIncludePath(upstream.path("src"));
+    library.root_module.addIncludePath(luajit_h.dirname());
+    library.root_module.addIncludePath(bcdef_header.dirname());
+    library.root_module.addIncludePath(ffdef_header.dirname());
+    library.root_module.addIncludePath(libdef_header.dirname());
+    library.root_module.addIncludePath(recdef_header.dirname());
+    library.root_module.addIncludePath(folddef_header.dirname());
 
     lib.addCSourceFiles(.{
         .root = .{ .dependency = .{

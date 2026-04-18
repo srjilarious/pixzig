@@ -37,7 +37,7 @@ pub fn configure(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.
         .flags = &flags,
     });
     lib.addCSourceFile(.{ .file = b.path("src/luau.cpp"), .flags = &flags });
-    library.linkLibCpp();
+    library.root_module.link_libcpp = true;
 
     library.installHeader(upstream.path("VM/include/lua.h"), "lua.h");
     library.installHeader(upstream.path("VM/include/lualib.h"), "lualib.h");
