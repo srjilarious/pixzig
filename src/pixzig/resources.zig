@@ -181,11 +181,11 @@ pub const ResourceManager = struct {
     ) !*Texture {
         std.log.info("Loading image '{s}' from '{s}'\n", .{ name, file_path });
         const nt_file_path = try self.alloc.dupeZ(u8, file_path);
-        errdefer self.alloc.free(nt_file_path);
+        defer self.alloc.free(nt_file_path);
 
         // Try to load an image
         var image = try stbi.Image.loadFromFile(nt_file_path, 0);
-        errdefer image.deinit();
+        defer image.deinit();
 
         std.log.info("Loaded image '{s}', width={}, height={}\n", .{ name, image.width, image.height });
 

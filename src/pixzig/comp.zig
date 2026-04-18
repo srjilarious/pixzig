@@ -1,6 +1,8 @@
+//! Comptime helper functions.
 const std = @import("std");
 const Type = @import("std").builtin.Type;
 
+/// Get the number of fields in an enum type.
 pub fn numEnumFields(comptime T: type) usize {
     const info = @typeInfo(T);
     if (info != .@"enum") {

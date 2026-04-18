@@ -1,7 +1,17 @@
 const std = @import("std");
 const comp = @import("comp.zig");
 
-pub fn GameStateMgr(comptime Engine: type, comptime StateKeysType: type, comptime States: []const type) type {
+/// A generic game state manager that can be typed across an enum associated
+/// with a list of state types.  It provides methods for setting the current
+/// state, updating, and rendering.  When the state is changed, it checks for
+/// and calls `deactivate` on the old state and `activate` on the new state
+/// if those methods exist.  The update and render methods also check for and
+/// call the corresponding method on the current state.
+pub fn GameStateMgr(
+    comptime Engine: type,
+    comptime StateKeysType: type,
+    comptime States: []const type,
+) type {
 
     // Contrain the state enum keys to be the same size as the provided states.
     const numStates = comp.numEnumFields(StateKeysType);
@@ -27,6 +37,9 @@ pub fn GameStateMgr(comptime Engine: type, comptime StateKeysType: type, comptim
             _ = self;
         }
 
+        /// Sets the current state to the provided state key, calling
+        /// deactivate on the old state and activate on the new state
+        /// if those methods exist.
         pub fn setCurrState(self: *Self, state: StateKeysType) void {
             const oldState = self.currStateIdx;
             self.currStateIdx = @intFromEnum(state);
@@ -58,6 +71,9 @@ pub fn GameStateMgr(comptime Engine: type, comptime StateKeysType: type, comptim
             }
         }
 
+        /// Calls the update method on the current state if it exists, passing
+        /// along the engine and delta time.  Returns true if the update was
+        /// handled by the current state, false otherwise.
         pub fn update(self: *Self, eng: *Engine, deltaMs: f64) bool {
             inline for (0..States.len) |idx| {
                 if (self.currStateIdx == idx) {
@@ -69,6 +85,7 @@ pub fn GameStateMgr(comptime Engine: type, comptime StateKeysType: type, comptim
             return false;
         }
 
+        /// Calls the render method on the current state if it exists.
         pub fn render(self: *Self, eng: *Engine) void {
             inline for (0..States.len) |idx| {
                 if (self.currStateIdx == idx) {

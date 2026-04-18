@@ -6,6 +6,8 @@ const KeyChordPiece = input.KeyChordPiece;
 const KeyboardState = input.KeyboardState;
 const ChordTree = input.ChordTree;
 
+const keychord = input.keychord;
+
 pub fn keyboardStateTest() !void {
     var kbState = KeyboardState.init();
     kbState.set(.a, true);
@@ -190,7 +192,7 @@ pub fn repeatKeyChordTrigger() !void {
     }
 
     {
-        const res = kmap.update(&kbState, input.InitialRepeatRate - 1000);
+        const res = kmap.update(&kbState, keychord.InitialRepeatRate - 1000);
         try testz.expectEqual(res, input.ChordUpdateResult.none);
     }
 
@@ -348,7 +350,7 @@ pub fn timeoutReturnsResetResultTest() !void {
     kbState.set(.k, false);
 
     // Burn past the timeout with a single large elapsed value.
-    const res = kmap.update(&kbState, input.DefaultChordTimeoutUs + 1);
+    const res = kmap.update(&kbState, keychord.DefaultChordTimeoutUs + 1);
     try testz.expectEqual(res, input.ChordUpdateResult.reset);
 
     // After timeout, the second key alone should not trigger (back at root).
@@ -358,7 +360,7 @@ pub fn timeoutReturnsResetResultTest() !void {
 }
 
 // ----------------------------------------------------------------------------
-// context storage tests 
+// context storage tests
 // ----------------------------------------------------------------------------
 
 // A non-null context string passed to ChordTree.init should be stored and

@@ -51,13 +51,17 @@ pub fn EventBus(EventType: type) type {
         subscriptions: std.ArrayList(Subscription),
 
         const Self = @This();
-        const Callback = *const fn (ctxt: *anyopaque, event_data: *EventType) void;
+
+        /// The callback type for event subscribers. It takes a context pointer
+        /// and a pointer to the event data.
+        pub const Callback = *const fn (ctxt: *anyopaque, event_data: *EventType) void;
 
         const Subscription = struct {
             ctxt: *anyopaque,
             callback: Callback,
         };
 
+        /// Initializes the event bus with the provided allocator.
         pub fn init(allocator: std.mem.Allocator) Self {
             return .{
                 .allocator = allocator,
@@ -65,14 +69,21 @@ pub fn EventBus(EventType: type) type {
             };
         }
 
+        /// Deinitializes the event bus, freeing the subscriptions list.
         pub fn deinit(self: *Self) void {
             self.subscriptions.deinit(self.allocator);
         }
 
+        /// Subscribes to the event bus with a context pointer and a callback
+        /// function. The callback will be called with the context pointer and
+        /// the event data when an event is emitted.
         pub fn subscribe(self: *Self, ctxt: *anyopaque, callback: Callback) !void {
             try self.subscriptions.append(self.allocator, .{ .ctxt = ctxt, .callback = callback });
         }
 
+        /// Emits an event to all subscribed listeners. The event data is
+        /// passed to each subscriber's callback function along with their
+        /// context pointer.
         pub fn emit(self: *Self, event_data: *EventType) void {
             for (self.subscriptions.items) |sub| {
                 sub.callback(sub.ctxt, event_data);

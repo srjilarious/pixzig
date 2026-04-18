@@ -28,6 +28,7 @@ pub const xml = @import("xml");
 pub const stb_tt = @import("stb_truetype");
 
 pub const common = @import("./common.zig");
+pub const comp = @import("./comp.zig");
 pub const utils = @import("./utils.zig");
 pub const shaders = @import("./renderer/shaders.zig");
 pub const textures = @import("./renderer/textures.zig");
@@ -324,8 +325,8 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         /// Frees engine resources and deinitializes subsystems.  This includes destroying the
         /// application window.
         pub fn deinit(self: *Self) void {
-            stbi.deinit();
             self.resources.deinit();
+            stbi.deinit();
 
             self.window.destroy();
             glfw.terminate();

@@ -16,7 +16,7 @@ const Vec2I = common.Vec2I;
 const Vec2U = common.Vec2U;
 const Color = common.Color;
 const RectF = common.RectF;
-const Keyboard = @import("./input.zig").Keyboard;
+const Keyboard = @import("./input/keyboard.zig").Keyboard;
 
 pub const ConsoleOpts = struct {
     numLogLines: usize = 2000,

@@ -1,9 +1,9 @@
 # App Runner Model
 
-Pixzig applications almost always utilize a `PixzigAppRunner`, a generic structure that allows you to provide your own application context and runs runs the fixed-time-step game loop for you, working on both desktop and web builds.  It sets up the engine for you and calls your `update` and `render` methods for you.
+Pixzig applications almost always utilize a [](sym:PixzigAppRunner), a generic structure that allows you to provide your own application context and runs runs the fixed-time-step game loop for you, working on both desktop and web builds.  It sets up the engine for you and calls your `update` and `render` methods for you.
 
 ## Creating the AppRunner
-
+ 
 ```zig
 const AppRunner = pixzig.PixzigAppRunner(App, .{
     .gameScale     = 8.0,          // pixel scale factor applied to projection matrix
@@ -15,7 +15,7 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{
 });
 ```
 
-`PixzigEngineOptions` (the second parameter) is evaluated at compile time, so unused subsystems produce zero overhead.
+[](sym:PixzigEngineOptions) (the second parameter) is evaluated at compile time, so unused subsystems produce zero overhead.
 
 ## Initialising
 
@@ -32,11 +32,11 @@ pub fn main() !void {
 }
 ```
 
-`AppRunner.init` initializes the engine, which creates the GLFW window, loads OpenGL, and sets up components like the `ResourceManager` and `SoundEngine` (if audio is enabled in your `PixzigEngineOptions`). Calling `appRunner.run(app)` blocks until the window closes, then calls `app.deinit()` and cleans up the engine and various resources.
+[](sym:AppRunner.init) initializes the engine, which creates the GLFW window, loads OpenGL, and sets up components like the [](sym:ResourceManager) and [](sym:SoundEngine) (if audio is enabled in your [](sym:PixzigEngineOptions)). Calling `appRunner.run(app)` blocks until the window closes, then calls `app.deinit()` and cleans up the engine and various resources.
 
 ## The App Interface
 
-Your app struct must provide the `update` and `render` public methods, with the following signatures, otherwise you'll get a compile time error when the `AppRunner` game loop tries to call them on your struct:
+Your app struct must provide the `update` and `render` public methods, with the following signatures, otherwise you'll get a compile time error when the [](sym:AppRunner) game loop tries to call them on your struct:
 
 ```zig
 pub const App = struct {
