@@ -264,8 +264,13 @@ fn buildEngine(
     // Lua
     const ziglua = b.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
     ziglua.module("zlua").addIncludePath(.{ .cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include" });
+
     const ziglua_mod = ziglua.module("zlua");
     pixeng.addImport("ziglua", ziglua_mod);
+
+    const ziglua_c_mod = ziglua.module("ziglua-c");
+    pixeng.addImport("ziglua-c", ziglua_c_mod);
+
     const lua_lib = ziglua.artifact("lua");
     addArchIncludes(b, target, optimize, lua_lib) catch unreachable;
     engine_lib.root_module.linkLibrary(lua_lib);
