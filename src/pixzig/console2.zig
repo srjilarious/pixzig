@@ -18,12 +18,23 @@ const Color = common.Color;
 const RectF = common.RectF;
 const Keyboard = @import("./input/keyboard.zig").Keyboard;
 
+/// Console initialization options.
 pub const ConsoleOpts = struct {
+    /// The max number of log lines to keep in in the console buffer.
     numLogLines: usize = 2000,
+
+    /// Whether the console is enabled by default.
     enabledByDefault: bool = true,
-    // Pixel width of the display area, less offset on either side.
+
+    /// Pixel width of the display area, less offset on either side.
     displaySize: Vec2U = .{ .x = 800, .y = 600 },
+
+    /// Padding in pixels between the text and the edge of the console
+    /// background.
     padding: Vec2I = .{ .x = 10, .y = 10 },
+
+    /// Offset in pixels from the top-left edge of the screen to the
+    /// console background.
     offs: Vec2I = .{ .x = 10, .y = 10 },
 };
 

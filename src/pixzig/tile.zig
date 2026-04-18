@@ -691,18 +691,39 @@ pub const TileLayer = struct {
 };
 
 /// The main tile map struct, containing all of the tilesets, layers, and
-/// object groups for a tile map.  This is the main entry point for loading
-/// and working with tile maps in the engine.
+/// object groups for a tile map.
 pub const TileMap = struct {
     tilesets: std.ArrayList(TileSet),
     layers: std.ArrayList(TileLayer),
     objectGroups: std.ArrayList(ObjectGroup),
     alloc: std.mem.Allocator,
 
+    /// Initializes an empty tile map with no tilesets, layers, or object
+    /// groups.
     pub fn init(alloc: std.mem.Allocator) !TileMap {
         return .{ .tilesets = .{}, .layers = .{}, .objectGroups = .{}, .alloc = alloc };
     }
 
+    /// Initializes a tile map from a Tiled map file. This will read the XML
+    /// from the file and set up the tilesets, layers, and object groups
+    /// accordingly.
+    ///
+    /// We only support tile layers with comma-separated values for the tile
+    /// data, and we only support tilesets that are defined in the same file
+    /// (i.e. no external tilesets).
+    ///
+    /// We have special handling for the properties "blocks" and "kills" on
+    /// tiles in tilesets, which are stored as bitflags in the Tile struct's
+    /// `core` field for easy access during collision and game logic.
+    ///
+    /// The "blocks" property can be set to "left", "right", "top", "bottom",
+    /// or "all" to indicate which sides of the tile should be considered
+    /// solid for collision purposes.
+    ///
+    /// The "kills" property can be set to "true" to indicate that the tile
+    /// should be considered deadly to the player.  Any other properties
+    /// defined on tiles, layers, or objects will be stored as string key/value
+    /// pairs in the `properties` field of the respective struct.
     pub fn initFromFile(filename: []const u8, alloc: std.mem.Allocator) !TileMap {
         const fileContents = try std.fs.cwd().readFileAlloc(alloc, filename, MaxFilesize);
         defer alloc.free(fileContents);
@@ -712,6 +733,10 @@ pub const TileMap = struct {
         return initFromElement(doc.root, alloc);
     }
 
+    /// Initializes a tile map from the root XML element of a Tiled map file.
+    ///
+    /// This is used by `initFromFile` after reading the file contents, but
+    /// is also helpful for testing.
     pub fn initFromElement(node: *xml.Element, alloc: std.mem.Allocator) !TileMap {
         var map = try init(alloc);
         var elems = node.elements();
@@ -748,16 +773,22 @@ pub const TileMap = struct {
         return map;
     }
 
+    /// Gets a pointer to the layer at the given index, or null if the index
+    /// is out of bounds.
     pub fn layerByIndex(self: *const TileMap, idx: usize) ?*TileLayer {
         if (idx >= self.layers.items.len) return null;
         return &self.layers.items[idx];
     }
 
+    /// Gets a pointer to the object group at the given index, or null if the
+    /// index is out of bounds.
     pub fn objectGroupByIndex(self: *const TileMap, idx: usize) ?*ObjectGroup {
         if (idx >= self.objectGroups.items.len) return null;
         return &self.objectGroups.items[idx];
     }
 
+    /// Gets a pointer to the layer with the given name, or null if no layer has
+    /// that name.
     pub fn layerByName(self: *const TileMap, name: []const u8) ?*TileLayer {
         for (0..self.layers.items.len) |idx| {
             const layer = &self.layers.items[idx];
@@ -768,6 +799,8 @@ pub const TileMap = struct {
         return null;
     }
 
+    /// Gets a pointer to the object group with the given name, or null if no
+    /// object group has that name.
     pub fn objectGroupByName(self: *const TileMap, name: []const u8) ?*ObjectGroup {
         for (0..self.objectGroups.items.len) |idx| {
             const objGroup = &self.objectGroups.items[idx];
@@ -778,6 +811,8 @@ pub const TileMap = struct {
         return null;
     }
 
+    /// Deinitializes the tile map, freeing any allocated properties and tile
+    /// data.
     pub fn deinit(self: *TileMap) void {
         for (0..self.tilesets.items.len) |idx| {
             self.tilesets.items[idx].deinit();
@@ -1006,7 +1041,7 @@ pub const TileMapRenderer = struct {
         }
         // A tile is being removed.
         else {
-            std.debug.print("Removing block at {}, {}\n", .{ loc.x, loc.y });
+            //std.debug.print("Removing block at {}, {}\n", .{ loc.x, loc.y });
 
             // Find the bufferIndex if location exists in map
             if (self.tileIndexMap.getBuffIndex(tileIdx)) |buffIdx| {
@@ -1042,7 +1077,7 @@ pub const TileMapRenderer = struct {
                     self.numActualIndices -= 6;
                 }
             } else {
-                std.debug.print("No tile set in position!\n", .{});
+                std.log.err("No tile set in position!\n", .{});
             }
         }
 

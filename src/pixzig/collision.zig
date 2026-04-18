@@ -5,17 +5,42 @@ const Vec2U = common.Vec2U;
 const Vec2I = common.Vec2I;
 const RectF = common.RectF;
 
+/// A spatial hash grid for broad phase collision detection.  This is a fixed
+/// size grid that divides the world into cells of a specified size.  Each
+/// cell can hold a fixed number of objects.  Objects are inserted into the
+/// grid based on their position and size, and can be queried for potential
+/// collisions with other objects in the same or neighboring cells.
 pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
     return struct {
         const Self = @This();
 
         const GridList = std.ArrayList([maxItemsPerCell]?T);
+
+        /// The 2D grid of cells. Each cell can hold a fixed number of objects
+        /// (maxItemsPerCell).
         grid: GridList,
+
+        /// The size of the grid in terms of number of cells in x and y
+        /// directions.
         gridSize: Vec2U,
+
+        /// The total extent of the grid in pixels. This is calculated as
+        /// gridSize * cellSize and is used for bounds checking when inserting
+        /// or querying objects.
         gridExtent: Vec2U,
+
+        /// The size of each cell in pixels. This determines how the world
+        /// is divided into cells and how objects are mapped to cells based
+        /// on their position and size.
         cellSize: Vec2U,
         alloc: std.mem.Allocator,
 
+        /// Initializes the collision grid with the specified grid size and
+        /// cell size. The grid size is the number of cells in the x and y
+        /// directions, and the cell size is the size of each cell in pixels.
+        /// The total extent of the grid in pixels is calculated as gridSize *
+        /// cellSize. The grid is initialized with null values, indicating that
+        /// there are no objects in any cells.
         pub fn init(alloc: std.mem.Allocator, gridSize: Vec2U, cellSize: Vec2U) !Self {
             var grid: GridList = .{};
             const gridLen = gridSize.x * gridSize.y;
@@ -37,10 +62,17 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             };
         }
 
+        /// Deinitializes the collision grid by deinitializing the internal
+        /// grid list.
         pub fn deinit(self: *Self) void {
             self.grid.deinit(self.alloc);
         }
 
+        /// Resizes the collision grid to the new specified grid size. This
+        /// will change the number of cells in the grid and the total extent
+        /// of the grid in pixels. The contents of the grid are not preserved
+        /// during resizing, so it is recommended to clear and reinsert
+        /// objects after resizing.
         pub fn resize(self: *Self, sz: Vec2U) !void {
             std.debug.print("** Resizing collision grid to {} x {}\n", .{ sz.x, sz.y });
             self.gridSize = sz;
@@ -48,6 +80,8 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             try self.grid.resize(self.alloc, sz.x * sz.y);
         }
 
+        /// Clears all objects from the collision grid by setting all cells to
+        /// null.
         pub fn reset(self: *Self) void {
             const gridLen = self.gridSize.x * self.gridSize.y;
             for (0..gridLen) |idx| {
@@ -57,6 +91,7 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             }
         }
 
+        /// Inserts an object into the collision grid based on its pixel position.
         pub fn insert(self: *Self, pixelPos: Vec2U, obj: T) !void {
             const cx: usize = @as(usize, @intCast(pixelPos.x)) / self.cellSize.x;
             const cy: usize = @as(usize, @intCast(pixelPos.y)) / self.cellSize.y;
@@ -75,6 +110,8 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             return error.NoMoreSpace;
         }
 
+        /// Inserts an object into the collision grid based on its bounding
+        /// rectangle.
         pub fn insertRect(self: *Self, bounds: RectF, obj: T) !void {
             const cx: usize = @as(usize, @intFromFloat(bounds.l)) / self.cellSize.x;
             const cy: usize = @as(usize, @intFromFloat(bounds.t)) / self.cellSize.y;
@@ -108,6 +145,8 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             }
         }
 
+        /// Removes an object from the collision grid based on its pixel
+        /// position.
         pub fn removePoint(self: *Self, pixelPos: Vec2I, obj: T) !usize {
             if (pixelPos.x < 0 or @as(usize, @intCast(pixelPos.x)) >= self.gridExtent.x) {
                 return 0;
@@ -158,6 +197,8 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             return cellsRemoved;
         }
 
+        /// Removes an object from the collision grid based on its bounding
+        /// rectangle.
         pub fn removeRect(self: *Self, bounds: RectF, obj: T) !usize {
             var cellsRemoved: usize = 0;
             const cx: usize = @as(usize, @intFromFloat(bounds.l)) / self.cellSize.x;
@@ -210,6 +251,11 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             return cellsRemoved;
         }
 
+        /// Checks for collisions at a point in the grid and returns a list of
+        /// objects that are in the cell at that point.
+        ///
+        /// The list is returned through the outList parameter and the function
+        /// returns the number of objects found.
         pub fn checkPoint(self: *Self, pixelPos: Vec2I, outList: *const []?T) !usize {
             if ((pixelPos.x < 0) or (@as(usize, @intCast(pixelPos.x)) >= self.gridExtent.x)) {
                 // std.debug.print("pos = {}\n", .{pixelPos.x});
@@ -241,6 +287,12 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             return numFound;
         }
 
+        /// Checks for collisions along a horizontal line from (cxStart, cy)
+        /// to (cxEnd, cy) and returns a list of objects that
+        /// are in the cells along that line.
+        ///
+        /// The list is returned through the outList parameter and the function
+        /// returns the number of objects found.
         pub fn checkHorz(self: *Self, cxStart: i32, cxEnd: i32, cy: i32, outList: *const []?T) !usize {
 
             // Check bounds
@@ -304,6 +356,11 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             return numFound;
         }
 
+        /// Checks for potential collisions along a vertical line from (cx, cyStart)
+        /// to (cx, cyEnd).
+        ///
+        /// It returns a list of objects that are in the cells along that line
+        /// in the outList param. The function returns the number of objects found.
         pub fn checkVert(self: *Self, cx: i32, cyStart: i32, cyEnd: i32, outList: *const []?T) !usize {
             var baseIdx: usize = 0;
             var numFound: usize = 0;
@@ -368,6 +425,10 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             return numFound;
         }
 
+        /// Checks for potential collisions along the left line from (objRect.l,
+        /// objRect.t) to (objRect.l, objRect.b) and returns a list of objects
+        /// that are in the cells along that line in the outList param. The
+        /// function returns the number of objects found.
         pub fn checkLeft(self: *Self, objRect: *const RectF, outList: *const []?T) !usize {
             const left: i32 = @intFromFloat(objRect.l);
             const top: i32 = @as(i32, @intFromFloat(objRect.t)) + 1;
@@ -380,6 +441,10 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             return self.checkVert(leftTileX, tyStart, tyEnd, outList);
         }
 
+        /// Checks for potential collisions along the right line from (objRect.r,
+        /// objRect.t) to (objRect.r, objRect.b) and returns a list of objects
+        /// that are in the cells along that line in the outList param. The
+        /// function returns the number of objects found.
         pub fn checkRight(self: *Self, objRect: *const RectF, outList: *const []?T) !usize {
             const right: i32 = @intFromFloat(objRect.r);
             const top: i32 = @as(i32, @intFromFloat(objRect.t)) + 1;
@@ -392,6 +457,10 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             return self.checkVert(rightTileX, tyStart, tyEnd, outList);
         }
 
+        /// Checks for potential collisions along the top line from (objRect.l,
+        /// objRect.t) to (objRect.r, objRect.t) and returns a list of objects
+        /// that are in the cells along that line in the outList param. The
+        /// function returns the number of objects found.
         pub fn checkUp(self: *Self, objRect: *const RectF, outList: *const []?T) !usize {
             const top: i32 = @intFromFloat(objRect.t);
             const left: i32 = @as(i32, @intFromFloat(objRect.l)) + 1;
@@ -404,6 +473,10 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             return self.checkHorz(txStart, txEnd, topTileY, outList);
         }
 
+        /// Checks for potential collisions along the bottom line from (objRect.l,
+        /// objRect.b) to (objRect.r, objRect.b) and returns a list of objects
+        /// that are in the cells along that line in the outList param. The
+        /// function returns the number of objects found.
         pub fn checkDown(self: *Self, objRect: *const RectF, outList: *const []?T) !usize {
             const bottom: i32 = @intFromFloat(objRect.b);
             const left: i32 = @as(i32, @intFromFloat(objRect.l)) + 1;

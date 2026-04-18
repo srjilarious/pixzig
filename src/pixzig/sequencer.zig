@@ -1,6 +1,6 @@
-/// An action sequencer for coordinating timed game events.
-/// Sequences are sequential sets of steps, with a ParallelStep for concurrent steps.
-/// Steps follow an OO pattern with a VTable in order to allow extension in games.
+//! An action sequencer for coordinating timed game events.
+//! Sequences are sequential sets of steps, with a ParallelStep for concurrent steps.
+//! Steps follow an OO pattern with a VTable in order to allow extension in games.
 const std = @import("std");
 const common = @import("./common.zig");
 const sprites = @import("./renderer/sprites.zig");
@@ -12,8 +12,22 @@ const Color = common.Color;
 const Sprite = sprites.Sprite;
 const Actor = sprites.Actor;
 
+/// Maximum length for a step or sequence name, used for debugging and Lua
+/// bindings.
 pub const MAX_NAME_LEN = 64;
 
+/// A single step in a sequence. Steps are heap allocated and owned by the
+/// Sequence that contains them. Each step has an update function that is
+/// called every tick while the step is active, and a deinit function that
+/// is called once when the step is removed from its sequence to free any
+/// heap memory owned by the step.
+///
+/// The step struct is designed to be extensible by games, with a VTable
+/// pattern for the update and deinit functions and a void pointer for
+/// step-specific data. The base Step struct is not intended to be used
+/// directly; instead, games should define their own step structs with the
+/// Step struct as a prefix, and implement the update and deinit functions
+/// for their step type.
 pub const Step = struct {
     ptr: *anyopaque,
     vtable: *const VTable,
@@ -27,6 +41,7 @@ pub const Step = struct {
     };
 };
 
+/// A step that waits for a specified amount of time before finishing.
 pub const WaitStep = struct {
     timeLeft: f64,
     const vtable: Step.VTable = .{
@@ -57,6 +72,10 @@ pub const WaitStep = struct {
     }
 };
 
+/// A step that contains multiple sub-steps that are updated in parallel. The
+/// step finishes when all sub-steps are finished. Sub-steps are added via the
+/// add() method, which takes a Step struct and appends it to the list of
+/// sub-steps.
 pub const ParallelStep = struct {
     subSteps: std.ArrayListUnmanaged(Step),
     const vtable: Step.VTable = .{
@@ -115,7 +134,6 @@ pub const ParallelStep = struct {
     }
 };
 
-// ----------------------------------------------------------------------------
 /// Lerps a Sprite's position from its location on first tick to `target`
 /// over `durationMs`. Captures start position lazily on the first update call.
 pub const MoveToStep = struct {
@@ -181,7 +199,6 @@ pub const MoveToStep = struct {
     }
 };
 
-// ----------------------------------------------------------------------------
 /// Immediately switches an entity's Actor animation state. Fire-and-forget;
 /// completes in zero time. The state name slice is owned and freed by the step.
 pub const SetActorStateStep = struct {
@@ -227,8 +244,7 @@ pub const SetActorStateStep = struct {
     }
 };
 
-// ----------------------------------------------------------------------------
-// A linear set of steps, finished when it's iterated through all of the steps.
+/// A linear set of steps, finished when it's iterated through all of the steps.
 pub const Sequence = struct {
     steps: std.ArrayList(Step),
     alloc: std.mem.Allocator,
@@ -279,7 +295,6 @@ pub const Sequence = struct {
     }
 };
 
-// ----------------------------------------------------------------------------
 /// Manages a list of sequences and handles updating each sequence and cleaning
 /// up finished ones. Games should have one global SequencePlayer that they
 /// update every tick and add sequences to as needed.
