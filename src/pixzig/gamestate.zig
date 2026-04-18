@@ -13,7 +13,7 @@ pub fn GameStateMgr(
     comptime States: []const type,
 ) type {
 
-    // Contrain the state enum keys to be the same size as the provided states.
+    // Constrain the state enum keys to be the same size as the provided states.
     const numStates = comp.numEnumFields(StateKeysType);
     if (numStates != States.len) {
         @compileError("Number of states in keys enum and provided list must match!");
@@ -27,9 +27,6 @@ pub fn GameStateMgr(
         const Self = @This();
 
         pub fn init(states: []*anyopaque) Self {
-
-            // const enumTypeInfo = @typeInfo(StateKeysType);
-
             return .{ .currStateIdx = 0, .states = states };
         }
 

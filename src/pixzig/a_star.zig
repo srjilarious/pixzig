@@ -5,26 +5,36 @@ const tiles = @import("./tile.zig");
 const TileLayer = tiles.TileLayer;
 
 /// A location on a tilemap with helpers for checking relative positions.
+/// We assume a coordinate system of the top left of the map at 0,0 and the
+/// bottom right at size.x, size.y.
 pub const TileLoc = struct {
+    /// The x coordinate of the tile location
     x: i32,
+
+    /// The y coordinate of the tile location
     y: i32,
 
+    /// Checks if this location is equal to another location
     pub fn equals(self: *const TileLoc, other: TileLoc) bool {
         return self.x == other.x and self.y == other.y;
     }
 
+    /// Checks if this location is directly left of another location
     pub fn isLeftOf(self: *const TileLoc, other: TileLoc) bool {
         return self.x < other.x and self.y == other.y;
     }
 
+    /// Checks if this location is directly right of another location
     pub fn isRightOf(self: *const TileLoc, other: TileLoc) bool {
         return self.x > other.x and self.y == other.y;
     }
 
+    /// Checks if this location is directly above another location
     pub fn isAbove(self: *const TileLoc, other: TileLoc) bool {
         return self.x == other.x and self.y < other.y;
     }
 
+    /// Checks if this location is directly below another location
     pub fn isBelow(self: *const TileLoc, other: TileLoc) bool {
         return self.x == other.x and self.y > other.y;
     }
@@ -57,15 +67,22 @@ const AStarPriorityQueue = std.PriorityQueue(PathElem, EmptyContext, comparePath
 
 const LocDataArray = std.ArrayList(LocData);
 
-/// A basic tilemap path checker that uses the Tile core properties and checks for BlocksAll (i.e. any direction).
-/// This can be used as the CheckContext for AStarPathFinder for basic tile map use cases.
+/// A basic tilemap path checker that uses the Tile core properties and checks
+/// for BlocksAll (i.e. any direction).  This can be used as the CheckContext
+/// for AStarPathFinder for basic tile map use cases.
 pub const BasicTileMapPathChecker = struct {
     tileLayer: *const TileLayer,
 
+    /// Initializes the path checker with a reference to the tile layer. The
+    /// path checker will use the tile layer to check if tiles are walkable based
+    /// on their core properties.
     pub fn init(tileLayer: *const TileLayer) BasicTileMapPathChecker {
         return .{ .tileLayer = tileLayer };
     }
 
+    /// Checks if the tile at the given location is walkable (i.e. does not have
+    /// the BlocksAll property). If the location is out of bounds or has no
+    /// tile, it is considered walkable.
     pub fn checkPosition(self: *BasicTileMapPathChecker, loc: TileLoc) bool {
         const tile = self.tileLayer.tile(loc.x, loc.y);
         if (tile == null) return true;

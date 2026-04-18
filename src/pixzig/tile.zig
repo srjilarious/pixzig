@@ -27,19 +27,29 @@ pub const BlocksAll: u32 = 0x0f;
 pub const Kills: u32 = 0x10;
 pub const UserPropsStart: u32 = 0x20;
 
-pub const Property = struct { name: []const u8, value: []const u8 };
+/// A string key/value pair used on objects, tiles, and layers for custom properties.
+pub const Property = struct {
+    name: []const u8,
+    value: []const u8,
+};
 
 pub const PropertyList = std.ArrayList(Property);
 
+/// A tile in a tileset, with its custom properties and a bitmask for core tile
+///  properties the engine handles.
 pub const Tile = struct {
     core: CoreTileProperty,
     properties: ?PropertyList,
     alloc: std.mem.Allocator,
 
+    /// Initializes a tile with no properties and the Clear core property.
     pub fn init(alloc: std.mem.Allocator) !Tile {
         return .{ .core = Clear, .properties = null, .alloc = alloc };
     }
 
+    /// Initializes a tile from an XML element in the tileset.  This will add
+    /// any properties defined on the tile in the tileset XML and set the core
+    /// properties based on the "blocks" and "kills" properties defined in the XML.
     pub fn initFromElement(alloc: std.mem.Allocator, node: *xml.Element) !Tile {
         var tile = try Tile.init(alloc);
 
@@ -56,6 +66,9 @@ pub const Tile = struct {
         return tile;
     }
 
+    /// Adds a property to the tile.  This can be used for custom properties,
+    /// but also handles the "blocks" and "kills" properties that set core
+    /// engine behavior.
     pub fn addProperty(self: *Tile, name: []const u8, value: []const u8) !void {
         if (std.mem.eql(u8, name, "blocks")) {
             if (std.mem.eql(u8, value, "left")) {
@@ -86,6 +99,7 @@ pub const Tile = struct {
         }
     }
 
+    /// Deinitializes the tile, freeing any allocated properties.
     pub fn deinit(self: *Tile) void {
         if (self.properties != null) {
             for (0..self.properties.?.items.len) |idx| {
@@ -107,6 +121,7 @@ fn intFromFloatAttr(node: *xml.Element, attr: []const u8) !i32 {
     return val;
 }
 
+/// A Tiled "object", with name, position, size, class and custom properties.
 pub const Object = struct {
     alloc: std.mem.Allocator,
     id: i32 = -1,
@@ -119,6 +134,7 @@ pub const Object = struct {
 
     const Self = @This();
 
+    /// Initializes an empty object with no name, class, or properties.
     pub fn init(alloc: std.mem.Allocator) !Self {
         return .{ .alloc = alloc };
     }
@@ -208,6 +224,8 @@ pub const Object = struct {
         return error.PropertyNotFound;
     }
 
+    /// Gets a string property from the object.  Returns an error if the
+    /// property doesn't exist or if there are no properties on the object.
     pub fn stringProp(self: *const Self, name: []const u8) ![]const u8 {
         if (self.properties == null) return error.NoProperties;
 
@@ -221,6 +239,7 @@ pub const Object = struct {
         return error.PropertyNotFound;
     }
 
+    /// Deinitializes the tile, freeing any allocated properties.
     pub fn deinit(self: *Self) void {
         if (self.name != null) {
             self.alloc.free(self.name.?);
@@ -240,6 +259,8 @@ pub const Object = struct {
     }
 };
 
+/// A collection of tiles with information about the size of the tiles and the
+/// source texture.
 pub const TileSet = struct {
     //tileTexture: *Texture,
 
@@ -487,26 +508,71 @@ pub const ObjectGroup = struct {
     // }
 };
 
+/// A layer of tiles in a tilemap.
 pub const TileLayer = struct {
+    /// The tile indices for the layer, stored in row-major order.  A value
+    /// of -1 means no tile.
     tiles: std.ArrayList(i32),
+
+    /// Custom properties defined on the layer.
     properties: PropertyList,
+
+    /// The size of the layer in tiles.
     size: Vec2I,
+
+    /// The name of the layer, if it has one.
     name: ?[]const u8,
+
+    /// The tileset this layer uses, if it has one.  This is used for looking up
+    /// tile information like collision properties.
     tileset: ?*TileSet,
+
+    /// The size of the tiles in this layer.  This is used for calculating
+    /// source rectangles when rendering the layer.
     tileSize: Vec2I,
+
+    /// Whether the layer has been modified since it was loaded or last
+    /// rendered.  This can be used to optimize rendering by only
+    /// re-uploading the tile data to the GPU when it has changed.
     isDirty: bool,
+
+    /// Allocator used for any allocations on the layer, such as the tile data.
     alloc: std.mem.Allocator,
 
+    /// Initializes an empty layer with no tiles, properties, or name.
     pub fn init(alloc: std.mem.Allocator) !TileLayer {
-        return .{ .tiles = .{}, .properties = .{}, .size = .{ .x = 0, .y = 0 }, .name = null, .tileset = null, .tileSize = .{ .x = 0, .y = 0 }, .isDirty = false, .alloc = alloc };
+        return .{
+            .tiles = .{},
+            .properties = .{},
+            .size = .{ .x = 0, .y = 0 },
+            .name = null,
+            .tileset = null,
+            .tileSize = .{ .x = 0, .y = 0 },
+            .isDirty = false,
+            .alloc = alloc,
+        };
     }
 
+    /// Initializes a layer with the given size and tile size, with all tiles
+    /// set to -1.
     pub fn initEmpty(alloc: std.mem.Allocator, size: Vec2I, tileSize: Vec2I) !TileLayer {
         var tilesArr: std.ArrayList(i32) = .{};
         try tilesArr.appendNTimes(alloc, -1, @intCast(size.x * size.y));
-        return .{ .tiles = tilesArr, .properties = .{}, .size = size, .name = null, .tileset = null, .tileSize = tileSize, .isDirty = false, .alloc = alloc };
+        return .{
+            .tiles = tilesArr,
+            .properties = .{},
+            .size = size,
+            .name = null,
+            .tileset = null,
+            .tileSize = tileSize,
+            .isDirty = false,
+            .alloc = alloc,
+        };
     }
 
+    /// Initializes a layer from an XML element in the tilemap.  This will read
+    /// the tile data from the XML and set up the layer's tiles accordingly.
+    /// It will also read any properties defined on the layer in the XML.
     pub fn initFromElement(alloc: std.mem.Allocator, node: *xml.Element) !TileLayer {
         var layer = try init(alloc);
 
@@ -542,6 +608,7 @@ pub const TileLayer = struct {
         return layer;
     }
 
+    /// Deinitializes the layer, freeing any allocated properties and tile data.
     pub fn deinit(self: *TileLayer) void {
         if (self.name != null) {
             self.alloc.free(self.name.?);
@@ -561,10 +628,14 @@ pub const TileLayer = struct {
         self.tileset = null;
     }
 
+    /// Gets a pointer to the tile set index at the given coordinates, it does
+    /// no bounds checking.
     pub fn tileDataPtrUnchecked(self: *TileLayer, x: i32, y: i32) *i32 {
         return &self.tiles.items[self.tileIndex(x, y)];
     }
 
+    /// Sets the tile set index at the given coordinates.  Does bounds checking
+    /// and returns early if the coordinates are out of bounds.
     pub fn setTileData(self: *TileLayer, x: i32, y: i32, val: i32) void {
         if (x < 0 or x >= self.size.x) return;
         if (y < 0 or y >= self.size.y) return;
@@ -572,6 +643,8 @@ pub const TileLayer = struct {
         self.tileDataPtrUnchecked(x, y).* = val;
     }
 
+    /// Gets the tile set index at the given coordinates.  Does bounds checking
+    /// and returns -1 if the coordinates are out of bounds.
     pub fn tileData(self: *const TileLayer, x: i32, y: i32) i32 {
         if (x < 0 or x >= self.size.x) return -1;
         if (y < 0 or y >= self.size.y) return -1;
@@ -579,14 +652,21 @@ pub const TileLayer = struct {
         return self.tileDataUnchecked(x, y);
     }
 
+    /// Gets the tile set index at the given coordinates with no bounds checking.
     pub fn tileDataUnchecked(self: *const TileLayer, x: i32, y: i32) i32 {
         return self.tiles.items[self.tileIndex(x, y)];
     }
 
+    /// Gets the index into the tile data array for the given coordinates.
+    /// Does not do any bounds checking, so the caller must ensure the
+    /// coordinates are valid.
     pub fn tileIndex(self: *const TileLayer, x: i32, y: i32) usize {
         return @intCast(y * self.size.x + x);
     }
 
+    /// Gets a pointer to the tile at the given coordinates, or null if there
+    /// is no tileset for the layer, the coordinates are out of bounds or if
+    /// there is no tile at those coordinates.
     pub fn tile(self: *const TileLayer, x: i32, y: i32) ?*Tile {
         if (self.tileset == null) return null;
         if (x < 0 or x >= self.size.x) return null;
@@ -599,6 +679,7 @@ pub const TileLayer = struct {
         return self.tileset.?.tile(tsIdx);
     }
 
+    /// A debug function to print the tile indices for the layer to the console.
     pub fn dumpLayer(self: *const TileLayer) void {
         for (0..@intCast(self.size.y)) |yy| {
             for (0..@intCast(self.size.x)) |xx| {
@@ -609,6 +690,9 @@ pub const TileLayer = struct {
     }
 };
 
+/// The main tile map struct, containing all of the tilesets, layers, and
+/// object groups for a tile map.  This is the main entry point for loading
+/// and working with tile maps in the engine.
 pub const TileMap = struct {
     tilesets: std.ArrayList(TileSet),
     layers: std.ArrayList(TileLayer),

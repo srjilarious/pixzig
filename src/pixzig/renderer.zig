@@ -31,17 +31,24 @@ pub const SpriteBatchQueue = sprite_batch.SpriteBatchQueue;
 pub const ShapeBatchQueue = shape.ShapeBatchQueue;
 pub const TextRenderer = textMod.TextRenderer;
 
+/// Comptime render options that allow us to compile out features we don't
+/// need.  For example, if you don't need shape rendering, you can set
+/// shapeRendering to false and the related code will not be included in the
+///  final binary.
 pub const RendererOptions = struct {
     numSpriteTextures: u8 = 1,
     shapeRendering: bool = true,
     textRenderering: bool = false,
 };
 
+/// Runtime initialization options for the renderer.
 pub const RendererInitOpts = struct {
     fontFace: ?[:0]const u8 = null,
     fontSize: f32 = 20.0,
 };
 
+/// A rendering interface that provides methods for drawing sprites, shapes
+/// and writing text.
 pub fn Renderer(opts: RendererOptions) type {
     return struct {
         const Self = @This();

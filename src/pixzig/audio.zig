@@ -77,7 +77,7 @@ pub const AudioEngine = struct {
             }
         }
 
-        // If we got here, all sounds are currently playing. If we have room to create a new one, do it.
+        // If we got here, all sounds are currently playing. If we have room to create a new one, do it..
         if (sndList.items.len < DefaultMaxConcurrentSounds) {
             const newSnd = try self.engine.createSoundCopy(snd.snds.items[0], .{}, null);
             try sndList.append(self.allocator, newSnd);
