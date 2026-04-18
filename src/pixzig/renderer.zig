@@ -38,7 +38,7 @@ pub const TextRenderer = textMod.TextRenderer;
 pub const RendererOptions = struct {
     numSpriteTextures: u8 = 1,
     shapeRendering: bool = true,
-    textRenderering: bool = false,
+    textRendering: bool = false,
 };
 
 /// Runtime initialization options for the renderer.
@@ -83,7 +83,7 @@ pub fn Renderer(opts: RendererOptions) type {
                 rend.shapes = try ShapeBatchQueue.init(alloc, colorShader);
             }
 
-            if (opts.textRenderering) {
+            if (opts.textRendering) {
                 std.log.info("Setting up text renderering.\n", .{});
 
                 if (builtin.os.tag == .emscripten) {
@@ -127,7 +127,7 @@ pub fn Renderer(opts: RendererOptions) type {
                 self.impl.shapes.deinit();
             }
 
-            if (opts.textRenderering) {
+            if (opts.textRendering) {
                 self.impl.text.deinit();
             }
 
@@ -143,7 +143,7 @@ pub fn Renderer(opts: RendererOptions) type {
                 self.impl.shapes.begin(mvp);
             }
 
-            if (opts.textRenderering) {
+            if (opts.textRendering) {
                 self.impl.text.begin(mvp, null);
             }
         }
@@ -157,7 +157,7 @@ pub fn Renderer(opts: RendererOptions) type {
                 self.impl.shapes.end();
             }
 
-            if (opts.textRenderering) {
+            if (opts.textRendering) {
                 self.impl.text.end();
             }
         }
@@ -205,12 +205,12 @@ pub fn Renderer(opts: RendererOptions) type {
         }
 
         pub fn drawString(self: *Self, text: []const u8, pos: Vec2I) Vec2I {
-            std.debug.assert(opts.textRenderering);
+            std.debug.assert(opts.textRendering);
             return self.impl.text.drawString(text, pos);
         }
 
         pub fn drawScaledString(self: *Self, text: []const u8, pos: Vec2I, scale: f32) Vec2I {
-            std.debug.assert(opts.textRenderering);
+            std.debug.assert(opts.textRendering);
             return self.impl.text.drawScaledString(text, pos, scale);
         }
     };

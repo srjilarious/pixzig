@@ -9,7 +9,7 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{
     .gameScale     = 8.0,          // pixel scale factor applied to projection matrix
     .rendererOpts  = .{
         .shapeRendering  = true,   // enable drawRect / drawFilledRect
-        .textRenderering = false,  // enable text rendering (requires font)
+        .textRendering = false,  // enable text rendering (requires font)
     },
     .audioOpts = .{ .enabled = false },
 });

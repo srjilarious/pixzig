@@ -19,7 +19,7 @@ const FpsCounter = pixzig.utils.FpsCounter;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{ .rendererOpts = .{ .textRenderering = true } });
+const AppRunner = pixzig.PixzigAppRunner(App, .{ .rendererOpts = .{ .textRendering = true } });
 
 pub const App = struct {
     fps: FpsCounter,

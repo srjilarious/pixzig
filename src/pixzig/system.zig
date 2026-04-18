@@ -1,7 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const web = @import("./web.zig");
-const c = @cImport(@cInclude("time.h"));
 
 // Either the default panic handler or an emscripten capable one.
 pub const panic = if (builtin.os.tag == .emscripten) web.panic else std.debug.FullPanic(std.debug.defaultPanic);
@@ -37,12 +36,11 @@ fn nativeLog(
 
     const ms = std.time.milliTimestamp();
     const ms_part: u32 = @intCast(@mod(ms, 1000));
-    const t: c.time_t = @intCast(@divFloor(ms, 1000));
-    var tm: c.struct_tm = undefined;
-    _ = c.localtime_r(&t, &tm);
-    const h: u32 = @intCast(tm.tm_hour);
-    const min: u32 = @intCast(tm.tm_min);
-    const sec: u32 = @intCast(tm.tm_sec);
+    const total_secs: u64 = @intCast(@divFloor(ms, 1000));
+    const secs_in_day = total_secs % 86400;
+    const h: u32 = @intCast(secs_in_day / 3600);
+    const min: u32 = @intCast((secs_in_day % 3600) / 60);
+    const sec: u32 = @intCast(secs_in_day % 60);
 
     var buffer: [256]u8 = undefined;
     const w = std.debug.lockStderrWriter(&buffer);

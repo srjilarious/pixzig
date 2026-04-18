@@ -22,7 +22,7 @@ pub const std_options = pixzig.system.std_options;
 
 const AppRunner = pixzig.PixzigAppRunner(App, .{
     .rendererOpts = .{
-        .textRenderering = true,
+        .textRendering = true,
     },
 });
 

@@ -16,19 +16,21 @@ const SpackProcessor = struct {
     curPos: Vec2U,
     image: stbi.Image,
     rects: std.ArrayList(SpackFrame),
+    alloc: std.mem.Allocator,
 
     const Self = @This();
     pub fn init(alloc: std.mem.Allocator, size: Vec2U) !Self {
         return .{
             .curPos = .{ .x = 0, .y = 0},
             .image = try stbi.Image.createEmpty(size.x, size.y, 4, .{}),
-            .rects = std.ArrayList(SpackFrame).init(alloc),
+            .rects = .{},
+            .alloc = alloc,
         };
     }
 
     pub fn deinit(self: *Self) void {
         self.image.deinit();
-        self.rects.deinit();
+        self.rects.deinit(self.alloc);
     }
     pub fn handleImageFile(self: *Self, alloc: std.mem.Allocator, path: []const u8) !void {
         // Convert our string slice to a null terminated string
@@ -69,7 +71,7 @@ const SpackProcessor = struct {
             }
         };
 
-        try self.rects.append(
+        try self.rects.append(self.alloc,
             .{ 
                 .name = try alloc.dupe(u8, name),
                 .sizePx = .{ 
@@ -167,8 +169,17 @@ pub fn main() !void {
 
     var file = try std.fs.cwd().createFile(jsonName, .{});
     defer file.close();
+    var buffer: [2048]u8 = undefined;
+    var file_writer = file.writer(&buffer);
 
-    try std.json.stringify(data, .{ .whitespace = .indent_2 }, file.writer());
+    var write_stream: std.json.Stringify = .{
+        .writer = &file_writer.interface,
+        .options = .{ .whitespace = .indent_2 },
+    };
+    try write_stream.write(data);
+    try file_writer.interface.flush();
+
+    // try std.json.stringify(data, .{ .whitespace = .indent_2 }, file.writer());
     try stdout.print("Wrote out json file with {} rects.\n", .{spack.rects.items.len});
     try stdout.flush();
 }

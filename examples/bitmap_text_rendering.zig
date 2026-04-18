@@ -20,7 +20,7 @@ const FontAtlas = pixzig.renderer.FontAtlas;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{ .gameScale = 3.0, .rendererOpts = .{ .textRenderering = true } });
+const AppRunner = pixzig.PixzigAppRunner(App, .{ .gameScale = 3.0, .rendererOpts = .{ .textRendering = true } });
 
 pub const App = struct {
     fps: FpsCounter,
