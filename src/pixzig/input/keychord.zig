@@ -104,6 +104,11 @@ pub const KeyChord = struct {
             self.alloc.free(self.func.?);
         }
 
+        var it = self.children.valueIterator();
+        while (it.next()) |child| {
+            child.*.deinit();
+            self.alloc.destroy(child.*);
+        }
         self.children.deinit();
     }
 
@@ -166,6 +171,7 @@ pub const ChordTree = struct {
         }
 
         self.rootChord.deinit();
+        self.alloc.destroy(self.rootChord);
     }
 
     pub fn reset(self: *ChordTree) void {
@@ -235,7 +241,7 @@ pub const KeyMap = struct {
     }
 
     pub fn deinit(self: *KeyMap) void {
-        _ = self;
+        self.chords.deinit();
     }
 
     pub fn addKeyChord(self: *KeyMap, mods: KeyModifier, key: glfw.Key, func: []const u8, context: ?[]const u8) !bool {

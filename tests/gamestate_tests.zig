@@ -100,7 +100,9 @@ fn makeMgr2() struct { mgr: Mgr2, a: StateA, b: StateB } {
 }
 
 // setCurrState activates the newly selected state.
-pub fn gameStateActivateCalledOnSetTest() !void {
+pub fn gameStateActivateCalledOnSetTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     resetCounters();
     var stateA = StateA{};
     var stateB = StateB{};
@@ -119,7 +121,9 @@ pub fn gameStateActivateCalledOnSetTest() !void {
 }
 
 // Switching states deactivates the old one and activates the new one.
-pub fn gameStateSwitchDeactivatesOldActivatesNewTest() !void {
+pub fn gameStateSwitchDeactivatesOldActivatesNewTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     resetCounters();
     var stateA = StateA{};
     var stateB = StateB{};
@@ -139,7 +143,9 @@ pub fn gameStateSwitchDeactivatesOldActivatesNewTest() !void {
 }
 
 // update delegates to the active state and returns its result.
-pub fn gameStateUpdateDelegatesToActiveStateTest() !void {
+pub fn gameStateUpdateDelegatesToActiveStateTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     resetCounters();
     var stateA = StateA{};
     var stateB = StateB{};
@@ -161,7 +167,9 @@ pub fn gameStateUpdateDelegatesToActiveStateTest() !void {
 }
 
 // render delegates to the active state.
-pub fn gameStateRenderDelegatesToActiveStateTest() !void {
+pub fn gameStateRenderDelegatesToActiveStateTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     resetCounters();
     var stateA = StateA{};
     var stateB = StateB{};
@@ -181,7 +189,9 @@ pub fn gameStateRenderDelegatesToActiveStateTest() !void {
 }
 
 // States without lifecycle hooks can be set and used without panicking.
-pub fn gameStateNoLifecycleHooksTest() !void {
+pub fn gameStateNoLifecycleHooksTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     resetCounters();
     var stateA = StateA{};
     var stateB = StateB{};
@@ -203,7 +213,9 @@ pub fn gameStateNoLifecycleHooksTest() !void {
 }
 
 // Switching back to a previously active state calls its lifecycle hooks again.
-pub fn gameStateSwitchBackReinvokesLifecycleTest() !void {
+pub fn gameStateSwitchBackReinvokesLifecycleTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     resetCounters();
     var stateA = StateA{};
     var stateB = StateB{};

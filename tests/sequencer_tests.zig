@@ -38,8 +38,8 @@ fn makeSprite(x: i32, y: i32) Sprite {
 }
 
 // A single WaitStep should not be done before its duration elapses.
-pub fn waitStepNotDoneBeforeDurationTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn waitStepNotDoneBeforeDurationTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     var sequence = seq.Sequence.init(alloc);
     defer sequence.deinit(alloc);
 
@@ -50,8 +50,8 @@ pub fn waitStepNotDoneBeforeDurationTest() !void {
 }
 
 // A single WaitStep should be done once its full duration has elapsed.
-pub fn waitStepDoneAfterDurationTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn waitStepDoneAfterDurationTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     var sequence = seq.Sequence.init(alloc);
     defer sequence.deinit(alloc);
 
@@ -63,8 +63,8 @@ pub fn waitStepDoneAfterDurationTest() !void {
 }
 
 // An empty sequence should complete immediately.
-pub fn emptySequenceIsDoneImmediatelyTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn emptySequenceIsDoneImmediatelyTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     var sequence = seq.Sequence.init(alloc);
     defer sequence.deinit(alloc);
 
@@ -73,8 +73,8 @@ pub fn emptySequenceIsDoneImmediatelyTest() !void {
 }
 
 // Two sequential waits should run one after the other.
-pub fn twoWaitStepsRunSequentiallyTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn twoWaitStepsRunSequentiallyTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     var sequence = seq.Sequence.init(alloc);
     defer sequence.deinit(alloc);
 
@@ -100,8 +100,8 @@ pub fn twoWaitStepsRunSequentiallyTest() !void {
 // ---------------------------------------------------------------------------
 
 // MoveToStep should not be done before the full duration has elapsed.
-pub fn moveToStepNotDoneBeforeDurationTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn moveToStepNotDoneBeforeDurationTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     const world = makeWorld(.{Sprite});
     defer _ = flecs.fini(world);
 
@@ -118,8 +118,8 @@ pub fn moveToStepNotDoneBeforeDurationTest() !void {
 
 // MoveToStep should be done once the full duration has elapsed, with the
 // entity positioned at the target.
-pub fn moveToStepDoneAfterDurationTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn moveToStepDoneAfterDurationTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     const world = makeWorld(.{Sprite});
     defer _ = flecs.fini(world);
 
@@ -140,8 +140,8 @@ pub fn moveToStepDoneAfterDurationTest() !void {
 
 // At the midpoint of the duration the sprite should be halfway between
 // start and target.
-pub fn moveToStepInterpolatesAtMidpointTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn moveToStepInterpolatesAtMidpointTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     const world = makeWorld(.{Sprite});
     defer _ = flecs.fini(world);
 
@@ -165,8 +165,8 @@ pub fn moveToStepInterpolatesAtMidpointTest() !void {
 
 // SetActorStateStep should complete in one tick even when the entity has no
 // Actor component (graceful skip).
-pub fn setActorStateStepCompletesWithNoActorTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn setActorStateStepCompletesWithNoActorTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     const world = makeWorld(.{Actor});
     defer _ = flecs.fini(world);
 
@@ -183,8 +183,8 @@ pub fn setActorStateStepCompletesWithNoActorTest() !void {
 
 // SetActorStateStep should complete in one tick when the entity has an Actor
 // component, even if the requested state is not registered (setState is a no-op).
-pub fn setActorStateStepCompletesWithActorTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn setActorStateStepCompletesWithActorTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     const world = makeWorld(.{Actor});
     defer _ = flecs.fini(world);
 
@@ -208,8 +208,8 @@ pub fn setActorStateStepCompletesWithActorTest() !void {
 
 // A Lua script that calls seq_new / seq_wait / seq_play should produce a
 // sequence in the player that finishes after the declared wait duration.
-pub fn luaSeqWaitBuildsAndRunsTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn luaSeqWaitBuildsAndRunsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     const world = makeWorld(.{Sprite});
     defer _ = flecs.fini(world);
 
@@ -244,8 +244,8 @@ pub fn luaSeqWaitBuildsAndRunsTest() !void {
 }
 
 // A Lua script using seq_move_to should drive the entity to the target position.
-pub fn luaSeqMoveToReachesTargetTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn luaSeqMoveToReachesTargetTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     const world = makeWorld(.{Sprite});
     defer _ = flecs.fini(world);
 
@@ -286,8 +286,8 @@ pub fn luaSeqMoveToReachesTargetTest() !void {
 }
 
 // Multiple steps built from Lua run sequentially in the correct order.
-pub fn luaSeqMultipleStepsRunInOrderTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn luaSeqMultipleStepsRunInOrderTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     const world = makeWorld(.{Sprite});
     defer _ = flecs.fini(world);
 

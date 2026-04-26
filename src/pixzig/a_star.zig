@@ -101,6 +101,10 @@ pub fn AStarPathFinder(comptime CheckContext: type) type {
 
         const Self = @This();
 
+        pub fn deinit(self: *Self) void {
+            self.locDataArr.deinit(self.alloc);
+        }
+
         /// Initializes the pathfinder with the provided size. The size is used for bounds checking and should be the size of the tilemap. The pathfinder will allocate internal data structures based on the size, so it is recommended to reuse a single pathfinder instance for multiple pathfinding calls on the same map.
         pub fn init(checker: CheckContext, alloc: std.mem.Allocator, size: Vec2I) !Self {
             if (size.x < 0 or size.y < 0) return error.NegativeBoundsGiven;

@@ -255,6 +255,8 @@ pub const Object = struct {
                 self.alloc.free(prop.name);
                 self.alloc.free(prop.value);
             }
+
+            self.properties.?.deinit(self.alloc);
         }
     }
 };
@@ -436,7 +438,7 @@ pub const ObjectGroup = struct {
             const obj = &self.objects.items[idx];
             obj.deinit();
         }
-        self.objects.deinit();
+        self.objects.deinit(self.alloc);
 
         for (0..self.properties.items.len) |idx| {
             const prop = &self.properties.items[idx];
@@ -444,7 +446,7 @@ pub const ObjectGroup = struct {
             self.alloc.free(prop.value);
         }
 
-        self.properties.deinit();
+        self.properties.deinit(self.alloc);
     }
 
     const ObjectGroupIterator = struct {
@@ -826,6 +828,12 @@ pub const TileMap = struct {
         }
 
         self.layers.deinit(self.alloc);
+
+        for (0..self.objectGroups.items.len) |idx| {
+            self.objectGroups.items[idx].deinit();
+        }
+
+        self.objectGroups.deinit(self.alloc);
     }
 };
 

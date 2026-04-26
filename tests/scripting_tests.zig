@@ -36,8 +36,11 @@ const configLuaScript =
     \\    }
 ;
 
-pub fn structFromLuaLoading() !void {
-    var eng = try ScriptEngine.init(std.heap.page_allocator);
+pub fn structFromLuaLoading(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var eng = try ScriptEngine.init(alloc);
+    defer eng.deinit();
+
     // Define the global config table in lua.
     try eng.run(configLuaScript);
 
@@ -46,7 +49,7 @@ pub fn structFromLuaLoading() !void {
         std.debug.print("ERROR: {}\n", .{err});
         return err;
     };
-    defer conf.deinit(std.heap.page_allocator);
+    defer conf.deinit(alloc);
 
     try testz.expectEqual(conf.scale, 2);
     try testz.expectTrue(conf.fullscreen);
@@ -56,7 +59,6 @@ pub fn structFromLuaLoading() !void {
         std.debug.print("ERROR: {}\n", .{err});
         return err;
     };
-
     try testz.expectEqual(settings.sound_effects, true);
     try testz.expectEqual(settings.music_volume, 0.8);
 }
@@ -64,8 +66,9 @@ pub fn structFromLuaLoading() !void {
 // --- run ---
 
 // run executes Lua code and the result is visible in subsequent calls.
-pub fn runExecutesCodeAndAccumulatesStateTest() !void {
-    var eng = try ScriptEngine.init(std.heap.page_allocator);
+pub fn runExecutesCodeAndAccumulatesStateTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var eng = try ScriptEngine.init(alloc);
     defer eng.deinit();
 
     try eng.run("x = 42");
@@ -76,8 +79,9 @@ pub fn runExecutesCodeAndAccumulatesStateTest() !void {
 }
 
 // A second run call can read globals set by the first.
-pub fn runAccumulatesAcrossCallsTest() !void {
-    var eng = try ScriptEngine.init(std.heap.page_allocator);
+pub fn runAccumulatesAcrossCallsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var eng = try ScriptEngine.init(alloc);
     defer eng.deinit();
 
     try eng.run("a = 10");
@@ -90,8 +94,9 @@ pub fn runAccumulatesAcrossCallsTest() !void {
 }
 
 // run returns error.SyntaxError for invalid Lua syntax.
-pub fn runSyntaxErrorTest() !void {
-    var eng = try ScriptEngine.init(std.heap.page_allocator);
+pub fn runSyntaxErrorTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var eng = try ScriptEngine.init(alloc);
     defer eng.deinit();
 
     var got_error = false;
@@ -103,8 +108,9 @@ pub fn runSyntaxErrorTest() !void {
 }
 
 // run returns error.ScriptError for a Lua runtime error.
-pub fn runRuntimeErrorTest() !void {
-    var eng = try ScriptEngine.init(std.heap.page_allocator);
+pub fn runRuntimeErrorTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var eng = try ScriptEngine.init(alloc);
     defer eng.deinit();
 
     var got_error = false;
@@ -132,8 +138,9 @@ fn captureFunc(lua: *ziglua.Lua) i32 {
 }
 
 // A function registered with registerFunc is callable from Lua.
-pub fn registerFuncCallableFromLuaTest() !void {
-    var eng = try ScriptEngine.init(std.heap.page_allocator);
+pub fn registerFuncCallableFromLuaTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var eng = try ScriptEngine.init(alloc);
     defer eng.deinit();
 
     try eng.registerFunc("double", doubleFunc);
@@ -146,8 +153,9 @@ pub fn registerFuncCallableFromLuaTest() !void {
 }
 
 // Multiple functions can be registered independently.
-pub fn registerFuncMultipleFunctionsTest() !void {
-    var eng = try ScriptEngine.init(std.heap.page_allocator);
+pub fn registerFuncMultipleFunctionsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var eng = try ScriptEngine.init(alloc);
     defer eng.deinit();
 
     try eng.registerFunc("double", doubleFunc);

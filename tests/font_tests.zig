@@ -2,8 +2,8 @@ const std = @import("std");
 const testz = @import("testz");
 const pixzig = @import("pixzig");
 
-pub fn loadFontTest() !void {
-    const io = std.Io.Threaded.global_single_threaded.io();
+pub fn loadFontTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = alloc;
     const font_data = try std.Io.Dir.cwd().readFileAlloc(
         io,
         "assets/Roboto-Medium.ttf",

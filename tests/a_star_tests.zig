@@ -10,12 +10,16 @@ const Tile = pixzig.tile.Tile;
 
 const BasicTileMapPathChecker = pixzig.a_star.BasicTileMapPathChecker;
 
-pub fn basicMoveRightGoalTest() !void {
+pub fn basicMoveRightGoalTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     var path: Path = .empty;
+    defer path.deinit(alloc);
 
-    const tl = try TileLayer.initEmpty(std.heap.page_allocator, .{ .x = 10, .y = 10 }, .{ .x = 32, .y = 32 });
+    var tl = try TileLayer.initEmpty(alloc, .{ .x = 10, .y = 10 }, .{ .x = 32, .y = 32 });
+    defer tl.deinit();
     const checker = BasicTileMapPathChecker.init(&tl);
-    var pathFinder = try AStarPathFinder(BasicTileMapPathChecker).init(checker, std.heap.page_allocator, .{ .x = 10, .y = 10 });
+    var pathFinder = try AStarPathFinder(BasicTileMapPathChecker).init(checker, alloc, .{ .x = 10, .y = 10 });
+    defer pathFinder.deinit();
 
     try pathFinder.findPath(.{ .x = 0, .y = 0 }, .{ .x = 2, .y = 0 }, &path);
     try testz.expectEqual(path.items.len, 2);
@@ -23,12 +27,16 @@ pub fn basicMoveRightGoalTest() !void {
     try testz.expectTrue(path.items[1].equals(.{ .x = 2, .y = 0 }));
 }
 
-pub fn basicMoveLeftGoalTest() !void {
-    var path: Path = .empty; //Path.init(std.heap.page_allocator);
+pub fn basicMoveLeftGoalTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var path: Path = .empty;
+    defer path.deinit(alloc);
 
-    const tl = try TileLayer.initEmpty(std.heap.page_allocator, .{ .x = 10, .y = 10 }, .{ .x = 32, .y = 32 });
+    var tl = try TileLayer.initEmpty(alloc, .{ .x = 10, .y = 10 }, .{ .x = 32, .y = 32 });
+    defer tl.deinit();
     const checker = BasicTileMapPathChecker.init(&tl);
-    var pathFinder = try AStarPathFinder(BasicTileMapPathChecker).init(checker, std.heap.page_allocator, .{ .x = 10, .y = 10 });
+    var pathFinder = try AStarPathFinder(BasicTileMapPathChecker).init(checker, alloc, .{ .x = 10, .y = 10 });
+    defer pathFinder.deinit();
 
     try pathFinder.findPath(.{ .x = 4, .y = 0 }, .{ .x = 2, .y = 0 }, &path);
     try testz.expectEqual(path.items.len, 2);
@@ -36,13 +44,16 @@ pub fn basicMoveLeftGoalTest() !void {
     try testz.expectTrue(path.items[1].equals(.{ .x = 2, .y = 0 }));
 }
 
-pub fn basicMoveRightWithWallGoalTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn basicMoveRightWithWallGoalTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     var path: Path = .empty;
+    defer path.deinit(alloc);
 
     var tl = try TileLayer.initEmpty(alloc, .{ .x = 10, .y = 10 }, .{ .x = 32, .y = 32 });
+    defer tl.deinit();
     tl.setTileData(1, 0, 1);
     var ts = try TileSet.init(alloc);
+    defer ts.deinit();
     try ts.tiles.append(alloc, Tile{
         .core = pixzig.tile.Clear,
         .properties = null,
@@ -56,7 +67,8 @@ pub fn basicMoveRightWithWallGoalTest() !void {
     tl.tileset = &ts;
 
     const checker = BasicTileMapPathChecker.init(&tl);
-    var pathFinder = try AStarPathFinder(BasicTileMapPathChecker).init(checker, std.heap.page_allocator, .{ .x = 10, .y = 10 });
+    var pathFinder = try AStarPathFinder(BasicTileMapPathChecker).init(checker, alloc, .{ .x = 10, .y = 10 });
+    defer pathFinder.deinit();
 
     try pathFinder.findPath(.{ .x = 0, .y = 0 }, .{ .x = 2, .y = 0 }, &path);
     try testz.expectEqual(path.items.len, 4);

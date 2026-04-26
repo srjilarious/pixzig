@@ -5,10 +5,11 @@ const pixzig = @import("pixzig");
 const CollisionGrid = pixzig.collision.CollisionGrid;
 const IntCollisionGrid = CollisionGrid(i32, 2);
 
-pub fn insertionTest() !void {
+pub fn insertionTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
 
     // creates a 10x10 grid with cells 5x5 pixels
-    var grid = try IntCollisionGrid.init(std.heap.page_allocator, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
+    var grid = try IntCollisionGrid.init(alloc, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
     defer grid.deinit();
 
     grid.insert(.{ .x = 0, .y = 0 }, 100) catch {
@@ -36,10 +37,11 @@ pub fn insertionTest() !void {
     try testz.expectEqual(hits[1].?, 200);
 }
 
-pub fn insertRectTest() !void {
+pub fn insertRectTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
 
     // creates a 10x10 grid with cells 5x5 pixels
-    var grid = try IntCollisionGrid.init(std.heap.page_allocator, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
+    var grid = try IntCollisionGrid.init(alloc, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
     defer grid.deinit();
 
     grid.insertRect(.{ .t = 0, .l = 0, .r = 15, .b = 20 }, 100) catch {
@@ -83,9 +85,10 @@ pub fn insertRectTest() !void {
     try testz.expectEqual(hits[1].?, 200);
 }
 
-pub fn checkHorzTest() !void {
+pub fn checkHorzTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     // creates a 10x10 grid with cells 5x5 pixels
-    var grid = try IntCollisionGrid.init(std.heap.page_allocator, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
+    var grid = try IntCollisionGrid.init(alloc, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
     defer grid.deinit();
 
     grid.insertRect(.{ .t = 0, .l = 0, .r = 15, .b = 20 }, 100) catch {
@@ -128,9 +131,10 @@ pub fn checkHorzTest() !void {
     }
 }
 
-pub fn checkVertTest() !void {
+pub fn checkVertTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     // creates a 10x10 grid with cells 5x5 pixels
-    var grid = try IntCollisionGrid.init(std.heap.page_allocator, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
+    var grid = try IntCollisionGrid.init(alloc, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
     defer grid.deinit();
 
     grid.insertRect(.{ .t = 0, .l = 0, .r = 15, .b = 20 }, 100) catch {
@@ -205,9 +209,10 @@ pub fn checkVertTest() !void {
     }
 }
 
-pub fn checkLeftTest() !void {
+pub fn checkLeftTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     // creates a 10x10 grid with cells 5x5 pixels
-    var grid = try IntCollisionGrid.init(std.heap.page_allocator, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
+    var grid = try IntCollisionGrid.init(alloc, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
     defer grid.deinit();
 
     grid.insertRect(.{ .t = 0, .l = 0, .r = 15, .b = 20 }, 100) catch {
@@ -258,9 +263,10 @@ pub fn checkLeftTest() !void {
     }
 }
 
-pub fn checkRightTest() !void {
+pub fn checkRightTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     // creates a 10x10 grid with cells 5x5 pixels
-    var grid = try IntCollisionGrid.init(std.heap.page_allocator, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
+    var grid = try IntCollisionGrid.init(alloc, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
     defer grid.deinit();
 
     grid.insertRect(.{ .t = 0, .l = 0, .r = 15, .b = 20 }, 100) catch {
@@ -326,9 +332,10 @@ pub fn checkRightTest() !void {
     }
 }
 
-pub fn checkUpTest() !void {
+pub fn checkUpTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     // creates a 10x10 grid with cells 5x5 pixels
-    var grid = try IntCollisionGrid.init(std.heap.page_allocator, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
+    var grid = try IntCollisionGrid.init(alloc, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
     defer grid.deinit();
 
     grid.insertRect(.{ .t = 4, .l = 2, .r = 15, .b = 20 }, 100) catch {
@@ -394,9 +401,10 @@ pub fn checkUpTest() !void {
     }
 }
 
-pub fn checkDownTest() !void {
+pub fn checkDownTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     // creates a 10x10 grid with cells 5x5 pixels
-    var grid = try IntCollisionGrid.init(std.heap.page_allocator, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
+    var grid = try IntCollisionGrid.init(alloc, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
     defer grid.deinit();
 
     grid.insertRect(.{ .t = 4, .l = 2, .r = 15, .b = 15 }, 100) catch {
@@ -462,9 +470,10 @@ pub fn checkDownTest() !void {
     }
 }
 
-pub fn checkRemoveTest() !void {
+pub fn checkRemoveTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     // creates a 10x10 grid with cells 5x5 pixels
-    var grid = try IntCollisionGrid.init(std.heap.page_allocator, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
+    var grid = try IntCollisionGrid.init(alloc, .{ .x = 10, .y = 10 }, .{ .x = 5, .y = 5 });
     defer grid.deinit();
 
     grid.insertRect(.{ .t = 0, .l = 0, .r = 15, .b = 20 }, 100) catch {

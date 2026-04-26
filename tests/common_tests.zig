@@ -5,7 +5,9 @@ const pixzig = @import("pixzig");
 const RectF = pixzig.RectF;
 const RectI = pixzig.RectI;
 
-pub fn rectFIntersectsOverlappingTest() !void {
+pub fn rectFIntersectsOverlappingTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     const rect1 = RectF.fromPosSize(0, 0, 10, 10);
     const rect2 = RectF.fromPosSize(5, 5, 10, 10);
 
@@ -13,7 +15,9 @@ pub fn rectFIntersectsOverlappingTest() !void {
     try testz.expectTrue(rect2.intersects(&rect1));
 }
 
-pub fn rectFIntersectsNonOverlappingTest() !void {
+pub fn rectFIntersectsNonOverlappingTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     const rect1 = RectF.fromPosSize(0, 0, 10, 10);
     const rect2 = RectF.fromPosSize(20, 20, 10, 10);
 
@@ -21,7 +25,9 @@ pub fn rectFIntersectsNonOverlappingTest() !void {
     try testz.expectFalse(rect2.intersects(&rect1));
 }
 
-pub fn rectFIntersectsAdjacentTest() !void {
+pub fn rectFIntersectsAdjacentTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     // Touching but not overlapping
     const rect1 = RectF.fromPosSize(0, 0, 10, 10);
     const rect2 = RectF.fromPosSize(10, 0, 10, 10); // Touching right edge
@@ -34,7 +40,9 @@ pub fn rectFIntersectsAdjacentTest() !void {
     try testz.expectFalse(rect3.intersects(&rect1));
 }
 
-pub fn rectFIntersectsContainedTest() !void {
+pub fn rectFIntersectsContainedTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     // One rectangle completely inside another
     const outer = RectF.fromPosSize(0, 0, 100, 100);
     const inner = RectF.fromPosSize(10, 10, 20, 20);
@@ -43,7 +51,9 @@ pub fn rectFIntersectsContainedTest() !void {
     try testz.expectTrue(inner.intersects(&outer));
 }
 
-pub fn rectFIntersectsPartialOverlapTest() !void {
+pub fn rectFIntersectsPartialOverlapTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     // Partial overlap on one axis
     const rect1 = RectF.fromPosSize(0, 0, 10, 10);
     const rect2 = RectF.fromPosSize(5, 0, 10, 10); // Overlaps horizontally but aligned vertically
@@ -56,7 +66,9 @@ pub fn rectFIntersectsPartialOverlapTest() !void {
     try testz.expectTrue(rect3.intersects(&rect1));
 }
 
-pub fn rectFIntersectsZeroSizeTest() !void {
+pub fn rectFIntersectsZeroSizeTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     // Zero-size rectangles (points)
     const rect1 = RectF.fromPosSize(5, 5, 0, 0); // Point at (5, 5)
     const rect2 = RectF.fromPosSize(0, 0, 10, 10);
@@ -77,7 +89,9 @@ pub fn rectFIntersectsZeroSizeTest() !void {
     try testz.expectFalse(rect5.intersects(&rect4));
 }
 
-pub fn rectFIntersectsFloatPrecisionTest() !void {
+pub fn rectFIntersectsFloatPrecisionTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     // Test with floating point values
     const rect1 = RectF{ .l = 0.5, .t = 0.5, .r = 10.5, .b = 10.5 };
     const rect2 = RectF{ .l = 10.4, .t = 0.5, .r = 20.5, .b = 10.5 };
@@ -92,7 +106,9 @@ pub fn rectFIntersectsFloatPrecisionTest() !void {
     try testz.expectFalse(rect3.intersects(&rect1));
 }
 
-pub fn rectIIntersectsOverlappingTest() !void {
+pub fn rectIIntersectsOverlappingTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     const rect1 = RectI.init(0, 0, 10, 10);
     const rect2 = RectI.init(5, 5, 10, 10);
 
@@ -100,7 +116,9 @@ pub fn rectIIntersectsOverlappingTest() !void {
     try testz.expectTrue(rect2.intersects(&rect1));
 }
 
-pub fn rectIIntersectsNonOverlappingTest() !void {
+pub fn rectIIntersectsNonOverlappingTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     const rect1 = RectI.init(0, 0, 10, 10);
     const rect2 = RectI.init(20, 20, 10, 10);
 
@@ -108,7 +126,9 @@ pub fn rectIIntersectsNonOverlappingTest() !void {
     try testz.expectFalse(rect2.intersects(&rect1));
 }
 
-pub fn rectIIntersectsAdjacentTest() !void {
+pub fn rectIIntersectsAdjacentTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     // Touching but not overlapping
     const rect1 = RectI.init(0, 0, 10, 10);
     const rect2 = RectI.init(10, 0, 10, 10); // Touching right edge
@@ -121,7 +141,9 @@ pub fn rectIIntersectsAdjacentTest() !void {
     try testz.expectFalse(rect3.intersects(&rect1));
 }
 
-pub fn rectIIntersectsContainedTest() !void {
+pub fn rectIIntersectsContainedTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     // One rectangle completely inside another
     const outer = RectI.init(0, 0, 100, 100);
     const inner = RectI.init(10, 10, 20, 20);
@@ -130,7 +152,9 @@ pub fn rectIIntersectsContainedTest() !void {
     try testz.expectTrue(inner.intersects(&outer));
 }
 
-pub fn rectIIntersectsPartialOverlapTest() !void {
+pub fn rectIIntersectsPartialOverlapTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     // Partial overlap on one axis
     const rect1 = RectI.init(0, 0, 10, 10);
     const rect2 = RectI.init(5, 0, 10, 10); // Overlaps horizontally but aligned vertically
@@ -143,7 +167,9 @@ pub fn rectIIntersectsPartialOverlapTest() !void {
     try testz.expectTrue(rect3.intersects(&rect1));
 }
 
-pub fn rectIIntersectsZeroSizeTest() !void {
+pub fn rectIIntersectsZeroSizeTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     // Zero-size rectangles (points)
     const rect1 = RectI.init(5, 5, 0, 0); // Point at (5, 5)
     const rect2 = RectI.init(0, 0, 10, 10);
@@ -164,7 +190,9 @@ pub fn rectIIntersectsZeroSizeTest() !void {
     try testz.expectFalse(rect5.intersects(&rect4));
 }
 
-pub fn rectIIntersectsNegativeCoordsTest() !void {
+pub fn rectIIntersectsNegativeCoordsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     // Test with negative coordinates
     const rect1 = RectI.init(-10, -10, 10, 10);
     const rect2 = RectI.init(-5, -5, 10, 10);

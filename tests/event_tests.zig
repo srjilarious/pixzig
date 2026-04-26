@@ -8,8 +8,9 @@ fn basicEventCallback(ctxt: *anyopaque, event_data: *i32) void {
     called_ptr.* = true;
 }
 
-pub fn basicEventTest() !void {
-    var bus = events.EventBus(i32).init(std.heap.page_allocator);
+pub fn basicEventTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var bus = events.EventBus(i32).init(alloc);
     defer bus.deinit();
 
     var called = false;
@@ -38,8 +39,9 @@ fn gameEventCallback(ctxt: *anyopaque, event_data: *GameEvent) void {
     }
 }
 
-pub fn gameEventTest() !void {
-    var bus = events.EventBus(GameEvent).init(std.heap.page_allocator);
+pub fn gameEventTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var bus = events.EventBus(GameEvent).init(alloc);
     defer bus.deinit();
 
     var ctxt: i32 = 0;

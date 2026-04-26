@@ -7,14 +7,14 @@ const FrameSequenceManager = pixzig.sprites.FrameSequenceManager;
 
 fn createDummyTextureManager(alloc: std.mem.Allocator) !ResourceManager {
     var tm = ResourceManager.init(alloc);
-    try tm.atlas.put("player_right_1", .{ .texture = 0, .size = .{ .x = 8, .y = 8 }, .src = RectF.fromCoords(0, 0, 8, 8, 128, 128) });
-    try tm.atlas.put("player_right_2", .{ .texture = 0, .size = .{ .x = 8, .y = 8 }, .src = RectF.fromCoords(8, 0, 8, 8, 128, 128) });
-    try tm.atlas.put("player_right_3", .{ .texture = 0, .size = .{ .x = 8, .y = 8 }, .src = RectF.fromCoords(16, 0, 8, 8, 128, 128) });
+    try tm.atlas.put(try alloc.dupe(u8, "player_right_1"), .{ .texture = 0, .size = .{ .x = 8, .y = 8 }, .src = RectF.fromCoords(0, 0, 8, 8, 128, 128) });
+    try tm.atlas.put(try alloc.dupe(u8, "player_right_2"), .{ .texture = 0, .size = .{ .x = 8, .y = 8 }, .src = RectF.fromCoords(8, 0, 8, 8, 128, 128) });
+    try tm.atlas.put(try alloc.dupe(u8, "player_right_3"), .{ .texture = 0, .size = .{ .x = 8, .y = 8 }, .src = RectF.fromCoords(16, 0, 8, 8, 128, 128) });
     return tm;
 }
 
-pub fn frameSequenceFileLoadTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn frameSequenceFileLoadTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     const jsonStr =
         \\ {
         \\     "sequences": [
@@ -28,7 +28,7 @@ pub fn frameSequenceFileLoadTest() !void {
         \\             ]
         \\         }
         \\     ],
-        \\    "states": [] 
+        \\    "states": []
         \\ }
     ;
 
@@ -36,6 +36,7 @@ pub fn frameSequenceFileLoadTest() !void {
     defer seqMgr.deinit();
 
     var tm = try createDummyTextureManager(alloc);
+    defer tm.deinit();
     try seqMgr.loadSequence(jsonStr, &tm);
     try testz.expectEqual(seqMgr.sequences.count(), 1);
     const seq = seqMgr.getSeq("player_right");
@@ -44,8 +45,8 @@ pub fn frameSequenceFileLoadTest() !void {
     try testz.expectEqual(seq.?.frames.items.len, 3);
 }
 
-pub fn actorSequenceFileLoadTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn actorSequenceFileLoadTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     const jsonStr =
         \\ {
         \\     "sequences": [
@@ -69,7 +70,9 @@ pub fn actorSequenceFileLoadTest() !void {
     ;
 
     var seqMgr = try FrameSequenceManager.init(alloc);
+    defer seqMgr.deinit();
     var tm = try createDummyTextureManager(alloc);
+    defer tm.deinit();
     try seqMgr.loadSequence(jsonStr, &tm);
     try testz.expectEqual(seqMgr.sequences.count(), 1);
     const seq = seqMgr.getSeq("player_right");

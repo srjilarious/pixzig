@@ -4,13 +4,15 @@ const pixzig = @import("pixzig");
 const tile = pixzig.tile;
 const xml = pixzig.xml;
 
-pub fn tiledObjLoadTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn tiledObjLoadTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     const xmlStr =
         \\<object id="662" class="dot" gid="17" x="224" y="24" width="8" height="8"/>
     ;
     const doc = try xml.parse(alloc, xmlStr);
-    const obj = try tile.Object.initFromElement(alloc, doc.root);
+    defer doc.deinit();
+    var obj = try tile.Object.initFromElement(alloc, doc.root);
+    defer obj.deinit();
     try testz.expectEqual(obj.id, 662);
     try testz.expectEqual(obj.gid, 17);
     try testz.expectEqual(obj.pos.x, 224);
@@ -21,8 +23,8 @@ pub fn tiledObjLoadTest() !void {
     try testz.expectEqual(obj.name, null);
 }
 
-pub fn tiledObjWithPropsLoadTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn tiledObjWithPropsLoadTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     const xmlStr =
         \\  <object id="1567" class="ghost" gid="33" x="30" y="112" width="8" height="8">
         \\   <properties>
@@ -31,7 +33,9 @@ pub fn tiledObjWithPropsLoadTest() !void {
         \\  </object>
     ;
     const doc = try xml.parse(alloc, xmlStr);
-    const obj = try tile.Object.initFromElement(alloc, doc.root);
+    defer doc.deinit();
+    var obj = try tile.Object.initFromElement(alloc, doc.root);
+    defer obj.deinit();
     try testz.expectEqual(obj.id, 1567);
     try testz.expectEqual(obj.gid, 33);
     try testz.expectEqual(obj.pos.x, 30);
@@ -47,14 +51,16 @@ pub fn tiledObjWithPropsLoadTest() !void {
     try testz.expectEqualStr(prop.value, "red");
 }
 
-pub fn tiledObjWithFloatsLoadTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn tiledObjWithFloatsLoadTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     const xmlStr =
         \\  <object id="1567" class="ghost" gid="33" x="30.333" y="112.5" width="8" height="8">
         \\  </object>
     ;
     const doc = try xml.parse(alloc, xmlStr);
-    const obj = try tile.Object.initFromElement(alloc, doc.root);
+    defer doc.deinit();
+    var obj = try tile.Object.initFromElement(alloc, doc.root);
+    defer obj.deinit();
     try testz.expectEqual(obj.id, 1567);
     try testz.expectEqual(obj.gid, 33);
     try testz.expectEqual(obj.pos.x, 30);
@@ -66,8 +72,8 @@ pub fn tiledObjWithFloatsLoadTest() !void {
     try testz.expectEqual(obj.name, null);
 }
 
-pub fn tiledObjGroupLoadTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn tiledObjGroupLoadTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     const xmlStr =
         \\<objectgroup id="2" name="dots">
         \\  <properties>
@@ -79,10 +85,12 @@ pub fn tiledObjGroupLoadTest() !void {
         \\</objectgroup>
     ;
     const doc = try xml.parse(alloc, xmlStr);
-    const objGroup = tile.ObjectGroup.initFromElement(alloc, doc.root) catch |err| {
+    defer doc.deinit();
+    var objGroup = tile.ObjectGroup.initFromElement(alloc, doc.root) catch |err| {
         try testz.failWith(err);
         return;
     };
+    defer objGroup.deinit();
     try testz.expectEqual(objGroup.id, 2);
     try testz.expectEqualStr(objGroup.name.?, "dots");
 
@@ -104,8 +112,8 @@ pub fn tiledObjGroupLoadTest() !void {
     try testz.expectEqualStr(objGroup.objects.items[2].class.?, "dot");
 }
 
-pub fn tiledObjGroupIteratorTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn tiledObjGroupIteratorTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     const xmlStr =
         \\<objectgroup id="2" name="dots">
         \\  <properties>
@@ -117,10 +125,12 @@ pub fn tiledObjGroupIteratorTest() !void {
         \\</objectgroup>
     ;
     const doc = try xml.parse(alloc, xmlStr);
-    const objGroup = tile.ObjectGroup.initFromElement(alloc, doc.root) catch |err| {
+    defer doc.deinit();
+    var objGroup = tile.ObjectGroup.initFromElement(alloc, doc.root) catch |err| {
         try testz.failWith(err);
         return;
     };
+    defer objGroup.deinit();
 
     var it = objGroup.iterator("dot");
     const obj0 = it.next().?;
@@ -134,8 +144,8 @@ pub fn tiledObjGroupIteratorTest() !void {
     try testz.expectEqual(it.next(), null);
 }
 
-pub fn getLayerAndObjGroupTest() !void {
-    const alloc = std.heap.page_allocator;
+pub fn getLayerAndObjGroupTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     const xmlStr =
         \\<map version="1.9" tiledversion="1.9.2" orientation="orthogonal" renderorder="right-down" width="2" height="2" tilewidth="8" tileheight="8">
         \\ <tileset firstgid="1" name="tiles" tilewidth="8" tileheight="8" tilecount="256" columns="16">
@@ -160,10 +170,12 @@ pub fn getLayerAndObjGroupTest() !void {
         \\</map>
     ;
     const doc = try xml.parse(alloc, xmlStr);
-    const map = tile.TileMap.initFromElement(doc.root, alloc) catch |err| {
+    defer doc.deinit();
+    var map = tile.TileMap.initFromElement(doc.root, alloc) catch |err| {
         try testz.failWith(err);
         return;
     };
+    defer map.deinit();
 
     try testz.expectNotEqual(map.layerByIndex(0), null);
     try testz.expectEqual(map.layerByIndex(1), null);

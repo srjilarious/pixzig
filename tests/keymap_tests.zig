@@ -8,7 +8,9 @@ const ChordTree = input.ChordTree;
 
 const keychord = input.keychord;
 
-pub fn keyboardStateTest() !void {
+pub fn keyboardStateTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     var kbState = KeyboardState.init();
     kbState.set(.a, true);
     kbState.set(.left_alt, true);
@@ -38,30 +40,39 @@ pub fn keyboardStateTest() !void {
     }
 }
 
-pub fn simpleChordTest() !void {
-    var km = try KeyMap.init(std.heap.page_allocator);
+pub fn simpleChordTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var km = try KeyMap.init(alloc);
     defer km.deinit();
 
     _ = try km.addKeyChord(.{ .ctrl = true }, .a, "test", null);
 }
 
-pub fn printKeyChordPieceTest() !void {
+pub fn printKeyChordPieceTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     const kp1 = input.KeyChordPiece.from(.{ .ctrl = true, .shift = true }, .a);
 
     var buff: [256]u8 = undefined;
     const len1 = try kp1.print(buff[0..]);
     try testz.expectEqualStr(buff[0..len1], "Ctrl+Shift+A");
 
-    var kc = try input.KeyChord.init(std.heap.page_allocator, kp1, null);
+    var kc = try input.KeyChord.init(alloc, kp1, null);
+
+    // Only need to deinit the top key chord as it will free its children.
+    defer kc.deinit();
+
     const kp2 = KeyChordPiece.from(.{ .alt = true }, .p);
-    var kc2 = try input.KeyChord.init(std.heap.page_allocator, kp2, "another");
-    try kc.children.put(kp2, &kc2);
+    const kc2 = try alloc.create(input.KeyChord);
+    kc2.* = try input.KeyChord.init(alloc, kp2, "another");
+
+    try kc.children.put(kp2, kc2);
     const len2 = try kc.print(buff[0..]);
     try testz.expectEqualStr(buff[0..len2], "Ctrl+Shift+A, Alt+P: another");
 }
 
-pub fn addSingleKeyChordTest() !void {
-    var kmap = try KeyMap.init(std.heap.page_allocator);
+pub fn addSingleKeyChordTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var kmap = try KeyMap.init(alloc);
     defer kmap.deinit();
 
     _ = try kmap.addKeyChord(.{ .ctrl = true }, .a, "test", null);
@@ -69,8 +80,9 @@ pub fn addSingleKeyChordTest() !void {
     try testz.expectEqualStr(chord.func.?, "test");
 }
 
-pub fn simpleChordTreeUpdateTest() !void {
-    var kmap = try KeyMap.init(std.heap.page_allocator);
+pub fn simpleChordTreeUpdateTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var kmap = try KeyMap.init(alloc);
     defer kmap.deinit();
 
     _ = try kmap.addKeyChord(.{ .ctrl = true }, .a, "testThing", null);
@@ -89,8 +101,9 @@ pub fn simpleChordTreeUpdateTest() !void {
     }
 }
 
-pub fn twoKeyChordUpdateTest() !void {
-    var kmap = try KeyMap.init(std.heap.page_allocator);
+pub fn twoKeyChordUpdateTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var kmap = try KeyMap.init(alloc);
     defer kmap.deinit();
 
     _ = try kmap.addTwoKeyChord(.{ .ctrl = true }, .k, .l, "testThing", null);
@@ -122,8 +135,9 @@ pub fn twoKeyChordUpdateTest() !void {
 }
 
 // Test that a complex chord with different modifiers triggers as expected.
-pub fn twoKeyChordUpdateDifferentModsTest() !void {
-    var kmap = try KeyMap.init(std.heap.page_allocator);
+pub fn twoKeyChordUpdateDifferentModsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var kmap = try KeyMap.init(alloc);
     defer kmap.deinit();
 
     try testz.expectTrue(try kmap.addComplexChord(
@@ -172,8 +186,9 @@ pub fn twoKeyChordUpdateDifferentModsTest() !void {
     }
 }
 
-pub fn repeatKeyChordTrigger() !void {
-    var kmap = try KeyMap.init(std.heap.page_allocator);
+pub fn repeatKeyChordTrigger(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var kmap = try KeyMap.init(alloc);
     defer kmap.deinit();
 
     _ = try kmap.addKeyChord(.{ .ctrl = true }, .a, "testThing", null);
@@ -203,7 +218,9 @@ pub fn repeatKeyChordTrigger() !void {
     }
 }
 
-pub fn charFromKeyTest() !void {
+pub fn charFromKeyTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     try testz.expectEqual(input.charFromKey(.a, false), 'a');
     try testz.expectEqual(input.charFromKey(.a, true), 'A');
     try testz.expectEqual(input.charFromKey(.comma, true), '<');
@@ -217,7 +234,9 @@ pub fn charFromKeyTest() !void {
 // Text input tests.
 // ----------------------------------------------------------------------------
 
-pub fn textInputTest_1() !void {
+pub fn textInputTest_1(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     var kb = input.Keyboard.init();
     kb.currKeys().set(.a, true);
     kb.currKeys().set(.left_shift, true);
@@ -227,7 +246,9 @@ pub fn textInputTest_1() !void {
     try testz.expectEqualStr(buff[0..len], "A");
 }
 
-pub fn textInputTest_2() !void {
+pub fn textInputTest_2(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     var kb = input.Keyboard.init();
     kb.currKeys().set(.t, true);
     kb.currKeys().set(.g, true);
@@ -238,7 +259,9 @@ pub fn textInputTest_2() !void {
     try testz.expectEqualStr(buff[0..len], "GT");
 }
 
-pub fn textInputTest_3() !void {
+pub fn textInputTest_3(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     var kb = input.Keyboard.init();
     kb.currKeys().set(.t, true);
     kb.currKeys().set(.g, true);
@@ -249,7 +272,9 @@ pub fn textInputTest_3() !void {
     try testz.expectEqualStr(buff[0..len], "G");
 }
 
-pub fn textInputTest_4() !void {
+pub fn textInputTest_4(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
     var kb = input.Keyboard.init();
     kb.currKeys().set(.space, true);
     var buff: [1]u8 = undefined;
@@ -264,8 +289,9 @@ pub fn textInputTest_4() !void {
 
 // After triggering a chord and releasing the key, an explicit reset() should
 // leave the keymap in a clean state so the next update returns .none.
-pub fn resetStopsRepeatTest() !void {
-    var kmap = try KeyMap.init(std.heap.page_allocator);
+pub fn resetStopsRepeatTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var kmap = try KeyMap.init(alloc);
     defer kmap.deinit();
 
     _ = try kmap.addKeyChord(.{ .ctrl = true }, .a, "testThing", null);
@@ -287,8 +313,9 @@ pub fn resetStopsRepeatTest() !void {
 
 // After advancing mid-way through a two-key sequence, reset() should bring
 // the state back to root so the second key alone no longer triggers.
-pub fn resetMidSequenceTest() !void {
-    var kmap = try KeyMap.init(std.heap.page_allocator);
+pub fn resetMidSequenceTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var kmap = try KeyMap.init(alloc);
     defer kmap.deinit();
 
     _ = try kmap.addTwoKeyChord(.{ .ctrl = true }, .k, .l, "testThing", null);
@@ -313,8 +340,9 @@ pub fn resetMidSequenceTest() !void {
 // After triggering and calling reset() while the key is still held, the next
 // update should trigger immediately without waiting for InitialRepeatRate.
 // This distinguishes reset from the normal hold-to-repeat path.
-pub fn resetAllowsImmediateRetriggerTest() !void {
-    var kmap = try KeyMap.init(std.heap.page_allocator);
+pub fn resetAllowsImmediateRetriggerTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var kmap = try KeyMap.init(alloc);
     defer kmap.deinit();
 
     _ = try kmap.addKeyChord(.{ .ctrl = true }, .a, "testThing", null);
@@ -336,8 +364,9 @@ pub fn resetAllowsImmediateRetriggerTest() !void {
 
 // After the timeout elapses mid-sequence, update() should return .reset and
 // the keymap should be back at root (second key alone no longer triggers).
-pub fn timeoutReturnsResetResultTest() !void {
-    var kmap = try KeyMap.init(std.heap.page_allocator);
+pub fn timeoutReturnsResetResultTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var kmap = try KeyMap.init(alloc);
     defer kmap.deinit();
 
     _ = try kmap.addTwoKeyChord(.{ .ctrl = true }, .k, .l, "testThing", null);
@@ -365,9 +394,10 @@ pub fn timeoutReturnsResetResultTest() !void {
 
 // A non-null context string passed to ChordTree.init should be stored and
 // independently allocated (pointer differs from the original).
-pub fn chordTreeContextStoredTest() !void {
+pub fn chordTreeContextStoredTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
     const name: []const u8 = "my_context";
-    var tree = try ChordTree.init(std.heap.page_allocator, name);
+    var tree = try ChordTree.init(alloc, name);
     defer tree.deinit();
 
     try testz.expectTrue(tree.context != null);
@@ -377,8 +407,9 @@ pub fn chordTreeContextStoredTest() !void {
 }
 
 // A null context passed to ChordTree.init should result in a null stored context.
-pub fn chordTreeNullContextTest() !void {
-    var tree = try ChordTree.init(std.heap.page_allocator, null);
+pub fn chordTreeNullContextTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var tree = try ChordTree.init(alloc, null);
     defer tree.deinit();
 
     try testz.expectEqual(tree.context, null);
