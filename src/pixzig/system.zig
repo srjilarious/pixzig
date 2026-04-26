@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const web = @import("./web.zig");
+const ptime = @import("./time.zig");
 
 /// Either the default panic handler or an emscripten capable one.
 pub const panic = if (builtin.os.tag == .emscripten) web.panic else std.debug.FullPanic(std.debug.defaultPanic);
@@ -35,13 +36,7 @@ fn nativeLog(
     const scope_prefix = comptime if (scope == .default) "" else "(" ++ @tagName(scope) ++ ") ";
 
     const io = std.Io.Threaded.global_single_threaded.io();
-    const ms = std.Io.Timestamp.now(io, .real).toMilliseconds();
-    const ms_part: u32 = @intCast(@mod(ms, 1000));
-    const total_secs: u64 = @intCast(@divFloor(ms, 1000));
-    const secs_in_day = total_secs % 86400;
-    const h: u32 = @intCast(secs_in_day / 3600);
-    const min: u32 = @intCast((secs_in_day % 3600) / 60);
-    const sec: u32 = @intCast(secs_in_day % 60);
+    const lt = ptime.getLocalTime(io);
 
     var buffer: [256]u8 = undefined;
     const stderr = std.debug.lockStderr(&buffer);
@@ -51,7 +46,7 @@ fn nativeLog(
             "\x1b[2m{d:0>2}:{d:0>2}:{d:0>2}.{d:0>3}\x1b[0m " ++
                 level_color ++ level_char ++ "\x1b[0m " ++
                 scope_prefix,
-            .{ h, min, sec, ms_part },
+            .{ lt.hour, lt.minute, lt.second, lt.ms_part },
         ) catch return;
         stderr.file_writer.interface.print(format ++ "\x1b[0m\n", args) catch return;
     }

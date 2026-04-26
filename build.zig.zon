@@ -37,10 +37,12 @@
             .hash = "zmath-0.11.0-dev-wjwivdMsAwD-xaLj76YHUq3t9JDH-X16xuMTmnDzqbu2",
         },
         .zglfw = .{
-            .path = "../oss/zglfw",
+            .url = "git+https://github.com/srjilarious/zglfw.git#d5a94ade59c473315449cda12cefd62b1aa73586",
+            .hash = "zglfw-0.10.0-dev-zgVDNIK7IQBIUIzOUylSO1thWjjR9amEnW60eDhTr7WV",
         },
         .zstbi = .{
-            .path = "../oss/zstbi",
+            .url = "git+https://github.com/srjilarious/zstbi.git#89d30d105bdecd0494324ee9e6197963a9fd769b",
+            .hash = "zstbi-0.11.0-dev-L0Ea_9-XBwDgdQ5UuN7doMZiUzR4fwyzqFAxdmPjXeTF",
         },
         .zflecs = .{
             .path = "libs/zflecs",

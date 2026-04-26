@@ -301,6 +301,19 @@ fn buildEngine(
     }
     pixeng.addImport("stb_truetype", stbtt);
 
+    // C time functions (localtime / localtime_r) for local-time logging
+    const time_c_translate = b.addTranslateC(.{
+        .root_source_file = b.path("src/pixzig/time_c.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    if (target.result.os.tag == .emscripten) {
+        if (b.sysroot == null) @panic("Pass '--sysroot' for emscripten builds");
+        const em_inc = std.fs.path.join(b.allocator, &.{ b.sysroot.?, "include" }) catch @panic("OOM");
+        time_c_translate.addIncludePath(.{ .cwd_relative = em_inc });
+    }
+    pixeng.addImport("c_time", time_c_translate.createModule());
+
     // Install the engine library
     if (target.result.os.tag != .emscripten) {
         b.installArtifact(engine_lib);
