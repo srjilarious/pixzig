@@ -1227,7 +1227,7 @@ pub const GridRenderer = struct {
     vboIndices: u32 = 0,
     vertices: []f32 = undefined,
     colorCoords: []f32 = undefined,
-    indices: []u16 = undefined,
+    indices: []u32 = undefined,
     alloc: std.mem.Allocator,
     attrCoord: c_uint = 0,
     attrColor: c_uint = 0,
@@ -1305,7 +1305,7 @@ pub const GridRenderer = struct {
         colorCoords[15] = color.a;
 
         const indices = self.indices[self.currIdx .. self.currIdx + 6];
-        const currVertIdx: u16 = @intCast(self.currVert / 2);
+        const currVertIdx: u32 = @intCast(self.currVert / 2);
         indices[0] = currVertIdx + 0;
         indices[1] = currVertIdx + 1;
         indices[2] = currVertIdx + 2;
@@ -1350,7 +1350,7 @@ pub const GridRenderer = struct {
 
         self.vertices = try self.alloc.alloc(f32, @intCast(2 * 4 * numHorz * numVert * 2));
         self.colorCoords = try self.alloc.alloc(f32, @intCast(4 * 4 * numHorz * numVert * 2));
-        self.indices = try self.alloc.alloc(u16, @intCast(6 * numHorz * numVert * 2));
+        self.indices = try self.alloc.alloc(u32, @intCast(6 * numHorz * numVert * 2));
         self.initialized = true;
 
         std.debug.print("Creating {} vertices\n", .{self.vertices.len});
@@ -1400,6 +1400,8 @@ pub const GridRenderer = struct {
         gl.bindBuffer(gl.ARRAY_BUFFER, 0);
     }
 };
+
+pub const ChunkedTileMapRenderer = @import("./chunked_tile_renderer.zig").ChunkedTileMapRenderer;
 
 pub const Mover = struct {
 
