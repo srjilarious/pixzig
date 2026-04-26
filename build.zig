@@ -280,10 +280,22 @@ fn buildEngine(
     pixeng.addImport("xml", xml);
 
     // STB Truetype module
+    const stbtt_translate = b.addTranslateC(.{
+        .root_source_file = b.path("libs/stb_truetype/stb_truetype.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    stbtt_translate.addIncludePath(b.path("libs/stb_truetype"));
+    if (target.result.os.tag == .emscripten) {
+        if (b.sysroot == null) @panic("Pass '--sysroot' for emscripten builds");
+        const em_inc = std.fs.path.join(b.allocator, &.{ b.sysroot.?, "include" }) catch @panic("OOM");
+        stbtt_translate.addIncludePath(.{ .cwd_relative = em_inc });
+    }
+
     const stbtt = b.addModule("stb_truetype", .{ .root_source_file = b.path("libs/stb_truetype/stb_truetype.zig") });
+    stbtt.addImport("c", stbtt_translate.createModule());
     stbtt.addCSourceFile(.{ .file = b.path("libs/stb_truetype/stb_truetype.c"), .flags = &.{"-fno-sanitize=undefined"} });
     stbtt.addIncludePath(b.path("libs/stb_truetype"));
-    // Add Emscripten system includes for web builds
     if (target.result.os.tag == .emscripten) {
         stbtt.addIncludePath(.{ .cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include" });
     }
