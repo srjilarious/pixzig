@@ -20,7 +20,7 @@ pub fn main() !void {
     var eng = try pixzig.PixzigEngine.init("Create Texture Example", gpa, EngOptions{});
     defer eng.deinit();
 
-    std.debug.print("Engine initialized.\n", .{});
+    std.log.info("Engine initialized.\n", .{});
 
     const chars =
         \\=------=
@@ -42,7 +42,7 @@ pub fn main() !void {
         .{ .char = ' ', .color = Color8.from(0, 0, 0, 0) },
     });
 
-    std.debug.print("Created texture from characters.\n", .{});
+    std.log.info("Created texture from characters.\n", .{});
 
     const projMat = math.orthographicOffCenterLhGl(0, 320, 0, 240, -0.1, 1000);
 

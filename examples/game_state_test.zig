@@ -37,12 +37,12 @@ const StateA = struct {
 
     pub fn activate(self: *StateA) void {
         _ = self;
-        std.debug.print("State A activated!\n", .{});
+        std.log.info("State A activated!\n", .{});
     }
 
     pub fn deactivate(self: *StateA) void {
         _ = self;
-        std.debug.print("State A deactivated!\n", .{});
+        std.log.info("State A deactivated!\n", .{});
     }
 };
 
@@ -83,18 +83,18 @@ pub const App = struct {
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if (self.fps.update(delta)) {
-            std.debug.print("FPS: {}\n", .{self.fps.fps()});
+            std.log.debug("FPS: {}\n", .{self.fps.fps()});
         }
 
         if (eng.keyboard.pressed(.one)) {
-            std.debug.print("one!\n", .{});
+            std.log.info("one!\n", .{});
             self.states.setCurrState(.StateA);
         }
         if (eng.keyboard.pressed(.two)) {
-            std.debug.print("two!\n", .{});
+            std.log.info("two!\n", .{});
             self.states.setCurrState(.StateB);
         }
-        if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
+        if (eng.keyboard.pressed(.three)) std.log.info("three!\n", .{});
 
         if (eng.keyboard.pressed(.escape)) {
             return false;

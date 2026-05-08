@@ -27,7 +27,7 @@ pub const ScriptEngine = struct {
         self.lua.loadString(code) catch {
             // If there was an error, Lua will place an error string on the top of the stack.
             // Here we print out the string to inform the user of the issue.
-            std.debug.print("{s}\n", .{self.lua.toString(-1) catch unreachable});
+            std.log.err("{s}\n", .{self.lua.toString(-1) catch unreachable});
 
             // Remove the error from the stack and go back to the prompt
             self.lua.pop(1);
@@ -37,7 +37,7 @@ pub const ScriptEngine = struct {
         // Execute a line of Lua code
         self.lua.protectedCall(.{ .args = 0, .results = 0, .msg_handler = 0 }) catch {
             // Error handling here is the same as above.
-            std.debug.print("{s}\n", .{self.lua.toString(-1) catch unreachable});
+            std.log.err("{s}\n", .{self.lua.toString(-1) catch unreachable});
             self.lua.pop(1);
             return error.ScriptError;
         };

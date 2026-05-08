@@ -55,7 +55,7 @@ pub const App = struct {
         //     );
         //
         // const shapeBatch = try pixzig.renderer.ShapeBatchQueue.init(alloc, &colorShader);
-        std.debug.print("Done creating renderering data.\n", .{});
+        std.log.info("Done creating renderering data.\n", .{});
 
         const world = flecs.init();
 
@@ -150,14 +150,14 @@ pub const App = struct {
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if(self.fps.update(delta)) {
-            std.debug.print("FPS: {}\n", .{self.fps.fps()});
+            std.log.debug("FPS: {}\n", .{self.fps.fps()});
         }
 
         self.mouse.update();
 
-        if (eng.keyboard.pressed(.one)) std.debug.print("one!\n", .{});
-        if (eng.keyboard.pressed(.two)) std.debug.print("two!\n", .{});
-        if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
+        if (eng.keyboard.pressed(.one)) std.log.info("one!\n", .{});
+        if (eng.keyboard.pressed(.two)) std.log.info("two!\n", .{});
+        if (eng.keyboard.pressed(.three)) std.log.info("three!\n", .{});
         // const ScrollAmount = 3;
         // if (eng.keyboard.down(.left)) {
         //     self.scrollOffset.x += ScrollAmount;
@@ -220,7 +220,7 @@ pub const App = struct {
         const num = try self.collideGrid.checkPoint(mousePos, &hits[0..]);
         if(num > 0) {
             for(0..num) |idx| {
-                std.debug.print("Hit {?}\n", .{hits[idx]});
+                std.log.debug("Hit {?}\n", .{hits[idx]});
                 _ = try self.collideGrid.removeRect(RectF.fromPosSize(mousePos.x, mousePos.y, 16, 16), hits[idx].?);
                 flecs.delete(self.world, hits[idx].?);
             }

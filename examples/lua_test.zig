@@ -12,16 +12,16 @@ pub const std_options = pixzig.system.std_options;
 
 fn myFunc(lua: *Lua) i32 {
     _ = lua;
-    std.debug.print("Test function called.\n", .{});
+    std.log.info("Test function called.\n", .{});
     return 0;
 }
 
 fn log(lua: *Lua) i32 {
     const msg = lua.toString(1) catch {
-        std.debug.print("log(): Bad msg parameter.\n", .{});
+        std.log.err("log(): Bad msg parameter.\n", .{});
         return 0;
     };
-    std.debug.print("LOG: {s}\n", .{msg});
+    std.log.info("LOG: {s}\n", .{msg});
     return 0;
 }
 
@@ -61,8 +61,4 @@ pub fn main() !void {
     for (cons.history.items) |entry| {
         std.log.debug("{s}\n", .{entry});
     }
-
-    // Add an integer to the Lua stack and retrieve it
-    //lua.pushInteger(42);
-    //std.debug.print("{}\n", .{try lua.toInteger(1)});
 }

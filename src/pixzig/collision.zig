@@ -51,7 +51,7 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
                 }
             }
 
-            std.debug.print("Initializing collision grid: {} x {} cells, cell size {} x {}, extent {} x {}\n", .{ gridSize.x, gridSize.y, cellSize.x, cellSize.y, gridSize.x * cellSize.x, gridSize.y * cellSize.y });
+            std.log.debug("Initializing collision grid: {} x {} cells, cell size {} x {}, extent {} x {}\n", .{ gridSize.x, gridSize.y, cellSize.x, cellSize.y, gridSize.x * cellSize.x, gridSize.y * cellSize.y });
 
             return .{
                 .grid = grid,
@@ -74,7 +74,7 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
         /// during resizing, so it is recommended to clear and reinsert
         /// objects after resizing.
         pub fn resize(self: *Self, sz: Vec2U) !void {
-            std.debug.print("** Resizing collision grid to {} x {}\n", .{ sz.x, sz.y });
+            std.log.debug("** Resizing collision grid to {} x {}\n", .{ sz.x, sz.y });
             self.gridSize = sz;
             // TODO: Handle copying contents into resized grid.
             try self.grid.resize(self.alloc, sz.x * sz.y);
@@ -101,8 +101,6 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             for (0..items.len) |itIdx| {
                 if (items[itIdx] == null) {
                     items[itIdx] = obj;
-                    // std.debug.print("Inserted object {} at cell ({}, {}) idx {} at items[{}]\n", .{ obj, cx, cy, idx, itIdx });
-
                     return;
                 }
             }
@@ -161,11 +159,8 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             const idx: usize = cy * self.gridSize.x + cx;
             var items = &self.grid.items[idx];
 
-            // std.debug.print("Trying to remove object {} at cell ({}, {}) idx {}\n", .{ obj, cx, cy, idx });
-
             var cellsRemoved: usize = 0;
             for (0..items.len) |itIdx| {
-                // std.debug.print("Checking item at idx {}: {?}\n", .{ itIdx, items[itIdx] });
                 if (items[itIdx] == obj) {
                     cellsRemoved += 1;
                     items[itIdx] = null;
@@ -258,7 +253,6 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
         /// returns the number of objects found.
         pub fn checkPoint(self: *Self, pixelPos: Vec2I, outList: *const []?T) !usize {
             if ((pixelPos.x < 0) or (@as(usize, @intCast(pixelPos.x)) >= self.gridExtent.x)) {
-                // std.debug.print("pos = {}\n", .{pixelPos.x});
                 return 0;
             }
 

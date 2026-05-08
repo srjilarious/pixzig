@@ -326,7 +326,7 @@ pub const TileSet = struct {
             } else if (std.mem.eql(u8, child.tag, "image")) {
                 tileset.textureSize = .{ .x = try std.fmt.parseInt(i32, child.getAttribute("width").?, 0), .y = try std.fmt.parseInt(i32, child.getAttribute("height").?, 0) };
             } else {
-                std.debug.print("Unhandled tileset child: {s}\n", .{child.tag});
+                std.log.err("Unhandled tileset child: {s}\n", .{child.tag});
             }
         }
 
@@ -597,7 +597,7 @@ pub const TileLayer = struct {
         var buffIdx: usize = 0;
         while (it.next()) |curr| {
             const idx = std.fmt.parseInt(i32, curr, 0) catch |err| {
-                std.debug.print("Unable to parse index: {s}: {}", .{ curr, err });
+                std.log.err("Unable to parse index: {s}: {}", .{ curr, err });
                 continue;
             };
 
@@ -685,9 +685,9 @@ pub const TileLayer = struct {
     pub fn dumpLayer(self: *const TileLayer) void {
         for (0..@intCast(self.size.y)) |yy| {
             for (0..@intCast(self.size.x)) |xx| {
-                std.debug.print("{} ", .{self.tileData(@intCast(xx), @intCast(yy))});
+                std.log.debug("{} ", .{self.tileData(@intCast(xx), @intCast(yy))});
             }
-            std.debug.print("\n", .{});
+            std.log.debug("\n", .{});
         }
     }
 };
@@ -992,30 +992,30 @@ pub const TileMapRenderer = struct {
     }
 
     fn dump(self: *TileMapRenderer) void {
-        std.debug.print("*****************\n", .{});
+        std.log.debug("*****************\n", .{});
 
-        std.debug.print("### tileIndexMap:\n", .{});
+        std.log.debug("### tileIndexMap:\n", .{});
         for (self.tileIndexMap.arr.items, 0..) |kv, idx| {
-            std.debug.print("[{}] tIdx={}, bIdx={}\n", .{ idx, kv.tileIdx, kv.bufferIdx });
+            std.log.debug("[{}] tIdx={}, bIdx={}\n", .{ idx, kv.tileIdx, kv.bufferIdx });
             var vIdx = (kv.bufferIdx) * 8;
             var iIdx = (kv.bufferIdx) * 6;
 
-            std.debug.print("Vertices: \n", .{});
+            std.log.debug("Vertices: \n", .{});
             for (0..4) |_| {
-                std.debug.print("({}, {}) ", .{ @as(i32, @intFromFloat(self.vertices[vIdx])), @as(i32, @intFromFloat(self.vertices[vIdx + 1])) });
+                std.log.debug("({}, {}) ", .{ @as(i32, @intFromFloat(self.vertices[vIdx])), @as(i32, @intFromFloat(self.vertices[vIdx + 1])) });
                 vIdx += 2;
             }
-            std.debug.print("\n", .{});
+            std.log.debug("\n", .{});
 
-            std.debug.print("Indices: \n", .{});
+            std.log.debug("Indices: \n", .{});
             for (0..2) |_| {
-                std.debug.print("({}, {}, {}) ", .{ self.indices[iIdx], self.indices[iIdx + 1], self.indices[iIdx + 2] });
+                std.log.debug("({}, {}, {}) ", .{ self.indices[iIdx], self.indices[iIdx + 1], self.indices[iIdx + 2] });
                 iIdx += 3;
             }
-            std.debug.print("\n\n", .{});
+            std.log.debug("\n\n", .{});
         }
 
-        std.debug.print("*****************\n", .{});
+        std.log.debug("*****************\n", .{});
     }
 
     pub fn tileChanged(self: *TileMapRenderer, tileset: *TileSet, tiles: *TileLayer, loc: Vec2I, tile: i32) !void {
@@ -1361,7 +1361,7 @@ pub const GridRenderer = struct {
         self.indices = try self.alloc.alloc(u32, @intCast(6 * numHorz * numVert * 2));
         self.initialized = true;
 
-        std.debug.print("Creating {} vertices\n", .{self.vertices.len});
+        std.log.info("Creating {} vertices\n", .{self.vertices.len});
         const gridWidth: i32 = @intCast((numHorz - 1) * tw);
         const gridHeight: i32 = @intCast((numVert - 1) * th);
         for (0..numVert) |yy| {

@@ -55,22 +55,22 @@ pub const App = struct {
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if (self.fps.update(delta)) {
-            std.debug.print("FPS: {}\n", .{self.fps.fps()});
+            std.log.debug("FPS: {}\n", .{self.fps.fps()});
         }
 
-        if (eng.keyboard.pressed(.one)) std.debug.print("one!\n", .{});
-        if (eng.keyboard.pressed(.two)) std.debug.print("two!\n", .{});
-        if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
+        if (eng.keyboard.pressed(.one)) std.log.info("one!\n", .{});
+        if (eng.keyboard.pressed(.two)) std.log.info("two!\n", .{});
+        if (eng.keyboard.pressed(.three)) std.log.info("three!\n", .{});
         if (eng.keyboard.pressed(.left)) {
-            std.debug.print("Left!\n", .{});
+            std.log.info("Left!\n", .{});
             self.testVal -= 1;
         }
         if (eng.keyboard.pressed(.right)) {
-            std.debug.print("Right!\n", .{});
+            std.log.info("Right!\n", .{});
             self.testVal += 1;
         }
         if (eng.keyboard.pressed(.space)) {
-            std.debug.print("Context: {}\n", .{self.testVal});
+            std.log.info("Context: {}\n", .{self.testVal});
         }
         if (eng.keyboard.pressed(.escape)) {
             return false;

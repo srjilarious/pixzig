@@ -89,7 +89,7 @@ pub const AudioEngine = struct {
         for (sndList.items) |s| {
             if (!s.isPlaying()) {
                 s.start() catch |err| {
-                    std.debug.print("Error playing sound: {}\n", .{err});
+                    std.log.err("Error playing sound: {}\n", .{err});
                 };
                 return;
             }
@@ -100,10 +100,10 @@ pub const AudioEngine = struct {
             const newSnd = try self.engine.createSoundCopy(snd.snds.items[0], .{}, null);
             try sndList.append(self.allocator, newSnd);
             newSnd.start() catch |err| {
-                std.debug.print("Error playing sound: {}\n", .{err});
+                std.log.err("Error playing sound: {}\n", .{err});
             };
         } else {
-            std.debug.print("Max concurrent sounds reached for '{s}'. Cannot play sound.\n", .{name});
+            std.log.warn("Max concurrent sounds reached for '{s}'. Cannot play sound.\n", .{name});
         }
     }
 };

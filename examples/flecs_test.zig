@@ -128,12 +128,12 @@ pub const App = struct {
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if (self.fps.update(delta)) {
-            std.debug.print("FPS: {}\n", .{self.fps.fps()});
+            std.log.debug("FPS: {}\n", .{self.fps.fps()});
         }
 
-        if (eng.keyboard.pressed(.one)) std.debug.print("one!\n", .{});
-        if (eng.keyboard.pressed(.two)) std.debug.print("two!\n", .{});
-        if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
+        if (eng.keyboard.pressed(.one)) std.log.info("one!\n", .{});
+        if (eng.keyboard.pressed(.two)) std.log.info("two!\n", .{});
+        if (eng.keyboard.pressed(.three)) std.log.info("three!\n", .{});
         const ScrollAmount = 3;
         if (eng.keyboard.down(.left)) {
             self.scrollOffset.x += ScrollAmount;

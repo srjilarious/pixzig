@@ -178,19 +178,19 @@ pub const Console = struct {
     fn log(lua: *Lua) i32 {
         _ = lua.getField(1, "userdata");
         const console = lua.toUserdata(Console, -1) catch {
-            std.debug.print("Couldn't get console userdata ptr!\n", .{});
+            std.log.err("Couldn't get console userdata ptr!\n", .{});
             return 0;
         };
         lua.pop(1);
 
         // Get the message paramter.
         const msgC = lua.toString(2) catch {
-            std.debug.print("log(): Bad msg parameter.\n", .{});
+            std.log.err("log(): Bad msg parameter.\n", .{});
             return 0;
         };
 
         console.addMessageToLogZ(msgC, .{}) catch {
-            std.debug.print("Error adding message to history!\n", .{});
+            std.log.err("Error adding message to history!\n", .{});
             return 0;
         };
 
@@ -201,7 +201,7 @@ pub const Console = struct {
         // Make sure to null terminate the input buffer.
         self.inputBuffer[self.inputMax] = 0;
 
-        std.debug.print("Running: {s}\n", .{self.inputBuffer});
+        std.log.debug("Running: {s}\n", .{self.inputBuffer});
 
         var addToHistory: bool = false;
         if (self.history.items.len != 0) {

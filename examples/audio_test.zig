@@ -44,7 +44,7 @@ pub const App = struct {
         // std.log.info("Finished loading sample.", .{});
 
         engine.audio.loadSound("laserShoot", "assets/laserShoot.wav") catch |err| {
-            std.debug.print("Error loading sound: {}\n", .{err});
+            std.log.err("Error loading sound: {}\n", .{err});
         };
 
         const app = try allocator.create(App);
@@ -67,29 +67,29 @@ pub const App = struct {
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if (self.fps.update(delta)) {
-            std.debug.print("FPS: {}\n", .{self.fps.fps()});
+            std.log.info("FPS: {}\n", .{self.fps.fps()});
         }
 
-        if (eng.keyboard.pressed(.one)) std.debug.print("one!\n", .{});
-        if (eng.keyboard.pressed(.two)) std.debug.print("two!\n", .{});
-        if (eng.keyboard.pressed(.three)) std.debug.print("three!\n", .{});
+        if (eng.keyboard.pressed(.one)) std.log.info("one!\n", .{});
+        if (eng.keyboard.pressed(.two)) std.log.info("two!\n", .{});
+        if (eng.keyboard.pressed(.three)) std.log.info("three!\n", .{});
         if (eng.keyboard.pressed(.left)) {
-            std.debug.print("Left!\n", .{});
+            std.log.info("Left!\n", .{});
             eng.audio.playSound("laserShoot") catch |err| {
-                std.debug.print("Error playing sound: {}\n", .{err});
+                std.log.err("Error playing sound: {}\n", .{err});
             };
 
             // self.sample.start() catch |err| {
-            //     std.debug.print("Error playing sound: {}\n", .{err});
+            //     std.log.info("Error playing sound: {}\n", .{err});
             // };
             self.testVal -= 1;
         }
         if (eng.keyboard.pressed(.right)) {
-            std.debug.print("Right!\n", .{});
+            std.log.info("Right!\n", .{});
             self.testVal += 1;
         }
         if (eng.keyboard.pressed(.space)) {
-            std.debug.print("Context: {}\n", .{self.testVal});
+            std.log.info("Context: {}\n", .{self.testVal});
         }
         if (eng.keyboard.pressed(.escape)) {
             return false;

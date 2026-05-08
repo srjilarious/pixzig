@@ -46,7 +46,7 @@ pub fn structFromLuaLoading(io: std.Io, alloc: std.mem.Allocator) !void {
 
     // Extract some values from the table
     var conf = eng.loadStruct(TestConfig, "config") catch |err| {
-        std.debug.print("ERROR: {}\n", .{err});
+        std.log.err("ERROR: {}\n", .{err});
         return err;
     };
     defer conf.deinit(alloc);
@@ -56,7 +56,7 @@ pub fn structFromLuaLoading(io: std.Io, alloc: std.mem.Allocator) !void {
     try testz.expectEqualStr(conf.title.?, "My Game");
 
     const settings = eng.loadStruct(TestSettings, "settings") catch |err| {
-        std.debug.print("ERROR: {}\n", .{err});
+        std.log.err("ERROR: {}\n", .{err});
         return err;
     };
     try testz.expectEqual(settings.sound_effects, true);

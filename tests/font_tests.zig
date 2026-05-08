@@ -36,7 +36,7 @@ pub fn loadFontTest(io: std.Io, alloc: std.mem.Allocator) !void {
     pixzig.stb_tt.c.stbtt_PackEnd(&pack_context);
 
     for (0..16) |idx| {
-        std.debug.print("{}: x0={} x1={} y0={} y1={} xoff={} yoff={} xadvance={}\n", .{
+        std.log.debug("{}: x0={} x1={} y0={} y1={} xoff={} yoff={} xadvance={}", .{
             idx + 32,
             packed_chars[idx].x0,
             packed_chars[idx].x1,
