@@ -114,6 +114,8 @@ pub const KeyChord = struct {
 
     pub fn print(self: *KeyChord, buff: []u8) !usize {
         var len: usize = 0;
+
+        // Print ourself as a toplevel
         if (self.func != null) {
             len = try self.piece.print(buff);
             const sl = try std.fmt.bufPrint(buff[len..], ": {s}", .{self.func.?});
@@ -122,11 +124,12 @@ pub const KeyChord = struct {
 
         var it = self.children.keyIterator();
         while (it.next()) |k| {
+            // Print our selves first to show the full chain leading to this child.
             len += try self.piece.print(buff[len..]);
             _ = try std.fmt.bufPrint(buff[len..], ", ", .{});
             len += 2;
 
-            // len += try k.print(buff[len..]);
+            // Now print the child.
             len += try self.children.getPtr(k.*).?.*.print(buff[len..]);
         }
 
@@ -262,7 +265,7 @@ pub const KeyMap = struct {
         var chord1: *KeyChord = undefined;
         if (!self.chords.rootChord.children.contains(kcp1)) {
             chord1 = try self.alloc.create(KeyChord);
-            chord1.* = try KeyChord.init(self.alloc, kcp1, "");
+            chord1.* = try KeyChord.init(self.alloc, kcp1, null);
             try self.chords.rootChord.children.put(kcp1, chord1);
         } else {
             chord1 = self.chords.rootChord.children.get(kcp1).?;
@@ -283,7 +286,7 @@ pub const KeyMap = struct {
         var chord1: *KeyChord = undefined;
         if (!self.chords.rootChord.children.contains(kcp1)) {
             chord1 = try self.alloc.create(KeyChord);
-            chord1.* = try KeyChord.init(self.alloc, kcp1, "");
+            chord1.* = try KeyChord.init(self.alloc, kcp1, null);
             try self.chords.rootChord.children.put(kcp1, chord1);
         } else {
             chord1 = self.chords.rootChord.children.get(kcp1).?;

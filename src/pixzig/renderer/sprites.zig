@@ -35,7 +35,13 @@ pub const Sprite = struct {
     }
 };
 
-pub const Flip = enum { none, horz, vert, both };
+/// A enum for flipping sprites.
+pub const Flip = enum {
+    none,
+    horz,
+    vert,
+    both,
+};
 
 pub const Frame = struct {
     tex: *Texture,

@@ -146,7 +146,7 @@ pub const FontAtlas = struct {
         };
     }
 
-    // Alternative init function that loads from file path (for non-WASM)
+    /// Alternative init function that loads from file path (for non-WASM)
     pub fn initFromTtfFile(fontPath: []const u8, fontSize: f32, alloc: std.mem.Allocator) !FontAtlas {
         const io = std.Io.Threaded.global_single_threaded.io();
         const fontData = try std.Io.Dir.cwd().readFileAlloc(io, fontPath, alloc, .unlimited);
@@ -155,7 +155,7 @@ pub const FontAtlas = struct {
         return initFromTtf(fontData, fontSize, alloc);
     }
 
-    // Alternative init function for embedded fonts (WASM-friendly)
+    /// Alternative init function for embedded fonts (WASM-friendly)
     pub fn initFromTtfEmbedded(comptime fontPath: []const u8, fontSize: f32, alloc: std.mem.Allocator) !FontAtlas {
         const fontData = @embedFile(fontPath);
         return initFromTtf(fontData, fontSize, alloc);

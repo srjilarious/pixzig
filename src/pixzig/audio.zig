@@ -68,7 +68,7 @@ pub const AudioEngine = struct {
             return error.SoundAlreadyExists;
         }
 
-        var sndList: std.ArrayList(*zaudio.Sound) = .{};
+        var sndList: std.ArrayList(*zaudio.Sound) = .empty;
         try sndList.append(self.allocator, sound);
         try self.sounds.put(name, Sound{
             .snds = sndList,
