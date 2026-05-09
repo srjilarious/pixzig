@@ -128,7 +128,7 @@ pub const App = struct {
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if (self.fps.update(delta)) {
-            std.log.debug("FPS: {}\n", .{self.fps.fps()});
+            std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
         if (eng.keyboard.pressed(.one)) std.log.info("one!\n", .{});
@@ -211,14 +211,13 @@ pub const App = struct {
     }
 };
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig: Flecs Example", .{});
 
-    const alloc = std.heap.c_allocator;
-    const appRunner = try AppRunner.init("Pixzig: Flecs Example.", alloc, .{});
+    const appRunner = try AppRunner.init("Pixzig: Flecs Example.", init.gpa, .{});
 
     std.log.info("Initializing app.\n", .{});
-    const app: *App = try App.init(alloc, appRunner.engine);
+    const app: *App = try App.init(init.gpa, appRunner.engine);
 
     glfw.swapInterval(0);
     appRunner.run(app);

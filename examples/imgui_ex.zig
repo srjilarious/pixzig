@@ -1,4 +1,4 @@
-//! imgui_test — demonstrates the pixzig immediate mode GUI.
+//! Example that demonstrates the pixzig immediate mode GUI.
 //!
 //! Shows:
 //!   - A window with title bar
@@ -209,14 +209,13 @@ pub const App = struct {
     }
 };
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig IMGUI Test", .{});
-    const alloc = std.heap.c_allocator;
     const appRunner = try AppRunner.init(
         "Pixzig: IMGUI Test",
-        alloc,
+        init.gpa,
         .{ .renderInitOpts = .{ .fontFace = "assets/Roboto-Medium.ttf" } },
     );
-    const app = try App.init(alloc, appRunner.engine);
+    const app = try App.init(init.gpa, appRunner.engine);
     appRunner.run(app);
 }

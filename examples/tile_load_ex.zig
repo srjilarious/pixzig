@@ -147,14 +147,13 @@ pub const App = struct {
     }
 };
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig Tilemap Example", .{});
 
-    const alloc = std.heap.c_allocator;
-    const appRunner = try AppRunner.init("Pixzig: Tilemap Example.", alloc, .{});
+    const appRunner = try AppRunner.init("Pixzig: Tilemap Example.", init.gpa, .{});
 
-    std.log.info("Initializing app.\n", .{});
-    const app: *App = try App.init(alloc, appRunner.engine);
+    std.log.info("Initializing app.", .{});
+    const app: *App = try App.init(init.gpa, appRunner.engine);
 
     glfw.swapInterval(0);
     appRunner.run(app);

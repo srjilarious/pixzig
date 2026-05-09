@@ -25,15 +25,12 @@ fn log(lua: *Lua) i32 {
     return 0;
 }
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     std.log.info("Lua test starting.", .{});
-
-    // Create an allocator
-    const alloc = std.heap.c_allocator;
 
     // Initialize the Lua vm
     std.log.debug("a", .{});
-    var script = try scripting.ScriptEngine.init(alloc);
+    var script = try scripting.ScriptEngine.init(init.gpa);
     defer script.deinit();
 
     std.log.debug("b", .{});
@@ -47,7 +44,7 @@ pub fn main() !void {
     try script.run("log('My message here!')");
 
     std.log.debug("f", .{});
-    const cons = try console.Console.init(alloc, &script, .{});
+    const cons = try console.Console.init(init.gpa, &script, .{});
     defer cons.deinit();
 
     std.log.debug("g", .{});

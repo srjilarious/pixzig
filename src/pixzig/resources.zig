@@ -56,6 +56,12 @@ pub const ResourceManager = struct {
         }
 
         self.atlas.deinit();
+
+        for (self.shaders.items) |s| {
+            s.deinit();
+            self.alloc.destroy(s);
+        }
+        self.shaders.deinit(self.alloc);
     }
 
     /// Creates a texture from a character buffer, where each character is mapped

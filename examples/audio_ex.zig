@@ -21,28 +21,10 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{ .audioOpts = .{ .enabled = true
 pub const App = struct {
     alloc: std.mem.Allocator,
     testVal: i32,
-    // audioEngine: *zaudio.Engine,
-    // sample: *zaudio.Sound,
     fps: FpsCounter,
     delay: Delay = .{ .max = 120 },
 
     pub fn init(allocator: std.mem.Allocator, engine: *AppRunner.Engine) !*App {
-        // std.log.info("Initializing zaudio.", .{});
-        // zaudio.init(allocator);
-
-        // std.log.info("Intialized zaudio.", .{});
-
-        // const engine = try zaudio.Engine.create(null);
-
-        // std.log.info("Created audio engine.", .{});
-
-        // const sample = try engine.createSoundFromFile(
-        //     "assets/laserShoot.wav",
-        //     .{},
-        // );
-
-        // std.log.info("Finished loading sample.", .{});
-
         engine.audio.loadSound("laserShoot", "assets/laserShoot.wav") catch |err| {
             std.log.err("Error loading sound: {}\n", .{err});
         };
@@ -67,7 +49,7 @@ pub const App = struct {
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if (self.fps.update(delta)) {
-            std.log.info("FPS: {}\n", .{self.fps.fps()});
+            std.log.info("FPS: {}", .{self.fps.fps()});
         }
 
         if (eng.keyboard.pressed(.one)) std.log.info("one!\n", .{});
@@ -103,13 +85,11 @@ pub const App = struct {
     }
 };
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig Game Loop Example", .{});
 
-    const alloc = std.heap.c_allocator;
-
-    const appRunner = try AppRunner.init("Pixzig Game Loop Example.", alloc, .{});
-    const app = try App.init(alloc, appRunner.engine);
+    const appRunner = try AppRunner.init("Pixzig Game Loop Example.", init.gpa, .{});
+    const app = try App.init(init.gpa, appRunner.engine);
 
     glfw.swapInterval(0);
     appRunner.run(app);

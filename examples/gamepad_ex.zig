@@ -94,11 +94,10 @@ pub const App = struct {
     }
 };
 
-pub fn main() !void {
-    std.log.info("Pixzig Gamepad Test", .{});
+pub fn main(init: std.process.Init) !void {
+    std.log.info("Pixzig Gamepad Example", .{});
 
-    const alloc = std.heap.c_allocator;
-    const appRunner = try AppRunner.init("Pixzig: Gamepad Test", alloc, .{});
+    const appRunner = try AppRunner.init("Pixzig: Gamepad Example", init.gpa, .{});
     var app = App.init();
 
     glfw.swapInterval(0);

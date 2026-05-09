@@ -56,55 +56,130 @@ pub fn build(b: *std.Build) void {
         buildForWeb: bool = true,
     }{
         .{
-            .name = "audio_test",
-            .path = "examples/audio_test.zig",
+            .name = "audio_ex",
+            .path = "examples/audio_ex.zig",
             .assets = &.{
                 "laserShoot.wav",
             },
         },
-        .{ .name = "tile_load_test", .path = "examples/tile_load_test.zig", .assets = &.{
-            "mario_grassish2.png",
-            "level1a.tmx",
-        } },
-        .{ .name = "natetris", .path = "games/natetris/natetris.zig", .assets = &.{} },
-        .{ .name = "actor_test", .path = "examples/actor_test.zig", .assets = &.{
-            "pac-tiles.json",
-            "pac-tiles.png",
-        } },
-        .{ .name = "sequencer_test", .path = "examples/sequencer_test.zig", .assets = &.{
-            "pac-tiles.json",
-            "pac-tiles.png",
-            "circle_move.lua",
-        } },
-        .{ .name = "collision_test", .path = "examples/collision_test.zig", .assets = &.{
-            "mario_grassish2.png",
-            "level1a.tmx",
-            "pac-tiles.png",
-        } },
-        .{ .name = "flecs_test", .path = "examples/flecs_test.zig", .assets = &.{
-            "mario_grassish2.png",
-        } },
-        .{ .name = "a_star_path", .path = "examples/a_star_path.zig", .assets = &.{} },
-        .{ .name = "gameloop_test", .path = "examples/gameloop_test.zig", .assets = &.{} },
-        .{ .name = "gamepad_test", .path = "examples/gamepad_test.zig", .assets = &.{} },
-        .{ .name = "game_state_test", .path = "examples/game_state_test.zig", .assets = &.{} },
-        .{ .name = "glfw_sprites", .path = "examples/glfw_sprites.zig", .assets = &.{
-            "mario_grassish2.png",
-        } },
-        .{ .name = "grid_render", .path = "examples/grid_render.zig", .assets = &.{} },
-        .{ .name = "console2_test", .path = "examples/console2_test.zig", .assets = &.{
-            "Roboto-Medium.ttf",
-        } },
-        .{ .name = "imgui_test", .path = "examples/imgui_test.zig", .assets = &.{
-            "Roboto-Medium.ttf",
-        } },
-        .{ .name = "text_rendering", .path = "examples/text_rendering.zig", .assets = &.{
-            "Roboto-Medium.ttf",
-        } },
-        .{ .name = "bitmap_text_rendering", .path = "examples/bitmap_text_rendering.zig", .assets = &.{
-            "font5r.png",
-        } },
-        .{ .name = "pixel_buffer_test", .path = "examples/pixel_buffer_test.zig", .assets = &.{} },
+        .{
+            .name = "tile_load_ex",
+            .path = "examples/tile_load_ex.zig",
+            .assets = &.{
+                "mario_grassish2.png",
+                "level1a.tmx",
+            },
+        },
+        .{
+            .name = "natetris",
+            .path = "games/natetris/natetris.zig",
+            .assets = &.{},
+        },
+        .{
+            .name = "actor_ex",
+            .path = "examples/actor_ex.zig",
+            .assets = &.{
+                "pac-tiles.json",
+                "pac-tiles.png",
+            },
+        },
+        .{
+            .name = "sequencer_ex",
+            .path = "examples/sequencer_ex.zig",
+            .assets = &.{
+                "pac-tiles.json",
+                "pac-tiles.png",
+                "circle_move.lua",
+            },
+        },
+        .{
+            .name = "collision_ex",
+            .path = "examples/collision_ex.zig",
+            .assets = &.{
+                "mario_grassish2.png",
+                "level1a.tmx",
+                "pac-tiles.png",
+            },
+        },
+        .{
+            .name = "flecs_ex",
+            .path = "examples/flecs_ex.zig",
+            .assets = &.{
+                "mario_grassish2.png",
+            },
+        },
+        .{
+            .name = "a_star_path_ex",
+            .path = "examples/a_star_path_ex.zig",
+            .assets = &.{},
+        },
+        .{
+            .name = "gameloop_ex",
+            .path = "examples/gameloop_ex.zig",
+            .assets = &.{},
+        },
+        .{
+            .name = "gamepad_ex",
+            .path = "examples/gamepad_ex.zig",
+            .assets = &.{},
+        },
+        .{
+            .name = "game_state_ex",
+            .path = "examples/game_state_ex.zig",
+            .assets = &.{},
+        },
+        .{
+            .name = "render_ex",
+            .path = "examples/render_ex.zig",
+            .assets = &.{
+                "mario_grassish2.png",
+            },
+        },
+        .{
+            .name = "grid_render_ex",
+            .path = "examples/grid_render_ex.zig",
+            .assets = &.{},
+        },
+        .{
+            .name = "console2_ex",
+            .path = "examples/console2_ex.zig",
+            .assets = &.{
+                "Roboto-Medium.ttf",
+            },
+        },
+        .{
+            .name = "imgui_ex",
+            .path = "examples/imgui_ex.zig",
+            .assets = &.{
+                "Roboto-Medium.ttf",
+            },
+        },
+        .{
+            .name = "text_rendering_ex",
+            .path = "examples/text_rendering_ex.zig",
+            .assets = &.{
+                "Roboto-Medium.ttf",
+            },
+        },
+        .{
+            .name = "bitmap_text_rendering_ex",
+            .path = "examples/bitmap_text_rendering_ex.zig",
+            .assets = &.{
+                "font5r.png",
+            },
+        },
+        .{
+            .name = "pixel_buffer_ex",
+            .path = "examples/pixel_buffer_ex.zig",
+            .assets = &.{},
+        },
+        .{
+            .name = "mouse_ex",
+            .path = "examples/mouse_ex.zig",
+            .assets = &.{
+                "mario_grassish2.png",
+            },
+        },
         // Unit tests
         .{
             .name = "tests",

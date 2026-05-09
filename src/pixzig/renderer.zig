@@ -119,11 +119,7 @@ pub fn Renderer(opts: RendererOptions) type {
             for (0..self.impl.batches.len) |idx| {
                 self.impl.batches[idx].deinit();
             }
-
-            self.impl.texShader.deinit();
-
             if (opts.shapeRendering) {
-                self.impl.colorShader.deinit();
                 self.impl.shapes.deinit();
             }
 

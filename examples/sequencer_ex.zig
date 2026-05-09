@@ -175,7 +175,7 @@ pub const App = struct {
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if (self.fps.update(delta)) {
-            std.log.debug("FPS: {}\n", .{self.fps.fps()});
+            std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
         // Tick flash state.
@@ -238,11 +238,10 @@ pub const App = struct {
     }
 };
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig Sequencer Example", .{});
-    const alloc = std.heap.c_allocator;
-    const appRunner = try AppRunner.init("Pixzig Sequencer Example", alloc, .{});
-    const app = try App.init(alloc, appRunner.engine);
+    const appRunner = try AppRunner.init("Pixzig Sequencer Example", init.gpa, .{});
+    const app = try App.init(init.gpa, appRunner.engine);
     glfw.swapInterval(0);
     appRunner.run(app);
 }

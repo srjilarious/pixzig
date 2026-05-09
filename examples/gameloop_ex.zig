@@ -55,7 +55,7 @@ pub const App = struct {
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if (self.fps.update(delta)) {
-            std.log.debug("FPS: {}\n", .{self.fps.fps()});
+            std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
         if (eng.keyboard.pressed(.one)) std.log.info("one!\n", .{});
@@ -88,12 +88,10 @@ pub const App = struct {
 //* It initializes your App structure, the AppRunner and runs the application.
 //* It hands over control of the gameloop to AppRunner so that both desktop
 //* and web builds can use the same main function.
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig Game Loop Example", .{});
 
-    const alloc = std.heap.c_allocator;
-
-    const appRunner = try AppRunner.init("Pixzig Game Loop Example.", alloc, .{});
+    const appRunner = try AppRunner.init("Pixzig Game Loop Example.", init.gpa, .{});
     var app = App.init(123);
 
     glfw.swapInterval(0);

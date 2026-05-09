@@ -63,15 +63,13 @@ pub const App = struct {
     }
 };
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig Pixel Buffer Example", .{});
 
-    const alloc = std.heap.c_allocator;
-
-    const appRunner = try AppRunner.init("Pixzig Pixel Buffer Example.", alloc, .{
+    const appRunner = try AppRunner.init("Pixzig Pixel Buffer Example.", init.gpa, .{
         .windowSize = .{ .x = 800, .y = 600 },
     });
-    var app = try App.init(alloc, appRunner.engine);
+    var app = try App.init(init.gpa, appRunner.engine);
 
     glfw.swapInterval(0);
     appRunner.run(&app);

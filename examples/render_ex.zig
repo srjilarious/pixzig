@@ -40,7 +40,7 @@ pub const App = struct {
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app = try alloc.create(App);
 
-        std.log.debug("Loading texture...\n", .{});
+        std.log.debug("Loading texture...", .{});
 
         //* We load a texture through the resource manager, which will cache
         //* it and return the same texture if we try to load it again.  The
@@ -88,7 +88,7 @@ pub const App = struct {
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if (self.fps.update(delta)) {
-            std.log.debug("FPS: {}\n", .{self.fps.fps()});
+            std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
         if (eng.keyboard.pressed(.escape)) {
@@ -130,12 +130,11 @@ pub const App = struct {
 };
 
 //* -- collapsed: Main function --
-pub fn main() !void {
-    std.log.info("Pixzig Sprite and Shape test!", .{});
+pub fn main(init: std.process.Init) !void {
+    std.log.info("Pixzig Render Example", .{});
 
-    const alloc = std.heap.c_allocator;
-    const appRunner = try AppRunner.init("Pixzig Sprites Example.", alloc, .{});
-    const app = try App.init(alloc, appRunner.engine);
+    const appRunner = try AppRunner.init("Pixzig Render Example.", init.gpa, .{});
+    const app = try App.init(init.gpa, appRunner.engine);
 
     glfw.swapInterval(0);
     appRunner.run(app);

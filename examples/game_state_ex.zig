@@ -83,7 +83,7 @@ pub const App = struct {
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if (self.fps.update(delta)) {
-            std.log.debug("FPS: {}\n", .{self.fps.fps()});
+            std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
         if (eng.keyboard.pressed(.one)) {
@@ -109,18 +109,18 @@ pub const App = struct {
     }
 };
 
-pub fn main() !void {
-    std.log.info("Pixzig Game State test!", .{});
+pub fn main(init: std.process.Init) !void {
+    std.log.info("Pixzig Game State example.", .{});
 
-    const appRunner = try AppRunner.init("Pixzig: Tile Render Test.", std.heap.c_allocator, .{});
+    const appRunner = try AppRunner.init("Pixzig: Game State Example", init.gpa, .{});
 
-    std.log.debug("Initializing app.\n", .{});
+    std.log.debug("Initializing app.", .{});
 
     var StateAInst = StateA{};
     var ParamStateInst = ParamState{};
     var statesArr = [_]*anyopaque{ &StateAInst, &ParamStateInst };
     const states: []*anyopaque = statesArr[0..2];
-    const app = try App.init(std.heap.c_allocator, states);
+    const app = try App.init(init.gpa, states);
 
     glfw.swapInterval(0);
     appRunner.run(app);

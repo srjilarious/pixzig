@@ -71,7 +71,7 @@ pub const App = struct {
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
         if (self.fps.update(delta)) {
-            std.log.debug("FPS: {}\n", .{self.fps.fps()});
+            std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
         if (eng.keyboard.pressed(.escape)) {
@@ -94,16 +94,15 @@ pub const App = struct {
     }
 };
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig Console Test Example", .{});
 
-    const alloc = std.heap.c_allocator;
-    const appRunner = try AppRunner.init("Pixzig: Console Test Example.", alloc, .{ .renderInitOpts = .{
+    const appRunner = try AppRunner.init("Pixzig: Console Test Example.", init.gpa, .{ .renderInitOpts = .{
         .fontFace = "assets/Roboto-Medium.ttf",
     } });
 
     std.log.info("Initializing app.\n", .{});
-    const app: *App = try App.init(alloc, appRunner.engine);
+    const app: *App = try App.init(init.gpa, appRunner.engine);
 
     glfw.swapInterval(0);
     appRunner.run(app);

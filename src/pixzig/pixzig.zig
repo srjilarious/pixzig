@@ -325,15 +325,16 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         /// Frees engine resources and deinitializes subsystems.  This includes destroying the
         /// application window.
         pub fn deinit(self: *Self) void {
+            if (engOpts.audioOpts.enabled) {
+                self.audio.deinit();
+            }
+
             self.resources.deinit();
+            self.renderer.deinit();
             stbi.deinit();
 
             self.window.destroy();
             glfw.terminate();
-
-            if (engOpts.audioOpts.enabled) {
-                self.audio.deinit();
-            }
 
             self.allocator.destroy(self);
         }
