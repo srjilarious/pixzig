@@ -27,6 +27,10 @@ fn addArchIncludes(b: *std.Build, target: std.Build.ResolvedTarget, optimize: st
     }
 }
 
+fn getSysRootInclude(b: *std.Build) []const u8 {
+    return b.fmt("{s}/include", .{b.sysroot.?});
+}
+
 pub const EngineData = struct {
     engine_lib: *std.Build.Step.Compile,
     pixeng_mod: *std.Build.Module,
@@ -338,7 +342,9 @@ fn buildEngine(
 
     // Lua
     const ziglua = b.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
-    ziglua.module("zlua").addIncludePath(.{ .cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include" });
+    if (target.result.os.tag == .emscripten) {
+        ziglua.module("zlua").addIncludePath(.{ .cwd_relative = getSysRootInclude(b) });
+    }
 
     const ziglua_mod = ziglua.module("zlua");
     pixeng.addImport("ziglua", ziglua_mod);
@@ -372,7 +378,7 @@ fn buildEngine(
     stbtt.addCSourceFile(.{ .file = b.path("libs/stb_truetype/stb_truetype.c"), .flags = &.{"-fno-sanitize=undefined"} });
     stbtt.addIncludePath(b.path("libs/stb_truetype"));
     if (target.result.os.tag == .emscripten) {
-        stbtt.addIncludePath(.{ .cwd_relative = "/home/jeffdw/.cache/emscripten/sysroot/include" });
+        stbtt.addIncludePath(.{ .cwd_relative = getSysRootInclude(b) });
     }
     pixeng.addImport("stb_truetype", stbtt);
 
