@@ -69,6 +69,7 @@ pub const Color8 = common.Color8;
 /// in the final binary.
 pub const PixzigEngineOptions = struct {
     defaultIcon: bool = true,
+    vsyncEnabled: bool = true,
     gameScale: f32 = 1.0,
     rendererOpts: renderer.RendererOptions = .{},
     audioOpts: audio.AudioOptions = .{},
@@ -311,6 +312,10 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 try eng.setIcon(&defaultIcon);
             }
 
+            if (engOpts.vsyncEnabled) {
+                eng.enableVSync(engOpts.vsyncEnabled);
+            }
+
             // ----------------------------------------------------------------
             if (engOpts.audioOpts.enabled) {
                 std.log.info("Initializing Audio Engine.", .{});
@@ -358,6 +363,16 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 };
 
                 self.window.setIcon(&.{icon});
+            }
+        }
+
+        /// Sets whether vsync is enabled or not on the graphics context.
+        pub fn enableVSync(self: *Self, enabled: bool) void {
+            _ = self;
+            if (enabled) {
+                glfw.swapInterval(1);
+            } else {
+                glfw.swapInterval(0);
             }
         }
     };

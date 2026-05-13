@@ -1,5 +1,4 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const pixzig = @import("pixzig");
 const glfw = pixzig.glfw;
 const Delay = pixzig.utils.Delay;
@@ -100,6 +99,5 @@ pub fn main(init: std.process.Init) !void {
     const appRunner = try AppRunner.init("Pixzig: Gamepad Example", init.gpa, .{});
     var app = App.init();
 
-    glfw.swapInterval(0);
     appRunner.run(&app);
 }

@@ -1,8 +1,6 @@
 const std = @import("std");
 const pixzig = @import("pixzig");
 const gl = pixzig.gl;
-const glfw = pixzig.glfw;
-const zmath = pixzig.zmath;
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
@@ -412,7 +410,5 @@ pub fn main(init: std.process.Init) !void {
 
     const appRunner = try AppRunner.init("Pixzig A* Path Example.", init.gpa, .{});
     const app = try App.init(init.gpa, appRunner.engine);
-
-    glfw.swapInterval(0);
     appRunner.run(app);
 }

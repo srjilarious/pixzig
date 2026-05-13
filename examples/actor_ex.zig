@@ -1,6 +1,5 @@
 const std = @import("std");
 const pixzig = @import("pixzig");
-const glfw = pixzig.glfw;
 const zmath = pixzig.zmath;
 const shaders = pixzig.shaders;
 const stbi = @import("zstbi");
@@ -119,6 +118,5 @@ pub fn main(init: std.process.Init) !void {
     const appRunner = try AppRunner.init("Pixzig Actor Example.", init.gpa, .{});
     const app = try App.init(init.gpa, appRunner.engine);
 
-    glfw.swapInterval(0);
     appRunner.run(app);
 }

@@ -1,7 +1,5 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const pixzig = @import("pixzig");
-const glfw = pixzig.glfw;
 const zmath = pixzig.zmath;
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
@@ -122,6 +120,5 @@ pub fn main(init: std.process.Init) !void {
     const states: []*anyopaque = statesArr[0..2];
     const app = try App.init(init.gpa, states);
 
-    glfw.swapInterval(0);
     appRunner.run(app);
 }

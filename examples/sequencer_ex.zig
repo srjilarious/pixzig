@@ -1,6 +1,5 @@
 const std = @import("std");
 const pixzig = @import("pixzig");
-const glfw = pixzig.glfw;
 const flecs = pixzig.flecs;
 const seq = pixzig.sequencer;
 const scripting = pixzig.scripting;
@@ -242,6 +241,5 @@ pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig Sequencer Example", .{});
     const appRunner = try AppRunner.init("Pixzig Sequencer Example", init.gpa, .{});
     const app = try App.init(init.gpa, appRunner.engine);
-    glfw.swapInterval(0);
     appRunner.run(app);
 }

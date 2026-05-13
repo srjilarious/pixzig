@@ -9,7 +9,6 @@
 
 const std = @import("std");
 const pixzig = @import("pixzig");
-const glfw = pixzig.glfw;
 const zmath = pixzig.zmath;
 const RectF = pixzig.common.RectF;
 const Color = pixzig.common.Color;

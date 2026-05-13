@@ -1,8 +1,6 @@
 const std = @import("std");
-const builtin = @import("builtin");
 
 const pixzig = @import("pixzig");
-const glfw = pixzig.glfw;
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
@@ -84,6 +82,5 @@ pub fn main(init: std.process.Init) !void {
     const appRunner = try AppRunner.init("Pixzig Mouse Example.", init.gpa, .{});
     var app = try App.init(init.gpa, appRunner.engine);
 
-    glfw.swapInterval(0);
     appRunner.run(&app);
 }

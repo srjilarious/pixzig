@@ -2,11 +2,8 @@
 // mapping from character to color.  Useful for simple game assets.
 const std = @import("std");
 
-const glfw = @import("zglfw");
-const gl = @import("zopengl").bindings;
-const math = @import("zmath");
-
 const pixzig = @import("pixzig");
+const glfw = pixzig.glfw;
 const RectF = pixzig.RectF;
 const Color8 = pixzig.Color8;
 const EngOptions = pixzig.PixzigEngineOptions;
