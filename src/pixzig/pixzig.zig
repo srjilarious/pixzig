@@ -68,10 +68,23 @@ pub const Color8 = common.Color8;
 /// the audio engine handling code blocks in the engine from being included
 /// in the final binary.
 pub const PixzigEngineOptions = struct {
+    /// Whether the default pixzig icon should be set, can be changed with
+    /// PixzigEngine.setIcon
     defaultIcon: bool = true,
+
+    /// Whether vsync should be enabled on init, defaults true.
     vsyncEnabled: bool = true,
+
+    // How much to scale the rendered contents by, defaults to 1.0.
     gameScale: f32 = 1.0,
+
+    /// The update time frequency, defaults to 120 Hz.
+    updateStepHz: f64 = 120.0,
+
+    /// Render options
     rendererOpts: renderer.RendererOptions = .{},
+
+    /// Audio options.
     audioOpts: audio.AudioOptions = .{},
 };
 
@@ -109,13 +122,12 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
     const AppStruct = struct {
         pub const Engine = PixzigEngine(engOpts);
 
-        const UpdateStepMs: f64 = 1000.0 / 120.0;
-
         engine: *Engine,
         alloc: std.mem.Allocator,
         lag: f64 = 0,
         currTime: f64 = 0,
 
+        const UpdateStepMs = 1000.0 / engOpts.updateStepHz;
         const Self = @This();
 
         pub fn init(

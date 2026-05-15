@@ -27,7 +27,9 @@ pub const Velocity = struct { speed: Vec2F };
 
 pub const Dot = struct {};
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.PixzigAppRunner(App, .{
+    .updateStepHz = 60.0,
+});
 
 pub const App = struct {
     alloc: std.mem.Allocator,
