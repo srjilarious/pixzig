@@ -346,8 +346,8 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 self.audio.deinit();
             }
 
-            self.resources.deinit();
             self.renderer.deinit();
+            self.resources.deinit();
             stbi.deinit();
 
             self.window.destroy();
