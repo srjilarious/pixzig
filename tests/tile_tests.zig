@@ -11,7 +11,7 @@ pub fn tiledObjLoadTest(io: std.Io, alloc: std.mem.Allocator) !void {
     ;
     const doc = try xml.parse(alloc, xmlStr);
     defer doc.deinit();
-    var obj = try tile.Object.initFromElement(alloc, doc.root);
+    var obj = try tile.TiledMapXmlLoader.initObjectFromElement(alloc, doc.root);
     defer obj.deinit();
     try testz.expectEqual(obj.id, 662);
     try testz.expectEqual(obj.gid, 17);
@@ -34,7 +34,7 @@ pub fn tiledObjWithPropsLoadTest(io: std.Io, alloc: std.mem.Allocator) !void {
     ;
     const doc = try xml.parse(alloc, xmlStr);
     defer doc.deinit();
-    var obj = try tile.Object.initFromElement(alloc, doc.root);
+    var obj = try tile.TiledMapXmlLoader.initObjectFromElement(alloc, doc.root);
     defer obj.deinit();
     try testz.expectEqual(obj.id, 1567);
     try testz.expectEqual(obj.gid, 33);
@@ -59,7 +59,7 @@ pub fn tiledObjWithFloatsLoadTest(io: std.Io, alloc: std.mem.Allocator) !void {
     ;
     const doc = try xml.parse(alloc, xmlStr);
     defer doc.deinit();
-    var obj = try tile.Object.initFromElement(alloc, doc.root);
+    var obj = try tile.TiledMapXmlLoader.initObjectFromElement(alloc, doc.root);
     defer obj.deinit();
     try testz.expectEqual(obj.id, 1567);
     try testz.expectEqual(obj.gid, 33);
@@ -86,7 +86,7 @@ pub fn tiledObjGroupLoadTest(io: std.Io, alloc: std.mem.Allocator) !void {
     ;
     const doc = try xml.parse(alloc, xmlStr);
     defer doc.deinit();
-    var objGroup = tile.ObjectGroup.initFromElement(alloc, doc.root) catch |err| {
+    var objGroup = tile.TiledMapXmlLoader.initObjectGroupFromElement(alloc, doc.root) catch |err| {
         try testz.failWith(err);
         return;
     };
@@ -126,7 +126,7 @@ pub fn tiledObjGroupIteratorTest(io: std.Io, alloc: std.mem.Allocator) !void {
     ;
     const doc = try xml.parse(alloc, xmlStr);
     defer doc.deinit();
-    var objGroup = tile.ObjectGroup.initFromElement(alloc, doc.root) catch |err| {
+    var objGroup = tile.TiledMapXmlLoader.initObjectGroupFromElement(alloc, doc.root) catch |err| {
         try testz.failWith(err);
         return;
     };
@@ -171,7 +171,7 @@ pub fn getLayerAndObjGroupTest(io: std.Io, alloc: std.mem.Allocator) !void {
     ;
     const doc = try xml.parse(alloc, xmlStr);
     defer doc.deinit();
-    var map = tile.TileMap.initFromElement(doc.root, alloc) catch |err| {
+    var map = tile.TiledMapXmlLoader.initFromElement(doc.root, alloc) catch |err| {
         try testz.failWith(err);
         return;
     };

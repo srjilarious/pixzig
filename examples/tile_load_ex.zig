@@ -38,7 +38,7 @@ pub const App = struct {
         const tex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
 
         std.log.info("Loading tile map", .{});
-        const map = try tile.TileMap.initFromFile("assets/level1a.tmx", alloc);
+        const map = try tile.TiledMapXmlLoader.initFromFile("assets/level1a.tmx", alloc);
 
         const tData = map.layers.items[1].tile(0, 0);
         std.log.info("Tile 0,0 data: {any}", .{tData});

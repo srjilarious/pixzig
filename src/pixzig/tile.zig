@@ -40,3 +40,5 @@ pub const GridRenderer = @import("./tile/grid_renderer.zig").GridRenderer;
 pub const ChunkedTileMapRenderer = @import("./tile/chunked_tile_renderer.zig").ChunkedTileMapRenderer;
 
 pub const Mover = @import("./tile/tile_mover.zig").Mover;
+
+pub const TiledMapXmlLoader = @import("./tile/tiled_loader.zig").TiledMapXmlLoader;
