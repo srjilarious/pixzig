@@ -158,7 +158,7 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
             while (self.lag > UpdateStepMs) {
                 self.lag -= UpdateStepMs;
 
-                self.engine.keyboard.update(self.engine.window);
+                _ = self.engine.keyboard.update(self.engine.window);
                 if (!app.update(self.engine, UpdateStepMs)) {
                     return false;
                 }

@@ -78,7 +78,7 @@ pub const Gamepad = struct {
     /// state buffer with the latest button and axis values. If the joystick
     /// is not present or not a gamepad, it marks the gamepad as disconnected
     /// and clears the current state.
-    pub fn update(self: *Gamepad) void {
+    pub fn update(self: *Gamepad) bool {
         const temp = self.currIdx;
         self.currIdx = self.prevIdx;
         self.prevIdx = temp;
@@ -99,14 +99,18 @@ pub const Gamepad = struct {
         };
 
         var curr = self.currState();
+        var anyPressed: bool = false;
         for (state.buttons, 0..) |btn_action, i| {
             if (btn_action == .press) {
                 curr.buttons.set(i);
+                anyPressed = true;
             } else {
                 curr.buttons.unset(i);
             }
         }
         curr.axes = state.axes;
+
+        return anyPressed;
     }
 
     fn currState(self: *Gamepad) *GamepadState {

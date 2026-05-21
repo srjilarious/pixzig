@@ -199,27 +199,38 @@ pub const Keyboard = struct {
 
     /// Initializes a new Keyboard instance with two empty KeyboardState buffers.
     pub fn init() Keyboard {
-        const res: Keyboard = .{ .currIdx = 0, .prevIdx = 1, .keyBuffers = .{ KeyboardState.init(), KeyboardState.init() } };
+        const res: Keyboard = .{
+            .currIdx = 0,
+            .prevIdx = 1,
+            .keyBuffers = .{
+                KeyboardState.init(),
+                KeyboardState.init(),
+            },
+        };
 
         return res;
     }
 
     /// Returns a pointer to the current KeyboardState buffer, which
     /// represents the state of the keyboard in the current frame.
-    pub fn currKeys(self: *Keyboard) *KeyboardState {
+    pub fn currKeys(self: *const Keyboard) *const KeyboardState {
+        return &self.keyBuffers[self.currIdx];
+    }
+
+    pub fn currKeys_mut(self: *Keyboard) *KeyboardState {
         return &self.keyBuffers[self.currIdx];
     }
 
     /// Returns a pointer to the previous KeyboardState buffer, which
     /// represents the state of the keyboard in the previous frame.
-    pub fn prevKeys(self: *Keyboard) *KeyboardState {
+    pub fn prevKeys(self: *const Keyboard) *const KeyboardState {
         return &self.keyBuffers[self.prevIdx];
     }
 
     /// Updates the keyboard state by swapping the current and previous
     /// buffers and then polling the current state of the keyboard from
     /// the given GLFW window.
-    pub fn update(self: *Keyboard, window: *glfw.Window) void {
+    pub fn update(self: *Keyboard, window: *glfw.Window) bool {
         const temp = self.currIdx;
         self.currIdx = self.prevIdx;
         self.prevIdx = temp;
@@ -228,33 +239,38 @@ pub const Keyboard = struct {
         var curr = self.currKeys();
         const enumTypeInfo = @typeInfo(glfw.Key).@"enum";
         comptime var keyIdx = 0;
+        var anyPressed: bool = false;
         inline for (enumTypeInfo.fields) |field| {
             const enumValue = @field(glfw.Key, field.name);
-            curr.setIdx(keyIdx, window.getKey(enumValue) == .press);
+            const currPressed = window.getKey(enumValue) == .press;
+            curr.setIdx(keyIdx, currPressed);
+            anyPressed |= currPressed;
             keyIdx += 1;
         }
+
+        return anyPressed;
     }
 
     /// Returns true if the provided key is currently up in the current state.
-    pub fn up(self: *Keyboard, key: glfw.Key) bool {
+    pub fn up(self: *const Keyboard, key: glfw.Key) bool {
         return self.currKeys().up(key) == false;
     }
 
     /// Returns true if the provided key is currently down in the current state.
-    pub fn down(self: *Keyboard, key: glfw.Key) bool {
+    pub fn down(self: *const Keyboard, key: glfw.Key) bool {
         return self.currKeys().down(key);
     }
 
     /// Returns true if the provided key was pressed in the current frame
     /// (i.e., it is down in the current state but was up in the previous state).
-    pub fn pressed(self: *Keyboard, key: glfw.Key) bool {
+    pub fn pressed(self: *const Keyboard, key: glfw.Key) bool {
         const keyIdx = getIndexForKey(key);
         return (self.currKeys().downIdx(keyIdx) and !self.prevKeys().downIdx(keyIdx));
     }
 
     /// Returns true if the provided key was released in the current frame
     /// (i.e., it is up in the current state but was down in the previous state).
-    pub fn released(self: *Keyboard, key: glfw.Key) bool {
+    pub fn released(self: *const Keyboard, key: glfw.Key) bool {
         const keyIdx = getIndexForKey(key);
         return (!self.currKeys().downIdx(keyIdx) and self.prevKeys().downIdx(keyIdx));
     }

@@ -238,8 +238,8 @@ pub fn textInputTest_1(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     _ = alloc;
     var kb = input.Keyboard.init();
-    kb.currKeys().set(.a, true);
-    kb.currKeys().set(.left_shift, true);
+    kb.currKeys_mut().set(.a, true);
+    kb.currKeys_mut().set(.left_shift, true);
     var buff: [5]u8 = undefined;
     const len = kb.text(buff[0..]);
     try testz.expectEqual(len, 1);
@@ -250,9 +250,9 @@ pub fn textInputTest_2(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     _ = alloc;
     var kb = input.Keyboard.init();
-    kb.currKeys().set(.t, true);
-    kb.currKeys().set(.g, true);
-    kb.currKeys().set(.right_shift, true);
+    kb.currKeys_mut().set(.t, true);
+    kb.currKeys_mut().set(.g, true);
+    kb.currKeys_mut().set(.right_shift, true);
     var buff: [5]u8 = undefined;
     const len = kb.text(buff[0..]);
     try testz.expectEqual(len, 2);
@@ -263,9 +263,9 @@ pub fn textInputTest_3(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     _ = alloc;
     var kb = input.Keyboard.init();
-    kb.currKeys().set(.t, true);
-    kb.currKeys().set(.g, true);
-    kb.currKeys().set(.right_shift, true);
+    kb.currKeys_mut().set(.t, true);
+    kb.currKeys_mut().set(.g, true);
+    kb.currKeys_mut().set(.right_shift, true);
     var buff: [1]u8 = undefined;
     const len = kb.text(buff[0..]);
     try testz.expectEqual(len, 1);
@@ -276,7 +276,7 @@ pub fn textInputTest_4(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     _ = alloc;
     var kb = input.Keyboard.init();
-    kb.currKeys().set(.space, true);
+    kb.currKeys_mut().set(.space, true);
     var buff: [1]u8 = undefined;
     const len = kb.text(buff[0..]);
     try testz.expectEqual(len, 1);

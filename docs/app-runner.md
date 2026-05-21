@@ -70,7 +70,7 @@ The loop runs at a **fixed update rate of 120 Hz** with an uncapped render rate.
 // Inside AppRunner.gameLoopCore — simplified:
 while (lag > UpdateStepMs) {
     lag -= UpdateStepMs;
-    eng.keyboard.update(window);
+    _ = eng.keyboard.update(window);
     if (!app.update(eng, UpdateStepMs)) return false;
 }
 app.render(eng);

@@ -16,6 +16,7 @@ const Tests = testz.discoverTests(.{
     testz.Group{ .name = "Sequencer Tests", .tag = "seq", .mod = @import("./sequencer_tests.zig") },
     testz.Group{ .name = "Utils Tests", .tag = "utils", .mod = @import("./utils_tests.zig") },
     testz.Group{ .name = "GameState Tests", .tag = "gamestate", .mod = @import("./gamestate_tests.zig") },
+    testz.Group{ .name = "ActionMap Tests", .tag = "actions", .mod = @import("./action_tests.zig") },
 }, .{});
 
 pub fn main(init: std.process.Init) !void {

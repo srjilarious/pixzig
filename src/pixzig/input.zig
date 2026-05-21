@@ -20,3 +20,8 @@ pub const KeyChordPiece = keychord.KeyChordPiece;
 pub const ChordUpdateResult = keychord.ChordUpdateResult;
 pub const ChordTree = keychord.ChordTree;
 pub const KeyMap = keychord.KeyMap;
+
+pub const action = @import("./input/action.zig");
+pub const ActionMap = action.ActionMap;
+pub const ActionState = action.ActionState;
+pub const Binding = action.Binding;
