@@ -33,3 +33,38 @@ pub fn basicKbActions(io: std.Io, alloc: std.mem.Allocator) !void {
     try testz.expectFalse(actions.down(.jump));
     try testz.expectTrue(actions.down(.shoot));
 }
+
+pub fn multipleBindingKbActions(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var kb = Keyboard.init();
+
+    var actions = try input.ActionMap(TestActions).init(alloc);
+    defer actions.deinit();
+
+    try actions.bind(.jump, .{ .key = .space });
+    try actions.bind(.shoot, .{ .key = .a });
+    try actions.bind(.shoot, .{ .key = .z });
+    _ = actions.update(&kb);
+    try testz.expectFalse(actions.down(.jump));
+    try testz.expectFalse(actions.down(.shoot));
+
+    kb.currKeys_mut().set(.a, true);
+    _ = actions.update(&kb);
+    try testz.expectFalse(actions.down(.jump));
+    try testz.expectTrue(actions.down(.shoot));
+
+    kb.currKeys_mut().set(.z, true);
+    _ = actions.update(&kb);
+    try testz.expectFalse(actions.down(.jump));
+    try testz.expectTrue(actions.down(.shoot));
+
+    kb.currKeys_mut().set(.z, false);
+    _ = actions.update(&kb);
+    try testz.expectFalse(actions.down(.jump));
+    try testz.expectTrue(actions.down(.shoot));
+
+    kb.currKeys_mut().set(.a, false);
+    _ = actions.update(&kb);
+    try testz.expectFalse(actions.down(.jump));
+    try testz.expectFalse(actions.down(.shoot));
+}
