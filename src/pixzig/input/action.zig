@@ -1,10 +1,10 @@
 const std = @import("std");
 const glfw = @import("zglfw");
 const comp = @import("../comp.zig");
-const mouse = @import("./mouse.zig");
 const gamepad = @import("./gamepad.zig");
 const keyboard = @import("./keyboard.zig");
 const KeyModifier = keyboard.KeyModifier;
+const Mouse = @import("./mouse.zig").Mouse;
 
 pub const Source = union(enum) {
     key: glfw.Key,
@@ -101,6 +101,7 @@ pub fn ActionMap(comptime Action: type) type {
         }
     };
 
+    // The main typed ActionMap.
     return struct {
         alloc: std.mem.Allocator,
         digitalBindings: std.ArrayList(DigitalBinding),
@@ -158,7 +159,7 @@ pub fn ActionMap(comptime Action: type) type {
             );
         }
 
-        pub fn update(self: *Self, kb: *const keyboard.Keyboard) bool {
+        pub fn update(self: *Self, kb: *const keyboard.Keyboard, mouse: *const Mouse) bool {
             const temp = self.currIdx;
             self.currIdx = self.prevIdx;
             self.prevIdx = temp;
@@ -173,8 +174,8 @@ pub fn ActionMap(comptime Action: type) type {
                     .key => |k| {
                         sourceDown = kb.down(k);
                     },
-                    .mouse_button => {
-                        // TODO.
+                    .mouse_button => |m| {
+                        sourceDown = mouse.down(m);
                     },
                     .gamepad_button => {
                         // TODO.

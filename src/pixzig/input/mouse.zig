@@ -28,12 +28,21 @@ pub const MouseState = struct {
         return .{ .buttons = buttons, .pos = .{ .x = 0, .y = 0 } };
     }
 
-    pub fn down(self: *MouseState, keyIdx: usize) bool {
+    pub fn down(self: *const MouseState, keyIdx: usize) bool {
         const res = self.buttons.isSet(keyIdx);
         return res;
     }
 
-    pub fn set(self: *MouseState, btnIdx: usize, val: bool) void {
+    pub fn set(self: *MouseState, btn: glfw.MouseButton, val: bool) void {
+        const btnIdx = getIndexForMouseButton(btn);
+        if (val) {
+            self.buttons.set(btnIdx);
+        } else {
+            self.buttons.unset(btnIdx);
+        }
+    }
+
+    pub fn setIdx(self: *MouseState, btnIdx: usize, val: bool) void {
         if (val) {
             self.buttons.set(btnIdx);
         } else {
@@ -44,79 +53,91 @@ pub const MouseState = struct {
     pub fn setPos(self: *MouseState, pos: [2]f64) void {
         self.pos = .{ .x = @floatCast(pos[0]), .y = @floatCast(pos[1]) };
     }
+
+    pub fn clear(self: *MouseState) void {
+        self.buttons.setRangeValue(.{ .start = 0, .end = NumMouseButtons }, false);
+        self.pos = .{ .x = 0, .y = 0 };
+    }
 };
 
 pub const Mouse = struct {
     currIdx: usize,
     prevIdx: usize,
     mouseBuffers: [2]MouseState,
-    window: *glfw.Window,
-    allocator: std.mem.Allocator,
 
-    pub fn init(win: *glfw.Window, alloc: std.mem.Allocator) Mouse {
-        const res: Mouse = .{ .currIdx = 0, .prevIdx = 1, .mouseBuffers = .{ MouseState.init(), MouseState.init() }, .window = win, .allocator = alloc };
+    pub fn init() Mouse {
+        const res: Mouse = .{
+            .currIdx = 0,
+            .prevIdx = 1,
+            .mouseBuffers = .{
+                MouseState.init(),
+                MouseState.init(),
+            },
+        };
 
         return res;
     }
 
-    pub fn update(self: *Mouse) void {
+    pub fn update(
+        self: *Mouse,
+        window: *glfw.Window,
+    ) void {
         const temp = self.currIdx;
         self.currIdx = self.prevIdx;
         self.prevIdx = temp;
 
         var state = self.curr();
-        //const prev = self.prevKeys();
-        // curr.keys.setRangeValue(.{.start=0, .end=NumKeys}, false);
 
         // Update the current keys
         const enumTypeInfo = @typeInfo(glfw.MouseButton).@"enum";
         comptime var btnIdx = 0;
         inline for (enumTypeInfo.fields) |field| {
             const enumValue = @field(glfw.MouseButton, field.name);
-            state.set(btnIdx, self.window.getMouseButton(enumValue) == .press);
+            state.setIdx(btnIdx, window.getMouseButton(enumValue) == .press);
             btnIdx += 1;
         }
 
-        const cursorPos = self.window.getCursorPos();
-        // const contentScale = self.window.getContentScale();
-        // cursorPos[0] /= contentScale[0];
-        // cursorPos[1] /= contentScale[1];
+        const cursorPos = window.getCursorPos();
         state.setPos(cursorPos);
     }
 
-    fn curr(self: *Mouse) *MouseState {
+    pub fn curr(self: *const Mouse) *const MouseState {
         return &self.mouseBuffers[self.currIdx];
     }
 
-    fn prev(self: *Mouse) *MouseState {
+    pub fn curr_mut(self: *Mouse) *MouseState {
+        return &self.mouseBuffers[self.currIdx];
+    }
+
+    pub fn prev(self: *const Mouse) *const MouseState {
         return &self.mouseBuffers[self.prevIdx];
     }
 
-    pub fn up(self: *Mouse, btn: glfw.MouseButton) bool {
+    pub fn up(self: *const Mouse, btn: glfw.MouseButton) bool {
         const btnIdx = getIndexForMouseButton(btn);
         return self.curr().down(btnIdx) == false;
     }
 
-    pub fn down(self: *Mouse, btn: glfw.MouseButton) bool {
+    pub fn down(self: *const Mouse, btn: glfw.MouseButton) bool {
         const btnIdx = getIndexForMouseButton(btn);
         return self.curr().down(btnIdx);
     }
 
-    pub fn pressed(self: *Mouse, btn: glfw.MouseButton) bool {
+    pub fn pressed(self: *const Mouse, btn: glfw.MouseButton) bool {
         const btnIdx = getIndexForMouseButton(btn);
         return (self.curr().down(btnIdx) and !self.prev().down(btnIdx));
     }
 
-    pub fn released(self: *Mouse, btn: glfw.MouseButton) bool {
+    pub fn released(self: *const Mouse, btn: glfw.MouseButton) bool {
         const btnIdx = getIndexForMouseButton(btn);
         return (!self.curr().down(btnIdx) and self.prev().down(btnIdx));
     }
 
-    pub fn pos(self: *Mouse) Vec2F {
+    pub fn pos(self: *const Mouse) Vec2F {
         return self.curr().pos;
     }
 
-    pub fn lastPos(self: *Mouse) Vec2F {
+    pub fn lastPos(self: *const Mouse) Vec2F {
         return self.prev().pos;
     }
 };
