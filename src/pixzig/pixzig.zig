@@ -50,12 +50,18 @@ pub const collision = @import("./collision.zig");
 pub const a_star = @import("./a_star.zig");
 pub const assets = @import("./assets.zig");
 
+pub const windowing = @import("./window.zig");
+pub const WindowState = windowing.WindowState;
+pub const Viewport = windowing.Viewport;
+pub const ScalePolicy = windowing.ScalePolicy;
+
 pub const Texture = textures.Texture;
 pub const TextureImage = textures.TextureImage;
 
 const ResourceManager = resources.ResourceManager;
 
 pub const Vec2I = common.Vec2I;
+pub const Vec2F = common.Vec2F;
 pub const RectI = common.RectI;
 pub const RectF = common.RectF;
 pub const Color = common.Color;
@@ -97,6 +103,11 @@ pub const PixzigEngineOptions = struct {
 pub const PixzigEngineInitOptions = struct {
     fullscreen: bool = false,
     windowSize: Vec2I = .{ .x = 800, .y = 600 },
+    resizable: bool = true,
+    /// Logical game resolution. When null, logical size tracks the framebuffer
+    /// and projMat preserves the existing gameScale-based behavior.
+    logicalSize: ?Vec2I = .{ .x = 800, .y = 600 },
+    scalePolicy: windowing.ScalePolicy = .fit,
     renderInitOpts: renderer.RendererInitOpts = .{},
 };
 
@@ -154,6 +165,7 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
             self.currTime = newCurrTime;
 
             glfw.pollEvents();
+            self.engine.refreshWindowState();
 
             while (self.lag > UpdateStepMs) {
                 self.lag -= UpdateStepMs;
@@ -199,6 +211,15 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
     return AppStruct;
 }
 
+/// GLFW framebuffer-size callback. Sets a dirty flag on the WindowState so
+/// refreshWindowState() can rebuild the viewport on the main thread.
+fn framebufferSizeCallback(window: *glfw.Window, width: c_int, height: c_int) callconv(.c) void {
+    if (window.getUserPointer(windowing.WindowState)) |ws| {
+        ws.framebuffer_size = .{ .x = @intCast(width), .y = @intCast(height) };
+        ws.resized = true;
+    }
+}
+
 /// The core Pixzig Engine structure.  It provides rendering, audio, input and resource management
 /// components.  The `engOpts` allow configuring the engine at comptime so that unused features can
 /// be stripped out by the compiler. For example, if audio is not needed, setting `audioOpts.enabled`
@@ -210,6 +231,8 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         scaleFactor: f32,
         allocator: std.mem.Allocator,
         projMat: zmath.Mat,
+        window_state: windowing.WindowState,
+        viewport: windowing.Viewport,
         resources: ResourceManager,
         keyboard: input.Keyboard,
         renderer: Renderer = undefined,
@@ -242,7 +265,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             glfw.windowHint(.opengl_forward_compat, true);
             glfw.windowHint(.client_api, .opengl_api);
             glfw.windowHint(.doublebuffer, true);
-            glfw.windowHint(.resizable, false);
+            glfw.windowHint(.resizable, options.resizable);
 
             const monitor = blk: {
                 if (options.fullscreen) {
@@ -276,28 +299,28 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             // Use framebuffer size (physical pixels) rather than getContentScale(),
             // because getContentScale() can disagree with the actual framebuffer
             // dimensions on Wayland with fractional scaling, causing a viewport gap.
-            const fb_size = window.getFramebufferSize();
-            const fb_w: f32 = @floatFromInt(fb_size[0]);
-            const fb_h: f32 = @floatFromInt(fb_size[1]);
-            const win_w: f32 = @floatFromInt(options.windowSize.x);
-            const win_h: f32 = @floatFromInt(options.windowSize.y);
-            const scaleFactor = @max(fb_w / win_w, fb_h / win_h);
+            const ws = windowing.WindowState.init(window);
+            const fb_w: f32 = @floatFromInt(ws.framebuffer_size.x);
+            const fb_h: f32 = @floatFromInt(ws.framebuffer_size.y);
+            const scaleFactor = @max(ws.scale_factor.x, ws.scale_factor.y);
 
-            // Ensure the GL viewport covers the entire framebuffer.
-            // Without an explicit call the default may be set to the logical
-            // window size on Wayland, leaving a blank strip at the top.
-            gl.viewport(0, 0, @intCast(fb_size[0]), @intCast(fb_size[1]));
+            const logical_size = options.logicalSize orelse ws.framebuffer_size;
+            const vp = windowing.Viewport.init(logical_size, ws.framebuffer_size, options.scalePolicy);
 
-            // Create a default 2D orthogrpaphic projection matrix fitting the window.
-            // Also allow scaling the game content with engOpts.gameScale.
-            const projMat = zmath.mul(zmath.scaling(engOpts.gameScale, engOpts.gameScale, 1.0), zmath.orthographicOffCenterLhGl(
-                0,
-                fb_w,
-                0,
-                fb_h,
-                -0.1,
-                1000,
-            ));
+            // Apply GL viewport and build the initial projection matrix.
+            vp.apply();
+
+            // projMat: compatibility alias.
+            // When logicalSize is null, match the old gameScale-based formula so
+            // existing examples that use eng.projMat continue to work unchanged.
+            // When logicalSize is set, projMat mirrors viewport.projection().
+            const projMat = if (options.logicalSize == null)
+                zmath.mul(
+                    zmath.scaling(engOpts.gameScale, engOpts.gameScale, 1.0),
+                    zmath.orthographicOffCenterLhGl(0, fb_w, 0, fb_h, -0.1, 1000),
+                )
+            else
+                vp.projection();
 
             // ----------------------------------------------------------------
             std.log.debug("Initializing STBI.", .{});
@@ -311,9 +334,17 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 .scaleFactor = scaleFactor,
                 .allocator = allocator,
                 .projMat = projMat,
+                .window_state = ws,
+                .viewport = vp,
                 .resources = ResourceManager.init(allocator),
                 .keyboard = input.Keyboard.init(),
             };
+
+            // Store a pointer to window_state in the GLFW user pointer so the
+            // framebuffer-size callback can record resize events without
+            // rebuilding GL state from within the callback.
+            eng.window.setUserPointer(@ptrCast(&eng.window_state));
+            _ = eng.window.setFramebufferSizeCallback(framebufferSizeCallback);
 
             // ----------------------------------------------------------------
             std.log.info("Initializing Renderer.", .{});
@@ -386,6 +417,55 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             } else {
                 glfw.swapInterval(0);
             }
+        }
+
+        /// Called each frame (after glfw.pollEvents) to pick up resize events
+        /// recorded by the framebuffer-size callback. Rebuilds the viewport and
+        /// updates projMat when the framebuffer has changed.
+        pub fn refreshWindowState(self: *Self) void {
+            if (!self.window_state.resized) return;
+            self.window_state.resized = false;
+            self.window_state.refresh(self.window);
+
+            if (self.options.logicalSize == null) {
+                self.viewport.logical_size = self.window_state.framebuffer_size;
+            }
+            self.viewport.updateFramebufferSize(self.window_state.framebuffer_size);
+            self.viewport.apply();
+
+            self.scaleFactor = @max(self.window_state.scale_factor.x, self.window_state.scale_factor.y);
+
+            if (self.options.logicalSize == null) {
+                const fw: f32 = @floatFromInt(self.window_state.framebuffer_size.x);
+                const fh: f32 = @floatFromInt(self.window_state.framebuffer_size.y);
+                self.projMat = zmath.mul(
+                    zmath.scaling(engOpts.gameScale, engOpts.gameScale, 1.0),
+                    zmath.orthographicOffCenterLhGl(0, fw, 0, fh, -0.1, 1000),
+                );
+            } else {
+                self.projMat = self.viewport.projection();
+            }
+        }
+
+        /// Projection matrix for the logical/UI coordinate space (raster convention,
+        /// y=0 at top). Prefer this over projMat for new code.
+        pub fn uiMatrix(self: *const Self) zmath.Mat {
+            return self.viewport.projection();
+        }
+
+        /// Converts a GLFW window-coordinate position to framebuffer pixels,
+        /// accounting for DPI scale.
+        pub fn windowToFramebuffer(self: *const Self, pos: Vec2F) Vec2F {
+            return .{
+                .x = pos.x * self.window_state.scale_factor.x,
+                .y = pos.y * self.window_state.scale_factor.y,
+            };
+        }
+
+        /// Converts a GLFW window-coordinate position to logical game coordinates.
+        /// Returns null when the pointer is over a letterbox or pillarbox area.
+        pub fn windowToLogical(self: *const Self, pos: Vec2F) ?Vec2F {
+            return self.viewport.framebufferToLogical(self.windowToFramebuffer(pos));
         }
     };
 }

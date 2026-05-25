@@ -236,7 +236,7 @@ pub const Keyboard = struct {
         self.prevIdx = temp;
 
         // Update the current keys
-        var curr = self.currKeys();
+        var curr = self.currKeys_mut();
         const enumTypeInfo = @typeInfo(glfw.Key).@"enum";
         comptime var keyIdx = 0;
         var anyPressed: bool = false;
