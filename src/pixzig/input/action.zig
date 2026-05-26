@@ -25,13 +25,30 @@ pub const Source = union(enum) {
     // },
 };
 
-pub fn ActionMap(comptime Action: type) type {
+pub const AxisSource = union(enum) {
+    buttons: struct {
+        negative: Source,
+        positive: Source,
+    },
+    gamepad_axis: struct {
+        axis: glfw.Gamepad.Axis,
+        deadzone: f32 = 0.18,
+    },
+};
+
+pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
     const DigitalBinding = struct {
         source: Source,
         action: Action,
     };
 
+    const AnalogBinding = struct {
+        source: AxisSource,
+        axis: Axes,
+    };
+
     const NumActions = comp.numEnumFields(Action);
+    const NumAxes = comp.numEnumFields(Axes);
 
     const helpers = struct {
         // Gets the index of the action in our bitset.
@@ -41,6 +58,18 @@ pub fn ActionMap(comptime Action: type) type {
             inline for (enumTypeInfo.fields) |field| {
                 const fieldKey = @field(Action, field.name);
                 if (action == fieldKey) return keyIdx;
+                keyIdx += 1;
+            }
+
+            return 0;
+        }
+
+        fn getIndexForAxis(ax: Axes) usize {
+            const enumTypeInfo = @typeInfo(Axes).@"enum";
+            comptime var keyIdx: usize = 0;
+            inline for (enumTypeInfo.fields) |field| {
+                const fieldKey = @field(Axes, field.name);
+                if (ax == fieldKey) return keyIdx;
                 keyIdx += 1;
             }
 
@@ -101,13 +130,46 @@ pub fn ActionMap(comptime Action: type) type {
         }
     };
 
+    const AxisActionState = struct {
+        axes: [NumAxes]f32,
+
+        const InnerSelf = @This();
+
+        /// Initializes a new AxisActionState with all Axes set to 0.
+        pub fn init() InnerSelf {
+            return .{ .axes = std.mem.zeroes([NumAxes]f32) };
+        }
+
+        /// Sets the provided key to the given value (true for down, false for
+        /// up) in this state.  This is used for testing.
+        pub fn set(self: *InnerSelf, axis: Axes, val: f32) void {
+            const axisIdx = helpers.getIndexForAxis(axis);
+            self.setIdx(axisIdx, val);
+        }
+
+        /// Sets the provided key index to the given value (true for down, false
+        /// for up) in this state.  This is used for testing.
+        pub fn setIdx(self: *InnerSelf, axisIdx: usize, val: f32) void {
+            self.axes[axisIdx] = val;
+        }
+
+        /// Clears the keyboard state by setting all keys to up.
+        pub fn clear(self: *InnerSelf) void {
+            for (0..NumAxes) |axisIdx| {
+                self.axes[axisIdx] = 0;
+            }
+        }
+    };
+
     // The main typed ActionMap.
     return struct {
         alloc: std.mem.Allocator,
         digitalBindings: std.ArrayList(DigitalBinding),
+        axisBindings: std.ArrayList(AnalogBinding),
         currIdx: usize,
         prevIdx: usize,
         digitalActionBuffers: [2]DigitalActionState,
+        axisActionBuffers: [2]AxisActionState,
 
         const Self = @This();
 
@@ -118,11 +180,16 @@ pub fn ActionMap(comptime Action: type) type {
             actions.* = .{
                 .alloc = alloc,
                 .digitalBindings = .empty,
+                .axisBindings = .empty,
                 .prevIdx = 0,
                 .currIdx = 1,
                 .digitalActionBuffers = .{
                     DigitalActionState.init(),
                     DigitalActionState.init(),
+                },
+                .axisActionBuffers = .{
+                    AxisActionState.init(),
+                    AxisActionState.init(),
                 },
             };
             return actions;
@@ -130,6 +197,7 @@ pub fn ActionMap(comptime Action: type) type {
 
         pub fn deinit(self: *Self) void {
             self.digitalBindings.deinit(self.alloc);
+            self.axisBindings.deinit(self.alloc);
             self.alloc.destroy(self);
         }
 
@@ -149,6 +217,14 @@ pub fn ActionMap(comptime Action: type) type {
             return &self.digitalActionBuffers[self.prevIdx];
         }
 
+        pub fn currAnalog(self: *const Self) *const AxisActionState {
+            return &self.axisActionBuffers[self.currIdx];
+        }
+
+        pub fn currAxis_mut(self: *Self) *AxisActionState {
+            return &self.axisActionBuffers[self.currIdx];
+        }
+
         pub fn bind(self: *Self, action: Action, source: Source) !void {
             try self.digitalBindings.append(
                 self.alloc,
@@ -157,6 +233,31 @@ pub fn ActionMap(comptime Action: type) type {
                     .action = action,
                 },
             );
+        }
+
+        pub fn bindAxis(self: *Self, ax: Axes, source: AxisSource) !void {
+            try self.axisBindings.append(
+                self.alloc,
+                .{
+                    .source = source,
+                    .axis = ax,
+                },
+            );
+        }
+
+        fn isSourceDown(source: Source, kb: *const keyboard.Keyboard, mouse: *const Mouse) bool {
+            switch (source) {
+                .key => |k| {
+                    return kb.down(k);
+                },
+                .mouse_button => |m| {
+                    return mouse.down(m);
+                },
+                .gamepad_button => {
+                    // TODO.
+                    return false;
+                },
+            }
         }
 
         pub fn update(self: *Self, kb: *const keyboard.Keyboard, mouse: *const Mouse) bool {
@@ -169,24 +270,38 @@ pub fn ActionMap(comptime Action: type) type {
             curr.clear();
 
             for (self.digitalBindings.items) |binding| {
-                var sourceDown: bool = false;
-                switch (binding.source) {
-                    .key => |k| {
-                        sourceDown = kb.down(k);
-                    },
-                    .mouse_button => |m| {
-                        sourceDown = mouse.down(m);
-                    },
-                    .gamepad_button => {
-                        // TODO.
-                    },
-                }
+                const sourceDown = isSourceDown(binding.source, kb, mouse);
 
                 // Allow multiple bindings, and if any are pressed it triggers.
                 if (sourceDown) {
                     curr.set(binding.action, true);
                 }
             }
+
+            var currAxes = self.currAxis_mut();
+            currAxes.clear();
+
+            for (self.axisBindings.items) |binding| {
+                var val: f32 = 0.0;
+                switch (binding.source) {
+                    .buttons => |b| {
+                        const neg = isSourceDown(b.negative, kb, mouse);
+                        const pos = isSourceDown(b.positive, kb, mouse);
+                        if (neg and !pos) {
+                            val = -1.0;
+                        } else if (!neg and pos) {
+                            val = 1.0;
+                        }
+                    },
+                    .gamepad_axis => |ga| {
+                        _ = ga;
+                        // TODO
+                    },
+                }
+
+                currAxes.set(binding.axis, val);
+            }
+
             return false;
         }
 
@@ -198,6 +313,11 @@ pub fn ActionMap(comptime Action: type) type {
         /// Returns true if the provided key is currently down in the current state.
         pub fn down(self: *const Self, action: Action) bool {
             return self.currDigital().down(action);
+        }
+
+        pub fn axis(self: *const Self, ax: Axes) f32 {
+            const axisIdx = helpers.getIndexForAxis(ax);
+            return self.currAnalog().axes[axisIdx];
         }
 
         /// Returns true if the provided key was pressed in the current frame
