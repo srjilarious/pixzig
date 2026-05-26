@@ -51,8 +51,7 @@ pub const App = struct {
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app = try alloc.create(App);
 
-        var mouse = input.Mouse.init(eng.window, alloc);
-        mouse.update();
+        const mouse = input.Mouse.init();
 
         app.* = .{
             .alloc = alloc,
@@ -98,7 +97,7 @@ pub const App = struct {
         _ = _delta;
         if (eng.keyboard.pressed(.escape)) return false;
 
-        self.mouse.update();
+        self.mouse.update(eng.window);
         self.ui.update();
         return true;
     }

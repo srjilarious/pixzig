@@ -87,7 +87,7 @@ pub const Gamepad = struct {
         if (!joy.isPresent() or !joy.isGamepad()) {
             self.connected = false;
             self.currState().clear();
-            return;
+            return false;
         }
         self.connected = true;
 
@@ -95,7 +95,7 @@ pub const Gamepad = struct {
         const state = gp.getState() catch {
             self.connected = false;
             self.currState().clear();
-            return;
+            return false;
         };
 
         var curr = self.currState();

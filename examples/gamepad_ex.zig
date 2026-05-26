@@ -53,7 +53,7 @@ pub const App = struct {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        self.gamepad.update();
+        _ = self.gamepad.update();
 
         if (!self.gamepad.isConnected()) {
             if (self.printDelay.update(1)) {

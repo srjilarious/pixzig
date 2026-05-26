@@ -32,7 +32,7 @@ pub const App = struct {
         return .{
             .fps = FpsCounter.init(),
             .alloc = alloc,
-            .mouse = pixzig.input.Mouse.init(eng.window, eng.allocator),
+            .mouse = pixzig.input.Mouse.init(),
             .tex = tex,
             .pointer = pixzig.sprites.Sprite.create(tex, .{ .x = 32, .y = 32 }),
         };
@@ -47,7 +47,7 @@ pub const App = struct {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        self.mouse.update();
+        self.mouse.update(eng.window);
 
         const mousePos = self.mouse.pos().asVec2I();
         self.pointer.setPos(mousePos.x, mousePos.y);

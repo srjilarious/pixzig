@@ -82,7 +82,7 @@ pub const App = struct {
             .scrollOffset = .{ .x = 0, .y = 0}, 
             .paused = false,
             .spriteBatch = spriteBatch,
-            .mouse = pixzig.input.Mouse.init(eng.window, eng.allocator),
+            .mouse = pixzig.input.Mouse.init(),
             // .shapeBatch = shapeBatch,
             .tex = tex,
             .collideGrid = try CollisionGridEntity.init(alloc, .{ .x=100, .y=100}, .{.x=8, .y=8}),
@@ -151,7 +151,7 @@ pub const App = struct {
             std.log.debug("FPS: {}\n", .{self.fps.fps()});
         }
 
-        self.mouse.update();
+        self.mouse.update(eng.window);
 
         if (eng.keyboard.pressed(.one)) std.log.info("one!\n", .{});
         if (eng.keyboard.pressed(.two)) std.log.info("two!\n", .{});

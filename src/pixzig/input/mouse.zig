@@ -86,7 +86,7 @@ pub const Mouse = struct {
         self.currIdx = self.prevIdx;
         self.prevIdx = temp;
 
-        var state = self.curr();
+        var state = self.curr_mut();
 
         // Update the current keys
         const enumTypeInfo = @typeInfo(glfw.MouseButton).@"enum";
