@@ -22,7 +22,7 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{});
 
 pub const App = struct {
     alloc: std.mem.Allocator,
-    scrollOffset: Vec2F,
+    camera: pixzig.Camera2D,
     mapRenderer: tile.TileMapRenderer,
     guy: RectF,
     map: tile.TileMap,
@@ -51,14 +51,18 @@ pub const App = struct {
 
         std.log.info("Done creating tile renderering data.", .{});
 
+        const guy_rect = RectF.fromPosSize(33, 33, 32, 32);
+        var cam = pixzig.Camera2D.init(eng.viewport.logical_size);
+        cam.pos = guy_rect.centerF();
+
         const app = try alloc.create(App);
         app.* = .{
             .alloc = alloc,
-            .scrollOffset = .{ .x = 0, .y = 0 },
+            .camera = cam,
             .mapRenderer = mapRender,
             .map = map,
             .tex = tex,
-            .guy = RectF.fromPosSize(33, 33, 32, 32),
+            .guy = guy_rect,
             .fps = FpsCounter.init(),
         };
         return app;
@@ -75,31 +79,13 @@ pub const App = struct {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        if (eng.keyboard.pressed(.one)) std.log.info("one!", .{});
-        if (eng.keyboard.pressed(.two)) std.log.info("two!", .{});
-        if (eng.keyboard.pressed(.three)) std.log.info("three!", .{});
-        const ScrollAmount = 3;
-        if (eng.keyboard.down(.a)) {
-            self.scrollOffset.x += ScrollAmount;
-        }
-        if (eng.keyboard.down(.d)) {
-            self.scrollOffset.x -= ScrollAmount;
-        }
-        if (eng.keyboard.down(.w)) {
-            self.scrollOffset.y += ScrollAmount;
-        }
-        if (eng.keyboard.down(.s)) {
-            self.scrollOffset.y -= ScrollAmount;
-        }
-        if (eng.keyboard.pressed(.escape)) {
-            return false;
-        }
+        if (eng.keyboard.pressed(.escape)) return false;
 
-        // Handle guy movement.
+        const MoveAmount = 3;
         if (eng.keyboard.down(.left)) {
             _ = pixzig.tile.Mover.moveLeft(
                 &self.guy,
-                ScrollAmount,
+                MoveAmount,
                 &self.map.layers.items[1],
                 pixzig.tile.BlocksAll,
             );
@@ -107,7 +93,7 @@ pub const App = struct {
         if (eng.keyboard.down(.right)) {
             _ = pixzig.tile.Mover.moveRight(
                 &self.guy,
-                ScrollAmount,
+                MoveAmount,
                 &self.map.layers.items[1],
                 pixzig.tile.BlocksAll,
             );
@@ -115,7 +101,7 @@ pub const App = struct {
         if (eng.keyboard.down(.up)) {
             _ = pixzig.tile.Mover.moveUp(
                 &self.guy,
-                ScrollAmount,
+                MoveAmount,
                 &self.map.layers.items[1],
                 pixzig.tile.BlocksAll,
             );
@@ -123,11 +109,13 @@ pub const App = struct {
         if (eng.keyboard.down(.down)) {
             _ = pixzig.tile.Mover.moveDown(
                 &self.guy,
-                ScrollAmount,
+                MoveAmount,
                 &self.map.layers.items[1],
                 pixzig.tile.BlocksAll,
             );
         }
+
+        self.camera.pos = self.guy.centerF();
         return true;
     }
 
@@ -135,7 +123,7 @@ pub const App = struct {
         eng.renderer.clear(0, 0, 0.2, 1);
 
         self.fps.renderTick();
-        const mvp = zmath.mul(zmath.translation(self.scrollOffset.x, self.scrollOffset.y, 0.0), eng.projMat);
+        const mvp = self.camera.matrix(&eng.viewport);
         try self.mapRenderer.draw(self.tex, &self.map.layers.items[1], mvp);
 
         // Draw outline.

@@ -3,7 +3,9 @@ const testz = @import("testz");
 const pixzig = @import("pixzig");
 const zopengl = pixzig.zopengl;
 
-const Tests = testz.discoverTests(.{
+const Tests = blk: {
+    @setEvalBranchQuota(10000);
+    break :blk testz.discoverTests(.{
     testz.Group{ .name = "Tilemap Tests", .tag = "tile", .mod = @import("./tile_tests.zig") },
     testz.Group{ .name = "Keymap Tests", .tag = "keymap", .mod = @import("./keymap_tests.zig") },
     testz.Group{ .name = "Collision Tests", .tag = "collision", .mod = @import("./collision_tests.zig") },
@@ -18,7 +20,9 @@ const Tests = testz.discoverTests(.{
     testz.Group{ .name = "GameState Tests", .tag = "gamestate", .mod = @import("./gamestate_tests.zig") },
     testz.Group{ .name = "ActionMap Tests", .tag = "actions", .mod = @import("./action_tests.zig") },
     testz.Group{ .name = "Viewport Tests", .tag = "viewport", .mod = @import("./viewport_tests.zig") },
+    testz.Group{ .name = "Camera Tests", .tag = "camera", .mod = @import("./camera_tests.zig") },
 }, .{});
+};
 
 pub fn main(init: std.process.Init) !void {
     try testz.testzRunner(Tests, init.minimal.args);

@@ -55,6 +55,9 @@ pub const WindowState = windowing.WindowState;
 pub const Viewport = windowing.Viewport;
 pub const ScalePolicy = windowing.ScalePolicy;
 
+pub const camera = @import("./camera.zig");
+pub const Camera2D = camera.Camera2D;
+
 pub const Texture = textures.Texture;
 pub const TextureImage = textures.TextureImage;
 
