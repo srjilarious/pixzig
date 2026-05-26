@@ -218,3 +218,138 @@ pub fn viewportFixedScaleTest(io: std.Io, alloc: std.mem.Allocator) !void {
     try testz.expectEqual(@as(i32, 1440), vp.viewport_px.r);
     try testz.expectEqual(@as(i32, 810), vp.viewport_px.b);
 }
+
+// --- windowToLogical: letterbox ---------------------------------------------
+// Letterbox = horizontal bars at top and bottom (window wider than logical aspect).
+
+pub fn viewportWindowToLogicalLetterboxNullInBarTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    // fit: 320x180 logical in 1024x768 fb -> scale=3.2, viewport_px=(0,96,1024,672)
+    // On HiDPI 2x: window=512x384, window_scale=(2,2)
+    // Letterbox bars occupy fb y [0,96) and [672,768), i.e. window y [0,48) and [336,384)
+    const vp = Viewport.init(.{ .x = 320, .y = 180 }, .{ .x = 1024, .y = 768 }, .fit);
+    const ws = Vec2F{ .x = 2.0, .y = 2.0 };
+    // Click inside the top letterbox bar
+    try testz.expectTrue(vp.windowToLogical(.{ .x = 256, .y = 20 }, ws) == null);
+    // Click inside the bottom letterbox bar
+    try testz.expectTrue(vp.windowToLogical(.{ .x = 256, .y = 350 }, ws) == null);
+}
+
+pub fn viewportWindowToLogicalLetterboxTopEdgeTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    // Same setup as above. Window click at y=48 maps to fb y=96, which is the
+    // very top of the viewport -> logical (0, 0) for x=0.
+    const vp = Viewport.init(.{ .x = 320, .y = 180 }, .{ .x = 1024, .y = 768 }, .fit);
+    const ws = Vec2F{ .x = 2.0, .y = 2.0 };
+    const result = vp.windowToLogical(.{ .x = 0, .y = 48 }, ws);
+    try testz.expectTrue(result != null);
+    if (result) |r| {
+        try testz.expectTrue(approxEq(r.x, 0.0));
+        try testz.expectTrue(approxEq(r.y, 0.0));
+    }
+}
+
+pub fn viewportWindowToLogicalLetterboxCenterTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    // fit: 320x180 in 1024x768, scale=3.2, viewport_px=(0,96,1024,672)
+    // 1:1 window scale (no HiDPI)
+    // Click at window (160, 96+90) = (160, 186) -> fb same -> logical (50, 28.125)
+    //   x: (160 - 0) / 3.2 = 50   y: (186 - 96) / 3.2 = 28.125
+    const vp = Viewport.init(.{ .x = 320, .y = 180 }, .{ .x = 1024, .y = 768 }, .fit);
+    const ws = Vec2F{ .x = 1.0, .y = 1.0 };
+    const result = vp.windowToLogical(.{ .x = 160.0, .y = 186.0 }, ws);
+    try testz.expectTrue(result != null);
+    if (result) |r| {
+        try testz.expectTrue(approxEq(r.x, 50.0));
+        try testz.expectTrue(approxEq(r.y, 28.125));
+    }
+}
+
+// --- windowToLogical: pillarbox (column box) --------------------------------
+// Pillarbox = vertical bars at left and right (window taller than logical aspect).
+
+pub fn viewportWindowToLogicalPillarboxNullInBarTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    // fit: 320x240 logical in 1920x1080 fb -> scale=4.5, viewport_px=(240,0,1680,1080)
+    // 1:1 window scale, pillarbox bars at fb x [0,240) and [1680,1920)
+    const vp = Viewport.init(.{ .x = 320, .y = 240 }, .{ .x = 1920, .y = 1080 }, .fit);
+    const ws = Vec2F{ .x = 1.0, .y = 1.0 };
+    // Click in the left pillarbox bar
+    try testz.expectTrue(vp.windowToLogical(.{ .x = 100, .y = 540 }, ws) == null);
+    // Click in the right pillarbox bar
+    try testz.expectTrue(vp.windowToLogical(.{ .x = 1700, .y = 540 }, ws) == null);
+}
+
+pub fn viewportWindowToLogicalPillarboxLeftEdgeTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    // fit: 320x240 in 1920x1080, scale=4.5, viewport_px=(240,0,1680,1080)
+    // Window click at x=240 is the leftmost logical pixel (logical x=0)
+    const vp = Viewport.init(.{ .x = 320, .y = 240 }, .{ .x = 1920, .y = 1080 }, .fit);
+    const ws = Vec2F{ .x = 1.0, .y = 1.0 };
+    const result = vp.windowToLogical(.{ .x = 240.0, .y = 0.0 }, ws);
+    try testz.expectTrue(result != null);
+    if (result) |r| {
+        try testz.expectTrue(approxEq(r.x, 0.0));
+        try testz.expectTrue(approxEq(r.y, 0.0));
+    }
+}
+
+pub fn viewportWindowToLogicalPillarboxCenterTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    // fit: 320x240 in 1920x1080, scale=4.5, viewport_px=(240,0,1680,1080)
+    // Center of logical space (160,120) maps to fb (240+160*4.5, 120*4.5) = (960, 540)
+    // Inverse: fb (960,540) -> logical (160, 120)
+    const vp = Viewport.init(.{ .x = 320, .y = 240 }, .{ .x = 1920, .y = 1080 }, .fit);
+    const ws = Vec2F{ .x = 1.0, .y = 1.0 };
+    const result = vp.windowToLogical(.{ .x = 960.0, .y = 540.0 }, ws);
+    try testz.expectTrue(result != null);
+    if (result) |r| {
+        try testz.expectTrue(approxEq(r.x, 160.0));
+        try testz.expectTrue(approxEq(r.y, 120.0));
+    }
+}
+
+pub fn viewportWindowToLogicalPillarboxHiDpiTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    // fit: 320x240 logical in 1920x1080 fb, scale=4.5, viewport_px=(240,0,1680,1080)
+    // HiDPI 2x: window=960x540, window_scale=(2,2)
+    // Pillarbox bars at fb x [0,240), window x [0,120)
+    // Click at window (120, 270) -> fb (240, 540) -> logical (0, 120)
+    const vp = Viewport.init(.{ .x = 320, .y = 240 }, .{ .x = 1920, .y = 1080 }, .fit);
+    const ws = Vec2F{ .x = 2.0, .y = 2.0 };
+    try testz.expectTrue(vp.windowToLogical(.{ .x = 50, .y = 270 }, ws) == null);
+    const result = vp.windowToLogical(.{ .x = 120.0, .y = 270.0 }, ws);
+    try testz.expectTrue(result != null);
+    if (result) |r| {
+        try testz.expectTrue(approxEq(r.x, 0.0));
+        try testz.expectTrue(approxEq(r.y, 120.0));
+    }
+}
+
+// --- windowToLogical: no bars (stretch) -------------------------------------
+
+pub fn viewportWindowToLogicalStretchTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    // stretch: 320x180 in 800x600 fb, scale=(2.5, 3.333)
+    // 1:1 window scale. Any window pos maps to a logical coord.
+    const vp = Viewport.init(.{ .x = 320, .y = 180 }, .{ .x = 800, .y = 600 }, .stretch);
+    const ws = Vec2F{ .x = 1.0, .y = 1.0 };
+    // Corner: window (0,0) -> logical (0,0)
+    const tl = vp.windowToLogical(.{ .x = 0, .y = 0 }, ws);
+    try testz.expectTrue(tl != null);
+    // Bottom-right just inside: window (799, 599) -> logical (~319.6, ~179.7)
+    const br = vp.windowToLogical(.{ .x = 799, .y = 599 }, ws);
+    try testz.expectTrue(br != null);
+    if (br) |r| {
+        try testz.expectTrue(r.x < 320.0 and r.x > 318.0);
+        try testz.expectTrue(r.y < 180.0 and r.y > 178.0);
+    }
+}

@@ -61,7 +61,8 @@ pub const App = struct {
                 &eng.keyboard,
                 &eng.renderer.impl.shapes,
                 &eng.renderer.impl.text,
-                eng.scaleFactor,
+                &eng.viewport,
+                eng.window_state.scale_factor,
             ),
             .input_buf = std.mem.zeroes([InputBufLen]u8),
             .input_len = 0,
@@ -212,7 +213,10 @@ pub fn main(init: std.process.Init) !void {
     const appRunner = try AppRunner.init(
         "Pixzig: IMGUI Test",
         init.gpa,
-        .{ .renderInitOpts = .{ .fontFace = "assets/Roboto-Medium.ttf" } },
+        .{
+            .scalePolicy = .integer_fit,
+            .renderInitOpts = .{ .fontFace = "assets/Roboto-Medium.ttf" },
+        },
     );
     const app = try App.init(init.gpa, appRunner.engine);
     appRunner.run(app);

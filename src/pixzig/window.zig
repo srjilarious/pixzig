@@ -141,6 +141,17 @@ pub const Viewport = struct {
         };
     }
 
+    /// Converts a GLFW window-coordinate mouse position to logical game coordinates.
+    /// `window_scale` is the framebuffer-to-window ratio (WindowState.scale_factor).
+    /// Returns null when pos_window maps to a letterbox or pillarbox region.
+    pub fn windowToLogical(self: *const Viewport, pos_window: Vec2F, window_scale: Vec2F) ?Vec2F {
+        const fb = Vec2F{
+            .x = pos_window.x * window_scale.x,
+            .y = pos_window.y * window_scale.y,
+        };
+        return self.framebufferToLogical(fb);
+    }
+
     fn compute(self: *Viewport) void {
         const fb_w: f32 = @floatFromInt(self.framebuffer_size.x);
         const fb_h: f32 = @floatFromInt(self.framebuffer_size.y);

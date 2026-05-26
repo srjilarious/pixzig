@@ -22,6 +22,7 @@ const TextRenderer = @import("./renderer/text.zig").TextRenderer;
 const ShapeBatchQueue = @import("./renderer/shape.zig").ShapeBatchQueue;
 const common = @import("./common.zig");
 const input = @import("./input.zig");
+const windowing = @import("./window.zig");
 
 const Vec2I = common.Vec2I;
 const Vec2F = common.Vec2F;
@@ -114,8 +115,10 @@ pub const UiContext = struct {
     shapes: *ShapeBatchQueue,
     text: *TextRenderer,
     style: Style,
-    /// Scale factor from engine (logical → render pixels).
-    scale_factor: f32,
+    viewport: *const windowing.Viewport,
+    /// Window-to-framebuffer scale (WindowState.scale_factor). Update this if
+    /// the window moves between monitors with different DPI.
+    window_scale: Vec2F,
 
     win_stack: [8]WindowCtx,
     win_depth: usize,
@@ -154,7 +157,8 @@ pub const UiContext = struct {
         keyboard: *Keyboard,
         shapes: *ShapeBatchQueue,
         text: *TextRenderer,
-        scale_factor: f32,
+        viewport: *const windowing.Viewport,
+        window_scale: Vec2F,
     ) UiContext {
         return .{
             .hot_id = 0,
@@ -166,7 +170,8 @@ pub const UiContext = struct {
             .shapes = shapes,
             .text = text,
             .style = Style{},
-            .scale_factor = scale_factor,
+            .viewport = viewport,
+            .window_scale = window_scale,
             .win_stack = undefined,
             .win_depth = 0,
             .text_input = undefined,
@@ -189,10 +194,13 @@ pub const UiContext = struct {
     /// Latch keyboard and mouse input for this update step.
     /// Must be called from app.update(), after mouse.update().
     pub fn update(self: *UiContext) void {
-        // Store raw GLFW logical pixel coordinates (0..window_width, 0..window_height).
-        // testHot() compensates for scale_factor when comparing against render rects.
-        const mp = self.mouse.pos();
-        self.mouse_pos = mp;
+        // Convert GLFW window coordinates through the viewport to logical game
+        // coordinates so widget rects (which live in logical space) can be
+        // compared directly. Positions in letterbox/pillarbox regions map to
+        // (-1, -1) which will never match any valid widget rect.
+        const mp_window = self.mouse.pos();
+        self.mouse_pos = self.viewport.windowToLogical(mp_window, self.window_scale) orelse
+            Vec2F{ .x = -1, .y = -1 };
         self.left_down = self.mouse.down(.left);
         if (self.mouse.pressed(.left)) self.left_pressed = true;
         if (self.mouse.released(.left)) self.left_released = true;
@@ -390,11 +398,9 @@ pub const UiContext = struct {
     // ----------------------------------------------------------
 
     fn testHot(self: *UiContext, id: u64, rect: RectF) bool {
-        // mouse_pos is in GLFW logical pixels [0, window_w].
-        // Widget rects are in render pixels [0, window_w * sf].
-        // Multiply cursor by sf to bring it into render space for comparison.
-        const sf = self.scale_factor;
-        const mp = Vec2F{ .x = self.mouse_pos.x * sf, .y = self.mouse_pos.y * sf };
+        // mouse_pos is already in logical coordinates (converted in update()).
+        // Widget rects live in the same logical space, so compare directly.
+        const mp = self.mouse_pos;
         const over = mp.x >= rect.l and mp.x < rect.r and
             mp.y >= rect.t and mp.y < rect.b;
         if (over) self.hot_id = id;
@@ -623,8 +629,7 @@ pub const UiContext = struct {
                 const thumb_h = @max((area_height * @as(f32, @floatFromInt(lines_visible))) /
                     @as(f32, @floatFromInt(lines.len)), 12.0);
                 const travel = area_height - thumb_h;
-                const sf = self.scale_factor;
-                const my = self.mouse_pos.y * sf;
+                const my = self.mouse_pos.y;
                 const t = std.math.clamp((my - sb_rect.t - thumb_h / 2.0) / travel, 0.0, 1.0);
                 scroll.* = @intFromFloat(t * @as(f32, @floatFromInt(max_scroll)));
             }
@@ -710,8 +715,7 @@ pub const UiContext = struct {
 
         var changed = false;
         if (self.active_id == uid and self.left_down) {
-            const sf = self.scale_factor;
-            const mx = self.mouse_pos.x * sf;
+            const mx = self.mouse_pos.x;
             const t = std.math.clamp((mx - track_l) / track_range, 0.0, 1.0);
             const new_val = min_val + t * val_range;
             if (new_val != value.*) {

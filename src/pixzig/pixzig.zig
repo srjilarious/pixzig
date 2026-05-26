@@ -102,11 +102,11 @@ pub const PixzigEngineOptions = struct {
 /// rather than at compile time.
 pub const PixzigEngineInitOptions = struct {
     fullscreen: bool = false,
-    windowSize: Vec2I = .{ .x = 800, .y = 600 },
+    windowSize: Vec2I = .{ .x = 900, .y = 600 },
     resizable: bool = true,
     /// Logical game resolution. When null, logical size tracks the framebuffer
     /// and projMat preserves the existing gameScale-based behavior.
-    logicalSize: ?Vec2I = .{ .x = 800, .y = 600 },
+    logicalSize: ?Vec2I = .{ .x = 900, .y = 600 },
     scalePolicy: windowing.ScalePolicy = .fit,
     renderInitOpts: renderer.RendererInitOpts = .{},
 };
