@@ -430,7 +430,16 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             if (self.options.logicalSize == null) {
                 self.viewport.logical_size = self.window_state.framebuffer_size;
             }
-            self.viewport.updateFramebufferSize(self.window_state.framebuffer_size);
+            const fbsz = self.window_state.framebuffer_size;
+            self.viewport.updateFramebufferSize(fbsz);
+
+            // Make sure any out-of-viewport portions are cleared black for letterboxing.
+            // Clear whole framebuffer first. This creates the bars.
+            //gl.scissor(0, 0, fbsz.x, fbsz.y);
+
+            gl.disable(gl.SCISSOR_TEST);
+            self.renderer.clear(0, 0, 0, 1);
+
             self.viewport.apply();
 
             self.scaleFactor = @max(self.window_state.scale_factor.x, self.window_state.scale_factor.y);

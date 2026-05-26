@@ -99,6 +99,9 @@ pub const Viewport = struct {
             self.viewport_px.width(),
             self.viewport_px.height(),
         );
+
+        gl.scissor(self.viewport_px.l, gl_y, self.viewport_px.width(), self.viewport_px.height());
+        gl.enable(gl.SCISSOR_TEST);
     }
 
     /// Orthographic projection for the logical coordinate space.
