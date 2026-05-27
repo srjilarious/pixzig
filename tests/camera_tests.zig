@@ -102,3 +102,71 @@ pub fn cameraViewRectWidthHeightTest(io: std.Io, alloc: std.mem.Allocator) !void
     try testz.expectTrue(approxEq(r.r - r.l, 320.0));
     try testz.expectTrue(approxEq(r.b - r.t, 180.0));
 }
+
+// --- bounds clamping --------------------------------------------------------
+
+pub fn cameraBoundsNoBoundsUnchangedTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    // Without bounds, pos is unchanged even outside the world.
+    var cam = Camera2D.init(.{ .x = 800, .y = 600 });
+    cam.pos = .{ .x = -999, .y = -999 };
+    const r = cam.viewRect();
+    try testz.expectTrue(approxEq(r.l, -999 - 400.0));
+}
+
+pub fn cameraBoundsTopLeftCornerTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    // Camera trying to center on world origin (0,0) with a 800x600 viewport in a
+    // 3200x2400 world. The viewport half-size is 400x300, so the min clamped pos
+    // is (400, 300). The player appears at the top-left of the screen.
+    var cam = Camera2D.init(.{ .x = 800, .y = 600 });
+    cam.bounds = .{ .l = 0, .t = 0, .r = 3200, .b = 2400 };
+    cam.pos = .{ .x = 0, .y = 0 };
+    const r = cam.viewRect();
+    try testz.expectTrue(approxEq(r.l, 0.0));
+    try testz.expectTrue(approxEq(r.t, 0.0));
+    try testz.expectTrue(approxEq(r.r, 800.0));
+    try testz.expectTrue(approxEq(r.b, 600.0));
+}
+
+pub fn cameraBoundsBottomRightCornerTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    // Camera trying to go past the bottom-right edge of the world.
+    var cam = Camera2D.init(.{ .x = 800, .y = 600 });
+    cam.bounds = .{ .l = 0, .t = 0, .r = 3200, .b = 2400 };
+    cam.pos = .{ .x = 9999, .y = 9999 };
+    const r = cam.viewRect();
+    try testz.expectTrue(approxEq(r.r, 3200.0));
+    try testz.expectTrue(approxEq(r.b, 2400.0));
+}
+
+pub fn cameraBoundsMidwayUnclampedTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    // Camera centered in a large world stays unchanged.
+    var cam = Camera2D.init(.{ .x = 800, .y = 600 });
+    cam.bounds = .{ .l = 0, .t = 0, .r = 3200, .b = 2400 };
+    cam.pos = .{ .x = 1600, .y = 1200 };
+    const r = cam.viewRect();
+    try testz.expectTrue(approxEq(r.l, 1200.0));
+    try testz.expectTrue(approxEq(r.t, 900.0));
+    try testz.expectTrue(approxEq(r.r, 2000.0));
+    try testz.expectTrue(approxEq(r.b, 1500.0));
+}
+
+pub fn cameraBoundsSmallWorldCenteredTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    // World smaller than the viewport: camera centers on the world regardless of pos.
+    // Logical 800x600, world 200x100 -> center at (100, 50).
+    var cam = Camera2D.init(.{ .x = 800, .y = 600 });
+    cam.bounds = .{ .l = 0, .t = 0, .r = 200, .b = 100 };
+    cam.pos = .{ .x = 9999, .y = 9999 };
+    const r = cam.viewRect();
+    // Centered: effective pos = (100, 50), view extends by half the logical size.
+    try testz.expectTrue(approxEq(r.l + r.r, 200.0)); // midpoint == world center x
+    try testz.expectTrue(approxEq(r.t + r.b, 100.0)); // midpoint == world center y
+}

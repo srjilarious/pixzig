@@ -54,6 +54,13 @@ pub const App = struct {
         const guy_rect = RectF.fromPosSize(33, 33, 32, 32);
         var cam = pixzig.Camera2D.init(eng.viewport.logical_size);
         cam.pos = guy_rect.centerF();
+        const layer = &map.layers.items[1];
+        cam.bounds = .{
+            .l = 0,
+            .t = 0,
+            .r = @floatFromInt(layer.size.x * layer.tileSize.x),
+            .b = @floatFromInt(layer.size.y * layer.tileSize.y),
+        };
 
         const app = try alloc.create(App);
         app.* = .{

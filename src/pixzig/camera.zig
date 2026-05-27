@@ -10,11 +10,16 @@ const Viewport = windowing.Viewport;
 
 /// A 2D orthographic camera. `pos` is the world coordinate shown at the
 /// center of the logical viewport.
+///
+/// Set `bounds` to a world-space rectangle to prevent the camera from
+/// showing area outside it. When the viewport is larger than the bounds
+/// in either axis, that axis is centered on the bounds instead.
 pub const Camera2D = struct {
     pos: Vec2F = .{ .x = 0, .y = 0 },
     zoom: f32 = 1.0,
     rotation: f32 = 0.0,
     logical_size: Vec2I,
+    bounds: ?RectF = null,
 
     pub fn init(logical_size: Vec2I) Camera2D {
         return .{ .logical_size = logical_size };
@@ -29,8 +34,9 @@ pub const Camera2D = struct {
         const cx = lw / 2.0;
         const cy = lh / 2.0;
         const z = self.zoom;
+        const p = self.clampedPos();
 
-        const t_neg = zmath.translation(-self.pos.x, -self.pos.y, 0.0);
+        const t_neg = zmath.translation(-p.x, -p.y, 0.0);
         const t_scale = zmath.scaling(z, z, 1.0);
         const t_rot = zmath.rotationZ(self.rotation);
         const t_center = zmath.translation(cx, cy, 0.0);
@@ -39,16 +45,18 @@ pub const Camera2D = struct {
     }
 
     /// World-space rectangle currently visible through this camera.
+    /// Reflects the clamped position when bounds are set.
     pub fn viewRect(self: *const Camera2D) RectF {
         const lw: f32 = @floatFromInt(self.logical_size.x);
         const lh: f32 = @floatFromInt(self.logical_size.y);
         const half_w = lw / (2.0 * self.zoom);
         const half_h = lh / (2.0 * self.zoom);
+        const p = self.clampedPos();
         return .{
-            .l = self.pos.x - half_w,
-            .t = self.pos.y - half_h,
-            .r = self.pos.x + half_w,
-            .b = self.pos.y + half_h,
+            .l = p.x - half_w,
+            .t = p.y - half_h,
+            .r = p.x + half_w,
+            .b = p.y + half_h,
         };
     }
 
@@ -56,9 +64,10 @@ pub const Camera2D = struct {
     pub fn worldToLogical(self: *const Camera2D, world: Vec2F) Vec2F {
         const lw: f32 = @floatFromInt(self.logical_size.x);
         const lh: f32 = @floatFromInt(self.logical_size.y);
+        const p = self.clampedPos();
         return .{
-            .x = (world.x - self.pos.x) * self.zoom + lw / 2.0,
-            .y = (world.y - self.pos.y) * self.zoom + lh / 2.0,
+            .x = (world.x - p.x) * self.zoom + lw / 2.0,
+            .y = (world.y - p.y) * self.zoom + lh / 2.0,
         };
     }
 
@@ -66,9 +75,39 @@ pub const Camera2D = struct {
     pub fn logicalToWorld(self: *const Camera2D, logical: Vec2F) Vec2F {
         const lw: f32 = @floatFromInt(self.logical_size.x);
         const lh: f32 = @floatFromInt(self.logical_size.y);
+        const p = self.clampedPos();
         return .{
-            .x = (logical.x - lw / 2.0) / self.zoom + self.pos.x,
-            .y = (logical.y - lh / 2.0) / self.zoom + self.pos.y,
+            .x = (logical.x - lw / 2.0) / self.zoom + p.x,
+            .y = (logical.y - lh / 2.0) / self.zoom + p.y,
         };
+    }
+
+    /// Returns pos clamped so the viewport stays within bounds.
+    /// When the viewport is wider/taller than bounds in an axis, centers on
+    /// bounds for that axis rather than inverting the clamp.
+    fn clampedPos(self: *const Camera2D) Vec2F {
+        var p = self.pos;
+        const b = self.bounds orelse return p;
+
+        const lw: f32 = @floatFromInt(self.logical_size.x);
+        const lh: f32 = @floatFromInt(self.logical_size.y);
+        const half_w = lw / (2.0 * self.zoom);
+        const half_h = lh / (2.0 * self.zoom);
+        const bw = b.width();
+        const bh = b.height();
+
+        if (bw <= lw / self.zoom) {
+            p.x = b.l + bw / 2.0;
+        } else {
+            p.x = std.math.clamp(p.x, b.l + half_w, b.r - half_w);
+        }
+
+        if (bh <= lh / self.zoom) {
+            p.y = b.t + bh / 2.0;
+        } else {
+            p.y = std.math.clamp(p.y, b.t + half_h, b.b - half_h);
+        }
+
+        return p;
     }
 };
