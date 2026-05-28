@@ -178,7 +178,11 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
             while (self.lag > UpdateStepMs) {
                 self.lag -= UpdateStepMs;
 
-                self.engine.inputs.update(self.engine.window);
+                self.engine.inputs.update(
+                    self.engine.window,
+                    self.engine.window_state.scale_factor,
+                    &self.engine.viewport,
+                );
                 if (!app.update(self.engine, UpdateStepMs)) {
                     return false;
                 }

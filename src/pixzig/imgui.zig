@@ -22,7 +22,6 @@ const TextRenderer = @import("./renderer/text.zig").TextRenderer;
 const ShapeBatchQueue = @import("./renderer/shape.zig").ShapeBatchQueue;
 const common = @import("./common.zig");
 const input = @import("./input.zig");
-const windowing = @import("./window.zig");
 
 const Vec2I = common.Vec2I;
 const Vec2F = common.Vec2F;
@@ -115,10 +114,6 @@ pub const UiContext = struct {
     shapes: *ShapeBatchQueue,
     text: *TextRenderer,
     style: Style,
-    viewport: *const windowing.Viewport,
-    /// Window-to-framebuffer scale (WindowState.scale_factor). Update this if
-    /// the window moves between monitors with different DPI.
-    window_scale: Vec2F,
 
     win_stack: [8]WindowCtx,
     win_depth: usize,
@@ -157,8 +152,6 @@ pub const UiContext = struct {
         keyboard: *Keyboard,
         shapes: *ShapeBatchQueue,
         text: *TextRenderer,
-        viewport: *const windowing.Viewport,
-        window_scale: Vec2F,
     ) UiContext {
         return .{
             .hot_id = 0,
@@ -170,8 +163,6 @@ pub const UiContext = struct {
             .shapes = shapes,
             .text = text,
             .style = Style{},
-            .viewport = viewport,
-            .window_scale = window_scale,
             .win_stack = undefined,
             .win_depth = 0,
             .text_input = undefined,
@@ -194,13 +185,10 @@ pub const UiContext = struct {
     /// Latch keyboard and mouse input for this update step.
     /// Must be called from app.update(), after mouse.update().
     pub fn update(self: *UiContext) void {
-        // Convert GLFW window coordinates through the viewport to logical game
-        // coordinates so widget rects (which live in logical space) can be
-        // compared directly. Positions in letterbox/pillarbox regions map to
-        // (-1, -1) which will never match any valid widget rect.
-        const mp_window = self.mouse.pos();
-        self.mouse_pos = self.viewport.windowToLogical(mp_window, self.window_scale) orelse
-            Vec2F{ .x = -1, .y = -1 };
+        // mouse.pos() already returns logical game coordinates ((-1,-1) when
+        // the cursor is in a letterbox/pillarbox region), so no extra
+        // conversion is needed here.
+        self.mouse_pos = self.mouse.pos();
         self.left_down = self.mouse.down(.left);
         if (self.mouse.pressed(.left)) self.left_pressed = true;
         if (self.mouse.released(.left)) self.left_released = true;

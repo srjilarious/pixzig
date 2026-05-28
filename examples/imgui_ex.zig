@@ -58,8 +58,6 @@ pub const App = struct {
                 &eng.inputs.keyboard,
                 &eng.renderer.impl.shapes,
                 &eng.renderer.impl.text,
-                &eng.viewport,
-                eng.window_state.scale_factor,
             ),
             .input_buf = std.mem.zeroes([InputBufLen]u8),
             .input_len = 0,

@@ -1,5 +1,8 @@
 const std = @import("std");
 const glfw = @import("zglfw");
+const windowing = @import("./window.zig");
+const common = @import("./common.zig");
+const Vec2F = common.Vec2F;
 
 pub const keyboard = @import("./input/keyboard.zig");
 pub const charFromKey = keyboard.charFromKey;
@@ -37,8 +40,8 @@ pub const InputOptions = struct {
 
 /// Returns an InputManager type parameterized by the given options.  The
 /// manager always owns a Keyboard, and conditionally owns a Mouse and/or an
-/// array of Gamepads based on the options.  Call `update(window)` once per
-/// tick to advance all owned subsystems.
+/// array of Gamepads based on the options.  Call `update` once per tick to
+/// advance all owned subsystems.
 pub fn InputManager(comptime opts: InputOptions) type {
     return struct {
         keyboard: Keyboard,
@@ -63,10 +66,24 @@ pub fn InputManager(comptime opts: InputOptions) type {
 
         /// Advances all owned input subsystems by one tick.  Call after
         /// glfw.pollEvents() and before app.update().
-        pub fn update(self: *Self, window: *glfw.Window) void {
+        ///
+        /// `scale_factor` is WindowState.scale_factor (framebuffer/window ratio).
+        /// `viewport` is the current engine Viewport used to map raw cursor
+        /// positions into logical game coordinates for mouse.pos().
+        pub fn update(
+            self: *Self,
+            window: *glfw.Window,
+            scale_factor: Vec2F,
+            viewport: *const windowing.Viewport,
+        ) void {
             _ = self.keyboard.update(window);
             if (opts.mouse) {
                 self.mouse.update(window);
+                // Convert raw GLFW window coords to logical game coords.
+                const raw = self.mouse.rawPos();
+                const fb = Vec2F{ .x = raw.x * scale_factor.x, .y = raw.y * scale_factor.y };
+                self.mouse.curr_mut().logical_pos =
+                    viewport.framebufferToLogical(fb) orelse Vec2F{ .x = -1, .y = -1 };
             }
             if (opts.numGamepads > 0) {
                 for (&self.gamepads) |*gp| {

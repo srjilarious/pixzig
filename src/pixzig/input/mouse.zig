@@ -21,11 +21,19 @@ fn getIndexForMouseButton(key: glfw.MouseButton) usize {
 
 pub const MouseState = struct {
     buttons: std.StaticBitSet(NumMouseButtons),
-    pos: Vec2F,
+    /// Raw GLFW cursor position in window coordinates (from getCursorPos()).
+    raw_pos: Vec2F,
+    /// Logical game coordinates after viewport mapping.  Set to (-1, -1) when
+    /// the cursor is outside the viewport (letterbox / pillarbox region).
+    logical_pos: Vec2F,
 
     pub fn init() MouseState {
         const buttons = std.StaticBitSet(NumMouseButtons).initEmpty();
-        return .{ .buttons = buttons, .pos = .{ .x = 0, .y = 0 } };
+        return .{
+            .buttons = buttons,
+            .raw_pos = .{ .x = 0, .y = 0 },
+            .logical_pos = .{ .x = -1, .y = -1 },
+        };
     }
 
     pub fn down(self: *const MouseState, keyIdx: usize) bool {
@@ -50,13 +58,14 @@ pub const MouseState = struct {
         }
     }
 
-    pub fn setPos(self: *MouseState, pos: [2]f64) void {
-        self.pos = .{ .x = @floatCast(pos[0]), .y = @floatCast(pos[1]) };
+    pub fn setRawPos(self: *MouseState, pos: [2]f64) void {
+        self.raw_pos = .{ .x = @floatCast(pos[0]), .y = @floatCast(pos[1]) };
     }
 
     pub fn clear(self: *MouseState) void {
         self.buttons.setRangeValue(.{ .start = 0, .end = NumMouseButtons }, false);
-        self.pos = .{ .x = 0, .y = 0 };
+        self.raw_pos = .{ .x = 0, .y = 0 };
+        self.logical_pos = .{ .x = -1, .y = -1 };
     }
 };
 
@@ -78,6 +87,9 @@ pub const Mouse = struct {
         return res;
     }
 
+    /// Reads button state and raw cursor position from the GLFW window.
+    /// logical_pos is left unchanged here — InputManager sets it after calling
+    /// this so it can apply the viewport transformation.
     pub fn update(
         self: *Mouse,
         window: *glfw.Window,
@@ -88,7 +100,6 @@ pub const Mouse = struct {
 
         var state = self.curr_mut();
 
-        // Update the current keys
         const enumTypeInfo = @typeInfo(glfw.MouseButton).@"enum";
         comptime var btnIdx = 0;
         inline for (enumTypeInfo.fields) |field| {
@@ -98,7 +109,7 @@ pub const Mouse = struct {
         }
 
         const cursorPos = window.getCursorPos();
-        state.setPos(cursorPos);
+        state.setRawPos(cursorPos);
     }
 
     pub fn curr(self: *const Mouse) *const MouseState {
@@ -133,11 +144,24 @@ pub const Mouse = struct {
         return (!self.curr().down(btnIdx) and self.prev().down(btnIdx));
     }
 
+    /// Logical game coordinates for the current frame.  Returns (-1, -1) when
+    /// the cursor is outside the viewport (letterbox / pillarbox region).
     pub fn pos(self: *const Mouse) Vec2F {
-        return self.curr().pos;
+        return self.curr().logical_pos;
     }
 
+    /// Logical game coordinates for the previous frame.
     pub fn lastPos(self: *const Mouse) Vec2F {
-        return self.prev().pos;
+        return self.prev().logical_pos;
+    }
+
+    /// Raw GLFW cursor position in window coordinates for the current frame.
+    pub fn rawPos(self: *const Mouse) Vec2F {
+        return self.curr().raw_pos;
+    }
+
+    /// Raw GLFW cursor position in window coordinates for the previous frame.
+    pub fn lastRawPos(self: *const Mouse) Vec2F {
+        return self.prev().raw_pos;
     }
 };
