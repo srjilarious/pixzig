@@ -339,47 +339,47 @@ pub const App = struct {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        if (eng.keyboard.pressed(.space)) {
+        if (eng.inputs.keyboard.pressed(.space)) {
             self.refreshPath();
         }
 
-        if (eng.keyboard.pressed(.s)) {
+        if (eng.inputs.keyboard.pressed(.s)) {
             self.startPos = self.cursorPos;
             self.refreshPath();
         }
 
-        if (eng.keyboard.pressed(.e)) {
+        if (eng.inputs.keyboard.pressed(.e)) {
             self.endPos = self.cursorPos;
             self.refreshPath();
         }
 
-        if (eng.keyboard.pressed(.x)) {
+        if (eng.inputs.keyboard.pressed(.x)) {
             self.layer.setTileData(self.cursorPos.x, self.cursorPos.y, 1);
             self.refreshPath();
         }
 
-        if (eng.keyboard.pressed(.left)) {
+        if (eng.inputs.keyboard.pressed(.left)) {
             if (self.cursorPos.x > 0) {
                 self.cursorPos.x -= 1;
             }
         }
-        if (eng.keyboard.pressed(.right)) {
+        if (eng.inputs.keyboard.pressed(.right)) {
             if (self.cursorPos.x < MapWidth - 1) {
                 self.cursorPos.x += 1;
             }
         }
-        if (eng.keyboard.pressed(.up)) {
+        if (eng.inputs.keyboard.pressed(.up)) {
             if (self.cursorPos.y > 0) {
                 self.cursorPos.y -= 1;
             }
         }
-        if (eng.keyboard.pressed(.down)) {
+        if (eng.inputs.keyboard.pressed(.down)) {
             if (self.cursorPos.x < MapHeight - 1) {
                 self.cursorPos.y += 1;
             }
         }
 
-        if (eng.keyboard.pressed(.escape)) {
+        if (eng.inputs.keyboard.pressed(.escape)) {
             return false;
         }
         return true;

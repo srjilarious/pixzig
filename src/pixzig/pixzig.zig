@@ -55,6 +55,8 @@ pub const WindowState = windowing.WindowState;
 pub const Viewport = windowing.Viewport;
 pub const ScalePolicy = windowing.ScalePolicy;
 
+pub const InputOptions = input.InputOptions;
+
 pub const camera = @import("./camera.zig");
 pub const Camera2D = camera.Camera2D;
 
@@ -95,6 +97,9 @@ pub const PixzigEngineOptions = struct {
 
     /// Audio options.
     audioOpts: audio.AudioOptions = .{},
+
+    /// Input options.
+    inputOpts: input.InputOptions = .{},
 };
 
 /// Runtime initialization options for the Pixzig Engine.  These options are
@@ -173,7 +178,7 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
             while (self.lag > UpdateStepMs) {
                 self.lag -= UpdateStepMs;
 
-                _ = self.engine.keyboard.update(self.engine.window);
+                self.engine.inputs.update(self.engine.window);
                 if (!app.update(self.engine, UpdateStepMs)) {
                     return false;
                 }
@@ -237,12 +242,13 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         window_state: windowing.WindowState,
         viewport: windowing.Viewport,
         resources: ResourceManager,
-        keyboard: input.Keyboard,
+        inputs: Inputs,
         renderer: Renderer = undefined,
         audio: audio.AudioEngine = undefined,
 
         const Self = @This();
         pub const Renderer = renderer.Renderer(engOpts.rendererOpts);
+        pub const Inputs = input.InputManager(engOpts.inputOpts);
 
         /// Initializes the engine and its components.  In particular it creates the application
         /// window and rendering context, loads the OpenGL profile, and sets up the default
@@ -340,7 +346,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 .window_state = ws,
                 .viewport = vp,
                 .resources = ResourceManager.init(allocator),
-                .keyboard = input.Keyboard.init(),
+                .inputs = Inputs.init(),
             };
 
             // Store a pointer to window_state in the GLFW user pointer so the

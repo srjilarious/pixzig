@@ -15,12 +15,11 @@ const PixzigEngine = pixzig.PixzigEngine;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.PixzigAppRunner(App, .{ .inputOpts = .{ .mouse = true } });
 
 pub const App = struct {
     fps: FpsCounter,
     alloc: std.mem.Allocator,
-    mouse: pixzig.input.Mouse,
     tex: *pixzig.Texture,
     pointer: pixzig.sprites.Sprite,
 
@@ -32,7 +31,6 @@ pub const App = struct {
         return .{
             .fps = FpsCounter.init(),
             .alloc = alloc,
-            .mouse = pixzig.input.Mouse.init(),
             .tex = tex,
             .pointer = pixzig.sprites.Sprite.create(tex, .{ .x = 32, .y = 32 }),
         };
@@ -47,19 +45,17 @@ pub const App = struct {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        self.mouse.update(eng.window);
-
-        const mousePos = self.mouse.pos().asVec2I();
+        const mousePos = eng.inputs.mouse.pos().asVec2I();
         self.pointer.setPos(mousePos.x, mousePos.y);
 
-        if (self.mouse.pressed(.left)) {
+        if (eng.inputs.mouse.pressed(.left)) {
             std.log.info("left mouse!\n", .{});
         }
-        if (self.mouse.pressed(.right)) {
+        if (eng.inputs.mouse.pressed(.right)) {
             std.log.info("right mouse!\n", .{});
         }
 
-        if (eng.keyboard.pressed(.escape)) {
+        if (eng.inputs.keyboard.pressed(.escape)) {
             return false;
         }
 

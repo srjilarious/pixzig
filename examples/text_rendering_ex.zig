@@ -44,7 +44,7 @@ pub const App = struct {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        if (eng.keyboard.pressed(.escape)) {
+        if (eng.inputs.keyboard.pressed(.escape)) {
             return false;
         }
 

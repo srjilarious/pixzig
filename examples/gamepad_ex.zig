@@ -9,7 +9,7 @@ const FpsCounter = pixzig.utils.FpsCounter;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.PixzigAppRunner(App, .{ .inputOpts = .{ .numGamepads = 1 } });
 
 // Colors cycled by gamepad buttons.
 const Colors = struct {
@@ -19,26 +19,24 @@ const Colors = struct {
 };
 
 const ButtonColors = [_]struct { btn: glfw.Gamepad.Button, color: Colors }{
-    .{ .btn = .a, .color = .{ .r = 0.8, .g = 0.1, .b = 0.1 } }, // A  → red
-    .{ .btn = .b, .color = .{ .r = 0.1, .g = 0.8, .b = 0.1 } }, // B  → green
-    .{ .btn = .x, .color = .{ .r = 0.1, .g = 0.1, .b = 0.8 } }, // X  → blue
-    .{ .btn = .y, .color = .{ .r = 0.8, .g = 0.8, .b = 0.1 } }, // Y  → yellow
-    .{ .btn = .left_bumper, .color = .{ .r = 0.1, .g = 0.8, .b = 0.8 } }, // LB → cyan
-    .{ .btn = .right_bumper, .color = .{ .r = 0.8, .g = 0.1, .b = 0.8 } }, // RB → magenta
-    .{ .btn = .start, .color = .{ .r = 0.9, .g = 0.9, .b = 0.9 } }, // Start → white
-    .{ .btn = .back, .color = .{ .r = 0.2, .g = 0.2, .b = 0.2 } }, // Back  → dark gray
+    .{ .btn = .a, .color = .{ .r = 0.8, .g = 0.1, .b = 0.1 } }, // A  -> red
+    .{ .btn = .b, .color = .{ .r = 0.1, .g = 0.8, .b = 0.1 } }, // B  -> green
+    .{ .btn = .x, .color = .{ .r = 0.1, .g = 0.1, .b = 0.8 } }, // X  -> blue
+    .{ .btn = .y, .color = .{ .r = 0.8, .g = 0.8, .b = 0.1 } }, // Y  -> yellow
+    .{ .btn = .left_bumper, .color = .{ .r = 0.1, .g = 0.8, .b = 0.8 } }, // LB -> cyan
+    .{ .btn = .right_bumper, .color = .{ .r = 0.8, .g = 0.1, .b = 0.8 } }, // RB -> magenta
+    .{ .btn = .start, .color = .{ .r = 0.9, .g = 0.9, .b = 0.9 } }, // Start -> white
+    .{ .btn = .back, .color = .{ .r = 0.2, .g = 0.2, .b = 0.2 } }, // Back  -> dark gray
 };
 
 pub const App = struct {
     fps: FpsCounter,
-    gamepad: pixzig.input.Gamepad,
     color: Colors,
     printDelay: Delay,
 
     pub fn init() App {
         return .{
             .fps = FpsCounter.init(),
-            .gamepad = pixzig.input.Gamepad.init(0),
             .color = .{ .r = 0.0, .g = 0.0, .b = 0.5 },
             .printDelay = .{ .max = 60 },
         };
@@ -53,16 +51,16 @@ pub const App = struct {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        _ = self.gamepad.update();
+        const gp = eng.inputs.gamepad(0);
 
-        if (!self.gamepad.isConnected()) {
+        if (!gp.isConnected()) {
             if (self.printDelay.update(1)) {
                 std.log.warn("No gamepad connected on joystick 0.", .{});
             }
         } else {
             // Apply the color for whichever button is held.
             for (ButtonColors) |entry| {
-                if (self.gamepad.down(entry.btn)) {
+                if (gp.down(entry.btn)) {
                     self.color = entry.color;
                 }
             }
@@ -72,18 +70,18 @@ pub const App = struct {
                 std.log.debug(
                     "LStick ({d:.2}, {d:.2})  RStick ({d:.2}, {d:.2})  Triggers L={d:.2} R={d:.2}",
                     .{
-                        self.gamepad.axis(.left_x),
-                        self.gamepad.axis(.left_y),
-                        self.gamepad.axis(.right_x),
-                        self.gamepad.axis(.right_y),
-                        self.gamepad.axis(.left_trigger),
-                        self.gamepad.axis(.right_trigger),
+                        gp.axis(.left_x),
+                        gp.axis(.left_y),
+                        gp.axis(.right_x),
+                        gp.axis(.right_y),
+                        gp.axis(.left_trigger),
+                        gp.axis(.right_trigger),
                     },
                 );
             }
         }
 
-        if (eng.keyboard.pressed(.escape)) return false;
+        if (eng.inputs.keyboard.pressed(.escape)) return false;
         return true;
     }
 

@@ -84,17 +84,17 @@ pub const App = struct {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        if (eng.keyboard.pressed(.one)) {
+        if (eng.inputs.keyboard.pressed(.one)) {
             std.log.info("one!\n", .{});
             self.states.setCurrState(.StateA);
         }
-        if (eng.keyboard.pressed(.two)) {
+        if (eng.inputs.keyboard.pressed(.two)) {
             std.log.info("two!\n", .{});
             self.states.setCurrState(.StateB);
         }
-        if (eng.keyboard.pressed(.three)) std.log.info("three!\n", .{});
+        if (eng.inputs.keyboard.pressed(.three)) std.log.info("three!\n", .{});
 
-        if (eng.keyboard.pressed(.escape)) {
+        if (eng.inputs.keyboard.pressed(.escape)) {
             return false;
         }
 

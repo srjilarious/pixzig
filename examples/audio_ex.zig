@@ -50,10 +50,10 @@ pub const App = struct {
             std.log.info("FPS: {}", .{self.fps.fps()});
         }
 
-        if (eng.keyboard.pressed(.one)) std.log.info("one!\n", .{});
-        if (eng.keyboard.pressed(.two)) std.log.info("two!\n", .{});
-        if (eng.keyboard.pressed(.three)) std.log.info("three!\n", .{});
-        if (eng.keyboard.pressed(.left)) {
+        if (eng.inputs.keyboard.pressed(.one)) std.log.info("one!\n", .{});
+        if (eng.inputs.keyboard.pressed(.two)) std.log.info("two!\n", .{});
+        if (eng.inputs.keyboard.pressed(.three)) std.log.info("three!\n", .{});
+        if (eng.inputs.keyboard.pressed(.left)) {
             std.log.info("Left!\n", .{});
             eng.audio.playSound("laserShoot") catch |err| {
                 std.log.err("Error playing sound: {}\n", .{err});
@@ -64,14 +64,14 @@ pub const App = struct {
             // };
             self.testVal -= 1;
         }
-        if (eng.keyboard.pressed(.right)) {
+        if (eng.inputs.keyboard.pressed(.right)) {
             std.log.info("Right!\n", .{});
             self.testVal += 1;
         }
-        if (eng.keyboard.pressed(.space)) {
+        if (eng.inputs.keyboard.pressed(.space)) {
             std.log.info("Context: {}\n", .{self.testVal});
         }
-        if (eng.keyboard.pressed(.escape)) {
+        if (eng.inputs.keyboard.pressed(.escape)) {
             return false;
         }
         return true;

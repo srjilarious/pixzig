@@ -79,24 +79,24 @@ pub const App = struct {
 
         self.actor.update(30, &self.spr);
 
-        if (eng.keyboard.pressed(.up)) {
+        if (eng.inputs.keyboard.pressed(.up)) {
             self.spr.rotate = .rot90;
         }
-        if (eng.keyboard.pressed(.down)) {
+        if (eng.inputs.keyboard.pressed(.down)) {
             self.spr.rotate = .rot270;
         }
-        if (eng.keyboard.pressed(.left)) {
+        if (eng.inputs.keyboard.pressed(.left)) {
             std.log.debug("Left!\n", .{});
             self.spr.rotate = .flipHorz;
             // actor.setState("left");
         }
-        if (eng.keyboard.pressed(.right)) {
+        if (eng.inputs.keyboard.pressed(.right)) {
             self.spr.rotate = .none;
             std.log.debug("Right!\n", .{});
             // actor.setState("right");
         }
 
-        if (eng.keyboard.pressed(.escape)) {
+        if (eng.inputs.keyboard.pressed(.escape)) {
             return false;
         }
         return true;

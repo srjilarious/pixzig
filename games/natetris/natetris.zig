@@ -222,41 +222,41 @@ pub const Natetris = struct {
             std.log.debug("FPS: {}\n", .{self.fps.fps()});
         }
 
-        if (eng.keyboard.pressed(.one)) {
+        if (eng.inputs.keyboard.pressed(.one)) {
             if(self.currIdx > 0) self.currIdx -= 1;
             @memcpy(self.shape, Shapes[self.currIdx]);
         } 
-        if (eng.keyboard.pressed(.two)) {
+        if (eng.inputs.keyboard.pressed(.two)) {
             if(self.currIdx < (Shapes.len - 1)) self.currIdx += 1;
             @memcpy(self.shape, Shapes[self.currIdx]);
         }
-        if (eng.keyboard.pressed(.z)) {
+        if (eng.inputs.keyboard.pressed(.z)) {
             self.rotateCounterClockwise();
             if(!self.checkShape(self.shapePos)) {
                 // Undo our attempt.
                 self.rotateClockwise();
             }
         }
-        if (eng.keyboard.pressed(.x)) {
+        if (eng.inputs.keyboard.pressed(.x)) {
             self.rotateClockwise();
             if(!self.checkShape(self.shapePos)) {
                 self.rotateCounterClockwise();
             }
         }
 
-        if (eng.keyboard.pressed(.left)) {
+        if (eng.inputs.keyboard.pressed(.left)) {
             self.shapePos.x -= 1;
             if(!self.checkShape(self.shapePos)) {
                 self.shapePos.x += 1;
             }
         }
-        else if(eng.keyboard.pressed(.right)) {
+        else if(eng.inputs.keyboard.pressed(.right)) {
             self.shapePos.x += 1;
             if(!self.checkShape(self.shapePos)) {
                 self.shapePos.x -= 1;
             }
         }
-        else if(eng.keyboard.pressed(.down)) {
+        else if(eng.inputs.keyboard.pressed(.down)) {
             self.shapePos.y += 1;
 
             if(!self.checkShape(self.shapePos)) {
@@ -266,7 +266,7 @@ pub const Natetris = struct {
             }
         }
 
-        if(eng.keyboard.pressed(.escape)) {
+        if(eng.inputs.keyboard.pressed(.escape)) {
             return false;
         }
 

@@ -22,7 +22,7 @@ const CollisionGrid = pixzig.collision.CollisionGrid;
 
 const CollisionGridEntity = CollisionGrid(flecs.entity_t, 4);
 
-const AppRunner =  pixzig.PixzigAppRunner(App, .{});
+const AppRunner =  pixzig.PixzigAppRunner(App, .{ .inputOpts = .{ .mouse = true } });
 
 pub const App = struct {
     alloc: std.mem.Allocator,
@@ -30,7 +30,6 @@ pub const App = struct {
     spriteBatch: pixzig.renderer.SpriteBatchQueue,
     tex: *pixzig.Texture,
     collideGrid: CollisionGridEntity,
-    mouse: pixzig.input.Mouse,
     // colorShader: pixzig.shaders.Shader,
     // shapeBatch: pixzig.renderer.ShapeBatchQueue,
     fps: FpsCounter,
@@ -82,7 +81,6 @@ pub const App = struct {
             .scrollOffset = .{ .x = 0, .y = 0}, 
             .paused = false,
             .spriteBatch = spriteBatch,
-            .mouse = pixzig.input.Mouse.init(),
             // .shapeBatch = shapeBatch,
             .tex = tex,
             .collideGrid = try CollisionGridEntity.init(alloc, .{ .x=100, .y=100}, .{.x=8, .y=8}),
@@ -151,28 +149,26 @@ pub const App = struct {
             std.log.debug("FPS: {}\n", .{self.fps.fps()});
         }
 
-        self.mouse.update(eng.window);
-
-        if (eng.keyboard.pressed(.one)) std.log.info("one!\n", .{});
-        if (eng.keyboard.pressed(.two)) std.log.info("two!\n", .{});
-        if (eng.keyboard.pressed(.three)) std.log.info("three!\n", .{});
+        if (eng.inputs.keyboard.pressed(.one)) std.log.info("one!\n", .{});
+        if (eng.inputs.keyboard.pressed(.two)) std.log.info("two!\n", .{});
+        if (eng.inputs.keyboard.pressed(.three)) std.log.info("three!\n", .{});
         // const ScrollAmount = 3;
-        // if (eng.keyboard.down(.left)) {
+        // if (eng.inputs.keyboard.down(.left)) {
         //     self.scrollOffset.x += ScrollAmount;
         // }
-        // if (eng.keyboard.down(.right)) {
+        // if (eng.inputs.keyboard.down(.right)) {
         //     self.scrollOffset.x -= ScrollAmount;
         // }
-        // if (eng.keyboard.down(.up)) {
+        // if (eng.inputs.keyboard.down(.up)) {
         //     self.scrollOffset.y += ScrollAmount;
         // }
-        // if (eng.keyboard.down(.down)) {
+        // if (eng.inputs.keyboard.down(.down)) {
         //     self.scrollOffset.y -= ScrollAmount;
         // }
-        // if(eng.keyboard.pressed(.p)) {
+        // if(eng.inputs.keyboard.pressed(.p)) {
         //     self.paused = !self.paused;
         // }
-        if(eng.keyboard.pressed(.escape)) {
+        if(eng.inputs.keyboard.pressed(.escape)) {
             return false;
         }
 
@@ -213,7 +209,7 @@ pub const App = struct {
             }
         }
 
-        const mousePos = self.mouse.pos().asVec2I();
+        const mousePos = eng.inputs.mouse.pos().asVec2I();
         var hits: [4]?flecs.entity_t = .{ null, null, null, null };
         const num = try self.collideGrid.checkPoint(mousePos, &hits[0..]);
         if(num > 0) {

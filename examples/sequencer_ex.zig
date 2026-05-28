@@ -199,22 +199,22 @@ pub const App = struct {
 
         // Only process input if no sequences are running.
         if (self.seqPlayer.sequences.items.len == 0) {
-            if (eng.keyboard.pressed(.right)) {
+            if (eng.inputs.keyboard.pressed(.right)) {
                 self.queueMove("right", 16, 0) catch {};
-            } else if (eng.keyboard.pressed(.left)) {
+            } else if (eng.inputs.keyboard.pressed(.left)) {
                 self.queueMove("left", -16, 0) catch {};
-            } else if (eng.keyboard.pressed(.down)) {
+            } else if (eng.inputs.keyboard.pressed(.down)) {
                 self.queueMove("down", 0, 16) catch {};
-            } else if (eng.keyboard.pressed(.up)) {
+            } else if (eng.inputs.keyboard.pressed(.up)) {
                 self.queueMove("up", 0, -16) catch {};
-            } else if (eng.keyboard.pressed(.c)) {
+            } else if (eng.inputs.keyboard.pressed(.c)) {
                 self.runCircle() catch |err| {
                     std.log.err("circle_move.lua error: {}", .{err});
                 };
             }
         }
 
-        if (eng.keyboard.pressed(.escape)) return false;
+        if (eng.inputs.keyboard.pressed(.escape)) return false;
         return true;
     }
 

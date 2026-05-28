@@ -36,7 +36,7 @@ pub const App = struct {
         _ = delta;
         _ = self;
 
-        if (eng.keyboard.pressed(.escape)) {
+        if (eng.inputs.keyboard.pressed(.escape)) {
             return false;
         }
 

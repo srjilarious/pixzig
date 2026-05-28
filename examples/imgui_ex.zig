@@ -23,6 +23,7 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{
     .rendererOpts = .{
         .textRendering = true,
     },
+    .inputOpts = .{ .mouse = true },
 });
 
 const MaxLogLines = 200;
@@ -30,7 +31,6 @@ const InputBufLen = 128;
 
 pub const App = struct {
     alloc: std.mem.Allocator,
-    mouse: input.Mouse,
     ui: imgui.UiContext,
 
     // Text input buffer
@@ -51,14 +51,11 @@ pub const App = struct {
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app = try alloc.create(App);
 
-        const mouse = input.Mouse.init();
-
         app.* = .{
             .alloc = alloc,
-            .mouse = mouse,
             .ui = imgui.UiContext.init(
-                &app.mouse,
-                &eng.keyboard,
+                &eng.inputs.mouse,
+                &eng.inputs.keyboard,
                 &eng.renderer.impl.shapes,
                 &eng.renderer.impl.text,
                 &eng.viewport,
@@ -96,9 +93,8 @@ pub const App = struct {
 
     pub fn update(self: *App, eng: *AppRunner.Engine, _delta: f64) bool {
         _ = _delta;
-        if (eng.keyboard.pressed(.escape)) return false;
+        if (eng.inputs.keyboard.pressed(.escape)) return false;
 
-        self.mouse.update(eng.window);
         self.ui.update();
         return true;
     }

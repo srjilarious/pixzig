@@ -131,26 +131,26 @@ pub const App = struct {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        if (eng.keyboard.pressed(.one)) std.log.info("one!\n", .{});
-        if (eng.keyboard.pressed(.two)) std.log.info("two!\n", .{});
-        if (eng.keyboard.pressed(.three)) std.log.info("three!\n", .{});
+        if (eng.inputs.keyboard.pressed(.one)) std.log.info("one!\n", .{});
+        if (eng.inputs.keyboard.pressed(.two)) std.log.info("two!\n", .{});
+        if (eng.inputs.keyboard.pressed(.three)) std.log.info("three!\n", .{});
         const ScrollAmount = 3;
-        if (eng.keyboard.down(.left)) {
+        if (eng.inputs.keyboard.down(.left)) {
             self.scrollOffset.x += ScrollAmount;
         }
-        if (eng.keyboard.down(.right)) {
+        if (eng.inputs.keyboard.down(.right)) {
             self.scrollOffset.x -= ScrollAmount;
         }
-        if (eng.keyboard.down(.up)) {
+        if (eng.inputs.keyboard.down(.up)) {
             self.scrollOffset.y += ScrollAmount;
         }
-        if (eng.keyboard.down(.down)) {
+        if (eng.inputs.keyboard.down(.down)) {
             self.scrollOffset.y -= ScrollAmount;
         }
-        if (eng.keyboard.pressed(.p)) {
+        if (eng.inputs.keyboard.pressed(.p)) {
             self.paused = !self.paused;
         }
-        if (eng.keyboard.pressed(.escape)) {
+        if (eng.inputs.keyboard.pressed(.escape)) {
             return false;
         }
 

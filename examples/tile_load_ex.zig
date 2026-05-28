@@ -86,10 +86,10 @@ pub const App = struct {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        if (eng.keyboard.pressed(.escape)) return false;
+        if (eng.inputs.keyboard.pressed(.escape)) return false;
 
         const MoveAmount = 3;
-        if (eng.keyboard.down(.left)) {
+        if (eng.inputs.keyboard.down(.left)) {
             _ = pixzig.tile.Mover.moveLeft(
                 &self.guy,
                 MoveAmount,
@@ -97,7 +97,7 @@ pub const App = struct {
                 pixzig.tile.BlocksAll,
             );
         }
-        if (eng.keyboard.down(.right)) {
+        if (eng.inputs.keyboard.down(.right)) {
             _ = pixzig.tile.Mover.moveRight(
                 &self.guy,
                 MoveAmount,
@@ -105,7 +105,7 @@ pub const App = struct {
                 pixzig.tile.BlocksAll,
             );
         }
-        if (eng.keyboard.down(.up)) {
+        if (eng.inputs.keyboard.down(.up)) {
             _ = pixzig.tile.Mover.moveUp(
                 &self.guy,
                 MoveAmount,
@@ -113,7 +113,7 @@ pub const App = struct {
                 pixzig.tile.BlocksAll,
             );
         }
-        if (eng.keyboard.down(.down)) {
+        if (eng.inputs.keyboard.down(.down)) {
             _ = pixzig.tile.Mover.moveDown(
                 &self.guy,
                 MoveAmount,
