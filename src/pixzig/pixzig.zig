@@ -312,12 +312,35 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             // Use framebuffer size (physical pixels) rather than getContentScale(),
             // because getContentScale() can disagree with the actual framebuffer
             // dimensions on Wayland with fractional scaling, causing a viewport gap.
-            const ws = windowing.WindowState.init(window);
+            var ws = windowing.WindowState.init(window);
+            const logical_size = options.logicalSize orelse ws.framebuffer_size;
+
+            // For integer_fit and integer_dpi_fit, snap the window size once at
+            // startup so the framebuffer is an exact integer multiple of logical_size,
+            // eliminating the black border that arises from fractional DPI remainders.
+            if (options.logicalSize != null) {
+                switch (options.scalePolicy) {
+                    .integer_fit => {
+                        const fb_w: f32 = @floatFromInt(ws.framebuffer_size.x);
+                        const fb_h: f32 = @floatFromInt(ws.framebuffer_size.y);
+                        const log_w: f32 = @floatFromInt(logical_size.x);
+                        const log_h: f32 = @floatFromInt(logical_size.y);
+                        const sx: i32 = @intFromFloat(fb_w / log_w);
+                        const sy: i32 = @intFromFloat(fb_h / log_h);
+                        const s: f32 = @floatFromInt(@max(1, @min(sx, sy)));
+                        const new_w: i32 = @intFromFloat(@round(log_w * s / ws.content_scale.x));
+                        const new_h: i32 = @intFromFloat(@round(log_h * s / ws.content_scale.y));
+                        window.setSize(new_w, new_h);
+                        ws.refresh(window);
+                    },
+                    else => {},
+                }
+            }
+
             const fb_w: f32 = @floatFromInt(ws.framebuffer_size.x);
             const fb_h: f32 = @floatFromInt(ws.framebuffer_size.y);
             const scaleFactor = @max(ws.scale_factor.x, ws.scale_factor.y);
 
-            const logical_size = options.logicalSize orelse ws.framebuffer_size;
             const vp = windowing.Viewport.init(logical_size, ws.framebuffer_size, options.scalePolicy);
 
             // Apply GL viewport and build the initial projection matrix.

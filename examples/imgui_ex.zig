@@ -98,7 +98,7 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0.15, 0.15, 0.20, 1.0);
+        eng.renderer.clear(0.15, 0.15, 0.40, 1.0);
         eng.renderer.begin(eng.projMat);
 
         self.ui.begin();
