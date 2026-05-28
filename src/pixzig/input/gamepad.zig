@@ -86,7 +86,7 @@ pub const Gamepad = struct {
         const joy: glfw.Joystick = @enumFromInt(self.joystickId);
         if (!joy.isPresent() or !joy.isGamepad()) {
             self.connected = false;
-            self.currState().clear();
+            self.currState_mut().clear();
             return false;
         }
         self.connected = true;
@@ -94,11 +94,11 @@ pub const Gamepad = struct {
         const gp = joy.asGamepad().?;
         const state = gp.getState() catch {
             self.connected = false;
-            self.currState().clear();
+            self.currState_mut().clear();
             return false;
         };
 
-        var curr = self.currState();
+        var curr = self.currState_mut();
         var anyPressed: bool = false;
         for (state.buttons, 0..) |btn_action, i| {
             if (btn_action == .press) {
@@ -113,11 +113,15 @@ pub const Gamepad = struct {
         return anyPressed;
     }
 
-    fn currState(self: *Gamepad) *GamepadState {
+    fn currState(self: *const Gamepad) *const GamepadState {
         return &self.stateBuffers[self.currIdx];
     }
 
-    fn prevState(self: *Gamepad) *GamepadState {
+    fn currState_mut(self: *Gamepad) *GamepadState {
+        return &self.stateBuffers[self.currIdx];
+    }
+
+    fn prevState(self: *const Gamepad) *const GamepadState {
         return &self.stateBuffers[self.prevIdx];
     }
 
@@ -127,31 +131,31 @@ pub const Gamepad = struct {
     }
 
     /// Returns true if the specified button is currently down, false otherwise.
-    pub fn down(self: *Gamepad, btn: glfw.Gamepad.Button) bool {
+    pub fn down(self: *const Gamepad, btn: glfw.Gamepad.Button) bool {
         return self.currState().buttonDown(btn);
     }
 
     /// Returns true if the specified button is currently up, false otherwise.
-    pub fn up(self: *Gamepad, btn: glfw.Gamepad.Button) bool {
+    pub fn up(self: *const Gamepad, btn: glfw.Gamepad.Button) bool {
         return !self.currState().buttonDown(btn);
     }
 
     /// Returns true if the specified button was just pressed this frame (down
     ///  now, up last frame), false otherwise.
-    pub fn pressed(self: *Gamepad, btn: glfw.Gamepad.Button) bool {
+    pub fn pressed(self: *const Gamepad, btn: glfw.Gamepad.Button) bool {
         return self.currState().buttonDown(btn) and !self.prevState().buttonDown(btn);
     }
 
     /// Returns true if the specified button was just released this frame (up now,
     /// down last frame), false otherwise.
-    pub fn released(self: *Gamepad, btn: glfw.Gamepad.Button) bool {
+    pub fn released(self: *const Gamepad, btn: glfw.Gamepad.Button) bool {
         return !self.currState().buttonDown(btn) and self.prevState().buttonDown(btn);
     }
 
     /// Returns the value of the specified axis, which is a float typically in the
     /// range [-1.0, 1.0], where 0.0 is the centered position. If the gamepad
     /// is not connected, it returns 0.0.
-    pub fn axis(self: *Gamepad, ax: glfw.Gamepad.Axis) f32 {
+    pub fn axis(self: *const Gamepad, ax: glfw.Gamepad.Axis) f32 {
         return self.currState().getAxis(ax);
     }
 };

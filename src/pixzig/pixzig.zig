@@ -110,11 +110,11 @@ pub const PixzigEngineOptions = struct {
 /// rather than at compile time.
 pub const PixzigEngineInitOptions = struct {
     fullscreen: bool = false,
-    windowSize: Vec2I = .{ .x = 900, .y = 600 },
+    windowSize: Vec2I = .{ .x = 800, .y = 480 },
     resizable: bool = true,
     /// Logical game resolution. When null, logical size tracks the framebuffer
     /// and projMat preserves the existing gameScale-based behavior.
-    logicalSize: ?Vec2I = .{ .x = 900, .y = 600 },
+    logicalSize: ?Vec2I = .{ .x = 800, .y = 480 },
     scalePolicy: windowing.ScalePolicy = .fit,
     renderInitOpts: renderer.RendererInitOpts = .{},
 };
@@ -252,7 +252,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
 
         const Self = @This();
         pub const Renderer = renderer.Renderer(engOpts.rendererOpts);
-        pub const Inputs = input.InputManager(engOpts.inputOpts);
+        pub const Inputs = input.InputManager;
 
         /// Initializes the engine and its components.  In particular it creates the application
         /// window and rendering context, loads the OpenGL profile, and sets up the default
@@ -373,7 +373,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 .window_state = ws,
                 .viewport = vp,
                 .resources = ResourceManager.init(allocator),
-                .inputs = Inputs.init(),
+                .inputs = input.InputManager.init(engOpts.inputOpts),
             };
 
             // Store a pointer to window_state in the GLFW user pointer so the
