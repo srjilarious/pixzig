@@ -1,11 +1,14 @@
 const std = @import("std");
 const glfw = @import("zglfw");
+const ziglua = @import("ziglua");
+const Lua = ziglua.Lua;
 const comp = @import("../comp.zig");
 const gamepad = @import("./gamepad.zig");
 const keyboard = @import("./keyboard.zig");
 const KeyModifier = keyboard.KeyModifier;
 const Mouse = @import("./mouse.zig").Mouse;
 const InputManager = @import("./manager.zig").InputManager;
+const ScriptEngine = @import("../scripting.zig").ScriptEngine;
 
 pub const Source = union(enum) {
     key: glfw.Key,
@@ -36,6 +39,87 @@ pub const AxisSource = union(enum) {
         deadzone: f32 = 0.18,
     },
 };
+
+fn parseSource(lua: *Lua, entry_abs: i32) !Source {
+    _ = lua.getField(entry_abs, "type");
+    const type_str = try lua.toString(-1);
+    const is_key = std.mem.eql(u8, type_str, "key");
+    const is_mouse = std.mem.eql(u8, type_str, "mouse_button");
+    const is_gpad = std.mem.eql(u8, type_str, "gamepad_button");
+    lua.pop(1);
+
+    if (is_key) {
+        _ = lua.getField(entry_abs, "key");
+        defer lua.pop(1);
+        const key_str = try lua.toString(-1);
+        const key = std.meta.stringToEnum(glfw.Key, key_str) orelse return error.UnknownKey;
+        return .{ .key = key };
+    } else if (is_mouse) {
+        _ = lua.getField(entry_abs, "button");
+        defer lua.pop(1);
+        const btn_str = try lua.toString(-1);
+        const btn = std.meta.stringToEnum(glfw.MouseButton, btn_str) orelse return error.UnknownMouseButton;
+        return .{ .mouse_button = btn };
+    } else if (is_gpad) {
+        _ = lua.getField(entry_abs, "button");
+        defer lua.pop(1);
+        const btn_str = try lua.toString(-1);
+        const btn = std.meta.stringToEnum(glfw.Gamepad.Button, btn_str) orelse return error.UnknownGamepadButton;
+        return .{ .gamepad_button = btn };
+    } else {
+        return error.UnknownSourceType;
+    }
+}
+
+fn parseAxisSource(lua: *Lua, entry_abs: i32) !AxisSource {
+    _ = lua.getField(entry_abs, "type");
+    const type_str = try lua.toString(-1);
+    const is_buttons = std.mem.eql(u8, type_str, "buttons");
+    const is_gpad_axis = std.mem.eql(u8, type_str, "gamepad_axis");
+    lua.pop(1);
+
+    if (is_buttons) {
+        _ = lua.getField(entry_abs, "neg");
+        const neg_str = try lua.toString(-1);
+        const neg_key = std.meta.stringToEnum(glfw.Key, neg_str) orelse {
+            lua.pop(1);
+            return error.UnknownKey;
+        };
+        lua.pop(1);
+
+        _ = lua.getField(entry_abs, "pos");
+        const pos_str = try lua.toString(-1);
+        const pos_key = std.meta.stringToEnum(glfw.Key, pos_str) orelse {
+            lua.pop(1);
+            return error.UnknownKey;
+        };
+        lua.pop(1);
+
+        return .{ .buttons = .{
+            .negative = .{ .key = neg_key },
+            .positive = .{ .key = pos_key },
+        } };
+    } else if (is_gpad_axis) {
+        _ = lua.getField(entry_abs, "axis");
+        const axis_str = try lua.toString(-1);
+        const ax = std.meta.stringToEnum(glfw.Gamepad.Axis, axis_str) orelse {
+            lua.pop(1);
+            return error.UnknownGamepadAxis;
+        };
+        lua.pop(1);
+
+        _ = lua.getField(entry_abs, "deadzone");
+        const deadzone: f32 = if (!lua.isNil(-1))
+            @floatCast(try lua.toNumber(-1))
+        else
+            0.18;
+        lua.pop(1);
+
+        return .{ .gamepad_axis = .{ .axis = ax, .deadzone = deadzone } };
+    } else {
+        return error.UnknownAxisSourceType;
+    }
+}
 
 pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
     const DigitalBinding = struct {
@@ -179,6 +263,59 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
             self.digitalBindings.deinit(self.alloc);
             self.axisBindings.deinit(self.alloc);
             self.alloc.destroy(self);
+        }
+
+        pub fn loadFromLua(self: *Self, script: *const ScriptEngine, global_name: [:0]const u8) !void {
+            const lua = script.lua;
+
+            _ = try lua.getGlobal(global_name);
+            defer lua.pop(1);
+
+            if (!lua.isTable(-1)) return error.InvalidBindingsTable;
+
+            const table_abs = lua.absIndex(-1);
+            const len = lua.rawLen(table_abs);
+
+            for (0..len) |raw_i| {
+                const i: ziglua.Integer = @intCast(raw_i + 1);
+                _ = lua.rawGetIndex(table_abs, i);
+                defer lua.pop(1);
+
+                if (!lua.isTable(-1)) return error.InvalidBindingEntry;
+                const entry_abs = lua.absIndex(-1);
+
+                _ = lua.getField(entry_abs, "action");
+                const has_action = !lua.isNil(-1);
+                lua.pop(1);
+
+                if (has_action) {
+                    _ = lua.getField(entry_abs, "action");
+                    const action_str = try lua.toString(-1);
+                    const act = std.meta.stringToEnum(Action, action_str) orelse {
+                        lua.pop(1);
+                        return error.UnknownAction;
+                    };
+                    lua.pop(1);
+
+                    const source = try parseSource(lua, entry_abs);
+                    try self.bind(act, source);
+                } else {
+                    _ = lua.getField(entry_abs, "axis");
+                    if (lua.isNil(-1)) {
+                        lua.pop(1);
+                        return error.MissingActionOrAxis;
+                    }
+                    const axis_str = try lua.toString(-1);
+                    const ax = std.meta.stringToEnum(Axes, axis_str) orelse {
+                        lua.pop(1);
+                        return error.UnknownAxis;
+                    };
+                    lua.pop(1);
+
+                    const axis_source = try parseAxisSource(lua, entry_abs);
+                    try self.bindAxis(ax, axis_source);
+                }
+            }
         }
 
         pub fn currDigital(self: *const Self) *const DigitalActionState {
