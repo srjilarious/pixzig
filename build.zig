@@ -470,7 +470,7 @@ pub fn buildExample(
             const mkdir_command = b.addSystemCommand(&[_][]const u8{"mkdir"});
             mkdir_command.addArgs(&.{ "-p", path });
 
-            const emcc_exe_path = "/usr/lib/emscripten/em++";
+            const emcc_exe_path = "em++";
             const emcc_command = b.addSystemCommand(&[_][]const u8{emcc_exe_path});
 
             emcc_command.step.dependOn(&mkdir_command.step);

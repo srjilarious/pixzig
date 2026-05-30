@@ -135,7 +135,7 @@ pub fn configure(
 pub fn emCompileStep(b: *Build, filename: Build.LazyPath, optimize: std.builtin.OptimizeMode, extra_flags: []const []const u8) Build.LazyPath {
     // const emcc_path = emSdkLazyPath(b, emsdk, &.{ "upstream", "emscripten", "emcc" }).getPath(b);
     // const emcc = b.addSystemCommand(&.{emcc_path});
-    const emcc_exe_path = "/usr/lib/emscripten/emcc";
+    const emcc_exe_path = "emcc";
     const emcc = b.addSystemCommand(&[_][]const u8{emcc_exe_path});
     emcc.setName("emcc"); // hide emcc path
     emcc.addArg("-c");

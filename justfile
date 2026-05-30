@@ -29,4 +29,4 @@ build_web *EX:
 	zig build {{EX}} -Dtarget=wasm32-emscripten --sysroot {{EMSCRIPTEN_SYSROOT}}
 
 run_web EX:
-	cd zig-out/web/{{EX}} && /usr/lib/emscripten/emrun ./index.html
+	cd zig-out/web/{{EX}} && emrun ./index.html
