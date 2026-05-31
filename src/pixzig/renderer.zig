@@ -125,6 +125,9 @@ pub fn Renderer(opts: RendererOptions) type {
 
             if (opts.textRendering) {
                 self.impl.text.deinit();
+                if (self.impl.fontAtlas != null) {
+                    self.impl.fontAtlas.?.deinit();
+                }
             }
 
             self.alloc.destroy(self.impl);

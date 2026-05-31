@@ -51,8 +51,12 @@ pub fn multipleBindingKbActions(io: std.Io, alloc: std.mem.Allocator) !void {
     try actions.bind(.shoot, .{ .key = .a });
     try actions.bind(.shoot, .{ .key = .z });
     _ = actions.update(&inputs);
+
     try testz.expectFalse(actions.down(.jump));
+    try testz.expectTrue(actions.up(.jump));
+
     try testz.expectFalse(actions.down(.shoot));
+    try testz.expectTrue(actions.up(.shoot));
 
     inputs.keyboard.currKeys_mut().set(.a, true);
     _ = actions.update(&inputs);

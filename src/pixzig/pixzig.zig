@@ -157,7 +157,7 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
             var appRunner = try alloc.create(Self);
             appRunner.engine = try Engine.init(title, alloc, engInitOpts);
             appRunner.alloc = alloc;
-            appRunner.currTime = glfw.getTime();
+            appRunner.currTime = glfw.getTime() * 1000.0;
             return appRunner;
         }
 
@@ -398,7 +398,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             // ----------------------------------------------------------------
             if (engOpts.audioOpts.enabled) {
                 std.log.info("Initializing Audio Engine.", .{});
-                eng.audio = try audio.AudioEngine.init(allocator);
+                eng.audio = try audio.AudioEngine.init(allocator, engOpts.audioOpts);
             }
 
             std.log.info("Pixzig Engine Initialized.", .{});

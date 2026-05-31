@@ -25,15 +25,17 @@ pub const AudioEngine = struct {
     sounds: std.StringHashMap(Sound),
     engine: *zaudio.Engine,
     allocator: std.mem.Allocator,
+    opts: AudioOptions,
 
     /// Initializes the audio engine. Must be called before using any other
     /// audio functions.
-    pub fn init(allocator: std.mem.Allocator) !AudioEngine {
+    pub fn init(allocator: std.mem.Allocator, opts: AudioOptions) !AudioEngine {
         zaudio.init(allocator);
         return AudioEngine{
             .sounds = std.StringHashMap(Sound).init(allocator),
             .engine = try zaudio.Engine.create(null),
             .allocator = allocator,
+            .opts = opts,
         };
     }
 
@@ -53,6 +55,7 @@ pub const AudioEngine = struct {
             self.allocator.free(snd.name);
         }
 
+        self.sounds.deinit();
         self.engine.destroy();
         zaudio.deinit();
     }
@@ -60,13 +63,13 @@ pub const AudioEngine = struct {
     /// Loads a sound from a file and associates it with the given name. The
     /// sound can then be played using playSound.
     pub fn loadSound(self: *AudioEngine, name: []const u8, path: []const u8) !void {
-        const pathZ = try self.allocator.dupeZ(u8, path);
-        defer self.allocator.free(pathZ);
-        const sound = try self.engine.createSoundFromFile(pathZ, .{});
-
         if (self.sounds.get(name) != null) {
             return error.SoundAlreadyExists;
         }
+
+        const pathZ = try self.allocator.dupeZ(u8, path);
+        defer self.allocator.free(pathZ);
+        const sound = try self.engine.createSoundFromFile(pathZ, .{});
 
         var sndList: std.ArrayList(*zaudio.Sound) = .empty;
         try sndList.append(self.allocator, sound);
@@ -96,7 +99,7 @@ pub const AudioEngine = struct {
         }
 
         // If we got here, all sounds are currently playing. If we have room to create a new one, do it..
-        if (sndList.items.len < DefaultMaxConcurrentSounds) {
+        if (sndList.items.len < self.opts.maxConcurrentSounds) {
             const newSnd = try self.engine.createSoundCopy(snd.snds.items[0], .{}, null);
             try sndList.append(self.allocator, newSnd);
             newSnd.start() catch |err| {

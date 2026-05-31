@@ -404,7 +404,7 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
         }
 
         pub fn up(self: *const Self, action: Action) bool {
-            return self.currDigital().up(action) == false;
+            return self.currDigital().up(action);
         }
 
         pub fn down(self: *const Self, action: Action) bool {

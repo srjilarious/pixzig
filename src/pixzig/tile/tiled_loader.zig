@@ -52,6 +52,7 @@ pub const TiledMapXmlLoader = struct {
 
         std.log.debug("Loaded tile map file contents.", .{});
         const doc = try xml.parse(alloc, fileContents);
+        defer doc.deinit();
         return initFromElement(doc.root, alloc);
     }
 
@@ -80,7 +81,8 @@ pub const TiledMapXmlLoader = struct {
         }
 
         if (map.tilesets.items.len == 0) {
-            std.log.warn("No tileset found in map!\n", .{});
+            std.log.err("No tileset found in map!\n", .{});
+            return error.NoTileset;
         }
 
         for (0..map.layers.items.len) |idx| {
@@ -104,13 +106,30 @@ pub const TiledMapXmlLoader = struct {
         const nameAttr = node.getAttribute("name");
         if (nameAttr != null) {
             layer.name = try alloc.dupe(u8, nameAttr.?);
+            errdefer {
+                alloc.free(layer.name);
+            }
         }
 
         layer.size = .{ .x = try std.fmt.parseInt(i32, node.getAttribute("width").?, 0), .y = try std.fmt.parseInt(i32, node.getAttribute("height").?, 0) };
 
-        const dataNode = node.findChildByTag("data").?;
+        const dataNodeOpt = node.findChildByTag("data");
+        if (dataNodeOpt == null) {
+            std.log.err("No 'data' node found in tile layer '{s}'", .{layer.name.?});
+            return error.NoDataNodeInTileLayer;
+        }
+
+        const dataNode = dataNodeOpt.?;
+        if (dataNode.getAttribute("encoding") == null) {
+            std.log.err("No encoding on the 'data' element of tile layer '{s}", .{layer.name.?});
+            return error.NoEncodingOnDataNodeInTileLayer;
+        }
+
         const encoding = dataNode.getAttribute("encoding").?;
-        if (!std.mem.eql(u8, encoding, "csv")) return error.UnsupportedLayerEncoding;
+        if (!std.mem.eql(u8, encoding, "csv")) {
+            std.log.err("Only csv encodings are supported for tile layers currently: layer '{s}'", .{layer.name.?});
+            return error.UnsupportedLayerEncoding;
+        }
 
         // Resize the layer to have space for all of our tile indices.
         try layer.tiles.resize(alloc, @intCast(layer.size.x * layer.size.y));

@@ -64,6 +64,10 @@ pub const TileMapRenderer = struct {
     }
 
     pub fn deinit(self: *TileMapRenderer) void {
+        gl.deleteVertexArrays(1, &self.vao);
+        gl.deleteBuffers(1, &self.vboVertices);
+        gl.deleteBuffers(1, &self.vboTexCoords);
+        gl.deleteBuffers(1, &self.vboIndices);
         self.alloc.free(self.vertices);
         self.alloc.free(self.texCoords);
         self.alloc.free(self.indices);

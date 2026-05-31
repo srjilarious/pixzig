@@ -241,8 +241,8 @@ pub const FontAtlas = struct {
     }
 
     pub fn deinit(self: *FontAtlas) void {
-        gl.deleteTextures(1, &self.tex.texture);
-        self.characters.deinit();
+        gl.deleteTextures(1, &self.texture.texture);
+        self.chars.deinit();
     }
 };
 
