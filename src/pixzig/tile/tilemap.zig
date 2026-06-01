@@ -217,7 +217,7 @@ pub const TileSet = struct {
     }
 
     pub fn tile(self: *TileSet, idx: usize) ?*Tile {
-        if (idx > self.tiles.items.len) return null;
+        if (idx >= self.tiles.items.len) return null;
 
         return &self.tiles.items[idx];
     }

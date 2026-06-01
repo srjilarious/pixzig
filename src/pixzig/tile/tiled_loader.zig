@@ -103,9 +103,11 @@ pub const TiledMapXmlLoader = struct {
     pub fn initTileLayerFromElement(alloc: std.mem.Allocator, node: *xml.Element) !TileLayer {
         var layer = try TileLayer.init(alloc);
 
+        var debugName: []const u8 = "unnamed";
         const nameAttr = node.getAttribute("name");
         if (nameAttr != null) {
             layer.name = try alloc.dupe(u8, nameAttr.?);
+            debugName = layer.name.?;
             errdefer {
                 alloc.free(layer.name);
             }
@@ -115,19 +117,19 @@ pub const TiledMapXmlLoader = struct {
 
         const dataNodeOpt = node.findChildByTag("data");
         if (dataNodeOpt == null) {
-            std.log.err("No 'data' node found in tile layer '{s}'", .{layer.name.?});
+            std.log.err("No 'data' node found in tile layer '{s}'", .{debugName});
             return error.NoDataNodeInTileLayer;
         }
 
         const dataNode = dataNodeOpt.?;
         if (dataNode.getAttribute("encoding") == null) {
-            std.log.err("No encoding on the 'data' element of tile layer '{s}", .{layer.name.?});
+            std.log.err("No encoding on the 'data' element of tile layer '{s}", .{debugName});
             return error.NoEncodingOnDataNodeInTileLayer;
         }
 
         const encoding = dataNode.getAttribute("encoding").?;
         if (!std.mem.eql(u8, encoding, "csv")) {
-            std.log.err("Only csv encodings are supported for tile layers currently: layer '{s}'", .{layer.name.?});
+            std.log.err("Only csv encodings are supported for tile layers currently: layer '{s}'", .{debugName});
             return error.UnsupportedLayerEncoding;
         }
 

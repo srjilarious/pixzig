@@ -121,6 +121,7 @@ pub const SpriteBatchQueue = struct {
 
         if (self.currNumSprites >= C.MaxSprites) {
             self.flush();
+            self.texture = texture;
         }
 
         const verts = self.vertices[self.currVert .. self.currVert + 8];
