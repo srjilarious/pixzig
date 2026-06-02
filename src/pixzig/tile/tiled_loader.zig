@@ -62,19 +62,27 @@ pub const TiledMapXmlLoader = struct {
     /// is also helpful for testing.
     pub fn initFromElement(node: *xml.Element, alloc: std.mem.Allocator) !TileMap {
         var map = try TileMap.init(alloc);
+        errdefer map.deinit();
+
         var elems = node.elements();
         while (elems.next()) |elem| {
             if (std.mem.eql(u8, elem.tag, "tileset")) {
-                const newTileset = try initTileSetFromElement(alloc, elem);
+                var newTileset = try initTileSetFromElement(alloc, elem);
+                errdefer newTileset.deinit();
+
                 std.log.debug("Loaded a tileset '{s}', with {} tiles, {}x{} tile size, {} columns\n", .{ newTileset.name.?, newTileset.tiles.items.len, newTileset.tileSize.x, newTileset.tileSize.y, newTileset.columns });
 
                 try map.tilesets.append(alloc, newTileset);
             } else if (std.mem.eql(u8, elem.tag, "layer")) {
-                const newLayer = try initTileLayerFromElement(alloc, elem);
+                var newLayer = try initTileLayerFromElement(alloc, elem);
+                errdefer newLayer.deinit();
+
                 std.log.debug("Loaded a tile layer: '{?s}'", .{newLayer.name});
                 try map.layers.append(alloc, newLayer);
             } else if (std.mem.eql(u8, elem.tag, "objectgroup")) {
-                const newObjGroup = try initObjectGroupFromElement(alloc, elem);
+                var newObjGroup = try initObjectGroupFromElement(alloc, elem);
+                errdefer newObjGroup.deinit();
+
                 std.log.debug("Loaded object group: '{?s}'", .{newObjGroup.name});
                 try map.objectGroups.append(alloc, newObjGroup);
             }
@@ -102,15 +110,13 @@ pub const TiledMapXmlLoader = struct {
     /// It will also read any properties defined on the layer in the XML.
     pub fn initTileLayerFromElement(alloc: std.mem.Allocator, node: *xml.Element) !TileLayer {
         var layer = try TileLayer.init(alloc);
+        errdefer layer.deinit();
 
         var debugName: []const u8 = "unnamed";
         const nameAttr = node.getAttribute("name");
         if (nameAttr != null) {
             layer.name = try alloc.dupe(u8, nameAttr.?);
             debugName = layer.name.?;
-            errdefer {
-                alloc.free(layer.name);
-            }
         }
 
         layer.size = .{ .x = try std.fmt.parseInt(i32, node.getAttribute("width").?, 0), .y = try std.fmt.parseInt(i32, node.getAttribute("height").?, 0) };
@@ -156,6 +162,7 @@ pub const TiledMapXmlLoader = struct {
 
     pub fn initObjectGroupFromElement(alloc: std.mem.Allocator, node: *xml.Element) !ObjectGroup {
         var layer = try ObjectGroup.init(alloc);
+        errdefer layer.deinit();
 
         const nameAttr = node.getAttribute("name");
         if (nameAttr != null) {
@@ -174,16 +181,24 @@ pub const TiledMapXmlLoader = struct {
                     }
 
                     const name = prop.getAttribute("name").?;
+                    const nameDup = try alloc.dupe(u8, name);
+                    errdefer alloc.free(nameDup);
+
                     const value = prop.getAttribute("value").?;
+                    const valueDup = try alloc.dupe(u8, value);
+                    errdefer alloc.free(valueDup);
+
                     const newProp: Property = .{
-                        .name = try alloc.dupe(u8, name),
-                        .value = try alloc.dupe(u8, value),
+                        .name = nameDup,
+                        .value = valueDup,
                     };
 
                     try layer.properties.append(alloc, newProp);
                 }
             } else if (std.mem.eql(u8, elem.tag, "object")) {
-                const newObj = try initObjectFromElement(alloc, elem);
+                var newObj = try initObjectFromElement(alloc, elem);
+                errdefer newObj.deinit();
+
                 try layer.objects.append(alloc, newObj);
             }
         }
@@ -193,6 +208,7 @@ pub const TiledMapXmlLoader = struct {
 
     pub fn initTileSetFromElement(alloc: std.mem.Allocator, node: *xml.Element) !TileSet {
         var tileset = try TileSet.init(alloc);
+        errdefer tileset.deinit();
 
         if (!std.mem.eql(u8, node.tag, "tileset")) return error.BadNodeTag;
 
@@ -212,7 +228,9 @@ pub const TiledMapXmlLoader = struct {
         var children = node.elements();
         while (children.next()) |child| {
             if (std.mem.eql(u8, child.tag, "tile")) {
-                const newTile = try initTileFromElement(alloc, child);
+                var newTile = try initTileFromElement(alloc, child);
+                errdefer newTile.deinit();
+
                 const tileId = try std.fmt.parseInt(usize, child.getAttribute("id").?, 0);
                 tileset.tiles.items[tileId] = newTile;
             } else if (std.mem.eql(u8, child.tag, "image")) {
@@ -227,6 +245,7 @@ pub const TiledMapXmlLoader = struct {
 
     pub fn initObjectFromElement(alloc: std.mem.Allocator, node: *xml.Element) !Object {
         var obj = try Object.init(alloc);
+        errdefer obj.deinit();
 
         if (!std.mem.eql(u8, node.tag, "object")) return error.BadNodeTag;
 
@@ -263,18 +282,24 @@ pub const TiledMapXmlLoader = struct {
         if (propsNodeOpt) |propsNode| {
             var propsChildren = propsNode.elements();
             while (propsChildren.next()) |prop| {
-                const name = prop.getAttribute("name").?;
-                const value = prop.getAttribute("value").?;
-
                 // Lazy init string/value property list.
                 if (obj.properties == null) {
                     obj.properties = .empty;
                 }
 
+                const name = prop.getAttribute("name").?;
+                const nameDup = try alloc.dupe(u8, name);
+                errdefer alloc.free(nameDup);
+
+                const value = prop.getAttribute("value").?;
+                const valueDup = try alloc.dupe(u8, value);
+                errdefer alloc.free(valueDup);
+
                 const newProp: Property = .{
-                    .name = try alloc.dupe(u8, name),
-                    .value = try alloc.dupe(u8, value),
+                    .name = nameDup,
+                    .value = valueDup,
                 };
+
                 try obj.properties.?.append(alloc, newProp);
             }
         }
@@ -287,6 +312,7 @@ pub const TiledMapXmlLoader = struct {
     /// properties based on the "blocks" and "kills" properties defined in the XML.
     pub fn initTileFromElement(alloc: std.mem.Allocator, node: *xml.Element) !Tile {
         var tile = try Tile.init(alloc);
+        errdefer tile.deinit();
 
         if (!std.mem.eql(u8, node.tag, "tile")) return error.BadNodeTag;
         const propsNode = node.findChildByTag("properties").?;

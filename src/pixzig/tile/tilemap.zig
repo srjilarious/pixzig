@@ -64,7 +64,10 @@ pub const Tile = struct {
             }
 
             const newName = try self.alloc.dupe(u8, name);
+            errdefer self.alloc.free(newName);
             const newValue = try self.alloc.dupe(u8, value);
+            errdefer self.alloc.free(newValue);
+
             const newProp: Property = .{ .name = newName, .value = newValue };
             try self.properties.?.append(self.alloc, newProp);
         }
