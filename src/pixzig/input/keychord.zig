@@ -149,12 +149,11 @@ pub const ChordTree = struct {
     repeatCounter: f64,
 
     pub fn init(alloc: std.mem.Allocator, context: ?[]const u8) !ChordTree {
-        var ctxt: ?[]const u8 = null;
-        if (context != null) {
-            ctxt = try alloc.dupe(u8, context.?);
-        }
+        const ctxt: ?[]const u8 = if (context) |c| try alloc.dupe(u8, c) else null;
+        errdefer if (ctxt) |c| alloc.free(c);
 
         const root = try alloc.create(KeyChord);
+        errdefer alloc.destroy(root);
         root.* = try KeyChord.init(alloc, KeyChordPiece.from(.{}, .unknown), null);
 
         return .{
@@ -253,7 +252,9 @@ pub const KeyMap = struct {
         if (self.chords.rootChord.children.contains(kcp)) return false;
 
         const chord = try self.alloc.create(KeyChord);
+        errdefer self.alloc.destroy(chord);
         chord.* = try KeyChord.init(self.alloc, kcp, func);
+        errdefer chord.deinit();
         try self.chords.rootChord.children.put(kcp, chord);
         return true;
     }
@@ -265,8 +266,12 @@ pub const KeyMap = struct {
         var chord1: *KeyChord = undefined;
         if (!self.chords.rootChord.children.contains(kcp1)) {
             chord1 = try self.alloc.create(KeyChord);
+            var chord1Committed = false;
+            errdefer if (!chord1Committed) self.alloc.destroy(chord1);
             chord1.* = try KeyChord.init(self.alloc, kcp1, null);
+            errdefer if (!chord1Committed) chord1.deinit();
             try self.chords.rootChord.children.put(kcp1, chord1);
+            chord1Committed = true;
         } else {
             chord1 = self.chords.rootChord.children.get(kcp1).?;
         }
@@ -276,7 +281,9 @@ pub const KeyMap = struct {
         if (chord1.children.contains(kcp2)) return false;
 
         const chord2 = try self.alloc.create(KeyChord);
+        errdefer self.alloc.destroy(chord2);
         chord2.* = try KeyChord.init(self.alloc, kcp2, func);
+        errdefer chord2.deinit();
         try chord1.children.put(kcp2, chord2);
         return true;
     }
@@ -286,8 +293,12 @@ pub const KeyMap = struct {
         var chord1: *KeyChord = undefined;
         if (!self.chords.rootChord.children.contains(kcp1)) {
             chord1 = try self.alloc.create(KeyChord);
+            var chord1Committed = false;
+            errdefer if (!chord1Committed) self.alloc.destroy(chord1);
             chord1.* = try KeyChord.init(self.alloc, kcp1, null);
+            errdefer if (!chord1Committed) chord1.deinit();
             try self.chords.rootChord.children.put(kcp1, chord1);
+            chord1Committed = true;
         } else {
             chord1 = self.chords.rootChord.children.get(kcp1).?;
         }
@@ -296,7 +307,9 @@ pub const KeyMap = struct {
         if (chord1.children.contains(kcp2)) return false;
 
         const chord2 = try self.alloc.create(KeyChord);
+        errdefer self.alloc.destroy(chord2);
         chord2.* = try KeyChord.init(self.alloc, kcp2, func);
+        errdefer chord2.deinit();
         try chord1.children.put(kcp2, chord2);
         return true;
     }

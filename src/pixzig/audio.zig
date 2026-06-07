@@ -31,6 +31,7 @@ pub const AudioEngine = struct {
     /// audio functions.
     pub fn init(allocator: std.mem.Allocator, opts: AudioOptions) !AudioEngine {
         zaudio.init(allocator);
+        errdefer zaudio.deinit();
         return AudioEngine{
             .sounds = std.StringHashMap(Sound).init(allocator),
             .engine = try zaudio.Engine.create(null),
@@ -69,13 +70,20 @@ pub const AudioEngine = struct {
 
         const pathZ = try self.allocator.dupeZ(u8, path);
         defer self.allocator.free(pathZ);
+
         const sound = try self.engine.createSoundFromFile(pathZ, .{});
+        errdefer sound.destroy();
+
+        const nameDupe = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(nameDupe);
 
         var sndList: std.ArrayList(*zaudio.Sound) = .empty;
+        errdefer sndList.deinit(self.allocator);
         try sndList.append(self.allocator, sound);
+
         try self.sounds.put(name, Sound{
             .snds = sndList,
-            .name = try self.allocator.dupe(u8, name),
+            .name = nameDupe,
         });
     }
 
@@ -101,6 +109,7 @@ pub const AudioEngine = struct {
         // If we got here, all sounds are currently playing. If we have room to create a new one, do it..
         if (sndList.items.len < self.opts.maxConcurrentSounds) {
             const newSnd = try self.engine.createSoundCopy(snd.snds.items[0], .{}, null);
+            errdefer newSnd.destroy();
             try sndList.append(self.allocator, newSnd);
             newSnd.start() catch |err| {
                 std.log.err("Error playing sound: {}\n", .{err});

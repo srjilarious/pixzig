@@ -52,8 +52,13 @@ pub const SpriteBatchQueue = struct {
         var batch = SpriteBatchQueue{ .allocator = alloc, .shader = shader };
 
         batch.vertices = try alloc.alloc(f32, C.NumVerts);
+        errdefer alloc.free(batch.vertices);
+
         batch.texCoords = try alloc.alloc(f32, C.NumVerts);
+        errdefer alloc.free(batch.texCoords);
+
         batch.indices = try alloc.alloc(u16, C.NumIndices);
+        errdefer alloc.free(batch.indices);
 
         gl.genVertexArrays(1, &batch.vao);
         gl.bindVertexArray(batch.vao);

@@ -36,10 +36,16 @@ pub const GridRenderer = struct {
     pub fn init(alloc: std.mem.Allocator, shader: *const Shader, mapSize: Vec2I, tileSize: Vec2I, borderSize: usize, color: Color) !GridRenderer {
         var gr = GridRenderer{ .shader = shader, .color = color, .alloc = alloc };
         gl.genVertexArrays(1, &gr.vao);
+        errdefer gl.deleteVertexArrays(1, &gr.vao);
 
         gl.genBuffers(1, &gr.vboVertices);
+        errdefer gl.deleteBuffers(1, &gr.vboVertices);
+
         gl.genBuffers(1, &gr.vboColorCoords);
+        errdefer gl.deleteBuffers(1, &gr.vboColorCoords);
+
         gl.genBuffers(1, &gr.vboIndices);
+        errdefer gl.deleteBuffers(1, &gr.vboIndices);
 
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -132,19 +138,26 @@ pub const GridRenderer = struct {
         const th: usize = @intCast(tileSize.y);
         const numHorz: usize = @as(usize, @intCast(mapSize.x)) + 1;
         const numVert: usize = @as(usize, @intCast(mapSize.y)) + 1;
-        // const mapSize: i32 = @intCast(layerWidth*layerHeight);
-        // _ = mapSize;
 
-        // Check if we need to release previous buffers.
+        // Allocate new arrays first so a partial failure leaves the old ones intact.
+        const newVertices = try self.alloc.alloc(f32, @intCast(2 * 4 * numHorz * numVert * 2));
+        errdefer self.alloc.free(newVertices);
+
+        const newColorCoords = try self.alloc.alloc(f32, @intCast(4 * 4 * numHorz * numVert * 2));
+        errdefer self.alloc.free(newColorCoords);
+
+        const newIndices = try self.alloc.alloc(u32, @intCast(6 * numHorz * numVert * 2));
+
+        // All allocations succeeded; free previous arrays if they existed.
         if (self.initialized) {
             self.alloc.free(self.vertices);
             self.alloc.free(self.colorCoords);
             self.alloc.free(self.indices);
         }
 
-        self.vertices = try self.alloc.alloc(f32, @intCast(2 * 4 * numHorz * numVert * 2));
-        self.colorCoords = try self.alloc.alloc(f32, @intCast(4 * 4 * numHorz * numVert * 2));
-        self.indices = try self.alloc.alloc(u32, @intCast(6 * numHorz * numVert * 2));
+        self.vertices = newVertices;
+        self.colorCoords = newColorCoords;
+        self.indices = newIndices;
         self.initialized = true;
 
         std.log.info("Creating {} vertices\n", .{self.vertices.len});
@@ -185,9 +198,9 @@ pub const GridRenderer = struct {
             null);
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.vboIndices);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * @sizeOf(u16) * self.numRects), &self.indices[0], gl.STATIC_DRAW);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * @sizeOf(u32) * self.numRects), &self.indices[0], gl.STATIC_DRAW);
 
-        gl.drawElements(gl.TRIANGLES, @intCast(6 * self.numRects), gl.UNSIGNED_SHORT, null);
+        gl.drawElements(gl.TRIANGLES, @intCast(6 * self.numRects), gl.UNSIGNED_INT, null);
         gl.disableVertexAttribArray(self.attrCoord);
         gl.disableVertexAttribArray(self.attrColor);
 

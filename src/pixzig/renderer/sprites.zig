@@ -122,6 +122,7 @@ pub const FrameSequence = struct {
 
     pub fn init(alloc: std.mem.Allocator, framesArr: []const Frame) !FrameSequence {
         var frames: std.ArrayList(Frame) = .empty;
+        errdefer frames.deinit(alloc);
         for (framesArr) |fr| {
             try frames.append(alloc, fr);
         }
@@ -222,57 +223,68 @@ pub const FrameSequenceManager = struct {
         // First load the frame sequences, since actor states need those for looking up.
         for (parsed.value.sequences) |fileSeq| {
             var seq = try FrameSequence.initEmpty(self.alloc);
+            // addSeq takes a shallow-copy of seq; on failure it just destroys the
+            // allocation, so we remain responsible for freeing the frames backing array.
+            errdefer seq.deinit();
             for (fileSeq.frames) |fileFrame| {
-                const flip = blk: {
-                    if (fileFrame.flip) |f| {
-                        break :blk f;
-                    } else {
-                        break :blk .none;
-                    }
-                };
                 try seq.frames.append(self.alloc, .{
                     .tex = try texMgr.getTexture(fileFrame.name),
                     .frameTimeMs = fileFrame.ms,
-                    .flip = flip,
+                    .flip = fileFrame.flip orelse .none,
                 });
             }
-
             try self.addSeq(fileSeq.name, seq);
         }
 
         // Next load the actor states
         for (parsed.value.states) |fileState| {
-            var new = try self.alloc.create(ActorState);
-            new.name = try self.alloc.dupe(u8, fileState.name);
-            if (fileState.nextStateName) |nextState| {
-                new.nextState = try self.alloc.dupe(u8, nextState);
-            } else {
-                new.nextState = null;
-            }
+            const nameDupe = try self.alloc.dupe(u8, fileState.name);
+            errdefer self.alloc.free(nameDupe);
+
+            const nextStateDupe: ?[]const u8 = if (fileState.nextStateName) |ns|
+                try self.alloc.dupe(u8, ns)
+            else
+                null;
+            errdefer if (nextStateDupe) |ns| self.alloc.free(ns);
+
+            const new = try self.alloc.create(ActorState);
+            errdefer self.alloc.destroy(new);
+            new.name = nameDupe;
+            new.nextState = nextStateDupe;
             new.sequence = self.sequences.get(fileState.frameSeqName).?;
             new.flip = fileState.flip;
-            try self.actorStates.put(new.name, new);
+            try self.actorStates.put(nameDupe, new);
         }
     }
 
     pub fn addSeq(self: *Self, name: []const u8, seq: FrameSequence) !void {
         const new = try self.alloc.create(FrameSequence);
         new.* = seq;
+        // On error, just free the allocation — frames backing array belongs to the
+        // caller's copy of seq so the caller's errdefer will handle it.
+        errdefer self.alloc.destroy(new);
         const nameCopy = try self.alloc.dupe(u8, name);
+        errdefer self.alloc.free(nameCopy);
         try self.sequences.put(nameCopy, new);
     }
 
     pub fn addState(self: *Self, state: ActorState) !void {
-        const new = try self.alloc.create(ActorState);
-        new.* = state;
-        new.name = try self.alloc.dupe(u8, state.name);
-        if (state.nextState) |nextState| {
-            new.nextState = try self.alloc.dupe(u8, nextState);
-        } else {
-            new.nextState = null;
-        }
+        const nameDupe = try self.alloc.dupe(u8, state.name);
+        errdefer self.alloc.free(nameDupe);
 
-        try self.actorStates.put(new.name, new);
+        const nextStateDupe: ?[]const u8 = if (state.nextState) |ns|
+            try self.alloc.dupe(u8, ns)
+        else
+            null;
+        errdefer if (nextStateDupe) |ns| self.alloc.free(ns);
+
+        const new = try self.alloc.create(ActorState);
+        errdefer self.alloc.destroy(new);
+        new.* = state;
+        new.name = nameDupe;
+        new.nextState = nextStateDupe;
+
+        try self.actorStates.put(nameDupe, new);
     }
 
     pub fn getSeq(self: *Self, name: []const u8) ?*const FrameSequence {
@@ -312,21 +324,21 @@ pub const Actor = struct {
     }
 
     pub fn addState(self: *Actor, state: *const ActorState, opts: AddStateOpts) !*Actor {
-        const nameCopy = blk: {
-            if (opts.name == null) {
-                break :blk try self.alloc.dupe(u8, state.name);
-            } else {
-                break :blk try self.alloc.dupe(u8, opts.name.?);
-            }
-        };
+        const nameToUse = opts.name orelse state.name;
+        const nameCopy = try self.alloc.dupe(u8, nameToUse);
+        errdefer self.alloc.free(nameCopy);
 
-        var val = try self.alloc.create(ActorState);
+        const nextStateCopy: ?[]const u8 = if (state.nextState) |ns|
+            try self.alloc.dupe(u8, ns)
+        else
+            null;
+        errdefer if (nextStateCopy) |ns| self.alloc.free(ns);
+
+        const val = try self.alloc.create(ActorState);
+        errdefer self.alloc.destroy(val);
         val.* = state.*;
         val.name = nameCopy;
-
-        if (state.nextState != null) {
-            val.nextState = try self.alloc.dupe(u8, state.nextState.?);
-        }
+        val.nextState = nextStateCopy;
 
         try self.states.put(nameCopy, val);
         if (self.currState == null) {

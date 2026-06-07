@@ -52,8 +52,13 @@ pub const ShapeBatchQueue = struct {
         };
 
         batch.vertices = try alloc.alloc(f32, C.NumVerts);
+        errdefer alloc.free(batch.vertices);
+
         batch.colorCoords = try alloc.alloc(f32, NumColorCoords);
+        errdefer alloc.free(batch.colorCoords);
+
         batch.indices = try alloc.alloc(u16, C.NumIndices);
+        errdefer alloc.free(batch.indices);
 
         gl.genVertexArrays(1, &batch.vao);
         gl.bindVertexArray(batch.vao);

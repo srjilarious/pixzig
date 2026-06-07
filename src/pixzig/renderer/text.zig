@@ -36,6 +36,7 @@ pub const FontAtlas = struct {
 
     fn initFromTtf(fontData: []const u8, fontSize: f32, alloc: std.mem.Allocator) !FontAtlas {
         var chars = std.AutoHashMap(u32, Character).init(alloc);
+        errdefer chars.deinit();
         // Pack font using STB_TrueType
         var pack_context = stb_tt.c.stbtt_pack_context{};
         const GlyphBufferWidth = 2048;
@@ -181,6 +182,8 @@ pub const FontAtlas = struct {
         // Generate OpenGL texture
         var charTex: c_uint = undefined;
         gl.genTextures(1, &charTex);
+        errdefer gl.deleteTextures(1, &charTex);
+
         gl.bindTexture(gl.TEXTURE_2D, charTex);
 
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, @intCast(image.width), @intCast(image.height), 0, gl.RGBA, gl.UNSIGNED_BYTE, image.data.ptr);
@@ -192,6 +195,7 @@ pub const FontAtlas = struct {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
         var charsMap = std.AutoHashMap(u32, Character).init(alloc);
+        errdefer charsMap.deinit();
         var maxY: i32 = 0;
 
         for (0..chars.len) |i| {
@@ -255,7 +259,8 @@ pub const TextRenderer = struct {
 
     pub fn init(alloc: std.mem.Allocator, resMgr: *ResourceManager) !TextRenderer {
         const texShader = try resMgr.getShaderByName(shaders.TextureShader);
-        const spriteBatch = try SpriteBatchQueue.init(alloc, texShader);
+        var spriteBatch = try SpriteBatchQueue.init(alloc, texShader);
+        errdefer spriteBatch.deinit();
 
         return TextRenderer{
             .alloc = alloc,

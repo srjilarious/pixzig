@@ -151,8 +151,13 @@ pub const ResourceManager = struct {
         height: usize,
         buffer: []u8,
     ) !*Texture {
+        const baseName = utils.baseNameFromPath(name);
+        if (self.atlas.contains(baseName)) return error.DuplicateTextureName;
+
         var texture: c_uint = undefined;
         gl.genTextures(1, &texture);
+        errdefer gl.deleteTextures(1, &texture);
+
         gl.bindTexture(gl.TEXTURE_2D, texture);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
@@ -161,15 +166,29 @@ pub const ResourceManager = struct {
         const format = gl.RGBA;
         gl.texImage2D(gl.TEXTURE_2D, 0, format, @intCast(width), @intCast(height), 0, format, gl.UNSIGNED_BYTE, @ptrCast(buffer));
 
-        const baseName = utils.baseNameFromPath(name);
+        const texName = try self.alloc.dupe(u8, baseName);
+        var texNameOwned = false;
+        errdefer if (!texNameOwned) self.alloc.free(texName);
 
         try self.textures.append(self.alloc, .{
             .texture = texture,
             .size = .{ .x = @intCast(width), .y = @intCast(height) },
-            .name = try self.alloc.dupe(u8, baseName),
+            .name = texName,
         });
+        texNameOwned = true;
+        errdefer {
+            const last = self.textures.pop().?;
+            self.alloc.free(last.name.?);
+        }
 
-        try self.atlas.put(try self.alloc.dupe(u8, baseName), .{ .texture = texture, .size = .{ .x = @intCast(width), .y = @intCast(height) }, .src = .{ .t = 0, .l = 0, .b = 1, .r = 1 } });
+        const atlasKey = try self.alloc.dupe(u8, baseName);
+        errdefer self.alloc.free(atlasKey);
+
+        try self.atlas.put(atlasKey, .{
+            .texture = texture,
+            .size = .{ .x = @intCast(width), .y = @intCast(height) },
+            .src = .{ .t = 0, .l = 0, .b = 1, .r = 1 },
+        });
 
         return self.atlas.getPtr(baseName).?;
     }
@@ -227,7 +246,12 @@ pub const ResourceManager = struct {
         const sz: Vec2I = texImage.size.asVec2I();
         var num: usize = 0;
         for (spack.frames) |frame| {
-            try self.atlas.put(try self.alloc.dupe(u8, frame.name), .{
+            if (self.atlas.contains(frame.name)) return error.DuplicateTextureName;
+
+            const frameKey = try self.alloc.dupe(u8, frame.name);
+            errdefer self.alloc.free(frameKey);
+
+            try self.atlas.put(frameKey, .{
                 .texture = texImage.texture,
                 .size = frame.sizePx,
                 .src = RectF.fromCoords(
@@ -256,7 +280,10 @@ pub const ResourceManager = struct {
         name: []const u8,
         coords: RectF,
     ) !*Texture {
-        try self.atlas.put(try self.alloc.dupe(u8, name), tex.sub(coords));
+        if (self.atlas.contains(name)) return error.DuplicateTextureName;
+        const key = try self.alloc.dupe(u8, name);
+        errdefer self.alloc.free(key);
+        try self.atlas.put(key, tex.sub(coords));
         return self.atlas.getPtr(name).?;
     }
 
@@ -303,7 +330,9 @@ pub const ResourceManager = struct {
         }
 
         const shader = try self.alloc.create(Shader);
+        errdefer self.alloc.destroy(shader);
         shader.* = try Shader.init(vs, fs, .{ .name = name });
+        errdefer shader.deinit();
         try self.shaders.append(self.alloc, shader);
         return self.shaders.items[self.shaders.items.len - 1];
     }

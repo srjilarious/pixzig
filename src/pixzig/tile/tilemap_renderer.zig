@@ -31,6 +31,7 @@ pub const TileMapRenderer = struct {
     vertices: []f32 = undefined,
     texCoords: []f32 = undefined,
     indices: []u16 = undefined,
+    cpuBuffersInitialized: bool = false,
     alloc: std.mem.Allocator,
     attrCoord: c_uint = 0,
     attrTexCoord: c_uint = 0,
@@ -68,9 +69,11 @@ pub const TileMapRenderer = struct {
         gl.deleteBuffers(1, &self.vboVertices);
         gl.deleteBuffers(1, &self.vboTexCoords);
         gl.deleteBuffers(1, &self.vboIndices);
-        self.alloc.free(self.vertices);
-        self.alloc.free(self.texCoords);
-        self.alloc.free(self.indices);
+        if (self.cpuBuffersInitialized) {
+            self.alloc.free(self.vertices);
+            self.alloc.free(self.texCoords);
+            self.alloc.free(self.indices);
+        }
         self.tileIndexMap.deinit();
     }
 
@@ -260,9 +263,27 @@ pub const TileMapRenderer = struct {
         const numIndices: usize = @intCast(6 * layerWidth * layerHeight);
 
         std.log.debug("Creating map render data: verts={}, texCoords={}, indices={}", .{ numVerts, numVerts, numIndices });
-        self.vertices = try self.alloc.alloc(f32, numVerts);
-        self.texCoords = try self.alloc.alloc(f32, numVerts);
-        self.indices = try self.alloc.alloc(u16, numIndices);
+
+        // Allocate new arrays first so a partial failure leaves the old ones intact.
+        const newVertices = try self.alloc.alloc(f32, numVerts);
+        errdefer self.alloc.free(newVertices);
+
+        const newTexCoords = try self.alloc.alloc(f32, numVerts);
+        errdefer self.alloc.free(newTexCoords);
+
+        const newIndices = try self.alloc.alloc(u16, numIndices);
+
+        // All allocations succeeded; free previous CPU arrays if they existed.
+        if (self.cpuBuffersInitialized) {
+            self.alloc.free(self.vertices);
+            self.alloc.free(self.texCoords);
+            self.alloc.free(self.indices);
+        }
+
+        self.vertices = newVertices;
+        self.texCoords = newTexCoords;
+        self.indices = newIndices;
+        self.cpuBuffersInitialized = true;
 
         std.log.debug("Creating {} vertices\n", .{self.vertices.len});
         // self.tileIndexMap.clearRetainingCapacity();
