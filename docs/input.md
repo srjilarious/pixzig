@@ -1,124 +1,130 @@
-# Input Handling
+# Input
 
-Pixzig provides double-buffered keyboard, mouse, and gamepad state, updated once per fixed-rate update tick. All input is accessed through `eng.keyboard`, `eng.mouse`, and `eng.gamepad` inside your `update` method.
+`PixzigAppRunner` updates `eng.inputs` before each call to `App.update`. Use an `ActionMap` for game controls. Read `eng.inputs` directly for text entry, pointer position, or device-specific behavior.
 
-## Keyboard
+## Action Maps
 
-The `Keyboard` struct tracks key state across two frames, making it easy to detect single-frame transitions.
+An action map names controls independently of their physical bindings:
 
-### Key State Queries
+```zig
+const Action = enum { quit, jump, fire };
+const Axis = enum { move_x };
+const Actions = pixzig.input.ActionMap(Action, Axis);
+
+// During App initialization:
+self.actions = try Actions.init(alloc);
+try self.actions.bind(.quit, .{ .key = .escape });
+try self.actions.bind(.jump, .{ .key = .space });
+try self.actions.bind(.fire, .{ .mouse_button = .left });
+try self.actions.bindAxis(.move_x, .{ .buttons = .{
+    .negative = .{ .key = .a },
+    .positive = .{ .key = .d },
+} });
+```
+
+Update actions once per game tick, then query them:
 
 ```zig
 pub fn update(self: *App, eng: *AppRunner.Engine, _: f64) bool {
-    // True every tick the key is physically held down.
-    if (eng.keyboard.down(.left)) { self.x -= 3; }
+    _ = self.actions.update(&eng.inputs);
 
-    // True only on the first tick the key goes from up → down.
-    if (eng.keyboard.pressed(.space)) { self.jump(); }
+    if (self.actions.pressed(.quit)) return false;
+    if (self.actions.pressed(.jump)) self.jump();
+    if (self.actions.down(.fire)) self.fire();
 
-    // True only on the first tick the key goes from down → up.
-    if (eng.keyboard.released(.space)) { self.landAnimation(); }
-
-    // Quit on Escape.
-    if (eng.keyboard.pressed(.escape)) return false;
-
+    self.velocity.x = self.actions.axis(.move_x) * Speed;
     return true;
 }
 ```
 
-Keys are `glfw.Key` enum values: `.a`–`.z`, `.zero`–`.nine`, `.space`, `.enter`, `.escape`, `.left`, `.right`, `.up`, `.down`, `.left_shift`, `.left_control`, etc.
+`bind` may be called more than once for the same action. Digital bindings accept keys, mouse buttons, and gamepad buttons. Axis bindings accept a keyboard button pair or a gamepad axis.
+Call `self.actions.deinit()` from `App.deinit`.
 
-### Text Input
+## Input Manager
 
-Convert the currently pressed key to a character (shift-aware):
+The input manager exposes raw device state:
+
+| Field | Availability |
+|---|---|
+| `eng.inputs.keyboard` | Always enabled |
+| `eng.inputs.mouse` | Enabled when `inputOpts.mouse` is `true` (the default) |
+| `eng.inputs.gamepad(index)` | Enable slots with `inputOpts.numGamepads` |
+
+### Keyboard
 
 ```zig
-if (eng.keyboard.text()) |ch| {
-    // ch: u8 — ASCII character for the key pressed this tick, or null.
-    self.inputBuffer.append(ch);
+const keyboard = &eng.inputs.keyboard;
+
+if (keyboard.down(.left)) self.x -= 3;
+if (keyboard.pressed(.space)) self.jump();
+if (keyboard.released(.space)) self.stopJump();
+if (keyboard.pressed(.escape)) return false;
+```
+
+Keys are `glfw.Key` values such as `.a`, `.space`, `.escape`, `.left`, and `.left_shift`.
+
+For ASCII text input, supply a buffer. `text` returns the number of bytes written for this tick:
+
+```zig
+var chars: [16]u8 = undefined;
+const len = eng.inputs.keyboard.text(&chars);
+self.acceptText(chars[0..len]);
+
+const mods = eng.inputs.keyboard.currKeys().modifiers();
+if (mods.ctrl and mods.shift) {
+    // Handle Ctrl+Shift shortcut.
 }
 ```
 
-### Modifiers
+### Mouse
+
+`mouse.pos()` is in logical game coordinates after viewport mapping. It is `(-1, -1)` while the cursor is outside a letterboxed or pillarboxed viewport.
 
 ```zig
-const mods = eng.keyboard.currKeys().modifiers();
-if (mods.shift()) { ... }
-if (mods.ctrl())  { ... }
-if (mods.alt())   { ... }
+const mouse = &eng.inputs.mouse;
+if (mouse.pressed(.left)) self.onClick(mouse.pos());
+if (mouse.down(.left)) self.onDrag(mouse.pos());
+
+const pos = mouse.pos();
+const last = mouse.lastPos();
+const dx = pos.x - last.x;
 ```
 
-## Mouse
+### Gamepad
 
-The `Mouse` struct tracks button state and cursor position.
+Configure the number of tracked gamepads in the runner options:
 
 ```zig
-// Button state (single-frame transitions)
-if (eng.mouse.pressed(.left))   { self.onClick(eng.mouse.pos()); }
-if (eng.mouse.released(.right)) { self.onRightRelease(); }
-if (eng.mouse.down(.left))      { self.onDrag(); }
-
-// Position (screen pixels)
-const pos  = eng.mouse.pos();       // Vec2F — current position
-const last = eng.mouse.lastPos();   // Vec2F — previous-frame position
-const dx   = pos.x - last.x;        // frame delta
+const AppRunner = pixzig.PixzigAppRunner(App, .{
+    .inputOpts = .{ .numGamepads = 1 },
+});
 ```
 
-Mouse buttons are `.left`, `.right`, `.middle`.
-
-## Gamepad
-
-Gamepad support uses GLFW joystick detection. The first connected gamepad is automatically tracked.
+Then query a configured slot:
 
 ```zig
-if (eng.gamepad.isConnected()) {
-    // Digital buttons
-    if (eng.gamepad.pressed(.a))    { self.jump(); }
-    if (eng.gamepad.down(.right))   { self.moveRight(); }
-
-    // Analog axes (-1.0 to +1.0)
-    const lx = eng.gamepad.axis(.left_x);
-    const ly = eng.gamepad.axis(.left_y);
-    self.velocity.x = lx * Speed;
-    self.velocity.y = ly * Speed;
+const pad = eng.inputs.gamepad(0);
+if (pad.isConnected()) {
+    if (pad.pressed(.a)) self.jump();
+    self.velocity.x = pad.axis(.left_x) * Speed;
 }
 ```
 
-## Key Maps and Chords
+## Key Chords
 
-For more complex input schemes — vim-style key sequences, hold-then-tap combos, or remappable actions — use `KeyMap` and the chord system.
-
-### Defining a KeyMap
+`KeyMap` matches key sequences to command strings. It is intended for command-style input, such as editor bindings, rather than ordinary movement controls.
 
 ```zig
-const input = pixzig.input;
+var keymap = try pixzig.input.KeyMap.init(alloc);
+defer keymap.deinit();
 
-var keymap = try input.KeyMap.init(alloc);
-defer keymap.deinit(alloc);
+_ = try keymap.addKeyChord(.{}, .g, "goto", null);
+_ = try keymap.addTwoKeyChord(.{}, .g, .d, "goto_definition", null);
 
-// Single key: press 'g' → callback
-try keymap.addKeyChord(alloc, .g, .{}, myCallback, &myContext);
-
-// Two-key chord: press 'g' then 'd' → callback
-try keymap.addTwoKeyChord(alloc, .g, .{}, .d, .{}, myCallback, &myContext);
+switch (keymap.update(eng.inputs.keyboard.currKeys(), deltaMs * 1000.0)) {
+    .triggered => |chord| self.dispatchCommand(chord.func.?),
+    else => {},
+}
 ```
 
-### Updating the KeyMap
-
-Call `keymap.update` from your `update` method, passing the current keyboard state:
-
-```zig
-_ = keymap.update(alloc, &eng.keyboard, deltaMs);
-```
-
-`update` returns a `ChordUpdateResult` (`none`, `reset`, or `triggered`) and fires the registered callback when a chord completes.
-
-### Chord Timing
-
-| Constant | Value | Purpose |
-|---|---|---|
-| `DefaultChordTimeoutUs` | 2 000 000 µs | Max gap between chord keys |
-| `InitialRepeatRate` | 500 000 µs | Delay before key repeat starts |
-| `DownRepeatRate` | 50 000 µs | Repeat interval once started |
-
-Chords time out if the next key isn't pressed within `DefaultChordTimeoutUs`, resetting the state machine back to the root.
+`KeyMap.update` takes elapsed microseconds. Chord timing defaults are defined in `pixzig.input.keychord`.

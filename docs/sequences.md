@@ -1,6 +1,6 @@
 # Sequences
 
-The sequencer coordinates timed game events — moving a sprite, switching an animation state, waiting, or triggering custom game logic — in a clean, composable way without nested callbacks or state machines.
+The sequencer runs timed game events such as movement, animation changes, waits, and custom logic.
 
 ## Core Concepts
 
@@ -33,7 +33,7 @@ try sequence.add(alloc, try seq.MoveToStep.init(
 
 ### SetActorStateStep
 
-Instantly switches a flecs entity's `Actor` animation state. Fire-and-forget — the sequence advances immediately.
+Switches a flecs entity's `Actor` animation state and immediately advances.
 
 ```zig
 try sequence.add(alloc, try seq.SetActorStateStep.init(
@@ -48,42 +48,37 @@ Runs multiple sub-steps concurrently. The parallel step finishes when **all** su
 ```zig
 var par = try seq.ParallelStep.init(alloc);
 try seq.ParallelStep.add(&par, alloc, try seq.WaitStep.init(alloc, 200.0));
-try seq.ParallelStep.add(&par, try seq.MoveToStep.init(alloc, world, entityB, target, 200.0));
+try seq.ParallelStep.add(&par, alloc, try seq.MoveToStep.init(alloc, world, entityB, target, 200.0));
 try sequence.add(alloc, par);
 ```
 
 ## Building and Playing a Sequence
 
 ```zig
-// 1. Create a SequencePlayer (owned by your App).
 var seqPlayer = seq.SequencePlayer.init(alloc);
 defer seqPlayer.deinit();
 
-// 2. Build a Sequence.
 var sequence = seq.Sequence.init(alloc);
 try sequence.add(alloc, try seq.SetActorStateStep.init(alloc, world, entity, "right"));
 try sequence.add(alloc, try seq.MoveToStep.init(alloc, world, entity, .{ .x = 80, .y = 16 }, 300.0));
 try sequence.add(alloc, try seq.WaitStep.init(alloc, 200.0));
 
-// 3. Hand the sequence to the player (transfers ownership).
 try seqPlayer.add(sequence);
 
-// 4. Tick every update — the player removes finished sequences automatically.
 pub fn update(self: *App, ...) bool {
     self.seqPlayer.update(delta);
     ...
 }
 ```
 
-## Blocking Input While a Sequence Runs
+## Gating Actions While a Sequence Runs
 
-A common pattern is to queue a move only when no sequence is already in flight:
+Assuming `.move_right` is bound in an `ActionMap`, queue a move only when the player has no running sequence:
 
 ```zig
-if (self.seqPlayer.sequences.items.len == 0) {
-    if (eng.keyboard.pressed(.right)) {
-        try self.queueMove("right", 16, 0);
-    }
+_ = self.actions.update(&eng.inputs);
+if (self.seqPlayer.sequences.items.len == 0 and self.actions.pressed(.move_right)) {
+    self.queueMove("right", 16, 0) catch return false;
 }
 ```
 
@@ -110,7 +105,7 @@ pub const FlashStep = struct {
         self.flash.* = .{ .active = true, .remainingMs = self.durationMs,
                           .totalMs = self.durationMs, .color = self.color };
         step.done = true;
-        return -1.0; // negative → done immediately
+        return -1.0; // Negative means done immediately.
     }
 
     pub fn deinit(step: *seq.Step, alloc: std.mem.Allocator) void {
@@ -188,6 +183,6 @@ seq_play(h)
 | `vtable` | `*const Step.VTable` | Points to a `const` vtable on the concrete type |
 | `done` | `bool` | Set to `true` by `update` when finished |
 
-`update(step, deltaMs) f64` — tick the step; return time remaining (negative means done). The sequence advances to the next step on the tick after `done` is set.
+`update(step, deltaMs) f64` ticks the step and returns time remaining. A negative value means done. The sequence advances after `done` is set.
 
-`deinit(step, alloc)` — free all memory owned by the step. Called by the sequence when it is destroyed.
+`deinit(step, alloc)` frees memory owned by the step when the sequence is destroyed.

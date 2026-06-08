@@ -1,6 +1,6 @@
 # Scripting
 
-Pixzig embeds Lua 5.3 via the `ziglua` library and exposes it through `ScriptEngine`, a thin wrapper around a Lua state. Scripts can load configuration, drive sequences, or call back into Zig through registered C functions.
+`ScriptEngine` wraps a Lua 5.3 state provided by `ziglua`. Use it for configuration, sequences, or registered Zig functions.
 
 ## ScriptEngine Basics
 
@@ -28,7 +28,7 @@ Execute a file:
 try eng.runScript("assets/config.lua");
 ```
 
-Both methods print the Lua error to stderr and return `error.ScriptError` on failure — you can catch and log rather than panic.
+Both methods print Lua errors to stderr and return `error.ScriptError`.
 
 ### Registering Zig Functions
 
@@ -93,7 +93,7 @@ try eng.runScript("assets/my_script.lua");
 
 ## Sequence Scripting
 
-`SeqScriptingContext` wires a `SequencePlayer` to Lua, so scripts can build and queue action sequences without any Zig glue code per script. See the [Sequences](sequences.html) guide for full details.
+`SeqScriptingContext` lets Lua build and queue steps on a `SequencePlayer`. See [Sequences](sequences.html).
 
 ```zig
 var seqCtx = seq.SeqScriptingContext.init(alloc, world, &seqPlayer);
@@ -114,7 +114,7 @@ seq_play(h)
 
 ## Console Integration
 
-`console2` provides an interactive in-game Lua console that reads lines from the user, executes them against a shared `ScriptEngine`, and renders output as text. See `examples/console2_test.zig` for a complete setup.
+`console2` provides an in-game Lua console backed by a `ScriptEngine`. See `examples/console2_ex.zig`.
 
 ## Tips
 

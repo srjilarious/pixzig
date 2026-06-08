@@ -1,6 +1,6 @@
 # Game States
 
-`GameStateMgr` is a compile-time generic that dispatches `update` and `render` to whichever state is currently active, with optional `activate` / `deactivate` lifecycle hooks.
+`GameStateMgr` dispatches `update` and `render` to the active state. States may also provide `activate` and `deactivate` hooks.
 
 ## Defining States
 
@@ -40,11 +40,11 @@ const StateB = struct {
 };
 ```
 
-States that omit `activate` or `deactivate` are silently skipped — you only pay for what you implement.
+`activate` and `deactivate` are optional.
 
 ## Creating the Manager
 
-Instantiate `GameStateMgr` with three compile-time arguments: the engine type, the state enum, and a slice of the concrete state types in enum-order:
+Instantiate `GameStateMgr` with the engine type, state enum, and concrete state types in enum order:
 
 ```zig
 const States = enum { StateA, StateB };
@@ -61,7 +61,7 @@ The compiler validates that the number of types matches the enum variant count.
 
 ## Initialising with State Instances
 
-State instances are passed as `*anyopaque` pointers, which lets state objects live anywhere (stack, heap, as fields of App, etc.):
+Pass state instances as `*anyopaque` pointers:
 
 ```zig
 var stateA = StateA{};
@@ -78,17 +78,14 @@ pub const App = struct {
     states: AppStateMgr,
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
-        // Switch states on key press — triggers deactivate/activate.
-        if (eng.keyboard.pressed(.one)) self.states.setCurrState(.StateA);
-        if (eng.keyboard.pressed(.two)) self.states.setCurrState(.StateB);
-        if (eng.keyboard.pressed(.escape)) return false;
+        if (eng.inputs.keyboard.pressed(.one)) self.states.setCurrState(.StateA);
+        if (eng.inputs.keyboard.pressed(.two)) self.states.setCurrState(.StateB);
+        if (eng.inputs.keyboard.pressed(.escape)) return false;
 
-        // Delegate update to the active state.
         return self.states.update(eng, delta);
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        // Delegate render to the active state.
         self.states.render(eng);
         self.fps.renderTick();
     }
@@ -110,10 +107,10 @@ pub fn main() !void {
 }
 ```
 
-The manager starts with no active state (index 0 is not pre-selected). Call `setCurrState` at least once before the first `update`, or handle the null case in each state's methods.
+The manager starts on the first enum value. Initialization does not call its `activate` hook.
 
 ## Notes
 
-- States are identified by enum value, making call sites self-documenting (`.StateA` vs an integer index).
+- States are identified by enum value (`.StateA` rather than an integer index).
 - There is no built-in state stack; if you need push/pop semantics, layer a stack on top of `setCurrState`.
 - `update` on the manager returns the bool returned by the active state's `update`, so returning `false` from a state exits the game loop.

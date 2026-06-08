@@ -1,25 +1,21 @@
 # Rendering
 
-Pixzig's renderer supports textured sprites, outlined and filled rectangles, and optional text. All drawing happens between `renderer.begin` / `renderer.end` calls.
+Pixzig renders sprites, rectangles, and optional text. Submit drawing between `renderer.begin` and `renderer.end`.
 
 ## The Render Frame
 
 ```zig
 pub fn render(self: *App, eng: *AppRunner.Engine) void {
-    // 1. Clear the framebuffer (RGBA, 0–1 range).
     eng.renderer.clear(0.0, 0.0, 0.2, 1.0);
 
-    // 2. Open a batch with the projection matrix.
-    eng.renderer.begin(eng.projMat);
+    eng.renderer.begin(eng.uiMatrix());
+    // Issue draw calls.
 
-    // 3. Issue draw calls (see below).
-
-    // 4. Flush and present.
     eng.renderer.end();
 }
 ```
 
-The `begin` / `end` pair flushes all batched draw calls to the GPU in a single draw call per batch queue, so the order of individual draw calls within a frame does not affect performance significantly.
+`end` flushes each batch queue.
 
 ## Loading Textures
 
@@ -29,12 +25,11 @@ Load a raw PNG:
 const tex: *pixzig.Texture = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
 ```
 
-Load a sprite atlas (JSON + matching PNG automatically paired by name):
+Load a sprite atlas. `loadAtlas("assets/pac-tiles")` reads matching `.json` and `.png` files:
 
 ```zig
-_ = try eng.resources.loadAtlas("assets/pac-tiles"); // loads pac-tiles.json + pac-tiles.png
+_ = try eng.resources.loadAtlas("assets/pac-tiles");
 
-// Retrieve named frames as Texture pointers:
 const frame = try eng.resources.getTexture("player_right_1");
 ```
 
@@ -46,12 +41,12 @@ Draw a texture into an arbitrary destination rectangle:
 
 ```zig
 // tex: *pixzig.Texture
-// dest: RectF  — screen-space destination (pixels)
-// src:  RectF  — source UV region (normalised 0–1)
+// dest: logical-coordinate destination
+// src: normalized UV region
 eng.renderer.draw(tex, dest, src);
 ```
 
-Use `RectF.fromPosSize` for pixel-space rects and `RectF.fromCoords` to compute normalised UVs from pixel coordinates inside a texture:
+Use `RectF.fromPosSize` for logical-coordinate rectangles and `RectF.fromCoords` for normalized UVs from texture pixels:
 
 ```zig
 const dest = RectF.fromPosSize(10, 10, 32, 32);          // x, y, w, h
@@ -59,10 +54,9 @@ const src  = RectF.fromCoords(32, 32, 32, 32, 512, 512); // px, py, pw, ph, texW
 eng.renderer.draw(tex, dest, src);
 ```
 
-For the `Sprite` struct (which wraps a `*Texture`, destination, and flip/rotate state), use `drawSprite`:
+Draw a `Sprite` with `drawSprite`:
 
 ```zig
-// Sprite.create(texture, size_in_game_units)
 const spr = Sprite.create(frame, .{ .x = 16, .y = 16 });
 eng.renderer.drawSprite(&spr);
 ```
@@ -81,25 +75,24 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{
 const yellow = Color.from(255, 255, 0, 200); // RGBA 0–255
 const rect   = RectF.fromPosSize(50, 50, 100, 40);
 
-// Outlined rectangle (just the border, lineWidth pixels thick):
 eng.renderer.drawRect(rect, yellow, 2);
-
-// Outlined rectangle grown by lineWidth on all sides:
 eng.renderer.drawEnclosingRect(rect, Color.from(255, 0, 255, 200), 2);
-
-// Solid filled rectangle:
 eng.renderer.drawFilledRect(rect, Color.from(100, 200, 255, 128));
 ```
 
-## Game Scale
+## Logical Resolution
 
-`PixzigEngineOptions.gameScale` multiplies the projection matrix so that game-unit coordinates map to multiple screen pixels. With `gameScale = 8.0`, drawing a sprite at game position (16, 16) with size (16, 16) occupies a 128×128 screen-pixel area:
+Set a logical resolution and scaling policy when initializing the runner:
 
 ```zig
-const AppRunner = pixzig.PixzigAppRunner(App, .{ .gameScale = 8.0 });
+const appRunner = try AppRunner.init("My Game", alloc, .{
+    .windowSize = .{ .x = 1280, .y = 720 },
+    .logicalSize = .{ .x = 320, .y = 180 },
+    .scalePolicy = .integer_fit,
+});
 ```
 
-This is the standard setup for pixel-art games where each "tile" is 16×16 game units and you want crisp integer scaling.
+Render with `eng.uiMatrix()`. With `.integer_fit`, logical pixels use an integer framebuffer scale and unused space is letterboxed.
 
 ## Full Sprite+Shape Example
 
@@ -108,19 +101,16 @@ pub fn render(self: *App, eng: *AppRunner.Engine) void {
     eng.renderer.clear(0, 0, 0.2, 1);
     self.fps.renderTick();
 
-    eng.renderer.begin(eng.projMat);
+    eng.renderer.begin(eng.uiMatrix());
 
-    // Textured sprites
     for (0..3) |i| {
         eng.renderer.draw(self.tex, self.dest[i], self.srcCoords[i]);
     }
 
-    // Yellow outline
     for (0..3) |i| {
         eng.renderer.drawRect(self.dest[i], Color.from(255, 255, 0, 200), 2);
     }
 
-    // Semi-transparent filled rects
     for (0..3) |i| {
         eng.renderer.drawFilledRect(self.destRects[i], self.colorRects[i]);
     }
