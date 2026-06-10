@@ -58,6 +58,7 @@ pub fn Renderer(opts: RendererOptions) type {
 
         const Impl = struct {
             batches: [opts.numSpriteTextures]SpriteBatchQueue,
+            overlays: SpriteBatchQueue,
 
             shapes: ShapeBatchQueue = undefined,
             text: TextRenderer = undefined,
@@ -75,6 +76,7 @@ pub fn Renderer(opts: RendererOptions) type {
                 const sbq = try SpriteBatchQueue.init(alloc, texShader);
                 rend.batches[idx] = sbq;
             }
+            rend.overlays = try SpriteBatchQueue.init(alloc, texShader);
 
             if (opts.shapeRendering) {
                 std.log.info("Setting up shaders for shape renderering.", .{});
@@ -119,6 +121,7 @@ pub fn Renderer(opts: RendererOptions) type {
             for (0..self.impl.batches.len) |idx| {
                 self.impl.batches[idx].deinit();
             }
+            self.impl.overlays.deinit();
             if (opts.shapeRendering) {
                 self.impl.shapes.deinit();
             }
@@ -137,6 +140,7 @@ pub fn Renderer(opts: RendererOptions) type {
             for (0..self.impl.batches.len) |idx| {
                 self.impl.batches[idx].begin(mvp);
             }
+            self.impl.overlays.begin(mvp);
 
             if (opts.shapeRendering) {
                 self.impl.shapes.begin(mvp);
@@ -155,6 +159,8 @@ pub fn Renderer(opts: RendererOptions) type {
             if (opts.shapeRendering) {
                 self.impl.shapes.end();
             }
+
+            self.impl.overlays.end();
 
             if (opts.textRendering) {
                 self.impl.text.end();
@@ -179,6 +185,11 @@ pub fn Renderer(opts: RendererOptions) type {
 
         pub fn drawTexture(self: *Self, texture: *Texture, dest: RectF, srcCoords: RectF) void {
             self.impl.batches[0].draw(texture, dest, srcCoords, .none);
+        }
+
+        /// Draws a texture after shape batches, useful for image content in UI panels.
+        pub fn drawOverlayTexture(self: *Self, texture: *Texture, dest: RectF, srcCoords: RectF) void {
+            self.impl.overlays.draw(texture, dest, srcCoords, .none);
         }
 
         pub fn drawFullTexture(self: *Self, texture: *Texture, pos: Vec2I, scale: f32) void {

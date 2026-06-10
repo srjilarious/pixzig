@@ -248,7 +248,8 @@ pub const SpriteBatchQueue = struct {
 
     /// Draws the current contents of the queue to the screen.
     /// This assumes we have called `begin` beforehand.
-    fn flush(self: *SpriteBatchQueue) void {
+    /// Flushes queued sprites while keeping the batch open for further draws.
+    pub fn flush(self: *SpriteBatchQueue) void {
         std.debug.assert(self.begun);
 
         if (self.currNumSprites == 0) return;

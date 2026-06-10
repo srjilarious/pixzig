@@ -254,7 +254,8 @@ pub const ShapeBatchQueue = struct {
         self.begun = false;
     }
 
-    fn flush(self: *ShapeBatchQueue) void {
+    /// Flushes queued shapes while keeping the batch open for further draws.
+    pub fn flush(self: *ShapeBatchQueue) void {
         std.debug.assert(self.begun);
         if (self.currNumShapes == 0) return;
 

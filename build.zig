@@ -156,6 +156,7 @@ pub fn build(b: *std.Build) void {
             .path = "examples/imgui_ex.zig",
             .assets = &.{
                 "Roboto-Medium.ttf",
+                "mario_grassish2.png",
             },
         },
         .{

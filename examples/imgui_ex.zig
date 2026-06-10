@@ -7,6 +7,8 @@
 //!   - Text input box
 //!   - Integer input and checkbox
 //!   - Selectable list
+//!   - Embedded image preview
+//!   - Draggable, resizable, and dockable windows
 //!   - Scrollable text area (log)
 
 const std = @import("std");
@@ -42,6 +44,9 @@ const SpriteNames = [_][]const u8{
 pub const App = struct {
     alloc: std.mem.Allocator,
     ui: imgui.UiContext,
+    preview: *pixzig.Texture,
+    main_window: RectF,
+    editor_window: RectF,
 
     // Text input buffer
     input_buf: [InputBufLen]u8,
@@ -72,9 +77,14 @@ pub const App = struct {
             .ui = imgui.UiContext.init(
                 &eng.inputs.mouse,
                 &eng.inputs.keyboard,
+                &eng.renderer.impl.batches[0],
+                &eng.renderer.impl.overlays,
                 &eng.renderer.impl.shapes,
                 &eng.renderer.impl.text,
             ),
+            .preview = undefined,
+            .main_window = RectF.fromPosSize(30, 30, 380, 430),
+            .editor_window = RectF.fromPosSize(440, 30, 300, 430),
             .input_buf = std.mem.zeroes([InputBufLen]u8),
             .input_len = 0,
             .log = .empty,
@@ -87,6 +97,12 @@ pub const App = struct {
             .selected_sprite = 0,
             .sprite_scroll = 0,
         };
+        const sheet = try eng.resources.loadTexture("imgui_tiles", "assets/mario_grassish2.png");
+        app.preview = try eng.resources.addSubTexture(
+            sheet,
+            "imgui_preview",
+            RectF.fromCoords(32, 32, 32, 32, 512, 512),
+        );
 
         try app.addLog("GUI test started. Type something and press Submit.");
         try app.addLog("Hover/click buttons to see state changes.");
@@ -124,8 +140,7 @@ pub const App = struct {
         self.ui.begin();
 
         // Main demo window
-        const win_rect = RectF.fromPosSize(30, 30, 380, 550);
-        self.ui.beginWindow("demo_win", "Pixzig IMGUI Demo", win_rect);
+        self.ui.beginWindow("demo_win", "Pixzig IMGUI Demo", &self.main_window);
 
         // --- Labels ---
         self.ui.label("Text input:");
@@ -191,10 +206,9 @@ pub const App = struct {
         self.ui.endWindow();
 
         // Editor widget preview window
-        const win2_rect = RectF.fromPosSize(440, 30, 290, 420);
-        self.ui.beginWindow("editor_widgets_win", "Editor Widgets", win2_rect);
+        self.ui.beginWindow("editor_widgets_win", "Editor Widgets", &self.editor_window);
         self.ui.label("Sprites:");
-        if (self.ui.selectableList("sprite_list", &SpriteNames, &self.selected_sprite, &self.sprite_scroll, 130)) {
+        if (self.ui.selectableList("sprite_list", &SpriteNames, &self.selected_sprite, &self.sprite_scroll, 72)) {
             if (self.selected_sprite) |selected| {
                 var buf: [96]u8 = undefined;
                 const msg = std.fmt.bufPrint(&buf, "Selected: {s}", .{SpriteNames[selected]}) catch "Selection changed";
@@ -202,10 +216,25 @@ pub const App = struct {
             }
         }
         self.ui.spacing();
+        self.ui.label("Preview:");
+        self.ui.image(self.preview, .{ .x = 48, .y = 48 });
         _ = self.ui.toggle("loop_animation", "Loop animation", &self.loop_animation);
         self.ui.label("Frame duration (ms):");
         _ = self.ui.inputInt("frame_ms", &self.frame_ms);
         self.ui.spacing();
+
+        if (self.ui.button("dock_left", "Dock Left (35%)")) {
+            self.ui.resizeWindowToSide(&self.editor_window, .left, 0.35, eng.viewport.logical_size);
+        }
+        if (self.ui.button("dock_right", "Dock Right (35%)")) {
+            self.ui.resizeWindowToSide(&self.editor_window, .right, 0.35, eng.viewport.logical_size);
+        }
+        if (self.ui.button("dock_up", "Dock Up (45%)")) {
+            self.ui.resizeWindowToSide(&self.editor_window, .up, 0.45, eng.viewport.logical_size);
+        }
+        if (self.ui.button("dock_down", "Dock Down (45%)")) {
+            self.ui.resizeWindowToSide(&self.editor_window, .down, 0.45, eng.viewport.logical_size);
+        }
 
         var count_buf: [64]u8 = undefined;
         const selected_str = if (self.selected_sprite) |selected|
@@ -242,6 +271,7 @@ pub fn main(init: std.process.Init) !void {
         init.gpa,
         .{
             .scalePolicy = .integer_fit,
+            .logicalSize = .{ .x = 1200, .y = 720 },
             .renderInitOpts = .{ .fontFace = "assets/Roboto-Medium.ttf" },
         },
     );

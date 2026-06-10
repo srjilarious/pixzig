@@ -9,8 +9,9 @@
 //!
 //!   // In app.render(), inside renderer.begin()/end():
 //!   self.ui.begin();
-//!   self.ui.beginWindow("win", "My Window", rect);
+//!   self.ui.beginWindow("win", "My Window", &rect);
 //!   self.ui.label("Hello!");
+//!   self.ui.image(texture, .{ .x = 64, .y = 64 });
 //!   if (self.ui.button("btn1", "Click Me")) { ... }
 //!   _ = self.ui.inputText("input1", &buf, &buf_len);
 //!   _ = self.ui.inputInt("frame_ms", &frame_ms);
@@ -23,6 +24,8 @@
 const std = @import("std");
 const TextRenderer = @import("./renderer/text.zig").TextRenderer;
 const ShapeBatchQueue = @import("./renderer/shape.zig").ShapeBatchQueue;
+const SpriteBatchQueue = @import("./renderer/sprite_batch.zig").SpriteBatchQueue;
+const Texture = @import("./renderer/textures.zig").Texture;
 const common = @import("./common.zig");
 const input = @import("./input.zig");
 
@@ -41,6 +44,8 @@ pub const Style = struct {
     window_bg: Color = Color.from(30, 30, 35, 230),
     window_border: Color = Color.from(80, 80, 90, 255),
     window_title_bg: Color = Color.from(50, 50, 70, 255),
+    window_resize_handle: Color = Color.from(100, 100, 120, 255),
+    window_resize_handle_hover: Color = Color.from(135, 155, 205, 255),
     title_text: Color = Color.from(230, 230, 255, 255),
     button_normal: Color = Color.from(60, 60, 80, 255),
     button_hover: Color = Color.from(90, 90, 120, 255),
@@ -75,6 +80,8 @@ pub const Style = struct {
     padding: Vec2I = .{ .x = 8, .y = 6 },
     item_spacing: i32 = 4,
     title_height: i32 = 22,
+    resize_handle_size: i32 = 14,
+    min_window_size: Vec2I = .{ .x = 120, .y = 70 },
     button_height: i32 = 24,
     selectable_height: i32 = 24,
     checkbox_size: i32 = 18,
@@ -98,6 +105,8 @@ pub const ButtonResult = struct {
     clicked: bool,
     state: ButtonState,
 };
+
+pub const WindowSide = enum { left, right, up, down };
 
 // ============================================================
 // Internal per-window layout state
@@ -125,6 +134,8 @@ pub const UiContext = struct {
 
     mouse: *Mouse,
     keyboard: *Keyboard,
+    sprites: *SpriteBatchQueue,
+    images: *SpriteBatchQueue,
     shapes: *ShapeBatchQueue,
     text: *TextRenderer,
     style: Style,
@@ -166,10 +177,15 @@ pub const UiContext = struct {
     left_released: bool,
     /// True if the left button is currently held.
     left_down: bool,
+    window_drag_offset: Vec2F,
+    window_resize_start_mouse: Vec2F,
+    window_resize_start_size: Vec2F,
 
     pub fn init(
         mouse: *Mouse,
         keyboard: *Keyboard,
+        sprites: *SpriteBatchQueue,
+        images: *SpriteBatchQueue,
         shapes: *ShapeBatchQueue,
         text: *TextRenderer,
     ) UiContext {
@@ -180,6 +196,8 @@ pub const UiContext = struct {
             .frame = 0,
             .mouse = mouse,
             .keyboard = keyboard,
+            .sprites = sprites,
+            .images = images,
             .shapes = shapes,
             .text = text,
             .style = Style{},
@@ -199,6 +217,9 @@ pub const UiContext = struct {
             .left_pressed = false,
             .left_released = false,
             .left_down = false,
+            .window_drag_offset = .{ .x = 0, .y = 0 },
+            .window_resize_start_mouse = .{ .x = 0, .y = 0 },
+            .window_resize_start_size = .{ .x = 0, .y = 0 },
         };
     }
 
@@ -240,6 +261,8 @@ pub const UiContext = struct {
 
     /// Call at the start of each render frame before any widgets.
     pub fn begin(self: *UiContext) void {
+        // Scene sprites should be behind all window layers.
+        self.sprites.flush();
         self.hot_id = 0;
         self.frame +%= 1;
     }
@@ -270,30 +293,106 @@ pub const UiContext = struct {
     // Window
     // ----------------------------------------------------------
 
-    /// Begin a window. Draws title bar and background. Must be matched with endWindow().
+    /// Resize and place a window against one edge of the logical screen.
+    /// `percent` controls width for left/right and height for up/down.
+    pub fn resizeWindowToSide(self: *UiContext, rect: *RectF, side: WindowSide, percent: f32, screen_size: Vec2I) void {
+        _ = self;
+        const p = std.math.clamp(percent, 0.0, 1.0);
+        const width: f32 = @floatFromInt(screen_size.x);
+        const height: f32 = @floatFromInt(screen_size.y);
+        switch (side) {
+            .left => rect.* = .{ .l = 0, .t = 0, .r = width * p, .b = height },
+            .right => rect.* = .{ .l = width * (1.0 - p), .t = 0, .r = width, .b = height },
+            .up => rect.* = .{ .l = 0, .t = 0, .r = width, .b = height * p },
+            .down => rect.* = .{ .l = 0, .t = height * (1.0 - p), .r = width, .b = height },
+        }
+    }
+
+    /// Begin a draggable and bottom-right resizable window.
+    /// `rect` stores the persistent bounds and must be matched with endWindow().
     pub fn beginWindow(
         self: *UiContext,
         id: []const u8,
         title: []const u8,
-        rect: RectF,
+        rect: *RectF,
     ) void {
         const s = &self.style;
         const title_h: f32 = @floatFromInt(s.title_height);
         const pad_x: f32 = @floatFromInt(s.padding.x);
         const pad_y: f32 = @floatFromInt(s.padding.y);
+        const resize_size: f32 = @floatFromInt(s.resize_handle_size);
+        const uid = hashId(id);
+        const move_uid = uid ^ 0x5749_4e44_4f57_0001;
+        const resize_uid = uid ^ 0x5749_4e44_4f57_0002;
+
+        var resize_rect = RectF{
+            .l = rect.r - resize_size,
+            .t = rect.b - resize_size,
+            .r = rect.r,
+            .b = rect.b,
+        };
+        const over_resize = self.testHot(resize_uid, resize_rect);
+        if (over_resize and self.left_pressed) {
+            self.active_id = resize_uid;
+            self.focus_id = resize_uid;
+            self.window_resize_start_mouse = self.mouse_pos;
+            self.window_resize_start_size = .{ .x = rect.width(), .y = rect.height() };
+        }
+        if (self.active_id == resize_uid and self.left_down) {
+            const min_w: f32 = @floatFromInt(s.min_window_size.x);
+            const min_h: f32 = @floatFromInt(s.min_window_size.y);
+            const width = @max(min_w, self.window_resize_start_size.x + self.mouse_pos.x - self.window_resize_start_mouse.x);
+            const height = @max(min_h, self.window_resize_start_size.y + self.mouse_pos.y - self.window_resize_start_mouse.y);
+            rect.r = rect.l + width;
+            rect.b = rect.t + height;
+        }
+
+        var title_rect = RectF{
+            .l = rect.l,
+            .t = rect.t,
+            .r = rect.r,
+            .b = rect.t + title_h,
+        };
+        const over_title = self.testHot(move_uid, title_rect);
+        if (over_title and self.left_pressed and self.active_id != resize_uid) {
+            self.active_id = move_uid;
+            self.focus_id = move_uid;
+            self.window_drag_offset = .{
+                .x = self.mouse_pos.x - rect.l,
+                .y = self.mouse_pos.y - rect.t,
+            };
+        }
+        if (self.active_id == move_uid and self.left_down) {
+            const width = rect.width();
+            const height = rect.height();
+            rect.l = self.mouse_pos.x - self.window_drag_offset.x;
+            rect.t = self.mouse_pos.y - self.window_drag_offset.y;
+            rect.r = rect.l + width;
+            rect.b = rect.t + height;
+        }
 
         // Background
-        self.shapes.drawFilledRect(rect, s.window_bg);
-        self.shapes.drawEnclosingRect(rect, s.window_border, 1);
+        self.shapes.drawFilledRect(rect.*, s.window_bg);
+        self.shapes.drawEnclosingRect(rect.*, s.window_border, 1);
 
         // Title bar
-        const title_rect = RectF{
+        title_rect = RectF{
             .l = rect.l,
             .t = rect.t,
             .r = rect.r,
             .b = rect.t + title_h,
         };
         self.shapes.drawFilledRect(title_rect, s.window_title_bg);
+        resize_rect = .{
+            .l = rect.r - resize_size,
+            .t = rect.b - resize_size,
+            .r = rect.r,
+            .b = rect.b,
+        };
+        self.shapes.drawFilledRect(
+            resize_rect.shrinkFrom(3.0),
+            if (over_resize or self.active_id == resize_uid) s.window_resize_handle_hover else s.window_resize_handle,
+        );
 
         // Title text — vertically centered in title bar
         const line_h: f32 = if (self.text.atlas) |a| @floatFromInt(a.maxY) else 16;
@@ -302,12 +401,10 @@ pub const UiContext = struct {
             .y = @intFromFloat(rect.t + (title_h - line_h) / 2.0),
         });
 
-        _ = id;
-
         // Push window context
         std.debug.assert(self.win_depth < self.win_stack.len);
         self.win_stack[self.win_depth] = .{
-            .rect = rect,
+            .rect = rect.*,
             .content_y = rect.t + title_h + pad_y,
             .last_x = rect.l + pad_x,
             .last_y = rect.t + title_h + pad_y,
@@ -321,6 +418,9 @@ pub const UiContext = struct {
     /// End the current window.
     pub fn endWindow(self: *UiContext) void {
         std.debug.assert(self.win_depth > 0);
+        self.shapes.flush();
+        self.images.flush();
+        self.text.flush();
         self.win_depth -= 1;
     }
 
@@ -443,6 +543,19 @@ pub const UiContext = struct {
             .x = @intFromFloat(rect.l),
             .y = @intFromFloat(rect.t),
         });
+    }
+
+    // ----------------------------------------------------------
+    // image
+    // ----------------------------------------------------------
+
+    /// Draw a texture or atlas subtexture at the requested logical size.
+    pub fn image(self: *UiContext, texture: *Texture, size: Vec2I) void {
+        const rect = self.allocWidget(
+            @floatFromInt(size.x),
+            @floatFromInt(size.y),
+        );
+        self.images.draw(texture, rect, texture.src, .none);
     }
 
     // ----------------------------------------------------------

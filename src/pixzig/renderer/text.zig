@@ -288,6 +288,11 @@ pub const TextRenderer = struct {
         self.spriteBatch.end();
     }
 
+    /// Flushes queued text while keeping the renderer open for further draws.
+    pub fn flush(self: *TextRenderer) void {
+        self.spriteBatch.flush();
+    }
+
     pub fn setAtlas(self: *TextRenderer, atlas: *FontAtlas) void {
         self.atlas = atlas;
         if (atlas.isAlpha) {
