@@ -13,6 +13,9 @@
 //!   self.ui.label("Hello!");
 //!   if (self.ui.button("btn1", "Click Me")) { ... }
 //!   _ = self.ui.inputText("input1", &buf, &buf_len);
+//!   _ = self.ui.inputInt("frame_ms", &frame_ms);
+//!   _ = self.ui.checkbox("loop", "Loop", &loop);
+//!   _ = self.ui.selectableList("sprites", names, &selection, &scroll, 120);
 //!   self.ui.textArea("log", log_lines.items, &scroll, 120);
 //!   self.ui.endWindow();
 //!   self.ui.end();
@@ -45,6 +48,15 @@ pub const Style = struct {
     button_disabled: Color = Color.from(45, 45, 50, 200),
     button_text: Color = Color.from(220, 220, 220, 255),
     button_disabled_text: Color = Color.from(100, 100, 100, 255),
+    selectable_normal: Color = Color.from(35, 35, 42, 255),
+    selectable_hover: Color = Color.from(65, 65, 85, 255),
+    selectable_pressed: Color = Color.from(45, 55, 78, 255),
+    selectable_selected: Color = Color.from(60, 95, 145, 255),
+    selectable_text: Color = Color.from(220, 220, 220, 255),
+    checkbox_bg: Color = Color.from(20, 20, 25, 255),
+    checkbox_border: Color = Color.from(100, 100, 120, 255),
+    checkbox_hover: Color = Color.from(130, 150, 190, 255),
+    checkbox_check: Color = Color.from(95, 155, 230, 255),
     input_bg: Color = Color.from(20, 20, 25, 255),
     input_border: Color = Color.from(70, 70, 80, 255),
     input_border_hover: Color = Color.from(100, 100, 120, 255),
@@ -64,6 +76,8 @@ pub const Style = struct {
     item_spacing: i32 = 4,
     title_height: i32 = 22,
     button_height: i32 = 24,
+    selectable_height: i32 = 24,
+    checkbox_size: i32 = 18,
     input_height: i32 = 24,
     slider_height: i32 = 24,
     slider_thumb_w: i32 = 10,
@@ -134,6 +148,12 @@ pub const UiContext = struct {
     /// Whether page-down was pressed in any update step this frame.
     page_down_pressed: bool,
 
+    /// Scratch text used by the currently focused integer input.
+    int_edit_buf: [32]u8,
+    int_edit_len: usize,
+    int_edit_id: u64,
+    int_edit_replace: bool,
+
     // ----------------------------------------------------------
     // Mouse state snapshotted by update()
     // ----------------------------------------------------------
@@ -171,6 +191,10 @@ pub const UiContext = struct {
             .delete_count = 0,
             .page_up_pressed = false,
             .page_down_pressed = false,
+            .int_edit_buf = undefined,
+            .int_edit_len = 0,
+            .int_edit_id = 0,
+            .int_edit_replace = false,
             .mouse_pos = .{ .x = 0, .y = 0 },
             .left_pressed = false,
             .left_released = false,
@@ -381,6 +405,16 @@ pub const UiContext = struct {
         return h;
     }
 
+    fn indexId(parent: u64, index: usize) u64 {
+        var h = parent;
+        var n: usize = index + 1;
+        while (n > 0) : (n >>= 8) {
+            h ^= @as(u64, @intCast(n & 0xff));
+            h *%= 1099511628211;
+        }
+        return h;
+    }
+
     // ----------------------------------------------------------
     // Mouse hit test — uses the position snapshotted in update()
     // ----------------------------------------------------------
@@ -474,6 +508,199 @@ pub const UiContext = struct {
     }
 
     // ----------------------------------------------------------
+    // selectable / selectableList
+    // ----------------------------------------------------------
+
+    fn drawSelectable(
+        self: *UiContext,
+        uid: u64,
+        lbl: []const u8,
+        selected: bool,
+        rect: RectF,
+    ) bool {
+        const s = &self.style;
+        const over = self.testHot(uid, rect);
+        var clicked = false;
+
+        if (over and self.left_pressed) {
+            self.active_id = uid;
+            self.focus_id = uid;
+        }
+        if (self.active_id == uid and over and self.left_released) {
+            clicked = true;
+        }
+
+        const bg = if (self.active_id == uid)
+            s.selectable_pressed
+        else if (selected)
+            s.selectable_selected
+        else if (over)
+            s.selectable_hover
+        else
+            s.selectable_normal;
+        self.shapes.drawFilledRect(rect, bg);
+
+        const pad_x: f32 = @floatFromInt(s.padding.x);
+        const line_h: f32 = if (self.text.atlas) |a| @floatFromInt(a.maxY) else 16;
+        const text_clip = RectF{ .l = rect.l + pad_x, .t = rect.t, .r = rect.r - pad_x, .b = rect.b };
+        _ = self.text.drawClippedString(lbl, .{
+            .x = @intFromFloat(rect.l + pad_x),
+            .y = @intFromFloat(rect.t + (rect.height() - line_h) / 2.0),
+        }, text_clip);
+
+        return clicked;
+    }
+
+    /// A single selectable row. Returns true when it is clicked.
+    pub fn selectable(self: *UiContext, id: []const u8, lbl: []const u8, selected: bool) bool {
+        const h: f32 = @floatFromInt(self.style.selectable_height);
+        const rect = self.allocWidget(self.contentWidth(), h);
+        return self.drawSelectable(hashId(id), lbl, selected, rect);
+    }
+
+    /// Scrollable list of text rows with one optional selection.
+    /// Returns true when `selected` changes.
+    pub fn selectableList(
+        self: *UiContext,
+        id: []const u8,
+        items: []const []const u8,
+        selected: *?usize,
+        scroll: *usize,
+        area_height: f32,
+    ) bool {
+        const s = &self.style;
+        const uid = hashId(id);
+        const sb_uid = uid ^ 0x5343_0000_0000_0002;
+        const rect = self.allocWidget(self.contentWidth(), area_height);
+        const row_h: f32 = @floatFromInt(s.selectable_height);
+        const visible: usize = @max(1, @as(usize, @intFromFloat(@floor(area_height / row_h))));
+        const scrollable = items.len > visible;
+        const max_scroll = if (scrollable) items.len - visible else 0;
+        const sb_w = s.scrollbar_w;
+        const row_r = if (scrollable) rect.r - sb_w - 2.0 else rect.r;
+
+        if (scroll.* > max_scroll) scroll.* = max_scroll;
+        if (selected.*) |idx| {
+            if (idx >= items.len) selected.* = null;
+        }
+
+        const body_rect = RectF{ .l = rect.l, .t = rect.t, .r = row_r, .b = rect.b };
+        const over_body = self.testHot(uid, body_rect);
+        if (over_body) {
+            if (self.page_up_pressed and scroll.* > 0) {
+                scroll.* -= 1;
+            } else if (self.page_down_pressed and scroll.* < max_scroll) {
+                scroll.* += 1;
+            }
+        }
+
+        const sb_rect = RectF{ .l = rect.r - sb_w, .t = rect.t, .r = rect.r, .b = rect.b };
+        if (scrollable) {
+            const over_sb = self.testHot(sb_uid, sb_rect);
+            if (over_sb and self.left_pressed) self.active_id = sb_uid;
+            if (self.active_id == sb_uid and self.left_down) {
+                const thumb_h = @max((area_height * @as(f32, @floatFromInt(visible))) /
+                    @as(f32, @floatFromInt(items.len)), 12.0);
+                const travel = area_height - thumb_h;
+                const t = std.math.clamp((self.mouse_pos.y - sb_rect.t - thumb_h / 2.0) / travel, 0.0, 1.0);
+                scroll.* = @intFromFloat(t * @as(f32, @floatFromInt(max_scroll)));
+            }
+        }
+
+        self.shapes.drawFilledRect(rect, s.text_area_bg);
+        self.shapes.drawEnclosingRect(rect, s.text_area_border, 1);
+
+        var changed = false;
+        const end_idx = @min(scroll.* + visible, items.len);
+        var y = rect.t;
+        for (scroll.*..end_idx) |idx| {
+            const row = RectF{ .l = rect.l + 1.0, .t = y + 1.0, .r = row_r - 1.0, .b = @min(y + row_h, rect.b - 1.0) };
+            const is_selected = if (selected.*) |selected_idx| selected_idx == idx else false;
+            if (self.drawSelectable(indexId(uid, idx), items[idx], is_selected, row)) {
+                if (!is_selected) {
+                    selected.* = idx;
+                    changed = true;
+                }
+            }
+            y += row_h;
+        }
+
+        if (scrollable) {
+            const thumb_h = @max((area_height * @as(f32, @floatFromInt(visible))) /
+                @as(f32, @floatFromInt(items.len)), 12.0);
+            const travel = area_height - thumb_h;
+            const scroll_t = @as(f32, @floatFromInt(scroll.*)) / @as(f32, @floatFromInt(max_scroll));
+            const thumb_t = sb_rect.t + scroll_t * travel;
+            const thumb_rect = RectF{
+                .l = sb_rect.l + 1.0,
+                .t = thumb_t,
+                .r = sb_rect.r - 1.0,
+                .b = thumb_t + thumb_h,
+            };
+            self.shapes.drawFilledRect(sb_rect, s.scrollbar_track);
+            const thumb_col = if (self.active_id == sb_uid)
+                s.scrollbar_thumb_active
+            else if (self.hot_id == sb_uid)
+                s.scrollbar_thumb_hover
+            else
+                s.scrollbar_thumb;
+            self.shapes.drawFilledRect(thumb_rect, thumb_col);
+        }
+
+        return changed;
+    }
+
+    // ----------------------------------------------------------
+    // checkbox / toggle
+    // ----------------------------------------------------------
+
+    /// Boolean toggle rendered as a checkbox and label.
+    pub fn checkbox(self: *UiContext, id: []const u8, lbl: []const u8, checked: *bool) bool {
+        const s = &self.style;
+        const uid = hashId(id);
+        const h: f32 = @floatFromInt(s.input_height);
+        const rect = self.allocWidget(self.contentWidth(), h);
+        const over = self.testHot(uid, rect);
+        var changed = false;
+
+        if (over and self.left_pressed) {
+            self.active_id = uid;
+            self.focus_id = uid;
+        }
+        if (self.active_id == uid and over and self.left_released) {
+            checked.* = !checked.*;
+            changed = true;
+        }
+
+        const box_size: f32 = @floatFromInt(s.checkbox_size);
+        const box = RectF{
+            .l = rect.l,
+            .t = rect.t + (h - box_size) / 2.0,
+            .r = rect.l + box_size,
+            .b = rect.t + (h + box_size) / 2.0,
+        };
+        self.shapes.drawFilledRect(box, s.checkbox_bg);
+        self.shapes.drawEnclosingRect(box, if (over) s.checkbox_hover else s.checkbox_border, 1);
+        if (checked.*) {
+            self.shapes.drawFilledRect(box.shrinkFrom(4.0), s.checkbox_check);
+        }
+
+        const item_sp: f32 = @floatFromInt(s.item_spacing);
+        const line_h: f32 = if (self.text.atlas) |a| @floatFromInt(a.maxY) else 16;
+        _ = self.text.drawString(lbl, .{
+            .x = @intFromFloat(box.r + item_sp * 2.0),
+            .y = @intFromFloat(rect.t + (h - line_h) / 2.0),
+        });
+
+        return changed;
+    }
+
+    /// Alias for checkbox when a boolean is conceptually an option toggle.
+    pub fn toggle(self: *UiContext, id: []const u8, lbl: []const u8, value: *bool) bool {
+        return self.checkbox(id, lbl, value);
+    }
+
+    // ----------------------------------------------------------
     // inputText
     // ----------------------------------------------------------
 
@@ -556,6 +783,106 @@ pub const UiContext = struct {
                     .b = cy + line_h,
                 }, s.input_cursor);
             }
+        }
+
+        return changed;
+    }
+
+    // ----------------------------------------------------------
+    // inputInt
+    // ----------------------------------------------------------
+
+    fn beginIntEdit(self: *UiContext, uid: u64, value: i32) void {
+        const str = std.fmt.bufPrint(&self.int_edit_buf, "{}", .{value}) catch "0";
+        self.int_edit_len = str.len;
+        self.int_edit_id = uid;
+        self.int_edit_replace = true;
+    }
+
+    /// Signed integer input. Typing after focus replaces the current value;
+    /// backspace edits the existing value from its end.
+    pub fn inputInt(self: *UiContext, id: []const u8, value: *i32) bool {
+        const s = &self.style;
+        const uid = hashId(id);
+        const h: f32 = @floatFromInt(s.input_height);
+        const rect = self.allocWidget(self.contentWidth(), h);
+        const over = self.testHot(uid, rect);
+
+        if (over and self.left_pressed) {
+            if (self.focus_id != uid or self.int_edit_id != uid) {
+                self.beginIntEdit(uid, value.*);
+            }
+            self.focus_id = uid;
+        }
+
+        const focused = self.focus_id == uid;
+        if (focused and self.int_edit_id != uid) {
+            self.beginIntEdit(uid, value.*);
+        }
+
+        var changed = false;
+        if (focused) {
+            for (self.text_input[0..self.text_input_len]) |c| {
+                const valid = (c >= '0' and c <= '9') or
+                    (c == '-' and (self.int_edit_replace or self.int_edit_len == 0));
+                if (!valid) continue;
+                if (self.int_edit_replace) {
+                    self.int_edit_len = 0;
+                    self.int_edit_replace = false;
+                }
+                if (c == '-' and self.int_edit_len != 0) continue;
+                if (self.int_edit_len < self.int_edit_buf.len) {
+                    self.int_edit_buf[self.int_edit_len] = c;
+                    self.int_edit_len += 1;
+                }
+            }
+
+            var remove_count = self.backspace_count + self.delete_count;
+            if (remove_count > 0) self.int_edit_replace = false;
+            while (remove_count > 0 and self.int_edit_len > 0) : (remove_count -= 1) {
+                self.int_edit_len -= 1;
+            }
+
+            if (self.int_edit_len > 0 and
+                !(self.int_edit_len == 1 and self.int_edit_buf[0] == '-'))
+            {
+                if (std.fmt.parseInt(i32, self.int_edit_buf[0..self.int_edit_len], 10)) |new_value| {
+                    if (new_value != value.*) {
+                        value.* = new_value;
+                        changed = true;
+                    }
+                } else |_| {}
+            }
+        }
+
+        self.shapes.drawFilledRect(rect, s.input_bg);
+        const border_col = if (focused) s.input_border_focused else if (over) s.input_border_hover else s.input_border;
+        self.shapes.drawEnclosingRect(rect, border_col, 1);
+
+        var display_buf: [32]u8 = undefined;
+        const value_str = if (focused)
+            self.int_edit_buf[0..self.int_edit_len]
+        else
+            std.fmt.bufPrint(&display_buf, "{}", .{value.*}) catch "?";
+        const pad_x: f32 = @floatFromInt(s.padding.x);
+        const line_h: f32 = if (self.text.atlas) |a| @floatFromInt(a.maxY) else 16;
+        const ty: i32 = @intFromFloat(rect.t + (h - line_h) / 2.0);
+        const text_clip = RectF{ .l = rect.l + pad_x, .t = rect.t, .r = rect.r - pad_x, .b = rect.b };
+        _ = self.text.drawClippedString(value_str, .{
+            .x = @intFromFloat(rect.l + pad_x),
+            .y = ty,
+        }, text_clip);
+
+        if (focused and (self.frame / 30) % 2 == 0) {
+            const pre_sz = self.text.measureString(value_str);
+            const cx: f32 = rect.l + pad_x + @as(f32, @floatFromInt(pre_sz.x));
+            const cy: f32 = rect.t + (h - line_h) / 2.0;
+            self.shapes.drawFilledRect(RectF{
+                .l = cx,
+                .t = cy + line_h - 3.0,
+                .r = cx + 8.0,
+                .b = cy + line_h,
+            }, s.input_cursor);
         }
 
         return changed;

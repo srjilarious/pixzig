@@ -14,7 +14,7 @@ pub const MaxGamepads: u8 = 4;
 /// owns and updates.  Passed to `InputManager.init()`.
 pub const InputOptions = struct {
     /// Whether to update the Mouse each tick and expose logical coordinates.
-    mouse: bool = false,
+    mouse: bool = true,
     /// Number of gamepads to own and update (joystick IDs 0..numGamepads-1).
     /// Clamped to MaxGamepads at init time.
     numGamepads: u8 = 0,

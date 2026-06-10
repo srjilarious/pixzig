@@ -5,6 +5,8 @@
 //!   - Label text
 //!   - Normal / disabled buttons
 //!   - Text input box
+//!   - Integer input and checkbox
+//!   - Selectable list
 //!   - Scrollable text area (log)
 
 const std = @import("std");
@@ -28,6 +30,14 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{
 
 const MaxLogLines = 200;
 const InputBufLen = 128;
+const SpriteNames = [_][]const u8{
+    "player_idle_0",
+    "player_idle_1",
+    "player_walk_0",
+    "player_walk_1",
+    "player_jump",
+    "player_land",
+};
 
 pub const App = struct {
     alloc: std.mem.Allocator,
@@ -48,6 +58,12 @@ pub const App = struct {
     slider_a: f32,
     slider_b: f32,
 
+    // Editor-oriented widgets
+    loop_animation: bool,
+    frame_ms: i32,
+    selected_sprite: ?usize,
+    sprite_scroll: usize,
+
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app = try alloc.create(App);
 
@@ -66,6 +82,10 @@ pub const App = struct {
             .click_count = 0,
             .slider_a = 0.5,
             .slider_b = 25.0,
+            .loop_animation = true,
+            .frame_ms = 100,
+            .selected_sprite = 0,
+            .sprite_scroll = 0,
         };
 
         try app.addLog("GUI test started. Type something and press Submit.");
@@ -170,28 +190,41 @@ pub const App = struct {
 
         self.ui.endWindow();
 
-        // Second smaller window
-        const win2_rect = RectF.fromPosSize(440, 30, 250, 140);
-        self.ui.beginWindow("info_win", "Info", win2_rect);
+        // Editor widget preview window
+        const win2_rect = RectF.fromPosSize(440, 30, 290, 420);
+        self.ui.beginWindow("editor_widgets_win", "Editor Widgets", win2_rect);
+        self.ui.label("Sprites:");
+        if (self.ui.selectableList("sprite_list", &SpriteNames, &self.selected_sprite, &self.sprite_scroll, 130)) {
+            if (self.selected_sprite) |selected| {
+                var buf: [96]u8 = undefined;
+                const msg = std.fmt.bufPrint(&buf, "Selected: {s}", .{SpriteNames[selected]}) catch "Selection changed";
+                self.addLog(msg) catch {};
+            }
+        }
+        self.ui.spacing();
+        _ = self.ui.toggle("loop_animation", "Loop animation", &self.loop_animation);
+        self.ui.label("Frame duration (ms):");
+        _ = self.ui.inputInt("frame_ms", &self.frame_ms);
+        self.ui.spacing();
+
         var count_buf: [64]u8 = undefined;
+        const selected_str = if (self.selected_sprite) |selected|
+            SpriteNames[selected]
+        else
+            "(none)";
         const count_str = std.fmt.bufPrint(
             &count_buf,
-            "Submits: {}",
-            .{self.click_count},
-        ) catch "Submits: ?";
+            "Selected: {s}",
+            .{selected_str},
+        ) catch "Selected: ?";
         self.ui.label(count_str);
-        self.ui.spacing();
 
         const cursorStr = std.fmt.bufPrint(
             &count_buf,
-            "Cursor: ({d}, {d})",
-            .{
-                @as(i32, @intFromFloat(self.ui.mouse_pos.x)),
-                @as(i32, @intFromFloat(self.ui.mouse_pos.y)),
-            },
-        ) catch "Cursor: (?, ?)";
+            "Frame: {d} ms",
+            .{self.frame_ms},
+        ) catch "Frame: ?";
         self.ui.label(cursorStr);
-        self.ui.spacing();
 
         self.ui.label("ESC to quit");
         self.ui.endWindow();
