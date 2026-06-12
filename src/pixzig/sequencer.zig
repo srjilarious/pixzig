@@ -356,9 +356,6 @@ pub const SequencePlayer = struct {
 /// Maximum number of in-progress sequences buildable from Lua at once.
 const MAX_PENDING_SEQS: usize = 16;
 
-/// Active scripting context. Set by SeqScriptingContext.bindToLua().
-var g_seqCtx: ?*SeqScriptingContext = null;
-
 /// Bridges Lua scripting with the sequence system. Bind it to a Lua state via
 /// bindToLua(), then Lua scripts can call seq_new / seq_wait / seq_move_to /
 /// seq_set_actor_state / seq_play to build and queue sequences.
@@ -386,30 +383,38 @@ pub const SeqScriptingContext = struct {
             if (slot.*) |*s| s.deinit(self.alloc);
             slot.* = null;
         }
-        if (g_seqCtx == self) g_seqCtx = null;
     }
 
-    /// Register seq_* globals into the Lua state and set this as active context.
+    /// Register seq_* globals into the Lua state. The context must remain valid
+    /// while Lua can call the registered functions.
     pub fn bindToLua(self: *SeqScriptingContext, lua: *Lua) void {
-        g_seqCtx = self;
-        lua.pushFunction(ziglua.wrap(luaSeqNew));
+        lua.pushLightUserdata(self);
+        lua.pushClosure(ziglua.wrap(luaSeqNew), 1);
         lua.setGlobal("seq_new");
-        lua.pushFunction(ziglua.wrap(luaSeqWait));
+        lua.pushLightUserdata(self);
+        lua.pushClosure(ziglua.wrap(luaSeqWait), 1);
         lua.setGlobal("seq_wait");
-        lua.pushFunction(ziglua.wrap(luaSeqMoveTo));
+        lua.pushLightUserdata(self);
+        lua.pushClosure(ziglua.wrap(luaSeqMoveTo), 1);
         lua.setGlobal("seq_move_to");
-        lua.pushFunction(ziglua.wrap(luaSeqSetActorState));
+        lua.pushLightUserdata(self);
+        lua.pushClosure(ziglua.wrap(luaSeqSetActorState), 1);
         lua.setGlobal("seq_set_actor_state");
-        lua.pushFunction(ziglua.wrap(luaSeqPlay));
+        lua.pushLightUserdata(self);
+        lua.pushClosure(ziglua.wrap(luaSeqPlay), 1);
         lua.setGlobal("seq_play");
     }
 };
 
 // --- Lua C function implementations -----------------------------------------
 
+fn luaSeqContext(lua: *Lua) ?*SeqScriptingContext {
+    return lua.toUserdata(SeqScriptingContext, Lua.upvalueIndex(1)) catch null;
+}
+
 /// seq_new() -> handle:integer  — allocate a new pending sequence slot.
 fn luaSeqNew(lua: *Lua) i32 {
-    const ctx = g_seqCtx orelse {
+    const ctx = luaSeqContext(lua) orelse {
         lua.pushInteger(-1);
         return 1;
     };
@@ -426,7 +431,7 @@ fn luaSeqNew(lua: *Lua) i32 {
 
 /// seq_wait(handle, ms) — append a WaitStep to the pending sequence.
 fn luaSeqWait(lua: *Lua) i32 {
-    const ctx = g_seqCtx orelse return 0;
+    const ctx = luaSeqContext(lua) orelse return 0;
     const handle = lua.toInteger(1) catch return 0;
     const ms = lua.toNumber(2) catch return 0;
     if (handle < 0 or handle >= @as(ziglua.Integer, MAX_PENDING_SEQS)) return 0;
@@ -440,7 +445,7 @@ fn luaSeqWait(lua: *Lua) i32 {
 
 /// seq_move_to(handle, entity_id, x, y, ms) — append a MoveToStep.
 fn luaSeqMoveTo(lua: *Lua) i32 {
-    const ctx = g_seqCtx orelse return 0;
+    const ctx = luaSeqContext(lua) orelse return 0;
     const handle = lua.toInteger(1) catch return 0;
     const entityId: flecs.entity_t = @intCast(lua.toInteger(2) catch return 0);
     const x: f32 = @floatCast(lua.toNumber(3) catch return 0);
@@ -457,7 +462,7 @@ fn luaSeqMoveTo(lua: *Lua) i32 {
 
 /// seq_set_actor_state(handle, entity_id, state_name) — append a SetActorStateStep.
 fn luaSeqSetActorState(lua: *Lua) i32 {
-    const ctx = g_seqCtx orelse return 0;
+    const ctx = luaSeqContext(lua) orelse return 0;
     const handle = lua.toInteger(1) catch return 0;
     const entityId: flecs.entity_t = @intCast(lua.toInteger(2) catch return 0);
     const stateName = lua.toString(3) catch return 0;
@@ -472,7 +477,7 @@ fn luaSeqSetActorState(lua: *Lua) i32 {
 
 /// seq_play(handle) — submit the sequence to the SequencePlayer and free the slot.
 fn luaSeqPlay(lua: *Lua) i32 {
-    const ctx = g_seqCtx orelse return 0;
+    const ctx = luaSeqContext(lua) orelse return 0;
     const handle = lua.toInteger(1) catch return 0;
     if (handle < 0 or handle >= @as(ziglua.Integer, MAX_PENDING_SEQS)) return 0;
     const uhandle: usize = @intCast(handle);

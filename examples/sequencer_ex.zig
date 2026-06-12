@@ -138,8 +138,8 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        self.seqCtx.deinit();
         self.scriptEng.deinit();
+        self.seqCtx.deinit();
         // Free the Actor's StringHashMap before destroying the world.
         if (flecs.get_mut(self.world, self.entity, Actor)) |actor| {
             actor.deinit();
@@ -239,7 +239,9 @@ pub const App = struct {
 
 pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig Sequencer Example", .{});
-    const appRunner = try AppRunner.init("Pixzig Sequencer Example", init.gpa, .{});
+    const appRunner = try AppRunner.init("Pixzig Sequencer Example", init.gpa, .{
+        .logicalSize = .{ .x = 160, .y = 120 },
+    });
     const app = try App.init(init.gpa, appRunner.engine);
     appRunner.run(app);
 }

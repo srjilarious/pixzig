@@ -331,3 +331,49 @@ pub fn luaSeqMultipleStepsRunInOrderTest(io: std.Io, alloc: std.mem.Allocator) !
     try testz.expectEqual(spr_end.dest.l, 50.0);
     try testz.expectEqual(spr_end.dest.t, 50.0);
 }
+
+// Each Lua VM should submit sequences only to the context bound into that VM.
+pub fn luaSeqContextsArePerVmTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    const world = makeWorld(.{Sprite});
+    defer _ = flecs.fini(world);
+
+    var player_a = seq.SequencePlayer.init(alloc);
+    defer player_a.deinit();
+    var player_b = seq.SequencePlayer.init(alloc);
+    defer player_b.deinit();
+
+    var seq_ctx_a = seq.SeqScriptingContext.init(alloc, world, &player_a);
+    defer seq_ctx_a.deinit();
+    var seq_ctx_b = seq.SeqScriptingContext.init(alloc, world, &player_b);
+    defer seq_ctx_b.deinit();
+
+    var script_eng_a = try ScriptEngine.init(alloc);
+    defer script_eng_a.deinit();
+    var script_eng_b = try ScriptEngine.init(alloc);
+    defer script_eng_b.deinit();
+
+    seq_ctx_a.bindToLua(script_eng_a.lua);
+    seq_ctx_b.bindToLua(script_eng_b.lua);
+
+    try script_eng_a.run(
+        \\local h = seq_new()
+        \\seq_wait(h, 10)
+        \\seq_play(h)
+    );
+    try script_eng_b.run(
+        \\local h = seq_new()
+        \\seq_wait(h, 20)
+        \\seq_play(h)
+    );
+
+    try testz.expectEqual(player_a.sequences.items.len, 1);
+    try testz.expectEqual(player_b.sequences.items.len, 1);
+
+    player_a.update(10.0);
+    try testz.expectEqual(player_a.sequences.items.len, 0);
+    try testz.expectEqual(player_b.sequences.items.len, 1);
+
+    player_b.update(20.0);
+    try testz.expectEqual(player_b.sequences.items.len, 0);
+}
