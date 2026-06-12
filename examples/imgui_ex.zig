@@ -77,6 +77,7 @@ pub const App = struct {
             .ui = imgui.UiContext.init(
                 &eng.inputs.mouse,
                 &eng.inputs.keyboard,
+                &eng.viewport,
                 &eng.renderer.impl.batches[0],
                 &eng.renderer.impl.overlays,
                 &eng.renderer.impl.shapes,
@@ -208,7 +209,7 @@ pub const App = struct {
         // Editor widget preview window
         self.ui.beginWindow("editor_widgets_win", "Editor Widgets", &self.editor_window);
         self.ui.label("Sprites:");
-        if (self.ui.selectableList("sprite_list", &SpriteNames, &self.selected_sprite, &self.sprite_scroll, 72)) {
+        if (self.ui.selectableList("sprite_list", &SpriteNames, &self.selected_sprite, &self.sprite_scroll, 128)) {
             if (self.selected_sprite) |selected| {
                 var buf: [96]u8 = undefined;
                 const msg = std.fmt.bufPrint(&buf, "Selected: {s}", .{SpriteNames[selected]}) catch "Selection changed";

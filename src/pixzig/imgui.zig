@@ -22,10 +22,12 @@
 //!   self.ui.end();
 
 const std = @import("std");
+const gl = @import("zopengl").bindings;
 const TextRenderer = @import("./renderer/text.zig").TextRenderer;
 const ShapeBatchQueue = @import("./renderer/shape.zig").ShapeBatchQueue;
 const SpriteBatchQueue = @import("./renderer/sprite_batch.zig").SpriteBatchQueue;
 const Texture = @import("./renderer/textures.zig").Texture;
+const Viewport = @import("./window.zig").Viewport;
 const common = @import("./common.zig");
 const input = @import("./input.zig");
 
@@ -46,6 +48,10 @@ pub const Style = struct {
     window_title_bg: Color = Color.from(50, 50, 70, 255),
     window_resize_handle: Color = Color.from(100, 100, 120, 255),
     window_resize_handle_hover: Color = Color.from(135, 155, 205, 255),
+    window_scrollbar_track: Color = Color.from(20, 20, 28, 255),
+    window_scrollbar_thumb: Color = Color.from(80, 80, 100, 255),
+    window_scrollbar_thumb_hover: Color = Color.from(110, 110, 140, 255),
+    window_scrollbar_thumb_active: Color = Color.from(60, 60, 80, 255),
     title_text: Color = Color.from(230, 230, 255, 255),
     button_normal: Color = Color.from(60, 60, 80, 255),
     button_hover: Color = Color.from(90, 90, 120, 255),
@@ -113,13 +119,23 @@ pub const WindowSide = enum { left, right, up, down };
 // ============================================================
 
 const WindowCtx = struct {
+    id: u64,
     rect: RectF,
+    content_rect: RectF,
+    scroll_y: f32,
     content_y: f32, // next widget baseline Y
     last_x: f32, // top-left of last placed widget
     last_y: f32,
     last_w: f32, // size of last placed widget
     last_h: f32,
     same_line: bool, // if true, next widget placed to the right
+};
+
+const WindowState = struct {
+    used: bool = false,
+    id: u64 = 0,
+    content_height: f32 = 0,
+    scroll_y: f32 = 0,
 };
 
 // ============================================================
@@ -134,6 +150,7 @@ pub const UiContext = struct {
 
     mouse: *Mouse,
     keyboard: *Keyboard,
+    viewport: *const Viewport,
     sprites: *SpriteBatchQueue,
     images: *SpriteBatchQueue,
     shapes: *ShapeBatchQueue,
@@ -142,6 +159,7 @@ pub const UiContext = struct {
 
     win_stack: [8]WindowCtx,
     win_depth: usize,
+    window_states: [32]WindowState,
 
     // ----------------------------------------------------------
     // Input accumulated by update() — consumed each render frame
@@ -184,6 +202,7 @@ pub const UiContext = struct {
     pub fn init(
         mouse: *Mouse,
         keyboard: *Keyboard,
+        viewport: *const Viewport,
         sprites: *SpriteBatchQueue,
         images: *SpriteBatchQueue,
         shapes: *ShapeBatchQueue,
@@ -196,6 +215,7 @@ pub const UiContext = struct {
             .frame = 0,
             .mouse = mouse,
             .keyboard = keyboard,
+            .viewport = viewport,
             .sprites = sprites,
             .images = images,
             .shapes = shapes,
@@ -203,6 +223,7 @@ pub const UiContext = struct {
             .style = Style{},
             .win_stack = undefined,
             .win_depth = 0,
+            .window_states = [_]WindowState{.{}} ** 32,
             .text_input = undefined,
             .text_input_len = 0,
             .backspace_count = 0,
@@ -308,6 +329,49 @@ pub const UiContext = struct {
         }
     }
 
+    fn windowState(self: *UiContext, id: u64) *WindowState {
+        for (&self.window_states) |*state| {
+            if (state.used and state.id == id) return state;
+        }
+        for (&self.window_states) |*state| {
+            if (!state.used) {
+                state.* = .{ .used = true, .id = id };
+                return state;
+            }
+        }
+        return &self.window_states[@intCast(id % self.window_states.len)];
+    }
+
+    fn applyContentClip(self: *UiContext, rect: RectF) void {
+        const logical_w: f32 = @floatFromInt(self.viewport.logical_size.x);
+        const logical_h: f32 = @floatFromInt(self.viewport.logical_size.y);
+        const l = std.math.clamp(rect.l, 0.0, logical_w);
+        const t = std.math.clamp(rect.t, 0.0, logical_h);
+        const r = std.math.clamp(rect.r, l, logical_w);
+        const b = std.math.clamp(rect.b, t, logical_h);
+        const top_left = self.viewport.logicalToFramebuffer(.{ .x = l, .y = t });
+        const bottom_right = self.viewport.logicalToFramebuffer(.{ .x = r, .y = b });
+        const left_px: i32 = @intFromFloat(top_left.x);
+        const top_px: i32 = @intFromFloat(top_left.y);
+        const right_px: i32 = @intFromFloat(bottom_right.x);
+        const bottom_px: i32 = @intFromFloat(bottom_right.y);
+        gl.enable(gl.SCISSOR_TEST);
+        gl.scissor(
+            left_px,
+            self.viewport.framebuffer_size.y - bottom_px,
+            @max(0, right_px - left_px),
+            @max(0, bottom_px - top_px),
+        );
+    }
+
+    fn restoreContentClip(self: *UiContext) void {
+        if (self.win_depth > 1) {
+            self.applyContentClip(self.win_stack[self.win_depth - 2].content_rect);
+        } else {
+            self.viewport.apply();
+        }
+    }
+
     /// Begin a draggable and bottom-right resizable window.
     /// `rect` stores the persistent bounds and must be matched with endWindow().
     pub fn beginWindow(
@@ -324,6 +388,8 @@ pub const UiContext = struct {
         const uid = hashId(id);
         const move_uid = uid ^ 0x5749_4e44_4f57_0001;
         const resize_uid = uid ^ 0x5749_4e44_4f57_0002;
+        const scroll_uid = uid ^ 0x5749_4e44_4f57_0003;
+        const state = self.windowState(uid);
 
         var resize_rect = RectF{
             .l = rect.r - resize_size,
@@ -371,6 +437,37 @@ pub const UiContext = struct {
             rect.b = rect.t + height;
         }
 
+        const content_t = rect.t + title_h + pad_y;
+        const content_b = rect.b - pad_y;
+        const visible_h = @max(0.0, content_b - content_t);
+        const scrollable = state.content_height > visible_h;
+        const max_scroll = @max(0.0, state.content_height - visible_h);
+        state.scroll_y = std.math.clamp(state.scroll_y, 0.0, max_scroll);
+        const scroll_space = if (scrollable) s.scrollbar_w + @as(f32, @floatFromInt(s.item_spacing)) else 0.0;
+        const content_rect = RectF{
+            .l = rect.l + pad_x,
+            .t = content_t,
+            .r = rect.r - pad_x - scroll_space,
+            .b = content_b,
+        };
+
+        if (scrollable) {
+            const sb_rect = RectF{
+                .l = rect.r - pad_x - s.scrollbar_w,
+                .t = content_t,
+                .r = rect.r - pad_x,
+                .b = content_b,
+            };
+            const over_scrollbar = self.testHot(scroll_uid, sb_rect);
+            if (over_scrollbar and self.left_pressed) self.active_id = scroll_uid;
+            if (self.active_id == scroll_uid and self.left_down) {
+                const thumb_h = @max(visible_h * visible_h / state.content_height, 12.0);
+                const travel = @max(1.0, visible_h - thumb_h);
+                const t = std.math.clamp((self.mouse_pos.y - sb_rect.t - thumb_h / 2.0) / travel, 0.0, 1.0);
+                state.scroll_y = t * max_scroll;
+            }
+        }
+
         // Background
         self.shapes.drawFilledRect(rect.*, s.window_bg);
         self.shapes.drawEnclosingRect(rect.*, s.window_border, 1);
@@ -404,23 +501,73 @@ pub const UiContext = struct {
         // Push window context
         std.debug.assert(self.win_depth < self.win_stack.len);
         self.win_stack[self.win_depth] = .{
+            .id = uid,
             .rect = rect.*,
-            .content_y = rect.t + title_h + pad_y,
+            .content_rect = content_rect,
+            .scroll_y = state.scroll_y,
+            .content_y = content_t - state.scroll_y,
             .last_x = rect.l + pad_x,
-            .last_y = rect.t + title_h + pad_y,
+            .last_y = content_t - state.scroll_y,
             .last_w = 0,
             .last_h = 0,
             .same_line = false,
         };
         self.win_depth += 1;
+
+        self.shapes.flush();
+        self.images.flush();
+        self.text.flush();
+        self.applyContentClip(content_rect);
     }
 
     /// End the current window.
     pub fn endWindow(self: *UiContext) void {
         std.debug.assert(self.win_depth > 0);
+        const win = self.curWin().*;
+        const state = self.windowState(win.id);
+        const content_top = win.content_rect.t;
+        state.content_height = @max(0.0, win.content_y + win.scroll_y - content_top);
+        const visible_h = win.content_rect.height();
+        const max_scroll = @max(0.0, state.content_height - visible_h);
+        state.scroll_y = std.math.clamp(state.scroll_y, 0.0, max_scroll);
+
         self.shapes.flush();
         self.images.flush();
         self.text.flush();
+        self.restoreContentClip();
+
+        if (max_scroll > 0.0) {
+            const s = &self.style;
+            const pad_x: f32 = @floatFromInt(s.padding.x);
+            const sb_rect = RectF{
+                .l = win.rect.r - pad_x - s.scrollbar_w,
+                .t = win.content_rect.t,
+                .r = win.rect.r - pad_x,
+                .b = win.content_rect.b,
+            };
+            const visible = sb_rect.height();
+            const thumb_h = @max(visible * visible / state.content_height, 12.0);
+            const travel = visible - thumb_h;
+            const scroll_t = if (max_scroll > 0.0) state.scroll_y / max_scroll else 0.0;
+            const thumb = RectF{
+                .l = sb_rect.l + 1.0,
+                .t = sb_rect.t + scroll_t * travel,
+                .r = sb_rect.r - 1.0,
+                .b = sb_rect.t + scroll_t * travel + thumb_h,
+            };
+            const scroll_uid = win.id ^ 0x5749_4e44_4f57_0003;
+            self.shapes.drawFilledRect(sb_rect, s.window_scrollbar_track);
+            self.shapes.drawFilledRect(
+                thumb,
+                if (self.active_id == scroll_uid)
+                    s.window_scrollbar_thumb_active
+                else if (self.hot_id == scroll_uid)
+                    s.window_scrollbar_thumb_hover
+                else
+                    s.window_scrollbar_thumb,
+            );
+            self.shapes.flush();
+        }
         self.win_depth -= 1;
     }
 
@@ -478,8 +625,7 @@ pub const UiContext = struct {
 
     fn contentWidth(self: *UiContext) f32 {
         const win = self.curWin();
-        const pad_x: f32 = @floatFromInt(self.style.padding.x);
-        return win.rect.r - win.rect.l - pad_x * 2.0;
+        return win.content_rect.width();
     }
 
     /// Returns the remaining vertical space inside the current window,
@@ -487,8 +633,7 @@ pub const UiContext = struct {
     /// window with a text area or other expanding widget.
     pub fn remainingHeight(self: *UiContext) f32 {
         const win = self.curWin();
-        const pad_y: f32 = @floatFromInt(self.style.padding.y);
-        const remaining = win.rect.b - win.content_y - pad_y;
+        const remaining = win.content_rect.b - (win.content_y + win.scroll_y);
         return @max(0, remaining);
     }
 
@@ -523,8 +668,13 @@ pub const UiContext = struct {
         // mouse_pos is already in logical coordinates (converted in update()).
         // Widget rects live in the same logical space, so compare directly.
         const mp = self.mouse_pos;
-        const over = mp.x >= rect.l and mp.x < rect.r and
+        var over = mp.x >= rect.l and mp.x < rect.r and
             mp.y >= rect.t and mp.y < rect.b;
+        if (over and self.win_depth > 0) {
+            const clip = self.curWin().content_rect;
+            over = mp.x >= clip.l and mp.x < clip.r and
+                mp.y >= clip.t and mp.y < clip.b;
+        }
         if (over) self.hot_id = id;
         return over;
     }
