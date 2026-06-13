@@ -382,6 +382,11 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             eng.window.setUserPointer(@ptrCast(&eng.window_state));
             _ = eng.window.setFramebufferSizeCallback(framebufferSizeCallback);
 
+            if (eng.inputs.mouse_enabled) {
+                input.mouse.setScrollTarget(&eng.inputs.mouse);
+                _ = eng.window.setScrollCallback(input.mouse.scrollCallback);
+            }
+
             // ----------------------------------------------------------------
             std.log.info("Initializing Renderer.", .{});
             eng.renderer = try Renderer.init(allocator, &eng.resources, options.renderInitOpts);
