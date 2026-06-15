@@ -176,6 +176,11 @@ pub const UiContext = struct {
     page_up_pressed: bool,
     /// Whether page-down was pressed in any update step this frame.
     page_down_pressed: bool,
+    /// Vertical scroll wheel delta accumulated this frame (positive = up).
+    scroll_delta: f32,
+    /// Set to true by the first widget that consumes scroll_delta this frame,
+    /// preventing parent containers from double-scrolling.
+    scroll_consumed: bool,
 
     /// Scratch text used by the currently focused integer input.
     int_edit_buf: [32]u8,
@@ -230,6 +235,8 @@ pub const UiContext = struct {
             .delete_count = 0,
             .page_up_pressed = false,
             .page_down_pressed = false,
+            .scroll_delta = 0,
+            .scroll_consumed = false,
             .int_edit_buf = undefined,
             .int_edit_len = 0,
             .int_edit_id = 0,
@@ -274,6 +281,8 @@ pub const UiContext = struct {
         if (self.keyboard.pressed(.delete)) self.delete_count += 1;
         if (self.keyboard.pressed(.page_up)) self.page_up_pressed = true;
         if (self.keyboard.pressed(.page_down)) self.page_down_pressed = true;
+
+        self.scroll_delta += self.mouse.scroll().y;
     }
 
     // ----------------------------------------------------------
@@ -306,6 +315,8 @@ pub const UiContext = struct {
         self.delete_count = 0;
         self.page_up_pressed = false;
         self.page_down_pressed = false;
+        self.scroll_delta = 0;
+        self.scroll_consumed = false;
         self.left_pressed = false;
         self.left_released = false;
     }
@@ -530,6 +541,20 @@ pub const UiContext = struct {
         const visible_h = win.content_rect.height();
         const max_scroll = @max(0.0, state.content_height - visible_h);
         state.scroll_y = std.math.clamp(state.scroll_y, 0.0, max_scroll);
+
+        if (max_scroll > 0.0 and !self.scroll_consumed and self.scroll_delta != 0.0) {
+            const rect = win.rect;
+            const mp = self.mouse_pos;
+            if (mp.x >= rect.l and mp.x < rect.r and mp.y >= rect.t and mp.y < rect.b) {
+                const line_h: f32 = if (self.text.atlas) |a| @floatFromInt(a.maxY) else 16;
+                state.scroll_y = std.math.clamp(
+                    state.scroll_y - self.scroll_delta * line_h * 3.0,
+                    0.0,
+                    max_scroll,
+                );
+                self.scroll_consumed = true;
+            }
+        }
 
         self.shapes.flush();
         self.images.flush();
@@ -854,6 +879,16 @@ pub const UiContext = struct {
                 scroll.* -= 1;
             } else if (self.page_down_pressed and scroll.* < max_scroll) {
                 scroll.* += 1;
+            }
+            if (scrollable and self.scroll_delta != 0) {
+                if (self.scroll_delta > 0 and scroll.* > 0) {
+                    const steps = @max(1, @as(usize, @intFromFloat(self.scroll_delta)));
+                    scroll.* -= @min(scroll.*, steps);
+                } else if (self.scroll_delta < 0 and scroll.* < max_scroll) {
+                    const steps = @max(1, @as(usize, @intFromFloat(-self.scroll_delta)));
+                    scroll.* = @min(max_scroll, scroll.* + steps);
+                }
+                self.scroll_consumed = true;
             }
         }
 
@@ -1184,17 +1219,28 @@ pub const UiContext = struct {
         const sb_rect = RectF{ .l = rect.r - sb_w, .t = rect.t, .r = rect.r, .b = rect.b };
         const text_r = if (scrollable) rect.r - sb_w - 2.0 else rect.r;
 
-        // Hit-test the text body for page-up/down
+        // Hit-test the text body for page-up/down and mouse wheel
         const body_rect = RectF{ .l = rect.l, .t = rect.t, .r = text_r, .b = rect.b };
-        _ = self.testHot(uid, body_rect);
+        const over_body = self.testHot(uid, body_rect);
 
-        if (self.hot_id == uid) {
+        if (over_body) {
             if (self.page_up_pressed and scroll.* > 0) {
                 scroll.* -= 1;
             } else if (self.page_down_pressed) {
                 if (scroll.* + lines_visible < lines.len) {
                     scroll.* += 1;
                 }
+            }
+            if (scrollable and self.scroll_delta != 0) {
+                const max_scroll_ta = lines.len - lines_visible;
+                if (self.scroll_delta > 0 and scroll.* > 0) {
+                    const steps = @max(1, @as(usize, @intFromFloat(self.scroll_delta)));
+                    scroll.* -= @min(scroll.*, steps);
+                } else if (self.scroll_delta < 0) {
+                    const steps = @max(1, @as(usize, @intFromFloat(-self.scroll_delta)));
+                    scroll.* = @min(max_scroll_ta, scroll.* + steps);
+                }
+                self.scroll_consumed = true;
             }
         }
 
