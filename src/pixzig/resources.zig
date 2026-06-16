@@ -209,7 +209,7 @@ pub const ResourceManager = struct {
         defer self.alloc.free(nt_file_path);
 
         // Try to load an image
-        var image = try stbi.Image.loadFromFile(nt_file_path, 0);
+        var image = try stbi.Image.loadFromFile(nt_file_path, 4);
         defer image.deinit();
 
         std.log.info("Loaded image '{s}', width={}, height={}\n", .{ name, image.width, image.height });
