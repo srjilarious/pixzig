@@ -188,6 +188,24 @@ pub const UiContext = struct {
     int_edit_id: u64,
     int_edit_replace: bool,
 
+    /// Cursor position within the focused text/int input buffer.
+    /// Shared between inputText and inputInt; reset when focus changes.
+    edit_cursor_id: u64,
+    edit_cursor_pos: usize,
+
+    /// Number of left/right arrow key presses accumulated this frame.
+    left_arrow_count: usize,
+    right_arrow_count: usize,
+    /// Whether Tab was pressed this frame (forward) or shift+Tab (backward).
+    tab_pressed: bool,
+    tab_backward: bool,
+    /// Whether Enter (or keypad enter) was pressed this frame.
+    enter_pressed: bool,
+
+    /// Ordered list of focusable widget IDs registered this frame (for Tab cycling).
+    tab_focus_order: [64]u64,
+    tab_focus_count: usize,
+
     // ----------------------------------------------------------
     // Mouse state snapshotted by update()
     // ----------------------------------------------------------
@@ -241,6 +259,15 @@ pub const UiContext = struct {
             .int_edit_len = 0,
             .int_edit_id = 0,
             .int_edit_replace = false,
+            .edit_cursor_id = 0,
+            .edit_cursor_pos = 0,
+            .left_arrow_count = 0,
+            .right_arrow_count = 0,
+            .tab_pressed = false,
+            .tab_backward = false,
+            .enter_pressed = false,
+            .tab_focus_order = undefined,
+            .tab_focus_count = 0,
             .mouse_pos = .{ .x = 0, .y = 0 },
             .left_pressed = false,
             .left_released = false,
@@ -281,6 +308,16 @@ pub const UiContext = struct {
         if (self.keyboard.pressed(.delete)) self.delete_count += 1;
         if (self.keyboard.pressed(.page_up)) self.page_up_pressed = true;
         if (self.keyboard.pressed(.page_down)) self.page_down_pressed = true;
+        if (self.keyboard.pressed(.left)) self.left_arrow_count += 1;
+        if (self.keyboard.pressed(.right)) self.right_arrow_count += 1;
+        if (self.keyboard.pressed(.tab)) {
+            if (self.keyboard.currKeys().shift()) {
+                self.tab_backward = true;
+            } else {
+                self.tab_pressed = true;
+            }
+        }
+        if (self.keyboard.pressed(.enter) or self.keyboard.pressed(.kp_enter)) self.enter_pressed = true;
 
         self.scroll_delta += self.mouse.scroll().y;
     }
@@ -295,6 +332,7 @@ pub const UiContext = struct {
         self.sprites.flush();
         self.hot_id = 0;
         self.frame +%= 1;
+        self.tab_focus_count = 0;
     }
 
     /// Call at the end of each render frame after all widgets.
@@ -309,12 +347,31 @@ pub const UiContext = struct {
             self.active_id = 0;
         }
 
+        // Tab focus cycling
+        if ((self.tab_pressed or self.tab_backward) and self.tab_focus_count > 0) {
+            var found: ?usize = null;
+            for (self.tab_focus_order[0..self.tab_focus_count], 0..) |id, i| {
+                if (id == self.focus_id) { found = i; break; }
+            }
+            const n = self.tab_focus_count;
+            const next_idx = if (self.tab_backward)
+                if (found) |i| (i + n - 1) % n else n - 1
+            else
+                if (found) |i| (i + 1) % n else 0;
+            self.focus_id = self.tab_focus_order[next_idx];
+        }
+
         // Clear accumulated input for next frame
         self.text_input_len = 0;
         self.backspace_count = 0;
         self.delete_count = 0;
         self.page_up_pressed = false;
         self.page_down_pressed = false;
+        self.left_arrow_count = 0;
+        self.right_arrow_count = 0;
+        self.tab_pressed = false;
+        self.tab_backward = false;
+        self.enter_pressed = false;
         self.scroll_delta = 0;
         self.scroll_consumed = false;
         self.left_pressed = false;
@@ -685,6 +742,13 @@ pub const UiContext = struct {
         return h;
     }
 
+    fn registerFocusable(self: *UiContext, uid: u64) void {
+        if (self.tab_focus_count < self.tab_focus_order.len) {
+            self.tab_focus_order[self.tab_focus_count] = uid;
+            self.tab_focus_count += 1;
+        }
+    }
+
     // ----------------------------------------------------------
     // Mouse hit test — uses the position snapshotted in update()
     // ----------------------------------------------------------
@@ -755,6 +819,8 @@ pub const UiContext = struct {
         const w: f32 = self.contentWidth();
         const rect = self.allocWidget(w, h);
 
+        self.registerFocusable(uid);
+
         var state = ButtonState.normal;
         var clicked = false;
 
@@ -773,6 +839,10 @@ pub const UiContext = struct {
                 }
             } else if (over) {
                 state = .hover;
+            }
+            // Enter key fires the focused button
+            if (self.focus_id == uid and self.enter_pressed) {
+                clicked = true;
             }
         }
 
@@ -959,6 +1029,7 @@ pub const UiContext = struct {
         const h: f32 = @floatFromInt(s.input_height);
         const rect = self.allocWidget(self.contentWidth(), h);
         const over = self.testHot(uid, rect);
+        self.registerFocusable(uid);
         var changed = false;
 
         if (over and self.left_pressed) {
@@ -1016,6 +1087,8 @@ pub const UiContext = struct {
         const w: f32 = self.contentWidth();
         const rect = self.allocWidget(w, h);
 
+        self.registerFocusable(uid);
+
         var changed = false;
 
         // Click to focus
@@ -1027,28 +1100,57 @@ pub const UiContext = struct {
         const focused = self.focus_id == uid;
 
         if (focused) {
-            // Consume accumulated typed characters
+            // Initialize cursor when this widget first gains focus
+            if (self.edit_cursor_id != uid) {
+                self.edit_cursor_id = uid;
+                self.edit_cursor_pos = len.*;
+            }
+
+            // Move cursor with arrow keys
+            var la = self.left_arrow_count;
+            while (la > 0) : (la -= 1) {
+                if (self.edit_cursor_pos > 0) self.edit_cursor_pos -= 1;
+            }
+            var ra = self.right_arrow_count;
+            while (ra > 0) : (ra -= 1) {
+                if (self.edit_cursor_pos < len.*) self.edit_cursor_pos += 1;
+            }
+
+            // Insert typed characters at cursor position
             for (self.text_input[0..self.text_input_len]) |c| {
                 if (len.* < buf.len - 1) {
-                    buf[len.*] = c;
+                    var i = len.*;
+                    while (i > self.edit_cursor_pos) : (i -= 1) buf[i] = buf[i - 1];
+                    buf[self.edit_cursor_pos] = c;
                     len.* += 1;
+                    self.edit_cursor_pos += 1;
                     changed = true;
                 }
             }
-            // Consume accumulated backspaces
+
+            // Backspace: delete character before cursor
             var bs = self.backspace_count;
-            while (bs > 0 and len.* > 0) : (bs -= 1) {
+            while (bs > 0 and self.edit_cursor_pos > 0) : (bs -= 1) {
+                var i = self.edit_cursor_pos - 1;
+                while (i < len.* - 1) : (i += 1) buf[i] = buf[i + 1];
                 len.* -= 1;
                 buf[len.*] = 0;
+                self.edit_cursor_pos -= 1;
                 changed = true;
             }
-            // Consume accumulated deletes (treat as backspace from end)
+
+            // Delete: delete character at cursor
             var del = self.delete_count;
-            while (del > 0 and len.* > 0) : (del -= 1) {
+            while (del > 0 and self.edit_cursor_pos < len.*) : (del -= 1) {
+                var i = self.edit_cursor_pos;
+                while (i < len.* - 1) : (i += 1) buf[i] = buf[i + 1];
                 len.* -= 1;
                 buf[len.*] = 0;
                 changed = true;
             }
+
+            // Clamp cursor in case buffer shrank externally
+            if (self.edit_cursor_pos > len.*) self.edit_cursor_pos = len.*;
         }
 
         // Draw background + border
@@ -1056,8 +1158,6 @@ pub const UiContext = struct {
         const border_col = if (focused) s.input_border_focused else if (over) s.input_border_hover else s.input_border;
         self.shapes.drawEnclosingRect(rect, border_col, 1);
 
-        // Draw text clipped to the inner content rect so long strings don't
-        // overflow the box border.
         const pad_x: f32 = @floatFromInt(s.padding.x);
         const line_h: f32 = if (self.text.atlas) |a| @floatFromInt(a.maxY) else 16;
         const ty: i32 = @intFromFloat(rect.t + (h - line_h) / 2.0);
@@ -1067,11 +1167,12 @@ pub const UiContext = struct {
             .y = ty,
         }, text_clip);
 
-        // Blinking cursor
+        // Blinking cursor at edit_cursor_pos
         if (focused) {
             const blink_on = (self.frame / 30) % 2 == 0;
             if (blink_on) {
-                const pre_sz = self.text.measureString(buf[0..len.*]);
+                const cursor_pos = if (self.edit_cursor_id == uid) self.edit_cursor_pos else len.*;
+                const pre_sz = self.text.measureString(buf[0..cursor_pos]);
                 const cx: f32 = rect.l + pad_x + @as(f32, @floatFromInt(pre_sz.x));
                 const cy: f32 = rect.t + (h - line_h) / 2.0;
                 self.shapes.drawFilledRect(RectF{
@@ -1095,16 +1196,20 @@ pub const UiContext = struct {
         self.int_edit_len = str.len;
         self.int_edit_id = uid;
         self.int_edit_replace = true;
+        self.edit_cursor_id = uid;
+        self.edit_cursor_pos = str.len;
     }
 
     /// Signed integer input. Typing after focus replaces the current value;
-    /// backspace edits the existing value from its end.
+    /// backspace/delete and arrow keys edit with cursor support.
     pub fn inputInt(self: *UiContext, id: []const u8, value: *i32) bool {
         const s = &self.style;
         const uid = hashId(id);
         const h: f32 = @floatFromInt(s.input_height);
         const rect = self.allocWidget(self.contentWidth(), h);
         const over = self.testHot(uid, rect);
+
+        self.registerFocusable(uid);
 
         if (over and self.left_pressed) {
             if (self.focus_id != uid or self.int_edit_id != uid) {
@@ -1118,6 +1223,12 @@ pub const UiContext = struct {
             self.beginIntEdit(uid, value.*);
         }
 
+        // Sync cursor if focus just arrived (from tab or external set)
+        if (focused and self.edit_cursor_id != uid) {
+            self.edit_cursor_id = uid;
+            self.edit_cursor_pos = self.int_edit_len;
+        }
+
         var changed = false;
         if (focused) {
             for (self.text_input[0..self.text_input_len]) |c| {
@@ -1127,17 +1238,51 @@ pub const UiContext = struct {
                 if (self.int_edit_replace) {
                     self.int_edit_len = 0;
                     self.int_edit_replace = false;
+                    self.edit_cursor_pos = 0;
                 }
+                // '-' only allowed at position 0
                 if (c == '-' and self.int_edit_len != 0) continue;
                 if (self.int_edit_len < self.int_edit_buf.len) {
-                    self.int_edit_buf[self.int_edit_len] = c;
+                    var i = self.int_edit_len;
+                    while (i > self.edit_cursor_pos) : (i -= 1) {
+                        self.int_edit_buf[i] = self.int_edit_buf[i - 1];
+                    }
+                    self.int_edit_buf[self.edit_cursor_pos] = c;
                     self.int_edit_len += 1;
+                    self.edit_cursor_pos += 1;
                 }
             }
 
-            var remove_count = self.backspace_count + self.delete_count;
-            if (remove_count > 0) self.int_edit_replace = false;
-            while (remove_count > 0 and self.int_edit_len > 0) : (remove_count -= 1) {
+            if (self.backspace_count + self.delete_count > 0) self.int_edit_replace = false;
+
+            // Arrow keys (only meaningful once out of replace mode)
+            var la = self.left_arrow_count;
+            while (la > 0) : (la -= 1) {
+                if (self.edit_cursor_pos > 0) self.edit_cursor_pos -= 1;
+            }
+            var ra = self.right_arrow_count;
+            while (ra > 0) : (ra -= 1) {
+                if (self.edit_cursor_pos < self.int_edit_len) self.edit_cursor_pos += 1;
+            }
+
+            // Backspace: delete character before cursor
+            var bs = self.backspace_count;
+            while (bs > 0 and self.edit_cursor_pos > 0) : (bs -= 1) {
+                var i = self.edit_cursor_pos - 1;
+                while (i < self.int_edit_len - 1) : (i += 1) {
+                    self.int_edit_buf[i] = self.int_edit_buf[i + 1];
+                }
+                self.int_edit_len -= 1;
+                self.edit_cursor_pos -= 1;
+            }
+
+            // Delete: delete character at cursor
+            var del = self.delete_count;
+            while (del > 0 and self.edit_cursor_pos < self.int_edit_len) : (del -= 1) {
+                var i = self.edit_cursor_pos;
+                while (i < self.int_edit_len - 1) : (i += 1) {
+                    self.int_edit_buf[i] = self.int_edit_buf[i + 1];
+                }
                 self.int_edit_len -= 1;
             }
 
@@ -1171,8 +1316,10 @@ pub const UiContext = struct {
             .y = ty,
         }, text_clip);
 
+        // Blinking cursor at edit_cursor_pos
         if (focused and (self.frame / 30) % 2 == 0) {
-            const pre_sz = self.text.measureString(value_str);
+            const cursor_pos = if (self.edit_cursor_id == uid) self.edit_cursor_pos else self.int_edit_len;
+            const pre_sz = self.text.measureString(value_str[0..cursor_pos]);
             const cx: f32 = rect.l + pad_x + @as(f32, @floatFromInt(pre_sz.x));
             const cy: f32 = rect.t + (h - line_h) / 2.0;
             self.shapes.drawFilledRect(RectF{
@@ -1330,6 +1477,7 @@ pub const UiContext = struct {
         const track_range = track_r - track_l;
         const val_range = max_val - min_val;
 
+        self.registerFocusable(uid);
         const over = self.testHot(uid, rect);
 
         if (over and self.left_pressed) {
