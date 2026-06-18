@@ -261,6 +261,26 @@ pub const Keyboard = struct {
         return self.currKeys().down(key);
     }
 
+    /// Returns whether a shift key is currently down.
+    pub fn shift(self: *const Keyboard) bool {
+        return self.currKeys().shift();
+    }
+
+    /// Returns whether a ctrl key is currently down.
+    pub fn ctrl(self: *const Keyboard) bool {
+        return self.currKeys().ctrl();
+    }
+
+    /// Returns whether an alt key is currently down.
+    pub fn alt(self: *const Keyboard) bool {
+        return self.currKeys().alt();
+    }
+
+    /// Returns whether a super (win) key is currently down.
+    pub fn super(self: *const Keyboard) bool {
+        return self.currKeys().super();
+    }
+
     /// Returns true if the provided key was pressed in the current frame
     /// (i.e., it is down in the current state but was up in the previous state).
     pub fn pressed(self: *const Keyboard, key: glfw.Key) bool {
@@ -282,7 +302,7 @@ pub const Keyboard = struct {
     /// appends it to the buffer. It returns the number of characters written
     /// to the buffer. This can be used to capture text input from the keyboard.
     pub fn text(self: *Keyboard, buf: []u8) usize {
-        const shiftDown = self.currKeys().shift();
+        const shiftDown = self.shift();
         var bufIdx: usize = 0;
 
         const enumTypeInfo = @typeInfo(glfw.Key).@"enum";

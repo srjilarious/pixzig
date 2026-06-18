@@ -22,6 +22,7 @@
 //!   self.ui.end();
 
 const std = @import("std");
+const glfw = @import("zglfw");
 const gl = @import("zopengl").bindings;
 const TextRenderer = @import("./renderer/text.zig").TextRenderer;
 const ShapeBatchQueue = @import("./renderer/shape.zig").ShapeBatchQueue;
@@ -114,6 +115,24 @@ pub const ButtonResult = struct {
 
 pub const WindowSide = enum { left, right, up, down };
 
+pub const InputTextOptions = struct {
+    submit_on_enter: bool = false,
+    clipboard: bool = true,
+    clear_on_ctrl_l: bool = true,
+    history_keys: bool = false,
+};
+
+pub const InputTextResult = struct {
+    changed: bool = false,
+    submitted: bool = false,
+    focused: bool = false,
+    history_prev: bool = false,
+    history_next: bool = false,
+    copied: bool = false,
+    pasted: bool = false,
+    cleared: bool = false,
+};
+
 // ============================================================
 // Internal per-window layout state
 // ============================================================
@@ -155,6 +174,7 @@ pub const UiContext = struct {
     images: *SpriteBatchQueue,
     shapes: *ShapeBatchQueue,
     text: *TextRenderer,
+    clipboard_window: ?*glfw.Window,
     style: Style,
 
     win_stack: [8]WindowCtx,
@@ -196,6 +216,16 @@ pub const UiContext = struct {
     /// Number of left/right arrow key presses accumulated this frame.
     left_arrow_count: usize,
     right_arrow_count: usize,
+    /// Number of up/down arrow key presses accumulated this frame.
+    up_arrow_count: usize,
+    down_arrow_count: usize,
+    /// Home/end movement for focused text editors.
+    home_pressed: bool,
+    end_pressed: bool,
+    /// Common text editing shortcuts accumulated this frame.
+    ctrl_c_pressed: bool,
+    ctrl_v_pressed: bool,
+    ctrl_l_pressed: bool,
     /// Whether Tab was pressed this frame (forward) or shift+Tab (backward).
     tab_pressed: bool,
     tab_backward: bool,
@@ -243,6 +273,7 @@ pub const UiContext = struct {
             .images = images,
             .shapes = shapes,
             .text = text,
+            .clipboard_window = null,
             .style = Style{},
             .win_stack = undefined,
             .win_depth = 0,
@@ -263,6 +294,13 @@ pub const UiContext = struct {
             .edit_cursor_pos = 0,
             .left_arrow_count = 0,
             .right_arrow_count = 0,
+            .up_arrow_count = 0,
+            .down_arrow_count = 0,
+            .home_pressed = false,
+            .end_pressed = false,
+            .ctrl_c_pressed = false,
+            .ctrl_v_pressed = false,
+            .ctrl_l_pressed = false,
             .tab_pressed = false,
             .tab_backward = false,
             .enter_pressed = false,
@@ -276,6 +314,12 @@ pub const UiContext = struct {
             .window_resize_start_mouse = .{ .x = 0, .y = 0 },
             .window_resize_start_size = .{ .x = 0, .y = 0 },
         };
+    }
+
+    /// Enables clipboard shortcuts for text inputs. Without this, Ctrl+C and
+    /// Ctrl+V are reported but cannot touch the OS clipboard.
+    pub fn setClipboardWindow(self: *UiContext, window: *glfw.Window) void {
+        self.clipboard_window = window;
     }
 
     // ----------------------------------------------------------
@@ -293,13 +337,20 @@ pub const UiContext = struct {
         if (self.mouse.pressed(.left)) self.left_pressed = true;
         if (self.mouse.released(.left)) self.left_released = true;
 
-        // Accumulate typed characters
-        var buf: [8]u8 = undefined;
-        const n = self.keyboard.text(&buf);
-        for (buf[0..n]) |c| {
-            if (self.text_input_len < self.text_input.len) {
-                self.text_input[self.text_input_len] = c;
-                self.text_input_len += 1;
+        const ctrl_down = self.keyboard.ctrl();
+        const alt_down = self.keyboard.alt();
+        const super_down = self.keyboard.super();
+
+        // Accumulate typed characters. Modified key chords are handled below
+        // as commands, so they should not also type their letter.
+        if (!ctrl_down and !alt_down and !super_down) {
+            var buf: [8]u8 = undefined;
+            const n = self.keyboard.text(&buf);
+            for (buf[0..n]) |c| {
+                if (self.text_input_len < self.text_input.len) {
+                    self.text_input[self.text_input_len] = c;
+                    self.text_input_len += 1;
+                }
             }
         }
 
@@ -310,8 +361,15 @@ pub const UiContext = struct {
         if (self.keyboard.pressed(.page_down)) self.page_down_pressed = true;
         if (self.keyboard.pressed(.left)) self.left_arrow_count += 1;
         if (self.keyboard.pressed(.right)) self.right_arrow_count += 1;
+        if (self.keyboard.pressed(.up)) self.up_arrow_count += 1;
+        if (self.keyboard.pressed(.down)) self.down_arrow_count += 1;
+        if (self.keyboard.pressed(.home)) self.home_pressed = true;
+        if (self.keyboard.pressed(.end)) self.end_pressed = true;
+        if (ctrl_down and self.keyboard.pressed(.c)) self.ctrl_c_pressed = true;
+        if (ctrl_down and self.keyboard.pressed(.v)) self.ctrl_v_pressed = true;
+        if (ctrl_down and self.keyboard.pressed(.l)) self.ctrl_l_pressed = true;
         if (self.keyboard.pressed(.tab)) {
-            if (self.keyboard.currKeys().shift()) {
+            if (self.keyboard.shift()) {
                 self.tab_backward = true;
             } else {
                 self.tab_pressed = true;
@@ -351,13 +409,15 @@ pub const UiContext = struct {
         if ((self.tab_pressed or self.tab_backward) and self.tab_focus_count > 0) {
             var found: ?usize = null;
             for (self.tab_focus_order[0..self.tab_focus_count], 0..) |id, i| {
-                if (id == self.focus_id) { found = i; break; }
+                if (id == self.focus_id) {
+                    found = i;
+                    break;
+                }
             }
             const n = self.tab_focus_count;
             const next_idx = if (self.tab_backward)
                 if (found) |i| (i + n - 1) % n else n - 1
-            else
-                if (found) |i| (i + 1) % n else 0;
+            else if (found) |i| (i + 1) % n else 0;
             self.focus_id = self.tab_focus_order[next_idx];
         }
 
@@ -369,6 +429,13 @@ pub const UiContext = struct {
         self.page_down_pressed = false;
         self.left_arrow_count = 0;
         self.right_arrow_count = 0;
+        self.up_arrow_count = 0;
+        self.down_arrow_count = 0;
+        self.home_pressed = false;
+        self.end_pressed = false;
+        self.ctrl_c_pressed = false;
+        self.ctrl_v_pressed = false;
+        self.ctrl_l_pressed = false;
         self.tab_pressed = false;
         self.tab_backward = false;
         self.enter_pressed = false;
@@ -1069,6 +1136,48 @@ pub const UiContext = struct {
         return self.checkbox(id, lbl, value);
     }
 
+    /// Give keyboard focus to a widget by ID.
+    pub fn focusWidget(self: *UiContext, id: []const u8) void {
+        self.focus_id = hashId(id);
+    }
+
+    /// Returns true when a widget has keyboard focus.
+    pub fn widgetFocused(self: *const UiContext, id: []const u8) bool {
+        return self.focus_id == hashId(id);
+    }
+
+    /// Sets the cursor for a focused text input. Useful after replacing an
+    /// input buffer from caller-owned command history.
+    pub fn setInputCursor(self: *UiContext, id: []const u8, pos: usize) void {
+        const uid = hashId(id);
+        self.edit_cursor_id = uid;
+        self.edit_cursor_pos = pos;
+    }
+
+    fn insertTextAtCursor(self: *UiContext, uid: u64, buf: []u8, len: *usize, text_to_insert: []const u8) bool {
+        if (buf.len == 0) return false;
+        if (self.edit_cursor_id != uid) {
+            self.edit_cursor_id = uid;
+            self.edit_cursor_pos = len.*;
+        }
+
+        const capacity = buf.len - 1;
+        if (len.* >= capacity) return false;
+
+        const insert_len = @min(text_to_insert.len, capacity - len.*);
+        if (insert_len == 0) return false;
+
+        var i = len.*;
+        while (i > self.edit_cursor_pos) : (i -= 1) {
+            buf[i + insert_len - 1] = buf[i - 1];
+        }
+        @memcpy(buf[self.edit_cursor_pos .. self.edit_cursor_pos + insert_len], text_to_insert[0..insert_len]);
+        len.* += insert_len;
+        self.edit_cursor_pos += insert_len;
+        buf[len.*] = 0;
+        return true;
+    }
+
     // ----------------------------------------------------------
     // inputText
     // ----------------------------------------------------------
@@ -1081,6 +1190,17 @@ pub const UiContext = struct {
         buf: []u8,
         len: *usize,
     ) bool {
+        return self.inputTextEx(id, buf, len, .{}).changed;
+    }
+
+    /// Single-line text input with submit, clipboard, and history-key reporting.
+    pub fn inputTextEx(
+        self: *UiContext,
+        id: []const u8,
+        buf: []u8,
+        len: *usize,
+        opts: InputTextOptions,
+    ) InputTextResult {
         const s = &self.style;
         const uid = hashId(id);
         const h: f32 = @floatFromInt(s.input_height);
@@ -1089,7 +1209,7 @@ pub const UiContext = struct {
 
         self.registerFocusable(uid);
 
-        var changed = false;
+        var result = InputTextResult{};
 
         // Click to focus
         const over = self.testHot(uid, rect);
@@ -1098,12 +1218,57 @@ pub const UiContext = struct {
         }
 
         const focused = self.focus_id == uid;
+        result.focused = focused;
 
         if (focused) {
             // Initialize cursor when this widget first gains focus
             if (self.edit_cursor_id != uid) {
                 self.edit_cursor_id = uid;
                 self.edit_cursor_pos = len.*;
+            }
+
+            if (len.* >= buf.len) len.* = if (buf.len > 0) buf.len - 1 else 0;
+            if (self.edit_cursor_pos > len.*) self.edit_cursor_pos = len.*;
+
+            if (opts.submit_on_enter and self.enter_pressed) {
+                result.submitted = true;
+            }
+
+            if (opts.history_keys) {
+                result.history_prev = self.up_arrow_count > 0;
+                result.history_next = self.down_arrow_count > 0;
+            }
+
+            if (self.home_pressed) self.edit_cursor_pos = 0;
+            if (self.end_pressed) self.edit_cursor_pos = len.*;
+
+            if (opts.clipboard and self.ctrl_c_pressed) {
+                if (self.clipboard_window) |win| {
+                    if (buf.len > 0) {
+                        buf[len.*] = 0;
+                        win.setClipboardString(buf[0..len.* :0]);
+                    }
+                }
+                result.copied = true;
+            }
+
+            if (opts.clear_on_ctrl_l and self.ctrl_l_pressed) {
+                if (buf.len > 0) buf[0] = 0;
+                result.changed = result.changed or len.* > 0;
+                result.cleared = true;
+                len.* = 0;
+                self.edit_cursor_pos = 0;
+            }
+
+            if (opts.clipboard and self.ctrl_v_pressed) {
+                if (self.clipboard_window) |win| {
+                    if (win.getClipboardString()) |clip| {
+                        if (self.insertTextAtCursor(uid, buf, len, clip)) {
+                            result.changed = true;
+                            result.pasted = true;
+                        }
+                    }
+                }
             }
 
             // Move cursor with arrow keys
@@ -1118,14 +1283,7 @@ pub const UiContext = struct {
 
             // Insert typed characters at cursor position
             for (self.text_input[0..self.text_input_len]) |c| {
-                if (len.* < buf.len - 1) {
-                    var i = len.*;
-                    while (i > self.edit_cursor_pos) : (i -= 1) buf[i] = buf[i - 1];
-                    buf[self.edit_cursor_pos] = c;
-                    len.* += 1;
-                    self.edit_cursor_pos += 1;
-                    changed = true;
-                }
+                if (self.insertTextAtCursor(uid, buf, len, (&[_]u8{c})[0..])) result.changed = true;
             }
 
             // Backspace: delete character before cursor
@@ -1136,7 +1294,7 @@ pub const UiContext = struct {
                 len.* -= 1;
                 buf[len.*] = 0;
                 self.edit_cursor_pos -= 1;
-                changed = true;
+                result.changed = true;
             }
 
             // Delete: delete character at cursor
@@ -1146,7 +1304,7 @@ pub const UiContext = struct {
                 while (i < len.* - 1) : (i += 1) buf[i] = buf[i + 1];
                 len.* -= 1;
                 buf[len.*] = 0;
-                changed = true;
+                result.changed = true;
             }
 
             // Clamp cursor in case buffer shrank externally
@@ -1184,7 +1342,7 @@ pub const UiContext = struct {
             }
         }
 
-        return changed;
+        return result;
     }
 
     // ----------------------------------------------------------

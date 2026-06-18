@@ -104,6 +104,7 @@ pub const App = struct {
             "imgui_preview",
             RectF.fromCoords(32, 32, 32, 32, 512, 512),
         );
+        app.ui.setClipboardWindow(eng.window);
 
         try app.addLog("GUI test started. Type something and press Submit.");
         try app.addLog("Hover/click buttons to see state changes.");
@@ -113,7 +114,12 @@ pub const App = struct {
 
     fn addLog(self: *App, msg: []const u8) !void {
         const copy = try self.alloc.dupe(u8, msg);
-        try self.log.append(self.alloc, copy);
+        errdefer self.alloc.free(copy);
+        try self.appendLog(copy);
+    }
+
+    fn appendLog(self: *App, msg: []const u8) !void {
+        try self.log.append(self.alloc, msg);
         // Keep scroll at the bottom
         if (self.log.items.len > 5) {
             self.log_scroll = self.log.items.len - 5;
@@ -145,12 +151,15 @@ pub const App = struct {
 
         // --- Labels ---
         self.ui.label("Text input:");
-        _ = self.ui.inputText("name_input", &self.input_buf, &self.input_len);
+        const input_res = self.ui.inputTextEx("name_input", &self.input_buf, &self.input_len, .{
+            .submit_on_enter = true,
+        });
 
         self.ui.spacing();
 
         // --- Submit button (enabled) ---
-        if (self.ui.button("submit_btn", "Submit")) {
+        const submit_clicked = self.ui.button("submit_btn", "Submit");
+        if (input_res.submitted or submit_clicked) {
             const text = self.input_buf[0..self.input_len];
             if (text.len > 0) {
                 const msg = std.fmt.allocPrint(
@@ -158,7 +167,7 @@ pub const App = struct {
                     "Submitted: {s}",
                     .{text},
                 ) catch "Submitted!";
-                self.addLog(msg) catch {};
+                self.appendLog(msg) catch {};
                 @memset(&self.input_buf, 0);
                 self.input_len = 0;
                 self.click_count += 1;
