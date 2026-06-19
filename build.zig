@@ -152,6 +152,13 @@ pub fn build(b: *std.Build) void {
             },
         },
         .{
+            .name = "console_ex",
+            .path = "examples/console_ex.zig",
+            .assets = &.{
+                "Roboto-Medium.ttf",
+            },
+        },
+        .{
             .name = "imgui_ex",
             .path = "examples/imgui_ex.zig",
             .assets = &.{
