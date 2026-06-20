@@ -13,6 +13,10 @@
 //!   self.ui.label("Hello!");
 //!   self.ui.image(texture, .{ .x = 64, .y = 64 });
 //!   if (self.ui.button("btn1", "Click Me")) { ... }
+//!   // Side-by-side buttons using sameLine():
+//!   _ = self.ui.buttonSized("ok", "OK", self.ui.contentWidth() / 2.0 - 2);
+//!   self.ui.sameLine();
+//!   if (self.ui.buttonSized("cancel", "Cancel", self.ui.contentWidth() / 2.0 - 2)) { ... }
 //!   _ = self.ui.inputText("input1", &buf, &buf_len);
 //!   _ = self.ui.inputInt("frame_ms", &frame_ms);
 //!   _ = self.ui.checkbox("loop", "Loop", &loop);
@@ -772,7 +776,7 @@ pub const UiContext = struct {
         win.content_y += @as(f32, @floatFromInt(self.style.item_spacing)) * 2.0;
     }
 
-    fn contentWidth(self: *UiContext) f32 {
+    pub fn contentWidth(self: *UiContext) f32 {
         const win = self.curWin();
         return win.content_rect.width();
     }
@@ -871,6 +875,69 @@ pub const UiContext = struct {
     /// Draw a button. Returns true if clicked this frame.
     pub fn button(self: *UiContext, id: []const u8, lbl: []const u8) bool {
         return self.buttonEx(id, lbl, false).clicked;
+    }
+
+    /// Draw a button with an explicit pixel width. Useful with sameLine() to
+    /// place multiple buttons on one row.
+    pub fn buttonSized(self: *UiContext, id: []const u8, lbl: []const u8, width: f32) bool {
+        return self.buttonSizedEx(id, lbl, width, false).clicked;
+    }
+
+    /// Draw a button with explicit width and disabled state.
+    pub fn buttonSizedEx(
+        self: *UiContext,
+        id: []const u8,
+        lbl: []const u8,
+        width: f32,
+        disabled: bool,
+    ) ButtonResult {
+        const s = &self.style;
+        const uid = hashId(id);
+        const h: f32 = @floatFromInt(s.button_height);
+        const rect = self.allocWidget(width, h);
+
+        self.registerFocusable(uid);
+
+        var state = ButtonState.normal;
+        var clicked = false;
+
+        if (disabled) {
+            state = .disabled;
+        } else {
+            const over = self.testHot(uid, rect);
+            if (over and self.left_pressed) {
+                self.active_id = uid;
+                self.focus_id = uid;
+            }
+            if (self.active_id == uid) {
+                state = .pressed;
+                if (over and self.left_released) {
+                    clicked = true;
+                }
+            } else if (over) {
+                state = .hover;
+            }
+            if (self.focus_id == uid and self.enter_pressed) {
+                clicked = true;
+            }
+        }
+
+        const bg = switch (state) {
+            .normal => s.button_normal,
+            .hover => s.button_hover,
+            .pressed => s.button_pressed,
+            .disabled => s.button_disabled,
+        };
+        self.shapes.drawFilledRect(rect, bg);
+        self.shapes.drawEnclosingRect(rect, s.window_border, 1);
+
+        const ts = self.text.measureString(lbl);
+        const line_h: f32 = if (self.text.atlas) |a| @floatFromInt(a.maxY) else 16;
+        const tx: i32 = @intFromFloat(rect.l + (width - @as(f32, @floatFromInt(ts.x))) / 2.0);
+        const ty: i32 = @intFromFloat(rect.t + (h - line_h) / 2.0);
+        _ = self.text.drawString(lbl, .{ .x = tx, .y = ty });
+
+        return .{ .clicked = clicked, .state = state };
     }
 
     /// Draw a button with explicit disabled state.

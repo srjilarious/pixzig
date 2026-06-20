@@ -176,8 +176,11 @@ pub const App = struct {
             }
         }
 
-        // --- Clear log button (same line as counter label) ---
-        if (self.ui.button("clear_btn", "Clear Log")) {
+        // --- Submit + Clear on the same row using sameLine ---
+        const btn_w = (self.ui.contentWidth() - @as(f32, @floatFromInt(self.ui.style.item_spacing))) / 2.0;
+        _ = self.ui.buttonSized("noop_btn", "No-op", btn_w);
+        self.ui.sameLine();
+        if (self.ui.buttonSized("clear_btn", "Clear Log", btn_w)) {
             for (self.log.items) |line| self.alloc.free(line);
             self.log.clearRetainingCapacity();
             self.log_scroll = 0;
