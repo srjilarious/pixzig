@@ -1582,7 +1582,7 @@ pub const UiContext = struct {
         const line_hf: f32 = @floatFromInt(line_h);
         const pad_y: f32 = @floatFromInt(s.padding.y);
         const pad_x: f32 = @floatFromInt(s.padding.x);
-        const usable_h: f32 = area_height - pad_y * 2.0;
+        const usable_h: f32 = @max(0.0, area_height - pad_y * 2.0);
         const lines_visible: usize = @intFromFloat(@floor(usable_h / line_hf));
         const scrollable = lines.len > lines_visible;
 

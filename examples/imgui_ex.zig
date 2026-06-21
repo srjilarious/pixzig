@@ -158,7 +158,10 @@ pub const App = struct {
         self.ui.spacing();
 
         // --- Submit button (enabled) ---
-        const submit_clicked = self.ui.button("submit_btn", "Submit");
+
+        // --- Submit + Clear on the same row using sameLine ---
+        const btn_w = (self.ui.contentWidth() - @as(f32, @floatFromInt(self.ui.style.item_spacing))) / 2.0;
+        const submit_clicked = self.ui.buttonSized("submit_btn", "Submit", btn_w);
         if (input_res.submitted or submit_clicked) {
             const text = self.input_buf[0..self.input_len];
             if (text.len > 0) {
@@ -175,10 +178,6 @@ pub const App = struct {
                 self.addLog("(empty input)") catch {};
             }
         }
-
-        // --- Submit + Clear on the same row using sameLine ---
-        const btn_w = (self.ui.contentWidth() - @as(f32, @floatFromInt(self.ui.style.item_spacing))) / 2.0;
-        _ = self.ui.buttonSized("noop_btn", "No-op", btn_w);
         self.ui.sameLine();
         if (self.ui.buttonSized("clear_btn", "Clear Log", btn_w)) {
             for (self.log.items) |line| self.alloc.free(line);
