@@ -18,6 +18,166 @@ const Color8 = common.Color8;
 const RectF = common.RectF;
 const RectI = common.RectI;
 
+/// A reference-counted, generation-tracked handle to an asset of type `T`.
+/// Handles are owned by a `ManagedResource` and must be obtained via
+/// `acquire`. Holders should call `release` when finished and inspect
+/// `dirty` to decide whether to re-acquire for a newer generation.
+pub fn AssetHandle(comptime T: type) type {
+    return struct {
+        id: u32,
+        generation: u32,
+        refCount: u32,
+        dirty: bool,
+        val: T,
+
+        /// Function signature for a function that frees the underlying resource.
+        pub const FreeFunc = *const fn (T) void;
+    };
+}
+
+pub const TextureHandle = AssetHandle(Texture);
+pub const ShaderHandle = AssetHandle(*Shader);
+
+// pub const SoundHandle = AssetHandler()
+
+/// A pool of refcounted, hot-reloadable assets of type `T`, keyed by a
+/// user-supplied `u32` id. Multiple generations of the same id may coexist:
+/// adding a new version marks any older live version dirty so holders can
+/// notice and re-acquire, while unreferenced older versions are reclaimed
+/// immediately.
+///
+/// Handles returned by `add` / `acquire` are heap-allocated and remain at
+/// stable addresses for their full lifetime, so callers may hold raw
+/// `*AssetHandle(T)` pointers across `add` calls.
+pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type {
+    return struct {
+        res: std.ArrayList(?*HandleType),
+        alloc: std.mem.Allocator,
+        freeFunc: HandleType.FreeFunc,
+        id: u32,
+        gen: u32,
+
+        const Self = @This();
+        pub const HandleType = AssetHandle(T);
+
+        pub fn init(alloc: std.mem.Allocator, id: u32, freeFunc: HandleType.FreeFunc) Self {
+            return .{
+                .res = .empty,
+                .alloc = alloc,
+                .freeFunc = freeFunc,
+                .id = id,
+                .gen = 0,
+            };
+        }
+
+        pub fn deinit(self: *Self) void {
+            for (self.res.items) |hOpt| {
+                if (hOpt) |h| {
+                    if (h.refCount != 0) {
+                        std.log.err("{s}:{}: refCount = {} on deinit", .{ ResourceName, h.id, h.refCount });
+                    }
+                    self.freeFunc(h.val);
+                    self.alloc.destroy(h);
+                }
+            }
+            self.res.deinit(self.alloc);
+        }
+
+        /// Add a new version of the managed resource. Existing versions
+        /// are either marked dirty (if still referenced) or freed
+        /// immediately (if no one holds them).
+        pub fn add(self: *Self, obj: T) !void {
+            for (self.res.items, 0..) |hOpt, i| {
+                if (hOpt) |h| {
+                    if (h.refCount == 0) {
+                        self.freeFunc(h.val);
+                        self.alloc.destroy(h);
+                        self.res.items[i] = null;
+                    } else {
+                        h.dirty = true;
+                    }
+                }
+            }
+
+            self.gen += 1;
+
+            const handle = try self.alloc.create(HandleType);
+            errdefer self.alloc.destroy(handle);
+            handle.* = .{
+                .id = self.id,
+                .generation = self.gen,
+                .refCount = 0,
+                .dirty = false,
+                .val = obj,
+            };
+
+            try self.insertHandle(handle);
+        }
+
+        /// Increment the refCount on the latest live handle for the resource.
+        /// Returns null if nothing is registered under `id`.
+        pub fn acquire(self: *Self) ?*HandleType {
+            const latestHandle = self.latest() orelse return null;
+            latestHandle.refCount += 1;
+            return latestHandle;
+        }
+
+        /// Decrement the refCount. A dirty handle dropping to refCount == 0
+        /// is freed and its slot reclaimed. Clean handles at refCount == 0
+        /// are retained so subsequent `acquire` calls still hit.
+        pub fn release(self: *Self, handle: *HandleType) void {
+            std.debug.assert(handle.refCount > 0);
+            handle.refCount -= 1;
+            if (handle.refCount == 0 and handle.dirty) {
+                self.freeHandle(handle);
+            }
+        }
+
+        /// Latest live handle for the resource without bumping refCount.
+        /// Useful for peeking; prefer `acquire` for anything that outlives
+        /// one frame.
+        pub fn get(self: *Self) ?*HandleType {
+            return self.latest();
+        }
+
+        fn latest(self: *Self) ?*HandleType {
+            var latestHandle: ?*HandleType = null;
+            for (self.res.items) |hOpt| {
+                if (hOpt) |h| {
+                    if (latestHandle == null or h.generation > latestHandle.?.generation) {
+                        latestHandle = h;
+                    }
+                }
+            }
+            return latestHandle;
+        }
+
+        fn insertHandle(self: *Self, handle: *HandleType) !void {
+            for (self.res.items) |*slot| {
+                if (slot.* == null) {
+                    slot.* = handle;
+                    return;
+                }
+            }
+            try self.res.append(self.alloc, handle);
+        }
+
+        fn freeHandle(self: *Self, handle: *HandleType) void {
+            for (self.res.items, 0..) |hOpt, i| {
+                if (hOpt) |h| {
+                    if (h == handle) {
+                        self.freeFunc(h.val);
+                        self.alloc.destroy(h);
+                        self.res.items[i] = null;
+                        return;
+                    }
+                }
+            }
+            unreachable; // handle wasn't owned by this manager
+        }
+    };
+}
+
 /// A structure for managing game resources, particularly rendering ones:
 /// textures, shaders and texture atlases. The resource manager is responsible
 /// for loading and unloading these resources, as well as providing access to
