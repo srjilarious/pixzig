@@ -7,9 +7,14 @@ const FrameSequenceManager = pixzig.sprites.FrameSequenceManager;
 
 fn createDummyTextureManager(alloc: std.mem.Allocator) !ResourceManager {
     var tm = ResourceManager.init(alloc);
-    try tm.atlas.put(try alloc.dupe(u8, "player_right_1"), .{ .texture = 0, .size = .{ .x = 8, .y = 8 }, .src = RectF.fromCoords(0, 0, 8, 8, 128, 128) });
-    try tm.atlas.put(try alloc.dupe(u8, "player_right_2"), .{ .texture = 0, .size = .{ .x = 8, .y = 8 }, .src = RectF.fromCoords(8, 0, 8, 8, 128, 128) });
-    try tm.atlas.put(try alloc.dupe(u8, "player_right_3"), .{ .texture = 0, .size = .{ .x = 8, .y = 8 }, .src = RectF.fromCoords(16, 0, 8, 8, 128, 128) });
+    var parent: pixzig.Texture = .{
+        .texture = 0,
+        .size = .{ .x = 128, .y = 128 },
+        .src = RectF.fromCoords(0, 0, 128, 128, 128, 128),
+    };
+    _ = try tm.addSubTexture(&parent, "player_right_1", RectF.fromCoords(0, 0, 8, 8, 128, 128));
+    _ = try tm.addSubTexture(&parent, "player_right_2", RectF.fromCoords(8, 0, 8, 8, 128, 128));
+    _ = try tm.addSubTexture(&parent, "player_right_3", RectF.fromCoords(16, 0, 8, 8, 128, 128));
     return tm;
 }
 

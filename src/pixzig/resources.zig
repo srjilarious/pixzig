@@ -178,6 +178,12 @@ pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type
     };
 }
 
+/// The atlas stores named, refcounted views over GL textures. A Texture
+/// value itself owns no GL state, so reclaiming a stale view is free.
+pub const TextureAtlasPool = ManagedResource("Texture", Texture);
+
+fn freeTextureNoop(_: Texture) void {}
+
 /// A structure for managing game resources, particularly rendering ones:
 /// textures, shaders and texture atlases. The resource manager is responsible
 /// for loading and unloading these resources, as well as providing access to
@@ -187,8 +193,11 @@ pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type
 pub const ResourceManager = struct {
     textures: std.ArrayList(TextureImage),
     shaders: std.ArrayList(*Shader),
-    atlas: std.StringHashMap(Texture),
+    atlas: std.StringHashMap(*TextureAtlasPool),
     alloc: std.mem.Allocator,
+    /// Monotonic id assigned to each new ManagedResource the manager owns.
+    /// Lookups inside a pool use generations; this id distinguishes pools.
+    gid: u32,
 
     const Self = @This();
 
@@ -197,8 +206,9 @@ pub const ResourceManager = struct {
         return .{
             .textures = .empty,
             .shaders = .empty,
-            .atlas = std.StringHashMap(Texture).init(alloc),
+            .atlas = std.StringHashMap(*TextureAtlasPool).init(alloc),
             .alloc = alloc,
+            .gid = 0,
         };
     }
 
@@ -210,11 +220,12 @@ pub const ResourceManager = struct {
         }
         self.textures.clearAndFree(self.alloc);
 
-        var atlasKeys = self.atlas.keyIterator();
-        while (atlasKeys.next()) |key| {
-            self.alloc.free(key.*);
+        var it = self.atlas.iterator();
+        while (it.next()) |entry| {
+            entry.value_ptr.*.deinit();
+            self.alloc.destroy(entry.value_ptr.*);
+            self.alloc.free(entry.key_ptr.*);
         }
-
         self.atlas.deinit();
 
         for (self.shaders.items) |s| {
@@ -222,6 +233,25 @@ pub const ResourceManager = struct {
             self.alloc.destroy(s);
         }
         self.shaders.deinit(self.alloc);
+    }
+
+    /// Returns the existing atlas pool for `name`, or creates a new empty
+    /// pool (consuming one `gid`) and inserts it. The returned pointer is
+    /// stable across atlas mutations.
+    fn getOrCreateAtlasPool(self: *Self, name: []const u8) !*TextureAtlasPool {
+        if (self.atlas.get(name)) |existing| return existing;
+
+        const keyOwned = try self.alloc.dupe(u8, name);
+        errdefer self.alloc.free(keyOwned);
+
+        const pool = try self.alloc.create(TextureAtlasPool);
+        errdefer self.alloc.destroy(pool);
+
+        pool.* = TextureAtlasPool.init(self.alloc, self.gid, freeTextureNoop);
+        self.gid += 1;
+
+        try self.atlas.put(keyOwned, pool);
+        return pool;
     }
 
     /// Creates a texture from a character buffer, where each character is mapped
@@ -312,7 +342,6 @@ pub const ResourceManager = struct {
         buffer: []u8,
     ) !*Texture {
         const baseName = utils.baseNameFromPath(name);
-        if (self.atlas.contains(baseName)) return error.DuplicateTextureName;
 
         var texture: c_uint = undefined;
         gl.genTextures(1, &texture);
@@ -341,16 +370,14 @@ pub const ResourceManager = struct {
             self.alloc.free(last.name.?);
         }
 
-        const atlasKey = try self.alloc.dupe(u8, baseName);
-        errdefer self.alloc.free(atlasKey);
-
-        try self.atlas.put(atlasKey, .{
+        const pool = try self.getOrCreateAtlasPool(baseName);
+        try pool.add(.{
             .texture = texture,
             .size = .{ .x = @intCast(width), .y = @intCast(height) },
             .src = .{ .t = 0, .l = 0, .b = 1, .r = 1 },
         });
 
-        return self.atlas.getPtr(baseName).?;
+        return &pool.get().?.val;
     }
 
     /// Loads a texture from a file path. The name is the base name of the
@@ -406,12 +433,8 @@ pub const ResourceManager = struct {
         const sz: Vec2I = texImage.size.asVec2I();
         var num: usize = 0;
         for (spack.frames) |frame| {
-            if (self.atlas.contains(frame.name)) return error.DuplicateTextureName;
-
-            const frameKey = try self.alloc.dupe(u8, frame.name);
-            errdefer self.alloc.free(frameKey);
-
-            try self.atlas.put(frameKey, .{
+            const pool = try self.getOrCreateAtlasPool(frame.name);
+            try pool.add(.{
                 .texture = texImage.texture,
                 .size = frame.sizePx,
                 .src = RectF.fromCoords(
@@ -440,11 +463,9 @@ pub const ResourceManager = struct {
         name: []const u8,
         coords: RectF,
     ) !*Texture {
-        if (self.atlas.contains(name)) return error.DuplicateTextureName;
-        const key = try self.alloc.dupe(u8, name);
-        errdefer self.alloc.free(key);
-        try self.atlas.put(key, tex.sub(coords));
-        return self.atlas.getPtr(name).?;
+        const pool = try self.getOrCreateAtlasPool(name);
+        try pool.add(tex.sub(coords));
+        return &pool.get().?.val;
     }
 
     /// Gets a texture by name. Returns an error if no texture with that name
@@ -453,11 +474,9 @@ pub const ResourceManager = struct {
     /// an atlas.  Textures within an atlas are accessed by the name specified
     /// with the json.
     pub fn getTexture(self: *Self, name: []const u8) !*Texture {
-        const tex = self.atlas.getPtr(name);
-        if (tex == null) {
-            return error.NoTextureWithThatName;
-        }
-        return tex.?;
+        const pool = self.atlas.get(name) orelse return error.NoTextureWithThatName;
+        const handle = pool.get() orelse return error.NoTextureWithThatName;
+        return &handle.val;
     }
 
     /// Gets a shader by name. Returns an error if no shader with that name

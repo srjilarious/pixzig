@@ -4,6 +4,9 @@ const pixzig = @import("pixzig");
 
 const ManagedResource = pixzig.resources.ManagedResource;
 const AssetHandle = pixzig.resources.AssetHandle;
+const ResourceManager = pixzig.resources.ResourceManager;
+const Texture = pixzig.Texture;
+const RectF = pixzig.RectF;
 
 // Track which integer values have been freed so tests can assert the
 // underlying resource lifecycle.
@@ -250,4 +253,74 @@ pub fn separatePoolsAreIndependentTest(io: std.Io, alloc: std.mem.Allocator) !vo
     try testz.expectEqual(pool_b.get().?.id, 2);
 
     pool_a.release(a);
+}
+
+// --- ResourceManager atlas (no GL needed for addSubTexture / getTexture) ---
+
+fn dummyParentTexture() Texture {
+    return .{
+        .texture = 0,
+        .size = .{ .x = 128, .y = 128 },
+        .src = RectF.fromCoords(0, 0, 128, 128, 128, 128),
+    };
+}
+
+pub fn rmAddSubTextureRegistersAndGetReturnsItTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var rm = ResourceManager.init(alloc);
+    defer rm.deinit();
+
+    var parent = dummyParentTexture();
+    const sub = try rm.addSubTexture(&parent, "foo", RectF.fromCoords(0, 0, 8, 8, 128, 128));
+    try testz.expectEqual(sub.size.x, 8);
+    try testz.expectEqual(sub.size.y, 8);
+
+    const fetched = try rm.getTexture("foo");
+    try testz.expectEqual(fetched, sub);
+}
+
+pub fn rmGetTextureMissingReturnsErrorTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var rm = ResourceManager.init(alloc);
+    defer rm.deinit();
+
+    try testz.expectError(rm.getTexture("not_there"), error.NoTextureWithThatName);
+}
+
+pub fn rmGidIncrementsOncePerDistinctNameTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var rm = ResourceManager.init(alloc);
+    defer rm.deinit();
+
+    var parent = dummyParentTexture();
+    try testz.expectEqual(rm.gid, 0);
+
+    _ = try rm.addSubTexture(&parent, "foo", RectF.fromCoords(0, 0, 8, 8, 128, 128));
+    try testz.expectEqual(rm.gid, 1);
+
+    _ = try rm.addSubTexture(&parent, "bar", RectF.fromCoords(0, 0, 8, 8, 128, 128));
+    try testz.expectEqual(rm.gid, 2);
+
+    // Reload "foo" reuses the existing pool, so gid must not change.
+    _ = try rm.addSubTexture(&parent, "foo", RectF.fromCoords(8, 0, 8, 8, 128, 128));
+    try testz.expectEqual(rm.gid, 2);
+}
+
+pub fn rmAddSubTextureReloadMarksOldHandleDirtyTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var rm = ResourceManager.init(alloc);
+    defer rm.deinit();
+
+    var parent = dummyParentTexture();
+    _ = try rm.addSubTexture(&parent, "foo", RectF.fromCoords(0, 0, 8, 8, 128, 128));
+
+    const pool = rm.atlas.get("foo").?;
+    const old_handle = pool.acquire().?;
+    try testz.expectEqual(old_handle.dirty, false);
+
+    _ = try rm.addSubTexture(&parent, "foo", RectF.fromCoords(8, 0, 8, 8, 128, 128));
+    try testz.expectEqual(old_handle.dirty, true);
+    try testz.expectEqual(pool.get().?.generation, 2);
+
+    pool.release(old_handle);
 }
