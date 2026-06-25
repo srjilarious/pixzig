@@ -186,10 +186,20 @@ pub const TextureAtlasPool = ManagedResource("Texture", Texture);
 /// TextureImage deletes the GL handle.
 pub const TextureImagePool = ManagedResource("TextureImage", TextureImage);
 
+/// A Shader owns its GL program + vertex/fragment shaders. The pool stores
+/// shaders by value; pointer stability comes from the heap-allocated
+/// `AssetHandle` inside the pool.
+pub const ShaderPool = ManagedResource("Shader", Shader);
+
 fn freeTextureNoop(_: Texture) void {}
 
 fn freeTextureImage(t: TextureImage) void {
     gl.deleteTextures(1, &t.texture);
+}
+
+fn freeShader(s: Shader) void {
+    var copy = s;
+    copy.deinit();
 }
 
 /// A structure for managing game resources, particularly rendering ones:
@@ -200,7 +210,7 @@ fn freeTextureImage(t: TextureImage) void {
 /// deinitialized.
 pub const ResourceManager = struct {
     textures: std.StringHashMap(*TextureImagePool),
-    shaders: std.ArrayList(*Shader),
+    shaders: std.StringHashMap(*ShaderPool),
     atlas: std.StringHashMap(*TextureAtlasPool),
     alloc: std.mem.Allocator,
     /// Monotonic id assigned to each new ManagedResource the manager owns.
@@ -213,7 +223,7 @@ pub const ResourceManager = struct {
     pub fn init(alloc: std.mem.Allocator) Self {
         return .{
             .textures = std.StringHashMap(*TextureImagePool).init(alloc),
-            .shaders = .empty,
+            .shaders = std.StringHashMap(*ShaderPool).init(alloc),
             .atlas = std.StringHashMap(*TextureAtlasPool).init(alloc),
             .alloc = alloc,
             .gid = 0,
@@ -238,11 +248,13 @@ pub const ResourceManager = struct {
         }
         self.atlas.deinit();
 
-        for (self.shaders.items) |s| {
-            s.deinit();
-            self.alloc.destroy(s);
+        var sit = self.shaders.iterator();
+        while (sit.next()) |entry| {
+            entry.value_ptr.*.deinit();
+            self.alloc.destroy(entry.value_ptr.*);
+            self.alloc.free(entry.key_ptr.*);
         }
-        self.shaders.deinit(self.alloc);
+        self.shaders.deinit();
     }
 
     /// Returns the existing atlas pool for `name`, or creates a new empty
@@ -279,6 +291,24 @@ pub const ResourceManager = struct {
         self.gid += 1;
 
         try self.textures.put(keyOwned, pool);
+        return pool;
+    }
+
+    /// Returns the existing shader pool for `name`, or creates a new empty
+    /// pool (consuming one `gid`) and inserts it.
+    fn getOrCreateShaderPool(self: *Self, name: []const u8) !*ShaderPool {
+        if (self.shaders.get(name)) |existing| return existing;
+
+        const keyOwned = try self.alloc.dupe(u8, name);
+        errdefer self.alloc.free(keyOwned);
+
+        const pool = try self.alloc.create(ShaderPool);
+        errdefer self.alloc.destroy(pool);
+
+        pool.* = ShaderPool.init(self.alloc, self.gid, freeShader);
+        self.gid += 1;
+
+        try self.shaders.put(keyOwned, pool);
         return pool;
     }
 
@@ -501,37 +531,23 @@ pub const ResourceManager = struct {
     /// Gets a shader by name. Returns an error if no shader with that name
     /// exists.
     pub fn getShaderByName(self: *Self, name: []const u8) !*const Shader {
-        for (self.shaders.items) |s| {
-            if (s.name != null and std.mem.eql(u8, name, s.name.?)) {
-                return s;
-            }
-        }
-
-        return error.NoShaderWithThatName;
+        const pool = self.shaders.get(name) orelse return error.NoShaderWithThatName;
+        const handle = pool.get() orelse return error.NoShaderWithThatName;
+        return &handle.val;
     }
 
     /// Loads a shader from vertex and fragment shader source code, and stores
-    /// it in the resource manager with the given name. If a shader with that
-    /// name already exists, it is returned instead of loading a new one.
+    /// it in the resource manager with the given name. Calling with an
+    /// existing name compiles a fresh shader and marks the prior version
+    /// dirty, so live holders can re-acquire to pick up the new program.
     pub fn loadShader(
         self: *Self,
         name: []const u8,
         vs: shaders.ShaderCodePtr,
         fs: shaders.ShaderCodePtr,
     ) !*const Shader {
-
-        // Check if we already have a shader with that name.
-        for (self.shaders.items) |s| {
-            if (s.name != null and std.mem.eql(u8, name, s.name.?)) {
-                return s;
-            }
-        }
-
-        const shader = try self.alloc.create(Shader);
-        errdefer self.alloc.destroy(shader);
-        shader.* = try Shader.init(vs, fs, .{ .name = name });
-        errdefer shader.deinit();
-        try self.shaders.append(self.alloc, shader);
-        return self.shaders.items[self.shaders.items.len - 1];
+        const pool = try self.getOrCreateShaderPool(name);
+        try pool.add(try Shader.init(vs, fs));
+        return &pool.get().?.val;
     }
 };

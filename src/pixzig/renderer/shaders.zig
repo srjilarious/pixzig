@@ -118,12 +118,11 @@ pub const FontShader = "font_shader";
 /// Our pixel buffer shader that maps directly to the screen pixels.
 pub const PixelBuffShader = "pixel_buffer_shader";
 
-/// Stores the name and opengl IDs for the shader program, and vertex/fragment shaders.
+/// Stores the opengl IDs for the shader program, and vertex/fragment shaders.
 pub const Shader = struct {
     program: u32 = 0,
     vertex: u32 = 0,
     fragment: u32 = 0,
-    name: ?[]const u8 = null,
 
     // Compiles shader source and returns the OpenGL id of it.
     fn compile(glsl: ShaderCodePtr, shaderType: u32) !u32 {
@@ -144,17 +143,13 @@ pub const Shader = struct {
         return res;
     }
 
-    /// Initializes the shader, given a pointer to the shader strings, optionally providing the
-    /// name for the shader.  If a name is provided it is expected to be managed by the caller.
-    pub fn init(vs: ShaderCodePtr, fs: ShaderCodePtr, extra: struct { name: ?[]const u8 = null }) !Shader {
+    /// Initializes the shader, given pointers to the vertex and fragment shader source.
+    pub fn init(vs: ShaderCodePtr, fs: ShaderCodePtr) !Shader {
         var shader = Shader{};
 
         // Compile the vertex and fragment shaders.
         shader.vertex = try compile(vs, gl.VERTEX_SHADER);
         shader.fragment = try compile(fs, gl.FRAGMENT_SHADER);
-        if (extra.name != null) {
-            shader.name = extra.name;
-        }
 
         // Create the shader program and attach our vertex/fragment shaders.
         shader.program = gl.createProgram();
