@@ -16,7 +16,6 @@ pub const TextureImage = struct {
     // GL Texture ID once loaded.
     texture: c_uint,
     size: Vec2U,
-    name: ?[]u8,
 };
 
 pub const Texture = struct {

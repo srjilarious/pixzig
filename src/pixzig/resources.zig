@@ -182,7 +182,15 @@ pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type
 /// value itself owns no GL state, so reclaiming a stale view is free.
 pub const TextureAtlasPool = ManagedResource("Texture", Texture);
 
+/// A TextureImage owns the GL texture handle. Reclaiming a stale
+/// TextureImage deletes the GL handle.
+pub const TextureImagePool = ManagedResource("TextureImage", TextureImage);
+
 fn freeTextureNoop(_: Texture) void {}
+
+fn freeTextureImage(t: TextureImage) void {
+    gl.deleteTextures(1, &t.texture);
+}
 
 /// A structure for managing game resources, particularly rendering ones:
 /// textures, shaders and texture atlases. The resource manager is responsible
@@ -191,7 +199,7 @@ fn freeTextureNoop(_: Texture) void {}
 /// and their OpenGL resources, if any, when the resource manager is
 /// deinitialized.
 pub const ResourceManager = struct {
-    textures: std.ArrayList(TextureImage),
+    textures: std.StringHashMap(*TextureImagePool),
     shaders: std.ArrayList(*Shader),
     atlas: std.StringHashMap(*TextureAtlasPool),
     alloc: std.mem.Allocator,
@@ -204,7 +212,7 @@ pub const ResourceManager = struct {
     /// Initializes the resource manager.
     pub fn init(alloc: std.mem.Allocator) Self {
         return .{
-            .textures = .empty,
+            .textures = std.StringHashMap(*TextureImagePool).init(alloc),
             .shaders = .empty,
             .atlas = std.StringHashMap(*TextureAtlasPool).init(alloc),
             .alloc = alloc,
@@ -214,11 +222,13 @@ pub const ResourceManager = struct {
 
     // Deinitializes the resource manager, freeing all resources and their OpenGL resources.
     pub fn deinit(self: *Self) void {
-        for (self.textures.items) |t| {
-            gl.deleteTextures(1, &t.texture);
-            self.alloc.free(t.name.?);
+        var tit = self.textures.iterator();
+        while (tit.next()) |entry| {
+            entry.value_ptr.*.deinit();
+            self.alloc.destroy(entry.value_ptr.*);
+            self.alloc.free(entry.key_ptr.*);
         }
-        self.textures.clearAndFree(self.alloc);
+        self.textures.deinit();
 
         var it = self.atlas.iterator();
         while (it.next()) |entry| {
@@ -251,6 +261,24 @@ pub const ResourceManager = struct {
         self.gid += 1;
 
         try self.atlas.put(keyOwned, pool);
+        return pool;
+    }
+
+    /// Returns the existing TextureImage pool for `name`, or creates a new
+    /// empty pool (consuming one `gid`) and inserts it.
+    fn getOrCreateTextureImagePool(self: *Self, name: []const u8) !*TextureImagePool {
+        if (self.textures.get(name)) |existing| return existing;
+
+        const keyOwned = try self.alloc.dupe(u8, name);
+        errdefer self.alloc.free(keyOwned);
+
+        const pool = try self.alloc.create(TextureImagePool);
+        errdefer self.alloc.destroy(pool);
+
+        pool.* = TextureImagePool.init(self.alloc, self.gid, freeTextureImage);
+        self.gid += 1;
+
+        try self.textures.put(keyOwned, pool);
         return pool;
     }
 
@@ -355,20 +383,11 @@ pub const ResourceManager = struct {
         const format = gl.RGBA;
         gl.texImage2D(gl.TEXTURE_2D, 0, format, @intCast(width), @intCast(height), 0, format, gl.UNSIGNED_BYTE, @ptrCast(buffer));
 
-        const texName = try self.alloc.dupe(u8, baseName);
-        var texNameOwned = false;
-        errdefer if (!texNameOwned) self.alloc.free(texName);
-
-        try self.textures.append(self.alloc, .{
+        const imagePool = try self.getOrCreateTextureImagePool(baseName);
+        try imagePool.add(.{
             .texture = texture,
             .size = .{ .x = @intCast(width), .y = @intCast(height) },
-            .name = texName,
         });
-        texNameOwned = true;
-        errdefer {
-            const last = self.textures.pop().?;
-            self.alloc.free(last.name.?);
-        }
 
         const pool = try self.getOrCreateAtlasPool(baseName);
         try pool.add(.{
