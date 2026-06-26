@@ -74,6 +74,8 @@ pub const FlashStep = struct {
 
 pub const App = struct {
     alloc: std.mem.Allocator,
+    eng: *AppRunner.Engine,
+    sprTex: *pixzig.resources.TextureHandle,
     world: *flecs.world_t,
     entity: flecs.entity_t,
     seqMgr: FrameSequenceManager,
@@ -88,6 +90,7 @@ pub const App = struct {
 
         var app = try alloc.create(App);
         app.alloc = alloc;
+        app.eng = eng;
         app.fps = FpsCounter.init();
         app.flashState = .{};
         app.seqPlayer = seq.SequencePlayer.init(alloc);
@@ -95,18 +98,20 @@ pub const App = struct {
         app.scriptEng = try scripting.ScriptEngine.init(alloc);
 
         // --- Build frame sequences ---
-        const right_seq = try FrameSequence.init(alloc, &[_]Frame{
-            .{ .tex = try eng.resources.getTexture("player_right_1"), .frameTimeMs = 70, .flip = .none },
-            .{ .tex = try eng.resources.getTexture("player_right_2"), .frameTimeMs = 70, .flip = .none },
-            .{ .tex = try eng.resources.getTexture("player_right_3"), .frameTimeMs = 70, .flip = .none },
+        var right_seq = try FrameSequence.init(alloc, &[_]Frame{
+            .{ .tex = try eng.resources.acquireTexture("player_right_1"), .frameTimeMs = 70, .flip = .none },
+            .{ .tex = try eng.resources.acquireTexture("player_right_2"), .frameTimeMs = 70, .flip = .none },
+            .{ .tex = try eng.resources.acquireTexture("player_right_3"), .frameTimeMs = 70, .flip = .none },
         });
+        right_seq.texMgr = &eng.resources;
         try app.seqMgr.addSeq("player_right", right_seq);
 
-        const down_seq = try FrameSequence.init(alloc, &[_]Frame{
-            .{ .tex = try eng.resources.getTexture("player_down_1"), .frameTimeMs = 70, .flip = .none },
-            .{ .tex = try eng.resources.getTexture("player_down_2"), .frameTimeMs = 70, .flip = .none },
-            .{ .tex = try eng.resources.getTexture("player_down_3"), .frameTimeMs = 70, .flip = .none },
+        var down_seq = try FrameSequence.init(alloc, &[_]Frame{
+            .{ .tex = try eng.resources.acquireTexture("player_down_1"), .frameTimeMs = 70, .flip = .none },
+            .{ .tex = try eng.resources.acquireTexture("player_down_2"), .frameTimeMs = 70, .flip = .none },
+            .{ .tex = try eng.resources.acquireTexture("player_down_3"), .frameTimeMs = 70, .flip = .none },
         });
+        down_seq.texMgr = &eng.resources;
         try app.seqMgr.addSeq("player_down", down_seq);
 
         // --- Set up flecs world with Sprite and Actor components ---
@@ -116,10 +121,8 @@ pub const App = struct {
 
         app.entity = flecs.new_entity(app.world, "player");
 
-        const spr = Sprite.create(
-            try eng.resources.getTexture("player_right_1"),
-            .{ .x = 16, .y = 16 },
-        );
+        app.sprTex = try eng.resources.acquireTexture("player_right_1");
+        const spr = Sprite.create(app.sprTex, .{ .x = 16, .y = 16 });
         flecs.set(app.world, app.entity, Sprite, spr);
 
         var actor = try Actor.init(alloc);
@@ -147,6 +150,7 @@ pub const App = struct {
         _ = flecs.fini(self.world);
         self.seqPlayer.deinit();
         self.seqMgr.deinit();
+        self.eng.resources.releaseTexture(self.sprTex);
         self.alloc.destroy(self);
     }
 

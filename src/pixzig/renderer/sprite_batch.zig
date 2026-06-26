@@ -8,6 +8,7 @@ const common = @import("../common.zig");
 
 const textures = @import("./textures.zig");
 const shaders = @import("./shaders.zig");
+const resources = @import("../resources.zig");
 const Sprite = @import("./sprites.zig").Sprite;
 const C = @import("./constants.zig");
 
@@ -18,12 +19,22 @@ const Color = common.Color;
 const Rotate = common.Rotate;
 const Texture = textures.Texture;
 const Shader = shaders.Shader;
+const ShaderPool = resources.ShaderPool;
+const ShaderHandle = resources.ShaderHandle;
 
 /// SpriteBatchQueue lets the user queue up multiple sprites to draw in one go.
 /// It uses buffers for vertices, texture coords and indices to make a single draw
 /// call.  This entire batch is drawn via the `flush` call which will happen on
 /// render, switching the current texture, or drawing more than C.MaxSprites.
 pub const SpriteBatchQueue = struct {
+    /// Refcounted handle to the shader. Refreshed in `begin` when the pool
+    /// signals a hot-reload.
+    shader_handle: *ShaderHandle,
+    /// The pool that owns the shader handle. Stored so we can reacquire
+    /// after a dirty signal without re-doing the name lookup.
+    shader_pool: *ShaderPool,
+    /// Cached `&shader_handle.val` so the hot draw path doesn't repeatedly
+    /// chase through the handle.
     shader: *const Shader,
     vao: u32 = 0,
     vboVertices: u32 = 0,
@@ -48,8 +59,16 @@ pub const SpriteBatchQueue = struct {
     begun: bool = false,
 
     /// Initializes the SpriteBatchQueue, creating the buffers and OpenGL objects needed.
-    pub fn init(alloc: std.mem.Allocator, shader: *const Shader) !SpriteBatchQueue {
-        var batch = SpriteBatchQueue{ .allocator = alloc, .shader = shader };
+    pub fn init(alloc: std.mem.Allocator, shader_pool: *ShaderPool) !SpriteBatchQueue {
+        const handle = shader_pool.acquire() orelse return error.NoShaderInPool;
+        errdefer shader_pool.release(handle);
+
+        var batch = SpriteBatchQueue{
+            .allocator = alloc,
+            .shader_handle = handle,
+            .shader_pool = shader_pool,
+            .shader = &handle.val,
+        };
 
         batch.vertices = try alloc.alloc(f32, C.NumVerts);
         errdefer alloc.free(batch.vertices);
@@ -80,15 +99,14 @@ pub const SpriteBatchQueue = struct {
 
         gl.enable(gl.TEXTURE_2D);
 
-        batch.attrCoord = @intCast(gl.getAttribLocation(batch.shader.program, "coord3d"));
-        batch.attrTexCoord = @intCast(gl.getAttribLocation(batch.shader.program, "texcoord"));
-        batch.uniformMVP = @intCast(gl.getUniformLocation(batch.shader.program, "projectionMatrix"));
+        batch.cacheShaderLocations();
 
         return batch;
     }
 
     /// Cleans up the OpenGL objects associated with the SpriteBatchQueue and fress the buffer memory.
     pub fn deinit(self: *SpriteBatchQueue) void {
+        self.shader_pool.release(self.shader_handle);
         gl.deleteBuffers(1, &self.vboVertices);
         gl.deleteBuffers(1, &self.vboTexCoords);
         gl.deleteBuffers(1, &self.vboIndices);
@@ -97,18 +115,36 @@ pub const SpriteBatchQueue = struct {
         self.allocator.free(self.indices);
     }
 
+    fn cacheShaderLocations(self: *SpriteBatchQueue) void {
+        self.attrCoord = @intCast(gl.getAttribLocation(self.shader.program, "coord3d"));
+        self.attrTexCoord = @intCast(gl.getAttribLocation(self.shader.program, "texcoord"));
+        self.uniformMVP = @intCast(gl.getUniformLocation(self.shader.program, "projectionMatrix"));
+    }
+
+    /// If the shader was hot-reloaded, swap to the fresh handle and refetch
+    /// uniform/attribute locations (a new GL program means new ids).
+    fn refreshShader(self: *SpriteBatchQueue) void {
+        if (!self.shader_handle.dirty) return;
+        const new_handle = self.shader_pool.acquire() orelse return;
+        self.shader_pool.release(self.shader_handle);
+        self.shader_handle = new_handle;
+        self.shader = &new_handle.val;
+        self.cacheShaderLocations();
+    }
+
     /// Begins a new render frame, setting the Model-View-Projection matrix to use.
     pub fn begin(self: *SpriteBatchQueue, mvp: zmath.Mat) void {
         if (self.begun) {
             self.end();
         }
+        self.refreshShader();
         self.begun = true;
         self.mvpArr = zmath.matToArr(mvp);
     }
 
     // Enqueues drawing a `Sprite`
     pub fn drawSprite(self: *SpriteBatchQueue, sprite: *Sprite) void {
-        self.draw(sprite.texture, sprite.dest, sprite.src_coords, sprite.rotate);
+        self.draw(&sprite.texture.val, sprite.dest, sprite.src_coords, sprite.rotate);
     }
 
     /// Enqueues drawing a portion of a texture to the screen, with optional 90deg rotation or flips.

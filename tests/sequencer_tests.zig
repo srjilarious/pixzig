@@ -16,19 +16,25 @@ fn makeWorld(comptime Components: anytype) *flecs.world_t {
     return world;
 }
 
-// Fake texture used across all tests. Never rendered or dereferenced by the
-// steps under test — it exists only to satisfy the non-optional *Texture field.
-var g_fakeTex: pixzig.Texture = .{
-    .texture = 0,
-    .size = .{ .x = 16, .y = 16 },
-    .src = .{ .l = 0, .t = 0, .r = 1, .b = 1 },
+// Fake texture handle used across all tests. Never rendered or dereferenced by
+// the steps under test — it exists only to satisfy the non-optional handle field.
+var g_fakeHandle: pixzig.resources.TextureHandle = .{
+    .id = 0,
+    .generation = 1,
+    .refCount = 1,
+    .dirty = false,
+    .val = .{
+        .texture = 0,
+        .size = .{ .x = 16, .y = 16 },
+        .src = .{ .l = 0, .t = 0, .r = 1, .b = 1 },
+    },
 };
 
 // Build a Sprite at (x, y) with a 16×16 size backed by the module-level fake
-// texture, whose pointer remains valid for the lifetime of the test binary.
+// handle, whose pointer remains valid for the lifetime of the test binary.
 fn makeSprite(x: i32, y: i32) Sprite {
     return .{
-        .texture = &g_fakeTex,
+        .texture = &g_fakeHandle,
         .src_coords = .{ .l = 0, .t = 0, .r = 1, .b = 1 },
         .dest = RectF.fromPosSize(x, y, 16, 16),
         .size = .{ .x = 16, .y = 16 },

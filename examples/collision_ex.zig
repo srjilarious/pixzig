@@ -26,9 +26,10 @@ const AppRunner =  pixzig.PixzigAppRunner(App, .{ .inputOpts = .{ .mouse = true 
 
 pub const App = struct {
     alloc: std.mem.Allocator,
+    eng: *AppRunner.Engine,
     scrollOffset: Vec2F,
     spriteBatch: pixzig.renderer.SpriteBatchQueue,
-    tex: *pixzig.Texture,
+    tex: *pixzig.resources.TextureHandle,
     collideGrid: CollisionGridEntity,
     // colorShader: pixzig.shaders.Shader,
     // shapeBatch: pixzig.renderer.ShapeBatchQueue,
@@ -37,14 +38,16 @@ pub const App = struct {
     world: *flecs.world_t,
     update_query: *flecs.query_t,
     draw_query: *flecs.query_t,
- 
+
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
 
 
         const bigtex = try eng.resources.loadTexture("tiles", "assets/pac-tiles.png");
-        const tex = try eng.resources.addSubTexture(bigtex, "guy", RectF.fromCoords(32, 32, 32, 32, 512, 512));
+        _ = try eng.resources.addSubTexture(bigtex, "guy", RectF.fromCoords(32, 32, 32, 32, 512, 512));
+        const tex = try eng.resources.acquireTexture("guy");
 
-        const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, try eng.resources.getShaderByName(shaders.TextureShader));
+        const texPool = eng.resources.shaders.get(shaders.TextureShader) orelse return error.NoShaderWithThatName;
+        const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, texPool);
 
         // var colorShader = try pixzig.shaders.Shader.init(
         //         &pixzig.shaders.ColorVertexShader,
@@ -78,7 +81,8 @@ pub const App = struct {
         var app = try alloc.create(App);
         app.* = App{
             .alloc = alloc,
-            .scrollOffset = .{ .x = 0, .y = 0}, 
+            .eng = eng,
+            .scrollOffset = .{ .x = 0, .y = 0},
             .paused = false,
             .spriteBatch = spriteBatch,
             // .shapeBatch = shapeBatch,
@@ -101,6 +105,7 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
+        self.eng.resources.releaseTexture(self.tex);
         self.spriteBatch.deinit();
         self.collideGrid.deinit();
 

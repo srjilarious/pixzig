@@ -258,15 +258,15 @@ pub const TextRenderer = struct {
     atlas: ?*FontAtlas,
 
     pub fn init(alloc: std.mem.Allocator, resMgr: *ResourceManager) !TextRenderer {
-        const texShader = try resMgr.getShaderByName(shaders.TextureShader);
-        var spriteBatch = try SpriteBatchQueue.init(alloc, texShader);
+        const texPool = resMgr.shaders.get(shaders.TextureShader) orelse return error.NoShaderWithThatName;
+        var spriteBatch = try SpriteBatchQueue.init(alloc, texPool);
         errdefer spriteBatch.deinit();
 
         return TextRenderer{
             .alloc = alloc,
             .spriteBatch = spriteBatch,
             .alphaTexShader = try resMgr.getShaderByName(shaders.FontShader),
-            .texShader = texShader,
+            .texShader = try resMgr.getShaderByName(shaders.TextureShader),
             .atlas = null,
         };
     }

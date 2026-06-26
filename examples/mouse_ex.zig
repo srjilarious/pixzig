@@ -20,24 +20,27 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{ .inputOpts = .{ .mouse = true }
 pub const App = struct {
     fps: FpsCounter,
     alloc: std.mem.Allocator,
-    tex: *pixzig.Texture,
+    eng: *AppRunner.Engine,
+    tex: *pixzig.resources.TextureHandle,
     pointer: pixzig.sprites.Sprite,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !App {
         const bigtex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
+        _ = try eng.resources.addSubTexture(bigtex, "guy", RectF.fromCoords(32, 32, 32, 32, 512, 512));
 
-        const tex = try eng.resources.addSubTexture(bigtex, "guy", RectF.fromCoords(32, 32, 32, 32, 512, 512));
+        const tex = try eng.resources.acquireTexture("guy");
 
         return .{
             .fps = FpsCounter.init(),
             .alloc = alloc,
+            .eng = eng,
             .tex = tex,
             .pointer = pixzig.sprites.Sprite.create(tex, .{ .x = 32, .y = 32 }),
         };
     }
 
     pub fn deinit(self: *App) void {
-        _ = self;
+        self.eng.resources.releaseTexture(self.tex);
     }
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {

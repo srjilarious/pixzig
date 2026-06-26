@@ -324,3 +324,55 @@ pub fn rmAddSubTextureReloadMarksOldHandleDirtyTest(io: std.Io, alloc: std.mem.A
 
     pool.release(old_handle);
 }
+
+// --- acquireTexture / releaseTexture helpers ---
+
+pub fn rmAcquireTextureBumpsRefCountTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var rm = ResourceManager.init(alloc);
+    defer rm.deinit();
+
+    var parent = dummyParentTexture();
+    _ = try rm.addSubTexture(&parent, "foo", RectF.fromCoords(0, 0, 8, 8, 128, 128));
+
+    const h1 = try rm.acquireTexture("foo");
+    try testz.expectEqual(h1.refCount, 1);
+    const h2 = try rm.acquireTexture("foo");
+    try testz.expectEqual(h2.refCount, 2);
+    try testz.expectEqual(h1, h2);
+
+    rm.releaseTexture(h2);
+    rm.releaseTexture(h1);
+    try testz.expectEqual(rm.atlas.get("foo").?.get().?.refCount, 0);
+}
+
+pub fn rmAcquireTextureMissingReturnsErrorTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var rm = ResourceManager.init(alloc);
+    defer rm.deinit();
+
+    try testz.expectError(rm.acquireTexture("not_there"), error.NoTextureWithThatName);
+}
+
+pub fn rmReloadVisibleAsDirtyThroughHelperTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var rm = ResourceManager.init(alloc);
+    defer rm.deinit();
+
+    var parent = dummyParentTexture();
+    _ = try rm.addSubTexture(&parent, "foo", RectF.fromCoords(0, 0, 8, 8, 128, 128));
+
+    const holder = try rm.acquireTexture("foo");
+    try testz.expectEqual(holder.dirty, false);
+
+    _ = try rm.addSubTexture(&parent, "foo", RectF.fromCoords(8, 0, 8, 8, 128, 128));
+    try testz.expectEqual(holder.dirty, true);
+
+    // The fresh handle reachable through the helper is the v2 generation.
+    const fresh = try rm.acquireTexture("foo");
+    try testz.expectEqual(fresh.generation, 2);
+    try testz.expectEqual(fresh.dirty, false);
+
+    rm.releaseTexture(holder);
+    rm.releaseTexture(fresh);
+}

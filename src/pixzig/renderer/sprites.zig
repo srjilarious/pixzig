@@ -10,19 +10,22 @@ const Rotate = common.Rotate;
 
 const Texture = textures.Texture;
 const ResourceManager = resources.ResourceManager;
+const TextureHandle = resources.TextureHandle;
 
 pub const Sprite = struct {
-    texture: *Texture,
+    /// Non-owning handle to a managed texture. The sprite never acquires
+    /// or releases — the creator of the sprite owns the handle.
+    texture: *TextureHandle,
     src_coords: RectF,
     dest: RectF,
     size: Vec2F,
     flip: Flip,
     rotate: Rotate,
 
-    pub fn create(tex: *Texture, size: Vec2F) Sprite {
+    pub fn create(tex: *TextureHandle, size: Vec2F) Sprite {
         return Sprite{
             .texture = tex,
-            .src_coords = tex.src,
+            .src_coords = tex.val.src,
             .dest = RectF.fromPosSize(0, 0, @as(i32, @intFromFloat(size.x)), @as(i32, @intFromFloat(size.y))),
             .size = size,
             .flip = .none,
@@ -44,11 +47,12 @@ pub const Flip = enum {
 };
 
 pub const Frame = struct {
-    tex: *Texture,
+    tex: *TextureHandle,
     frameTimeMs: f64,
     flip: Flip,
 
     pub fn apply(self: *Frame, spr: *Sprite, extraFlip: Flip) void {
+        const src = self.tex.val.src;
         const flip = blk: {
             switch (self.flip) {
                 .none => break :blk extraFlip,
@@ -80,15 +84,15 @@ pub const Frame = struct {
         };
 
         switch (flip) {
-            .none => spr.src_coords = self.tex.src,
+            .none => spr.src_coords = src,
             .horz => {
-                spr.src_coords = .{ .l = self.tex.src.r, .t = self.tex.src.t, .r = self.tex.src.l, .b = self.tex.src.b };
+                spr.src_coords = .{ .l = src.r, .t = src.t, .r = src.l, .b = src.b };
             },
             .vert => {
-                spr.src_coords = .{ .l = self.tex.src.l, .t = self.tex.src.b, .r = self.tex.src.r, .b = self.tex.src.t };
+                spr.src_coords = .{ .l = src.l, .t = src.b, .r = src.r, .b = src.t };
             },
             .both => {
-                spr.src_coords = .{ .l = self.tex.src.r, .t = self.tex.src.b, .r = self.tex.src.l, .b = self.tex.src.t };
+                spr.src_coords = .{ .l = src.r, .t = src.b, .r = src.l, .b = src.t };
             },
         }
     }
@@ -109,6 +113,10 @@ pub const FrameSequence = struct {
     frames: std.ArrayList(Frame),
     alloc: std.mem.Allocator,
     mode: AnimPlayMode,
+    /// Optional manager that owns the texture handles in `frames`. When set,
+    /// `deinit` releases each frame's handle so the JSON-loaded sequences
+    /// don't leak texture references.
+    texMgr: ?*ResourceManager = null,
 
     pub fn initEmpty(alloc: std.mem.Allocator) !FrameSequence {
         const frames: std.ArrayList(Frame) = .empty;
@@ -134,7 +142,15 @@ pub const FrameSequence = struct {
         };
     }
 
+    /// Lifetime contract: when `texMgr` is set the referenced ResourceManager
+    /// must outlive this FrameSequence — otherwise the per-frame release calls
+    /// touch freed pool state.
     pub fn deinit(self: *FrameSequence) void {
+        if (self.texMgr) |rm| {
+            for (self.frames.items) |frame| {
+                rm.releaseTexture(frame.tex);
+            }
+        }
         self.frames.deinit(self.alloc);
     }
 };
@@ -223,12 +239,13 @@ pub const FrameSequenceManager = struct {
         // First load the frame sequences, since actor states need those for looking up.
         for (parsed.value.sequences) |fileSeq| {
             var seq = try FrameSequence.initEmpty(self.alloc);
+            seq.texMgr = texMgr;
             // addSeq takes a shallow-copy of seq; on failure it just destroys the
             // allocation, so we remain responsible for freeing the frames backing array.
             errdefer seq.deinit();
             for (fileSeq.frames) |fileFrame| {
                 try seq.frames.append(self.alloc, .{
-                    .tex = try texMgr.getTexture(fileFrame.name),
+                    .tex = try texMgr.acquireTexture(fileFrame.name),
                     .frameTimeMs = fileFrame.ms,
                     .flip = fileFrame.flip orelse .none,
                 });

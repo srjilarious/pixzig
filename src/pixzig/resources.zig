@@ -36,7 +36,8 @@ pub fn AssetHandle(comptime T: type) type {
 }
 
 pub const TextureHandle = AssetHandle(Texture);
-pub const ShaderHandle = AssetHandle(*Shader);
+pub const TextureImageHandle = AssetHandle(TextureImage);
+pub const ShaderHandle = AssetHandle(Shader);
 
 // pub const SoundHandle = AssetHandler()
 
@@ -526,6 +527,45 @@ pub const ResourceManager = struct {
         const pool = self.atlas.get(name) orelse return error.NoTextureWithThatName;
         const handle = pool.get() orelse return error.NoTextureWithThatName;
         return &handle.val;
+    }
+
+    /// Acquires a refcounted handle to a texture by name. The handle stays
+    /// alive until released via `releaseTexture`. The owning pool tags the
+    /// handle dirty when the texture is reloaded so the caller can re-acquire.
+    pub fn acquireTexture(self: *Self, name: []const u8) !*TextureHandle {
+        const pool = self.atlas.get(name) orelse return error.NoTextureWithThatName;
+        return pool.acquire() orelse return error.NoTextureWithThatName;
+    }
+
+    /// Releases a handle obtained from `acquireTexture`. The pool is looked
+    /// up by the handle's id; the caller does not need to remember the name.
+    pub fn releaseTexture(self: *Self, handle: *TextureHandle) void {
+        var it = self.atlas.iterator();
+        while (it.next()) |entry| {
+            if (entry.value_ptr.*.id == handle.id) {
+                entry.value_ptr.*.release(handle);
+                return;
+            }
+        }
+        unreachable; // handle did not belong to this manager
+    }
+
+    /// Acquires a refcounted handle to a shader by name. See `acquireTexture`
+    /// for lifecycle notes.
+    pub fn acquireShader(self: *Self, name: []const u8) !*ShaderHandle {
+        const pool = self.shaders.get(name) orelse return error.NoShaderWithThatName;
+        return pool.acquire() orelse return error.NoShaderWithThatName;
+    }
+
+    pub fn releaseShader(self: *Self, handle: *ShaderHandle) void {
+        var it = self.shaders.iterator();
+        while (it.next()) |entry| {
+            if (entry.value_ptr.*.id == handle.id) {
+                entry.value_ptr.*.release(handle);
+                return;
+            }
+        }
+        unreachable;
     }
 
     /// Gets a shader by name. Returns an error if no shader with that name

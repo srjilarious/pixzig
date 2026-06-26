@@ -37,11 +37,13 @@ pub fn frameSequenceFileLoadTest(io: std.Io, alloc: std.mem.Allocator) !void {
         \\ }
     ;
 
-    var seqMgr = try FrameSequenceManager.init(alloc);
-    defer seqMgr.deinit();
-
+    // tm must outlive seqMgr: FrameSequence.deinit releases each frame's
+    // texture handle back into tm, so tm needs to deinit last.
     var tm = try createDummyTextureManager(alloc);
     defer tm.deinit();
+
+    var seqMgr = try FrameSequenceManager.init(alloc);
+    defer seqMgr.deinit();
     try seqMgr.loadSequence(jsonStr, &tm);
     try testz.expectEqual(seqMgr.sequences.count(), 1);
     const seq = seqMgr.getSeq("player_right");
@@ -74,10 +76,12 @@ pub fn actorSequenceFileLoadTest(io: std.Io, alloc: std.mem.Allocator) !void {
         \\ }
     ;
 
-    var seqMgr = try FrameSequenceManager.init(alloc);
-    defer seqMgr.deinit();
+    // tm must outlive seqMgr (see frameSequenceFileLoadTest).
     var tm = try createDummyTextureManager(alloc);
     defer tm.deinit();
+
+    var seqMgr = try FrameSequenceManager.init(alloc);
+    defer seqMgr.deinit();
     try seqMgr.loadSequence(jsonStr, &tm);
     try testz.expectEqual(seqMgr.sequences.count(), 1);
     const seq = seqMgr.getSeq("player_right");

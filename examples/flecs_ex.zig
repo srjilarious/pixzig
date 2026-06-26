@@ -33,8 +33,9 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{
 
 pub const App = struct {
     alloc: std.mem.Allocator,
+    eng: *AppRunner.Engine,
     scrollOffset: Vec2F,
-    tex: *pixzig.Texture,
+    tex: *pixzig.resources.TextureHandle,
     fps: FpsCounter,
     paused: bool,
     world: *flecs.world_t,
@@ -43,8 +44,9 @@ pub const App = struct {
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const bigtex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
+        _ = try eng.resources.addSubTexture(bigtex, "guy", RectF.fromCoords(192, 64, 32, 32, 512, 512));
 
-        const tex = try eng.resources.addSubTexture(bigtex, "guy", RectF.fromCoords(192, 64, 32, 32, 512, 512));
+        const tex = try eng.resources.acquireTexture("guy");
 
         std.log.info("Initializing world.\n", .{});
 
@@ -75,6 +77,7 @@ pub const App = struct {
         var app = try alloc.create(App);
         app.* = App{
             .alloc = alloc,
+            .eng = eng,
             .scrollOffset = .{ .x = 0, .y = 0 },
             .paused = false,
             .tex = tex,
@@ -97,6 +100,7 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
+        self.eng.resources.releaseTexture(self.tex);
         flecs.query_fini(self.draw_query);
         _ = flecs.fini(self.world);
         self.alloc.destroy(self);

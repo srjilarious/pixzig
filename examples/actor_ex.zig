@@ -24,6 +24,8 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{ .gameScale = 8.0 });
 
 pub const App = struct {
     alloc: std.mem.Allocator,
+    eng: *AppRunner.Engine,
+    sprTex: *pixzig.resources.TextureHandle,
     spr: Sprite,
     actor: Actor,
     seqMgr: FrameSequenceManager,
@@ -33,30 +35,35 @@ pub const App = struct {
         _ = try eng.resources.loadAtlas("assets/pac-tiles");
 
         var app = try alloc.create(App);
+        const sprTex = try eng.resources.acquireTexture("player_right_1");
         app.* = .{
             .alloc = alloc,
-            .spr = Sprite.create(try eng.resources.getTexture("player_right_1"), .{ .x = 16, .y = 16 }),
+            .eng = eng,
+            .sprTex = sprTex,
+            .spr = Sprite.create(sprTex, .{ .x = 16, .y = 16 }),
             .actor = try pixzig.sprites.Actor.init(alloc),
             .seqMgr = try FrameSequenceManager.init(alloc),
             .fps = FpsCounter.init(),
         };
 
         const fr1: Frame = .{
-            .tex = try eng.resources.getTexture("player_right_1"),
+            .tex = try eng.resources.acquireTexture("player_right_1"),
             .frameTimeMs = 300,
             .flip = .none,
         };
         const fr2: Frame = .{
-            .tex = try eng.resources.getTexture("player_right_2"),
+            .tex = try eng.resources.acquireTexture("player_right_2"),
             .frameTimeMs = 300,
             .flip = .none,
         };
         const fr3: Frame = .{
-            .tex = try eng.resources.getTexture("player_right_3"),
+            .tex = try eng.resources.acquireTexture("player_right_3"),
             .frameTimeMs = 300,
             .flip = .none,
         };
-        const frseq = try pixzig.sprites.FrameSequence.init(alloc, &[_]Frame{ fr1, fr2, fr3 });
+        var frseq = try pixzig.sprites.FrameSequence.init(alloc, &[_]Frame{ fr1, fr2, fr3 });
+        // texMgr makes seqMgr's eventual deinit release each frame's handle.
+        frseq.texMgr = &eng.resources;
         try app.seqMgr.addSeq("player_right", frseq);
 
         _ = try app.actor.addState(&.{ .name = "right", .sequence = app.seqMgr.getSeq("player_right").?, .flip = .none }, .{});
@@ -66,9 +73,9 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
+        self.seqMgr.deinit();
         self.actor.deinit();
-        // self.frseq_1.deinit();
-        // self.frseq_2.deinit();
+        self.eng.resources.releaseTexture(self.sprTex);
         self.alloc.destroy(self);
     }
 

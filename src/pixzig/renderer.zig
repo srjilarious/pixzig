@@ -69,14 +69,15 @@ pub fn Renderer(opts: RendererOptions) type {
             var rend = try alloc.create(Impl);
 
             std.log.info("Initializing shaders.", .{});
-            const texShader = try resMgr.loadShader(shaders.TextureShader, &shaders.TexVertexShader, &shaders.TexPixelShader);
+            _ = try resMgr.loadShader(shaders.TextureShader, &shaders.TexVertexShader, &shaders.TexPixelShader);
+            const texPool = resMgr.shaders.get(shaders.TextureShader).?;
 
             std.log.info("Setting up {} sprite batch queues.", .{opts.numSpriteTextures});
             for (0..opts.numSpriteTextures) |idx| {
-                const sbq = try SpriteBatchQueue.init(alloc, texShader);
+                const sbq = try SpriteBatchQueue.init(alloc, texPool);
                 rend.batches[idx] = sbq;
             }
-            rend.overlays = try SpriteBatchQueue.init(alloc, texShader);
+            rend.overlays = try SpriteBatchQueue.init(alloc, texPool);
 
             if (opts.shapeRendering) {
                 std.log.info("Setting up shaders for shape renderering.", .{});
