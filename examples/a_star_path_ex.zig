@@ -56,7 +56,6 @@ pub const App = struct {
     tileSet: TileSet,
     checker: BasicTileMapPathChecker,
     pathFinder: AStarPathFinder(BasicTileMapPathChecker),
-    tex: *Texture,
     cursorPos: Vec2I = .{ .x = 0, .y = 0 },
     startPos: Vec2I = .{ .x = 2, .y = 2 },
     endPos: Vec2I = .{ .x = 6, .y = 8 },
@@ -64,7 +63,8 @@ pub const App = struct {
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app = try alloc.create(App);
 
-        const grid = try GridRenderer.init(alloc, try eng.resources.getShaderByName(shaders.ColorShader), .{ .x = MapWidth, .y = MapHeight }, .{ .x = TileWidth, .y = TileHeight }, 1, Color{ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 });
+        const color_shader_pool = eng.resources.shaders.get(shaders.ColorShader) orelse return error.NoShaderWithThatName;
+        const grid = try GridRenderer.init(alloc, color_shader_pool, .{ .x = MapWidth, .y = MapHeight }, .{ .x = TileWidth, .y = TileHeight }, 1, Color{ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 });
 
         // Create a texture for the path tiles.
         const colorMap = &[_]CharToColor{
@@ -206,13 +206,12 @@ pub const App = struct {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        const tex = try eng.resources.loadTextureFromBuffer("a_star", bufferSize.x, bufferSize.y, textureBuff);
+        _ = try eng.resources.loadTextureFromBuffer("a_star", bufferSize.x, bufferSize.y, textureBuff);
 
         app.* = .{
             .alloc = alloc,
             .fps = FpsCounter.init(),
             .grid = grid,
-            .tex = tex,
             .path = .empty,
             .layer = undefined,
             .pathLayer = undefined,
@@ -240,7 +239,9 @@ pub const App = struct {
         app.pathLayer = try TileLayer.initEmpty(alloc, .{ .x = MapWidth, .y = MapHeight }, .{ .x = TileWidth, .y = TileHeight });
         app.pathLayer.tileset = &app.tileSet;
 
-        app.pathLayerRenderer = try tile.TileMapRenderer.init(alloc, try eng.resources.getShaderByName(shaders.TextureShader));
+        const tex_shader_pool = eng.resources.shaders.get(shaders.TextureShader) orelse return error.NoShaderWithThatName;
+        const a_star_tex_pool = eng.resources.atlas.get("a_star") orelse return error.NoTextureWithThatName;
+        app.pathLayerRenderer = try tile.TileMapRenderer.init(alloc, tex_shader_pool, a_star_tex_pool);
         // TODO: Change to pathLayer and make wall layer renderer.
         try app.pathLayerRenderer.recreateVertices(&app.tileSet, &app.layer);
 
@@ -250,6 +251,7 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
+        self.pathLayerRenderer.deinit();
         self.grid.deinit();
         self.alloc.destroy(self);
     }
@@ -399,7 +401,7 @@ pub const App = struct {
         );
         eng.renderer.end();
 
-        try self.pathLayerRenderer.draw(self.tex, &self.layer, eng.projMat);
+        try self.pathLayerRenderer.draw(&self.layer, eng.projMat);
 
         try self.grid.draw(eng.projMat);
     }

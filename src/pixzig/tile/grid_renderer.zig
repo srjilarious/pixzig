@@ -5,15 +5,20 @@ const zmath = @import("zmath");
 
 const common = @import("../common.zig");
 const shaders = @import("../renderer/shaders.zig");
+const resources = @import("../resources.zig");
 
 const Vec2I = common.Vec2I;
 const Vec2U = common.Vec2U;
 const RectF = common.RectF;
 const Color = common.Color;
 const Shader = shaders.Shader;
+const ShaderPool = resources.ShaderPool;
+const ShaderHandle = resources.ShaderHandle;
 
 pub const GridRenderer = struct {
-    shader: *const Shader = undefined,
+    shader_handle: *ShaderHandle,
+    shader_pool: *ShaderPool,
+    shader: *const Shader,
     color: Color = undefined,
     vao: u32 = 0,
     vboVertices: u32 = 0,
@@ -33,8 +38,24 @@ pub const GridRenderer = struct {
     numRects: usize = 0,
     initialized: bool = false,
 
-    pub fn init(alloc: std.mem.Allocator, shader: *const Shader, mapSize: Vec2I, tileSize: Vec2I, borderSize: usize, color: Color) !GridRenderer {
-        var gr = GridRenderer{ .shader = shader, .color = color, .alloc = alloc };
+    pub fn init(
+        alloc: std.mem.Allocator,
+        shader_pool: *ShaderPool,
+        mapSize: Vec2I,
+        tileSize: Vec2I,
+        borderSize: usize,
+        color: Color,
+    ) !GridRenderer {
+        const shader_handle = shader_pool.acquire() orelse return error.NoShaderInPool;
+        errdefer shader_pool.release(shader_handle);
+
+        var gr = GridRenderer{
+            .shader_handle = shader_handle,
+            .shader_pool = shader_pool,
+            .shader = &shader_handle.val,
+            .color = color,
+            .alloc = alloc,
+        };
         gl.genVertexArrays(1, &gr.vao);
         errdefer gl.deleteVertexArrays(1, &gr.vao);
 
@@ -51,15 +72,14 @@ pub const GridRenderer = struct {
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         gl.enable(gl.TEXTURE_2D);
 
-        gr.attrCoord = @intCast(gl.getAttribLocation(gr.shader.program, "coord3d"));
-        gr.attrColor = @intCast(gl.getAttribLocation(gr.shader.program, "color"));
-        gr.uniformMVP = @intCast(gl.getUniformLocation(gr.shader.program, "projectionMatrix"));
+        gr.cacheShaderLocations();
 
         try gr.recreateVertices(mapSize, tileSize, borderSize, color);
         return gr;
     }
 
     pub fn deinit(self: *GridRenderer) void {
+        self.shader_pool.release(self.shader_handle);
         self.alloc.free(self.vertices);
         self.alloc.free(self.colorCoords);
         self.alloc.free(self.indices);
@@ -67,6 +87,21 @@ pub const GridRenderer = struct {
         gl.deleteBuffers(1, &self.vboVertices);
         gl.deleteBuffers(1, &self.vboColorCoords);
         gl.deleteBuffers(1, &self.vboIndices);
+    }
+
+    fn cacheShaderLocations(self: *GridRenderer) void {
+        self.attrCoord = @intCast(gl.getAttribLocation(self.shader.program, "coord3d"));
+        self.attrColor = @intCast(gl.getAttribLocation(self.shader.program, "color"));
+        self.uniformMVP = @intCast(gl.getUniformLocation(self.shader.program, "projectionMatrix"));
+    }
+
+    fn refreshShader(self: *GridRenderer) void {
+        if (!self.shader_handle.dirty) return;
+        const new_handle = self.shader_pool.acquire() orelse return;
+        self.shader_pool.release(self.shader_handle);
+        self.shader_handle = new_handle;
+        self.shader = &new_handle.val;
+        self.cacheShaderLocations();
     }
 
     fn drawFilledRect(self: *GridRenderer, dest: RectF, color: Color) void {
@@ -172,10 +207,9 @@ pub const GridRenderer = struct {
     }
 
     pub fn draw(self: *GridRenderer, mvp: zmath.Mat) !void {
+        self.refreshShader();
+
         const mvpArr = zmath.matToArr(mvp);
-        // const layerWidth: usize = @intCast(tiles.size.x);
-        // const layerHeight: usize = @intCast(tiles.size.y);
-        // const mapSize: i32 = @intCast(layerWidth*layerHeight);
         gl.useProgram(self.shader.program);
         gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&mvpArr[0]));
 

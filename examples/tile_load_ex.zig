@@ -18,7 +18,7 @@ const FpsCounter = pixzig.utils.FpsCounter;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.PixzigAppRunner(App, .{ .vsyncEnabled = false });
 
 pub const App = struct {
     alloc: std.mem.Allocator,
@@ -26,16 +26,10 @@ pub const App = struct {
     mapRenderer: tile.TileMapRenderer,
     guy: RectF,
     map: tile.TileMap,
-    tex: *pixzig.Texture,
     fps: FpsCounter,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
-        // const texShader = try pixzig.shaders.Shader.init(
-        //     &pixzig.shaders.TexVertexShader,
-        //     &pixzig.shaders.TexPixelShader,
-        // );
-
-        const tex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
+        _ = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
 
         std.log.info("Loading tile map", .{});
         const map = try tile.TiledMapXmlLoader.initFromFile("assets/level1a.tmx", alloc);
@@ -44,7 +38,9 @@ pub const App = struct {
         std.log.info("Tile 0,0 data: {any}", .{tData});
 
         std.log.info("Initializing map renderer.", .{});
-        var mapRender = try tile.TileMapRenderer.init(alloc, try eng.resources.getShaderByName(pixzig.shaders.TextureShader));
+        const shader_pool = eng.resources.shaders.get(pixzig.shaders.TextureShader) orelse return error.NoShaderWithThatName;
+        const texture_pool = eng.resources.atlas.get("tiles") orelse return error.NoTextureWithThatName;
+        var mapRender = try tile.TileMapRenderer.init(alloc, shader_pool, texture_pool);
 
         std.log.info("Creating tile renderering data.", .{});
         try mapRender.recreateVertices(&map.tilesets.items[0], &map.layers.items[1]);
@@ -68,7 +64,6 @@ pub const App = struct {
             .camera = cam,
             .mapRenderer = mapRender,
             .map = map,
-            .tex = tex,
             .guy = guy_rect,
             .fps = FpsCounter.init(),
         };
@@ -131,7 +126,7 @@ pub const App = struct {
 
         self.fps.renderTick();
         const mvp = self.camera.matrix(&eng.viewport);
-        try self.mapRenderer.draw(self.tex, &self.map.layers.items[1], mvp);
+        try self.mapRenderer.draw(&self.map.layers.items[1], mvp);
 
         // Draw outline.
         eng.renderer.begin(mvp);
