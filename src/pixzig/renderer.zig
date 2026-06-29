@@ -82,9 +82,9 @@ pub fn Renderer(opts: RendererOptions) type {
 
             if (opts.shapeRendering) {
                 std.log.info("Setting up shaders for shape renderering.", .{});
-                const colorShader = try resMgr.loadShader(shaders.ColorShader, &shaders.ColorVertexShader, &shaders.ColorPixelShader);
-
-                rend.shapes = try ShapeBatchQueue.init(alloc, colorShader);
+                _ = try resMgr.loadShader(shaders.ColorShader, &shaders.ColorVertexShader, &shaders.ColorPixelShader);
+                const colorPool = resMgr.shaders.get(shaders.ColorShader).?;
+                rend.shapes = try ShapeBatchQueue.init(alloc, colorPool);
             }
 
             if (opts.textRendering) {

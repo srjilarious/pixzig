@@ -4,13 +4,18 @@ const common = @import("../common.zig");
 const Vec2U = common.Vec2U;
 const shaders = @import("shaders.zig");
 const Shader = shaders.Shader;
-const ResourceManager = @import("../resources.zig").ResourceManager;
+const resources = @import("../resources.zig");
+const ResourceManager = resources.ResourceManager;
+const ShaderHandle = resources.ShaderHandle;
+const ShaderPool = resources.ShaderPool;
 
 /// A 2d buffer of pixels that can be used for old school effects, emulators, etc.
 /// It uses a texture and provides clearing and setting pixels.
 pub const PixelBuffer = struct {
     texId: c_uint,
     vbo: c_uint,
+    shader_handle: *ShaderHandle,
+    shader_pool: *ShaderPool,
     shader: *const Shader,
     size: Vec2U,
     pixels: []u8,
@@ -24,25 +29,31 @@ pub const PixelBuffer = struct {
         res: *ResourceManager,
         size: Vec2U,
     ) !PixelBuffer {
-        var self = PixelBuffer{
-            .texId = undefined,
-            .vbo = undefined,
-            .shader = undefined,
-            .size = size,
-            .pixels = undefined,
-            .allocator = allocator,
-        };
-
         // Allocate pixel buffer (RGB format)
-        self.pixels = try allocator.alloc(u8, size.x * size.y * 3);
-        @memset(self.pixels, 0);
+        const pixels = try allocator.alloc(u8, size.x * size.y * 3);
+        errdefer allocator.free(pixels);
+        @memset(pixels, 0);
 
-        // Load the shader
-        self.shader = try res.loadShader(
+        // Load the shader and acquire a handle
+        _ = try res.loadShader(
             shaders.PixelBuffShader,
             &shaders.PixBuffVertexShader,
             &shaders.TexPixelShader,
         );
+        const pool = res.shaders.get(shaders.PixelBuffShader).?;
+        const handle = pool.acquire() orelse return error.NoShaderInPool;
+        errdefer pool.release(handle);
+
+        var self = PixelBuffer{
+            .texId = undefined,
+            .vbo = undefined,
+            .shader_handle = handle,
+            .shader_pool = pool,
+            .shader = &handle.val,
+            .size = size,
+            .pixels = pixels,
+            .allocator = allocator,
+        };
 
         // Create texture
         gl.genTextures(1, &self.texId);
@@ -92,9 +103,10 @@ pub const PixelBuffer = struct {
 
     /// Frees the pixel buffer, texture and VBO.
     pub fn deinit(self: *PixelBuffer) void {
+        self.shader_pool.release(self.shader_handle);
         self.allocator.free(self.pixels);
-        gl.deleteTexture(self.texture);
-        gl.deleteBuffer(self.vbo);
+        gl.deleteTextures(1, &self.texId);
+        gl.deleteBuffers(1, &self.vbo);
     }
 
     /// Sets the pixel at x, y to the RGB value (r, g, b)
@@ -116,9 +128,18 @@ pub const PixelBuffer = struct {
         }
     }
 
+    fn refreshShader(self: *PixelBuffer) void {
+        if (!self.shader_handle.dirty) return;
+        const new_handle = self.shader_pool.acquire() orelse return;
+        self.shader_pool.release(self.shader_handle);
+        self.shader_handle = new_handle;
+        self.shader = &new_handle.val;
+    }
+
     /// Uploads the current pixel buffer and draws the texture as a fullscreen quad
     /// via the VBO setup during init.
     pub fn render(self: *PixelBuffer) void {
+        self.refreshShader();
         // Upload pixel data to texture
         gl.bindTexture(gl.TEXTURE_2D, self.texId);
         gl.texSubImage2D(

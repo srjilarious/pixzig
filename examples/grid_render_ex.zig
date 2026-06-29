@@ -35,9 +35,10 @@ pub const App = struct {
         // Orthographic projection matrix
         const projMat = zmath.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
 
+        const colorPool = eng.resources.shaders.get(shaders.ColorShader) orelse return error.ColorShaderNotLoaded;
         const grid = try GridRenderer.init(
             alloc,
-            try eng.resources.getShaderByName(shaders.ColorShader),
+            colorPool,
             .{ .x = 20, .y = 12 },
             .{ .x = 32, .y = 32 },
             1,

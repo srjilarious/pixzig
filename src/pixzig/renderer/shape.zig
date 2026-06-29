@@ -8,6 +8,7 @@ const common = @import("../common.zig");
 
 const textures = @import("./textures.zig");
 const shaders = @import("./shaders.zig");
+const resources = @import("../resources.zig");
 const Sprite = @import("./sprites.zig").Sprite;
 const C = @import("./constants.zig");
 
@@ -18,10 +19,14 @@ const Color = common.Color;
 const Rotate = common.Rotate;
 const Texture = textures.Texture;
 const Shader = shaders.Shader;
+const ShaderHandle = resources.ShaderHandle;
+const ShaderPool = resources.ShaderPool;
 
 const NumColorCoords = 4 * 4 * C.MaxSprites;
 
 pub const ShapeBatchQueue = struct {
+    shader_handle: *ShaderHandle = undefined,
+    shader_pool: *ShaderPool = undefined,
     shader: *const Shader = undefined,
     vao: u32 = 0,
     vboVertices: u32 = 0,
@@ -45,10 +50,15 @@ pub const ShapeBatchQueue = struct {
 
     /// Creates buffers to contain the draw primitives and OpenGL VBOs to execute the draw
     /// commands with in a batch.
-    pub fn init(alloc: std.mem.Allocator, shader: *const Shader) !ShapeBatchQueue {
+    pub fn init(alloc: std.mem.Allocator, shader_pool: *ShaderPool) !ShapeBatchQueue {
+        const handle = shader_pool.acquire() orelse return error.NoShaderInPool;
+        errdefer shader_pool.release(handle);
+
         var batch = ShapeBatchQueue{
             .allocator = alloc,
-            .shader = shader,
+            .shader_handle = handle,
+            .shader_pool = shader_pool,
+            .shader = &handle.val,
         };
 
         batch.vertices = try alloc.alloc(f32, C.NumVerts);
@@ -88,6 +98,7 @@ pub const ShapeBatchQueue = struct {
 
     /// Frees our OpenGL VBO resources and the internal buffers we use to queue up shapes.
     pub fn deinit(self: *ShapeBatchQueue) void {
+        self.shader_pool.release(self.shader_handle);
         gl.deleteBuffers(1, &self.vboVertices);
         gl.deleteBuffers(1, &self.vboColorCoords);
         gl.deleteBuffers(1, &self.vboIndices);
@@ -96,12 +107,21 @@ pub const ShapeBatchQueue = struct {
         self.allocator.free(self.indices);
     }
 
+    fn refreshShader(self: *ShapeBatchQueue) void {
+        if (!self.shader_handle.dirty) return;
+        const new_handle = self.shader_pool.acquire() orelse return;
+        self.shader_pool.release(self.shader_handle);
+        self.shader_handle = new_handle;
+        self.shader = &new_handle.val;
+    }
+
     /// Begins a draw cycle for the shape batch, must be matched with a call to `end`
     pub fn begin(self: *ShapeBatchQueue, mvp: zmath.Mat) void {
         if (self.begun) {
             self.end();
         }
 
+        self.refreshShader();
         self.begun = true;
         self.mvpArr = zmath.matToArr(mvp);
     }
