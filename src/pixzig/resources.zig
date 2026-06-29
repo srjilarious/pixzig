@@ -5,10 +5,12 @@ const common = @import("./common.zig");
 const utils = @import("./utils.zig");
 const shaders = @import("./renderer/shaders.zig");
 const textures = @import("./renderer/textures.zig");
+const font_atlas_mod = @import("./renderer/font_atlas.zig");
 
 const TextureImage = textures.TextureImage;
 const Texture = textures.Texture;
 const Shader = shaders.Shader;
+const FontAtlas = font_atlas_mod.FontAtlas;
 const CharToColor = textures.CharToColor;
 const SpackFile = textures.SpackFile;
 
@@ -38,6 +40,7 @@ pub fn AssetHandle(comptime T: type) type {
 pub const TextureHandle = AssetHandle(Texture);
 pub const TextureImageHandle = AssetHandle(TextureImage);
 pub const ShaderHandle = AssetHandle(Shader);
+pub const FontAtlasHandle = AssetHandle(FontAtlas);
 
 // pub const SoundHandle = AssetHandler()
 
@@ -192,6 +195,10 @@ pub const TextureImagePool = ManagedResource("TextureImage", TextureImage);
 /// `AssetHandle` inside the pool.
 pub const ShaderPool = ManagedResource("Shader", Shader);
 
+/// A FontAtlas owns a GL texture + a char-to-glyph hashmap. Stored by value
+/// inside the pool just like Shader.
+pub const FontAtlasPool = ManagedResource("FontAtlas", FontAtlas);
+
 fn freeTextureNoop(_: Texture) void {}
 
 fn freeTextureImage(t: TextureImage) void {
@@ -200,6 +207,11 @@ fn freeTextureImage(t: TextureImage) void {
 
 fn freeShader(s: Shader) void {
     var copy = s;
+    copy.deinit();
+}
+
+fn freeFontAtlas(fa: FontAtlas) void {
+    var copy = fa;
     copy.deinit();
 }
 
@@ -213,6 +225,7 @@ pub const ResourceManager = struct {
     textures: std.StringHashMap(*TextureImagePool),
     shaders: std.StringHashMap(*ShaderPool),
     atlas: std.StringHashMap(*TextureAtlasPool),
+    fonts: std.StringHashMap(*FontAtlasPool),
     alloc: std.mem.Allocator,
     /// Monotonic id assigned to each new ManagedResource the manager owns.
     /// Lookups inside a pool use generations; this id distinguishes pools.
@@ -226,6 +239,7 @@ pub const ResourceManager = struct {
             .textures = std.StringHashMap(*TextureImagePool).init(alloc),
             .shaders = std.StringHashMap(*ShaderPool).init(alloc),
             .atlas = std.StringHashMap(*TextureAtlasPool).init(alloc),
+            .fonts = std.StringHashMap(*FontAtlasPool).init(alloc),
             .alloc = alloc,
             .gid = 0,
         };
@@ -256,6 +270,14 @@ pub const ResourceManager = struct {
             self.alloc.free(entry.key_ptr.*);
         }
         self.shaders.deinit();
+
+        var fit = self.fonts.iterator();
+        while (fit.next()) |entry| {
+            entry.value_ptr.*.deinit();
+            self.alloc.destroy(entry.value_ptr.*);
+            self.alloc.free(entry.key_ptr.*);
+        }
+        self.fonts.deinit();
     }
 
     /// Returns the existing atlas pool for `name`, or creates a new empty
@@ -310,6 +332,24 @@ pub const ResourceManager = struct {
         self.gid += 1;
 
         try self.shaders.put(keyOwned, pool);
+        return pool;
+    }
+
+    /// Returns the existing font pool for `name`, or creates a new empty pool
+    /// (consuming one `gid`) and inserts it.
+    fn getOrCreateFontPool(self: *Self, name: []const u8) !*FontAtlasPool {
+        if (self.fonts.get(name)) |existing| return existing;
+
+        const keyOwned = try self.alloc.dupe(u8, name);
+        errdefer self.alloc.free(keyOwned);
+
+        const pool = try self.alloc.create(FontAtlasPool);
+        errdefer self.alloc.destroy(pool);
+
+        pool.* = FontAtlasPool.init(self.alloc, self.gid, freeFontAtlas);
+        self.gid += 1;
+
+        try self.fonts.put(keyOwned, pool);
         return pool;
     }
 
@@ -559,6 +599,65 @@ pub const ResourceManager = struct {
 
     pub fn releaseShader(self: *Self, handle: *ShaderHandle) void {
         var it = self.shaders.iterator();
+        while (it.next()) |entry| {
+            if (entry.value_ptr.*.id == handle.id) {
+                entry.value_ptr.*.release(handle);
+                return;
+            }
+        }
+        unreachable;
+    }
+
+    /// Loads a TTF font from disk and registers it under `name`. A second
+    /// call with the same name marks the prior generation dirty and adds a
+    /// fresh one (auto-reload semantics matching other load* methods).
+    pub fn loadFontFromTtfFile(
+        self: *Self,
+        name: []const u8,
+        fontPath: []const u8,
+        fontSize: f32,
+    ) !void {
+        const fa = try FontAtlas.initFromTtfFile(fontPath, fontSize, self.alloc);
+        const pool = try self.getOrCreateFontPool(name);
+        try pool.add(fa);
+    }
+
+    /// Loads a TTF font embedded at comptime into the binary and registers
+    /// it under `name`.
+    pub fn loadFontFromTtfEmbedded(
+        self: *Self,
+        name: []const u8,
+        comptime fontPath: []const u8,
+        fontSize: f32,
+    ) !void {
+        const fa = try FontAtlas.initFromTtfEmbedded(fontPath, fontSize, self.alloc);
+        const pool = try self.getOrCreateFontPool(name);
+        try pool.add(fa);
+    }
+
+    /// Loads a fixed-cell bitmap font and registers it under `name`.
+    pub fn loadFontFromBitmap(
+        self: *Self,
+        name: []const u8,
+        fontImagePath: []const u8,
+        charWidth: i32,
+        charHeight: i32,
+        charsPerRow: i32,
+        chars: []const u8,
+    ) !void {
+        const fa = try FontAtlas.initFromBitmap(fontImagePath, charWidth, charHeight, charsPerRow, chars, self.alloc);
+        const pool = try self.getOrCreateFontPool(name);
+        try pool.add(fa);
+    }
+
+    /// Acquires a refcounted handle to a font atlas by name.
+    pub fn acquireFontAtlas(self: *Self, name: []const u8) !*FontAtlasHandle {
+        const pool = self.fonts.get(name) orelse return error.NoFontWithThatName;
+        return pool.acquire() orelse return error.NoFontWithThatName;
+    }
+
+    pub fn releaseFontAtlas(self: *Self, handle: *FontAtlasHandle) void {
+        var it = self.fonts.iterator();
         while (it.next()) |entry| {
             if (entry.value_ptr.*.id == handle.id) {
                 entry.value_ptr.*.release(handle);

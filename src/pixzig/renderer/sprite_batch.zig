@@ -132,6 +132,18 @@ pub const SpriteBatchQueue = struct {
         self.cacheShaderLocations();
     }
 
+    /// Swap to a different shader pool entirely (e.g. text renderer toggling
+    /// between alpha and RGB pixel shaders). Releases the current handle,
+    /// acquires from `new_pool`, and re-caches uniform/attribute locations.
+    pub fn swapShader(self: *SpriteBatchQueue, new_pool: *ShaderPool) !void {
+        const new_handle = new_pool.acquire() orelse return error.NoShaderInPool;
+        self.shader_pool.release(self.shader_handle);
+        self.shader_pool = new_pool;
+        self.shader_handle = new_handle;
+        self.shader = &new_handle.val;
+        self.cacheShaderLocations();
+    }
+
     /// Begins a new render frame, setting the Model-View-Projection matrix to use.
     pub fn begin(self: *SpriteBatchQueue, mvp: zmath.Mat) void {
         if (self.begun) {

@@ -23,21 +23,30 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{ .gameScale = 3.0, .rendererOpts
 pub const App = struct {
     fps: FpsCounter,
     alloc: std.mem.Allocator,
-    atlas: FontAtlas,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app = try alloc.create(App);
 
+        eng.resources.loadFontFromBitmap(
+            "font5r",
+            "assets/font5r.png",
+            16,
+            19,
+            19,
+            "abcdefghijklmnopqrstuvwxyz| 0123456789*#!`:.,\\?-+=$&%()'",
+        ) catch {
+            std.log.err("Failed to load font atlas.", .{});
+            return error.FontLoadFailed;
+        };
+
+        const font_handle = try eng.resources.acquireFontAtlas("font5r");
+        const font_pool = eng.resources.fonts.get("font5r").?;
+        try eng.renderer.impl.text.setAtlas(font_handle, font_pool);
+
         app.* = .{
             .fps = FpsCounter.init(),
             .alloc = alloc,
-            .atlas = FontAtlas.initFromBitmap("assets/font5r.png", 16, 19, 19, "abcdefghijklmnopqrstuvwxyz| 0123456789*#!`:.,\\?-+=$&%()'", alloc) catch {
-                std.log.err("Failed to load font atlas.", .{});
-                return error.FontLoadFailed;
-            },
         };
-
-        eng.renderer.impl.text.setAtlas(&app.atlas);
 
         return app;
     }

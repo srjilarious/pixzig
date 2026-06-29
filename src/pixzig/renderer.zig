@@ -62,8 +62,9 @@ pub fn Renderer(opts: RendererOptions) type {
 
             shapes: ShapeBatchQueue = undefined,
             text: TextRenderer = undefined,
-            fontAtlas: ?FontAtlas = null,
         };
+
+        const DefaultFontName = "__pixzig_default_font";
 
         pub fn init(alloc: std.mem.Allocator, resMgr: *ResourceManager, initOpts: RendererInitOpts) !Self {
             var rend = try alloc.create(Impl);
@@ -98,8 +99,10 @@ pub fn Renderer(opts: RendererOptions) type {
                 rend.text = try TextRenderer.init(alloc, resMgr);
 
                 if (initOpts.fontFace != null) {
-                    rend.fontAtlas = try FontAtlas.initFromTtfFile(initOpts.fontFace.?, initOpts.fontSize, alloc);
-                    rend.text.setAtlas(&rend.fontAtlas.?);
+                    try resMgr.loadFontFromTtfFile(DefaultFontName, initOpts.fontFace.?, initOpts.fontSize);
+                    const handle = try resMgr.acquireFontAtlas(DefaultFontName);
+                    const pool = resMgr.fonts.get(DefaultFontName).?;
+                    try rend.text.setAtlas(handle, pool);
                 } else {
                     if (builtin.mode == .Debug) {
                         std.log.warn("No default font provided. Text rendering will not work until a FontAtlas is set.", .{});
@@ -129,9 +132,6 @@ pub fn Renderer(opts: RendererOptions) type {
 
             if (opts.textRendering) {
                 self.impl.text.deinit();
-                if (self.impl.fontAtlas != null) {
-                    self.impl.fontAtlas.?.deinit();
-                }
             }
 
             self.alloc.destroy(self.impl);
