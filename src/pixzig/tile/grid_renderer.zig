@@ -12,12 +12,12 @@ const Vec2U = common.Vec2U;
 const RectF = common.RectF;
 const Color = common.Color;
 const Shader = shaders.Shader;
-const ShaderPool = resources.ShaderPool;
+const ManagedShader = resources.ManagedShader;
 const ShaderHandle = resources.ShaderHandle;
 
 pub const GridRenderer = struct {
     shader_handle: *ShaderHandle,
-    shader_pool: *ShaderPool,
+    shader_pool: *ManagedShader,
     shader: *const Shader,
     color: Color = undefined,
     vao: u32 = 0,
@@ -40,7 +40,7 @@ pub const GridRenderer = struct {
 
     pub fn init(
         alloc: std.mem.Allocator,
-        shader_pool: *ShaderPool,
+        shader_pool: *ManagedShader,
         mapSize: Vec2I,
         tileSize: Vec2I,
         borderSize: usize,

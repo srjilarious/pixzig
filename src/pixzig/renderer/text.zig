@@ -26,54 +26,46 @@ pub const TextRenderer = struct {
     /// Pool refs (not pre-acquired handles) so setAtlas can swap the active
     /// shader on the underlying batch via swapShader. The batch itself owns
     /// whichever handle is currently in use.
-    alpha_shader_pool: *resources.ShaderPool,
-    tex_shader_pool: *resources.ShaderPool,
+    alphaShader: *resources.ManagedShader,
+    texShader: *resources.ManagedShader,
     alloc: std.mem.Allocator,
-    /// Active font handle + owning pool. Released in deinit. The cached
-    /// `atlas` pointer is refreshed when the handle goes dirty.
-    atlas_handle: ?*resources.FontAtlasHandle,
-    atlas_pool: ?*resources.FontAtlasPool,
-    atlas: ?*FontAtlas,
+    /// Active font handle and managed resource. Released in deinit.
+    font_handle: ?*resources.FontAtlasHandle,
+    font: ?*resources.ManagedFont,
 
     pub fn init(alloc: std.mem.Allocator, resMgr: *ResourceManager) !TextRenderer {
-        const tex_pool = resMgr.shaders.get(shaders.TextureShader) orelse return error.NoShaderWithThatName;
-        const alpha_pool = resMgr.shaders.get(shaders.FontShader) orelse return error.NoShaderWithThatName;
-        var spriteBatch = try SpriteBatchQueue.init(alloc, tex_pool);
+        const texShader = resMgr.shaders.get(shaders.TextureShader) orelse return error.NoShaderWithThatName;
+        const alphaShader = resMgr.shaders.get(shaders.FontShader) orelse return error.NoShaderWithThatName;
+        var spriteBatch = try SpriteBatchQueue.init(alloc, texShader);
         errdefer spriteBatch.deinit();
 
         return TextRenderer{
             .alloc = alloc,
             .spriteBatch = spriteBatch,
-            .alpha_shader_pool = alpha_pool,
-            .tex_shader_pool = tex_pool,
-            .atlas_handle = null,
-            .atlas_pool = null,
-            .atlas = null,
+            .alphaShader = alphaShader,
+            .texShader = texShader,
+            .font_handle = null,
+            .font = null,
         };
     }
 
     pub fn deinit(self: *TextRenderer) void {
-        if (self.atlas_handle) |h| {
-            if (self.atlas_pool) |p| p.release(h);
+        if (self.font_handle) |h| {
+            if (self.font) |p| p.release(h);
         }
         self.spriteBatch.deinit();
     }
 
     fn refreshAtlas(self: *TextRenderer) void {
-        const handle = self.atlas_handle orelse return;
+        const handle = self.font_handle orelse return;
         if (!handle.dirty) return;
-        const pool = self.atlas_pool.?;
-        const new_handle = pool.acquire() orelse return;
-        pool.release(handle);
-        self.atlas_handle = new_handle;
-        self.atlas = &new_handle.val;
+        const font = self.font.?;
+        const new_handle = font.acquire() orelse return;
+        font.release(handle);
+        self.font_handle = new_handle;
     }
 
-    pub fn begin(self: *TextRenderer, mvp: zmath.Mat, atlas: ?*FontAtlas) void {
-        if (atlas) |a| {
-            self.atlas = a;
-        }
-        self.refreshAtlas();
+    pub fn begin(self: *TextRenderer, mvp: zmath.Mat) void {
         self.spriteBatch.begin(mvp);
     }
 
@@ -86,25 +78,22 @@ pub const TextRenderer = struct {
         self.spriteBatch.flush();
     }
 
-    /// Adopt a new font atlas handle. Releases any previously held handle,
-    /// stores the new one (caller-acquired, ownership transferred), caches
-    /// `&handle.val`, and swaps the underlying batch's shader to the
-    /// alpha-channel program when the atlas was packed as alpha, or the
-    /// regular texture program otherwise.
-    pub fn setAtlas(
+    /// Adopt a new font for rendering. Releases any previously held handle,
+    /// acquires ownership of a new handle, and swaps the underlying batch's
+    /// shader to the alpha-channel program when the atlas was packed as
+    /// alpha, or the regular texture program otherwise.
+    pub fn setFont(
         self: *TextRenderer,
-        handle: *resources.FontAtlasHandle,
-        pool: *resources.FontAtlasPool,
+        font: *resources.ManagedFont,
     ) !void {
-        if (self.atlas_handle) |old| {
-            if (self.atlas_pool) |p| p.release(old);
+        if (self.font_handle) |old| {
+            if (self.font) |p| p.release(old);
         }
-        self.atlas_handle = handle;
-        self.atlas_pool = pool;
-        self.atlas = &handle.val;
+        self.font = font;
+        self.font_handle = font.acquire();
 
-        const target_pool = if (handle.val.isAlpha) self.alpha_shader_pool else self.tex_shader_pool;
-        try self.spriteBatch.swapShader(target_pool);
+        const shader = if (self.font_handle.?.val.isAlpha) self.alphaShader else self.texShader;
+        try self.spriteBatch.swapShader(shader);
     }
 
     pub fn drawString(self: *TextRenderer, text: []const u8, pos: Vec2I) Vec2I {
@@ -112,21 +101,21 @@ pub const TextRenderer = struct {
 
         var drawSize: Vec2I = .{ .x = 0, .y = 0 };
 
-        if (self.atlas == null) {
-            std.log.err("TextRenderer: No FontAtlas set. Cannot draw text.", .{});
+        if (self.font == null) {
+            std.log.err("TextRenderer: No Font set. Cannot draw text.", .{});
             return drawSize;
         }
 
-        const posY = pos.y + self.atlas.?.maxY;
+        const posY = pos.y + self.font_handle.?.val.maxY;
         for (text) |c| {
-            const charDataPtr = self.atlas.?.chars.get(@intCast(c));
+            const charDataPtr = self.font_handle.?.val.chars.get(@intCast(c));
             if (charDataPtr == null) continue;
 
             const charData = charDataPtr.?;
 
             // Only draw if character has visual representation
             if (charData.size.x > 0 and charData.size.y > 0) {
-                self.spriteBatch.draw(&self.atlas.?.texture, RectF.fromPosSize(currX + charData.bearing.x, posY - charData.bearing.y, charData.size.x, charData.size.y), charData.coords, .none);
+                self.spriteBatch.draw(&self.font_handle.?.val.texture, RectF.fromPosSize(currX + charData.bearing.x, posY - charData.bearing.y, charData.size.x, charData.size.y), charData.coords, .none);
             }
 
             currX += @intCast(charData.advance);
@@ -142,14 +131,14 @@ pub const TextRenderer = struct {
 
         var drawSize: Vec2I = .{ .x = 0, .y = 0 };
 
-        if (self.atlas == null) {
-            std.log.err("TextRenderer: No FontAtlas set. Cannot draw text.", .{});
+        if (self.font == null) {
+            std.log.err("TextRenderer: No Font set. Cannot draw text.", .{});
             return drawSize;
         }
 
-        const posY = pos.y + scaleInt(self.atlas.?.maxY, scale);
+        const posY = pos.y + scaleInt(self.font_handle.?.val.maxY, scale);
         for (text) |c| {
-            const charDataPtr = self.atlas.?.chars.get(@intCast(c));
+            const charDataPtr = self.font_handle.?.val.chars.get(@intCast(c));
             if (charDataPtr == null) continue;
 
             const charData = charDataPtr.?;
@@ -157,7 +146,7 @@ pub const TextRenderer = struct {
             // Only draw if character has visual representation
             if (charData.size.x > 0 and charData.size.y > 0) {
                 self.spriteBatch.draw(
-                    &self.atlas.?.texture,
+                    &self.font_handle.?.val.texture,
                     RectF.fromPosSize(
                         currX + scaleInt(charData.bearing.x, scale),
                         posY - scaleInt(charData.bearing.y, scale),
@@ -180,19 +169,19 @@ pub const TextRenderer = struct {
 
     // Like drawString but clips character quads to `clip` in screen space.
     // Partially-visible edge characters have their source UV rect trimmed to
-    // match so no bleed from adjacent atlas glyphs appears.
+    // match so no bleed from adjacent font glyphs appears.
     pub fn drawClippedString(self: *TextRenderer, text: []const u8, pos: Vec2I, clip: RectF) Vec2I {
         var currX: i32 = pos.x;
         var drawSize: Vec2I = .{ .x = 0, .y = 0 };
 
-        if (self.atlas == null) {
-            std.log.err("TextRenderer: No FontAtlas set. Cannot draw text.", .{});
+        if (self.font == null) {
+            std.log.err("TextRenderer: No Font set. Cannot draw text.", .{});
             return drawSize;
         }
 
-        const posY = pos.y + self.atlas.?.maxY;
+        const posY = pos.y + self.font_handle.?.val.maxY;
         for (text) |c| {
-            const charDataPtr = self.atlas.?.chars.get(@intCast(c));
+            const charDataPtr = self.font_handle.?.val.chars.get(@intCast(c));
             if (charDataPtr == null) continue;
 
             const charData = charDataPtr.?;
@@ -226,7 +215,7 @@ pub const TextRenderer = struct {
                     dest.r = clip.r;
                 }
 
-                self.spriteBatch.draw(&self.atlas.?.texture, dest, src, .none);
+                self.spriteBatch.draw(&self.font_handle.?.val.texture, dest, src, .none);
             }
 
             currX += @intCast(charData.advance);
@@ -243,7 +232,7 @@ pub const TextRenderer = struct {
         var height: i32 = 0;
 
         for (text) |c| {
-            const charDataPtr = self.atlas.?.chars.get(@intCast(c));
+            const charDataPtr = self.font_handle.?.val.chars.get(@intCast(c));
             if (charDataPtr == null) continue;
 
             const charData = charDataPtr.?;

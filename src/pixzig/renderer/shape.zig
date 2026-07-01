@@ -20,13 +20,13 @@ const Rotate = common.Rotate;
 const Texture = textures.Texture;
 const Shader = shaders.Shader;
 const ShaderHandle = resources.ShaderHandle;
-const ShaderPool = resources.ShaderPool;
+const ManagedShader = resources.ManagedShader;
 
 const NumColorCoords = 4 * 4 * C.MaxSprites;
 
 pub const ShapeBatchQueue = struct {
     shader_handle: *ShaderHandle = undefined,
-    shader_pool: *ShaderPool = undefined,
+    shader_pool: *ManagedShader = undefined,
     shader: *const Shader = undefined,
     vao: u32 = 0,
     vboVertices: u32 = 0,
@@ -50,7 +50,7 @@ pub const ShapeBatchQueue = struct {
 
     /// Creates buffers to contain the draw primitives and OpenGL VBOs to execute the draw
     /// commands with in a batch.
-    pub fn init(alloc: std.mem.Allocator, shader_pool: *ShaderPool) !ShapeBatchQueue {
+    pub fn init(alloc: std.mem.Allocator, shader_pool: *ManagedShader) !ShapeBatchQueue {
         const handle = shader_pool.acquire() orelse return error.NoShaderInPool;
         errdefer shader_pool.release(handle);
 

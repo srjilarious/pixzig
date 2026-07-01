@@ -11,9 +11,9 @@ const tilemap = @import("./tilemap.zig");
 const RectF = common.RectF;
 const Texture = textures.Texture;
 const Shader = shaders.Shader;
-const ShaderPool = resources.ShaderPool;
+const ManagedShader = resources.ManagedShader;
 const ShaderHandle = resources.ShaderHandle;
-const TextureAtlasPool = resources.TextureAtlasPool;
+const ManagedTexture = resources.ManagedTexture;
 const TextureHandle = resources.TextureHandle;
 const TileSet = tilemap.TileSet;
 const TileLayer = tilemap.TileLayer;
@@ -58,10 +58,10 @@ pub const ChunkedTileMapRenderer = struct {
     chunks_wide: u32,
     chunks_tall: u32,
     shader_handle: *ShaderHandle,
-    shader_pool: *ShaderPool,
+    shader_pool: *ManagedShader,
     shader: *const Shader,
     texture_handle: *TextureHandle,
-    texture_pool: *TextureAtlasPool,
+    texture_pool: *ManagedTexture,
     texture: *const Texture,
     attr_coord: c_uint,
     attr_texcoord: c_uint,
@@ -78,8 +78,8 @@ pub const ChunkedTileMapRenderer = struct {
     /// is read lazily on the first render() call (all chunks start dirty=true).
     pub fn init(
         alloc: std.mem.Allocator,
-        shader_pool: *ShaderPool,
-        texture_pool: *TextureAtlasPool,
+        shader_pool: *ManagedShader,
+        texture_pool: *ManagedTexture,
         layer: *const TileLayer,
     ) !Self {
         const shader_handle = shader_pool.acquire() orelse return error.NoShaderInPool;

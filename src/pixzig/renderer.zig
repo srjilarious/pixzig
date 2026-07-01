@@ -71,14 +71,14 @@ pub fn Renderer(opts: RendererOptions) type {
 
             std.log.info("Initializing shaders.", .{});
             _ = try resMgr.loadShader(shaders.TextureShader, &shaders.TexVertexShader, &shaders.TexPixelShader);
-            const texPool = resMgr.shaders.get(shaders.TextureShader).?;
+            const texShader = resMgr.shaders.get(shaders.TextureShader).?;
 
             std.log.info("Setting up {} sprite batch queues.", .{opts.numSpriteTextures});
             for (0..opts.numSpriteTextures) |idx| {
-                const sbq = try SpriteBatchQueue.init(alloc, texPool);
+                const sbq = try SpriteBatchQueue.init(alloc, texShader);
                 rend.batches[idx] = sbq;
             }
-            rend.overlays = try SpriteBatchQueue.init(alloc, texPool);
+            rend.overlays = try SpriteBatchQueue.init(alloc, texShader);
 
             if (opts.shapeRendering) {
                 std.log.info("Setting up shaders for shape renderering.", .{});
@@ -100,9 +100,8 @@ pub fn Renderer(opts: RendererOptions) type {
 
                 if (initOpts.fontFace != null) {
                     try resMgr.loadFontFromTtfFile(DefaultFontName, initOpts.fontFace.?, initOpts.fontSize);
-                    const handle = try resMgr.acquireFontAtlas(DefaultFontName);
-                    const pool = resMgr.fonts.get(DefaultFontName).?;
-                    try rend.text.setAtlas(handle, pool);
+                    const font = resMgr.fonts.get(DefaultFontName).?;
+                    try rend.text.setFont(font);
                 } else {
                     if (builtin.mode == .Debug) {
                         std.log.warn("No default font provided. Text rendering will not work until a FontAtlas is set.", .{});
@@ -148,7 +147,7 @@ pub fn Renderer(opts: RendererOptions) type {
             }
 
             if (opts.textRendering) {
-                self.impl.text.begin(mvp, null);
+                self.impl.text.begin(mvp);
             }
         }
 

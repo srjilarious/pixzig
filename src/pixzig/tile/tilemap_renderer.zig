@@ -16,9 +16,9 @@ const RectF = common.RectF;
 const Color = common.Color;
 const Texture = textures.Texture;
 const Shader = shaders.Shader;
-const ShaderPool = resources.ShaderPool;
+const ManagedShader = resources.ManagedShader;
 const ShaderHandle = resources.ShaderHandle;
-const TextureAtlasPool = resources.TextureAtlasPool;
+const ManagedTexture = resources.ManagedTexture;
 const TextureHandle = resources.TextureHandle;
 
 const TileLayer = tilemap.TileLayer;
@@ -29,10 +29,10 @@ const TileIndexMap = @import("./tile_index_map.zig").TileIndexMap;
 pub const TileMapRenderer = struct {
     mapSize: Vec2U = undefined,
     shader_handle: *ShaderHandle,
-    shader_pool: *ShaderPool,
+    shader_pool: *ManagedShader,
     shader: *const Shader,
     texture_handle: *TextureHandle,
-    texture_pool: *TextureAtlasPool,
+    texture_pool: *ManagedTexture,
     texture: *const Texture,
     vao: u32 = 0,
     vboVertices: u32 = 0,
@@ -52,8 +52,8 @@ pub const TileMapRenderer = struct {
 
     pub fn init(
         alloc: std.mem.Allocator,
-        shader_pool: *ShaderPool,
-        texture_pool: *TextureAtlasPool,
+        shader_pool: *ManagedShader,
+        texture_pool: *ManagedTexture,
     ) !TileMapRenderer {
         const shader_handle = shader_pool.acquire() orelse return error.NoShaderInPool;
         errdefer shader_pool.release(shader_handle);

@@ -39,9 +39,8 @@ pub const App = struct {
             return error.FontLoadFailed;
         };
 
-        const font_handle = try eng.resources.acquireFontAtlas("font5r");
-        const font_pool = eng.resources.fonts.get("font5r").?;
-        try eng.renderer.impl.text.setAtlas(font_handle, font_pool);
+        const font = eng.resources.fonts.get("font5r").?;
+        try eng.renderer.impl.text.setFont(font);
 
         app.* = .{
             .fps = FpsCounter.init(),

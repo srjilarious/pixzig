@@ -7,7 +7,7 @@ const Shader = shaders.Shader;
 const resources = @import("../resources.zig");
 const ResourceManager = resources.ResourceManager;
 const ShaderHandle = resources.ShaderHandle;
-const ShaderPool = resources.ShaderPool;
+const ManagedShader = resources.ManagedShader;
 
 /// A 2d buffer of pixels that can be used for old school effects, emulators, etc.
 /// It uses a texture and provides clearing and setting pixels.
@@ -15,7 +15,7 @@ pub const PixelBuffer = struct {
     texId: c_uint,
     vbo: c_uint,
     shader_handle: *ShaderHandle,
-    shader_pool: *ShaderPool,
+    shader_pool: *ManagedShader,
     shader: *const Shader,
     size: Vec2U,
     pixels: []u8,

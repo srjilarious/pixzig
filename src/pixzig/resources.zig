@@ -184,20 +184,20 @@ pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type
 
 /// The atlas stores named, refcounted views over GL textures. A Texture
 /// value itself owns no GL state, so reclaiming a stale view is free.
-pub const TextureAtlasPool = ManagedResource("Texture", Texture);
+pub const ManagedTexture = ManagedResource("Texture", Texture);
 
 /// A TextureImage owns the GL texture handle. Reclaiming a stale
 /// TextureImage deletes the GL handle.
-pub const TextureImagePool = ManagedResource("TextureImage", TextureImage);
+pub const ManagedTextureImage = ManagedResource("TextureImage", TextureImage);
 
-/// A Shader owns its GL program + vertex/fragment shaders. The pool stores
-/// shaders by value; pointer stability comes from the heap-allocated
-/// `AssetHandle` inside the pool.
-pub const ShaderPool = ManagedResource("Shader", Shader);
+/// A Shader owns its GL program + vertex/fragment shaders. The managed resource
+/// stores shaders by value; pointer stability comes from the heap-allocated
+/// `AssetHandle` inside the managed resource.
+pub const ManagedShader = ManagedResource("Shader", Shader);
 
 /// A FontAtlas owns a GL texture + a char-to-glyph hashmap. Stored by value
-/// inside the pool just like Shader.
-pub const FontAtlasPool = ManagedResource("FontAtlas", FontAtlas);
+/// inside the managed resource.
+pub const ManagedFont = ManagedResource("Font", FontAtlas);
 
 fn freeTextureNoop(_: Texture) void {}
 
@@ -222,13 +222,14 @@ fn freeFontAtlas(fa: FontAtlas) void {
 /// and their OpenGL resources, if any, when the resource manager is
 /// deinitialized.
 pub const ResourceManager = struct {
-    textures: std.StringHashMap(*TextureImagePool),
-    shaders: std.StringHashMap(*ShaderPool),
-    atlas: std.StringHashMap(*TextureAtlasPool),
-    fonts: std.StringHashMap(*FontAtlasPool),
+    textures: std.StringHashMap(*ManagedTextureImage),
+    shaders: std.StringHashMap(*ManagedShader),
+    atlas: std.StringHashMap(*ManagedTexture),
+    fonts: std.StringHashMap(*ManagedFont),
     alloc: std.mem.Allocator,
     /// Monotonic id assigned to each new ManagedResource the manager owns.
-    /// Lookups inside a pool use generations; this id distinguishes pools.
+    /// Lookups inside a managed resource use generations; this id distinguishes
+    /// each managed resource.
     gid: u32,
 
     const Self = @This();
@@ -236,10 +237,10 @@ pub const ResourceManager = struct {
     /// Initializes the resource manager.
     pub fn init(alloc: std.mem.Allocator) Self {
         return .{
-            .textures = std.StringHashMap(*TextureImagePool).init(alloc),
-            .shaders = std.StringHashMap(*ShaderPool).init(alloc),
-            .atlas = std.StringHashMap(*TextureAtlasPool).init(alloc),
-            .fonts = std.StringHashMap(*FontAtlasPool).init(alloc),
+            .textures = std.StringHashMap(*ManagedTextureImage).init(alloc),
+            .shaders = std.StringHashMap(*ManagedShader).init(alloc),
+            .atlas = std.StringHashMap(*ManagedTexture).init(alloc),
+            .fonts = std.StringHashMap(*ManagedFont).init(alloc),
             .alloc = alloc,
             .gid = 0,
         };
@@ -283,16 +284,16 @@ pub const ResourceManager = struct {
     /// Returns the existing atlas pool for `name`, or creates a new empty
     /// pool (consuming one `gid`) and inserts it. The returned pointer is
     /// stable across atlas mutations.
-    fn getOrCreateAtlasPool(self: *Self, name: []const u8) !*TextureAtlasPool {
+    fn getOrCreateAtlasPool(self: *Self, name: []const u8) !*ManagedTexture {
         if (self.atlas.get(name)) |existing| return existing;
 
         const keyOwned = try self.alloc.dupe(u8, name);
         errdefer self.alloc.free(keyOwned);
 
-        const pool = try self.alloc.create(TextureAtlasPool);
+        const pool = try self.alloc.create(ManagedTexture);
         errdefer self.alloc.destroy(pool);
 
-        pool.* = TextureAtlasPool.init(self.alloc, self.gid, freeTextureNoop);
+        pool.* = ManagedTexture.init(self.alloc, self.gid, freeTextureNoop);
         self.gid += 1;
 
         try self.atlas.put(keyOwned, pool);
@@ -301,16 +302,16 @@ pub const ResourceManager = struct {
 
     /// Returns the existing TextureImage pool for `name`, or creates a new
     /// empty pool (consuming one `gid`) and inserts it.
-    fn getOrCreateTextureImagePool(self: *Self, name: []const u8) !*TextureImagePool {
+    fn getOrCreateTextureImagePool(self: *Self, name: []const u8) !*ManagedTextureImage {
         if (self.textures.get(name)) |existing| return existing;
 
         const keyOwned = try self.alloc.dupe(u8, name);
         errdefer self.alloc.free(keyOwned);
 
-        const pool = try self.alloc.create(TextureImagePool);
+        const pool = try self.alloc.create(ManagedTextureImage);
         errdefer self.alloc.destroy(pool);
 
-        pool.* = TextureImagePool.init(self.alloc, self.gid, freeTextureImage);
+        pool.* = ManagedTextureImage.init(self.alloc, self.gid, freeTextureImage);
         self.gid += 1;
 
         try self.textures.put(keyOwned, pool);
@@ -319,16 +320,16 @@ pub const ResourceManager = struct {
 
     /// Returns the existing shader pool for `name`, or creates a new empty
     /// pool (consuming one `gid`) and inserts it.
-    fn getOrCreateShaderPool(self: *Self, name: []const u8) !*ShaderPool {
+    fn getOrCreateShaderPool(self: *Self, name: []const u8) !*ManagedShader {
         if (self.shaders.get(name)) |existing| return existing;
 
         const keyOwned = try self.alloc.dupe(u8, name);
         errdefer self.alloc.free(keyOwned);
 
-        const pool = try self.alloc.create(ShaderPool);
+        const pool = try self.alloc.create(ManagedShader);
         errdefer self.alloc.destroy(pool);
 
-        pool.* = ShaderPool.init(self.alloc, self.gid, freeShader);
+        pool.* = ManagedShader.init(self.alloc, self.gid, freeShader);
         self.gid += 1;
 
         try self.shaders.put(keyOwned, pool);
@@ -337,16 +338,16 @@ pub const ResourceManager = struct {
 
     /// Returns the existing font pool for `name`, or creates a new empty pool
     /// (consuming one `gid`) and inserts it.
-    fn getOrCreateFontPool(self: *Self, name: []const u8) !*FontAtlasPool {
+    fn getOrCreateFontPool(self: *Self, name: []const u8) !*ManagedFont {
         if (self.fonts.get(name)) |existing| return existing;
 
         const keyOwned = try self.alloc.dupe(u8, name);
         errdefer self.alloc.free(keyOwned);
 
-        const pool = try self.alloc.create(FontAtlasPool);
+        const pool = try self.alloc.create(ManagedFont);
         errdefer self.alloc.destroy(pool);
 
-        pool.* = FontAtlasPool.init(self.alloc, self.gid, freeFontAtlas);
+        pool.* = ManagedFont.init(self.alloc, self.gid, freeFontAtlas);
         self.gid += 1;
 
         try self.fonts.put(keyOwned, pool);
