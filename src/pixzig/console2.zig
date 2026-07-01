@@ -67,7 +67,7 @@ pub const Console = struct {
     ) !*Console {
         const console: *Console = try alloc.create(Console);
 
-        const maxY: usize = @intCast(textRenderer.atlas.?.maxY);
+        const maxY: usize = @intCast(textRenderer.font_handle.?.val.maxY);
         const maxDispY: usize = opts.displaySize.y - @as(usize, @intCast(2 * opts.padding.y - 2 * opts.offs.y));
         // -2 accounts for the input line.
         const linesToDisplay: usize = @as(usize, @intCast(maxDispY)) / @as(usize, maxY) - 3;
@@ -368,7 +368,7 @@ pub const Console = struct {
     }
 
     pub fn draw(self: *Console) void {
-        const maxY = self.textRenderer.atlas.?.maxY;
+        const maxY = self.textRenderer.font_handle.?.val.maxY;
 
         const ySpaceForLines: i32 = @as(i32, @intCast(self.linesToDisplay)) * maxY;
         const padding: Vec2I = self.opts.padding;

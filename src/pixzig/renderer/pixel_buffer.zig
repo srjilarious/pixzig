@@ -3,7 +3,6 @@ const gl = @import("zopengl").bindings;
 const common = @import("../common.zig");
 const Vec2U = common.Vec2U;
 const shaders = @import("shaders.zig");
-const Shader = shaders.Shader;
 const resources = @import("../resources.zig");
 const ResourceManager = resources.ResourceManager;
 const ShaderHandle = resources.ShaderHandle;
@@ -14,9 +13,11 @@ const ManagedShader = resources.ManagedShader;
 pub const PixelBuffer = struct {
     texId: c_uint,
     vbo: c_uint,
+    /// Refcounted handle to the shader. Refreshed in `render` when the managed
+    /// resource signals a hot-reload.
     shader_handle: *ShaderHandle,
-    shader_pool: *ManagedShader,
-    shader: *const Shader,
+    /// The managed resource that owns the shader handle.
+    shader: *ManagedShader,
     size: Vec2U,
     pixels: []u8,
     allocator: std.mem.Allocator,
@@ -48,8 +49,7 @@ pub const PixelBuffer = struct {
             .texId = undefined,
             .vbo = undefined,
             .shader_handle = handle,
-            .shader_pool = pool,
-            .shader = &handle.val,
+            .shader = pool,
             .size = size,
             .pixels = pixels,
             .allocator = allocator,
@@ -103,7 +103,7 @@ pub const PixelBuffer = struct {
 
     /// Frees the pixel buffer, texture and VBO.
     pub fn deinit(self: *PixelBuffer) void {
-        self.shader_pool.release(self.shader_handle);
+        self.shader.release(self.shader_handle);
         self.allocator.free(self.pixels);
         gl.deleteTextures(1, &self.texId);
         gl.deleteBuffers(1, &self.vbo);
@@ -130,10 +130,9 @@ pub const PixelBuffer = struct {
 
     fn refreshShader(self: *PixelBuffer) void {
         if (!self.shader_handle.dirty) return;
-        const new_handle = self.shader_pool.acquire() orelse return;
-        self.shader_pool.release(self.shader_handle);
+        const new_handle = self.shader.acquire() orelse return;
+        self.shader.release(self.shader_handle);
         self.shader_handle = new_handle;
-        self.shader = &new_handle.val;
     }
 
     /// Uploads the current pixel buffer and draws the texture as a fullscreen quad
@@ -155,19 +154,19 @@ pub const PixelBuffer = struct {
         );
 
         // Use shader program
-        gl.useProgram(self.shader.program);
+        gl.useProgram(self.shader_handle.val.program);
 
         // Bind texture to texture unit 0
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, self.texId);
 
-        const texture_location = gl.getUniformLocation(self.shader.program, "tex");
+        const texture_location = gl.getUniformLocation(self.shader_handle.val.program, "tex");
         gl.uniform1i(texture_location, 0);
 
         // Bind vertex buffer and set up vertex attributes
         gl.bindBuffer(gl.ARRAY_BUFFER, self.vbo);
 
-        const position_attrib = gl.getAttribLocation(self.shader.program, "a_pos");
+        const position_attrib = gl.getAttribLocation(self.shader_handle.val.program, "a_pos");
         gl.enableVertexAttribArray(@intCast(position_attrib));
         gl.vertexAttribPointer(
             @intCast(position_attrib),

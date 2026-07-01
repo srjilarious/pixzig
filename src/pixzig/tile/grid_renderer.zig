@@ -11,14 +11,14 @@ const Vec2I = common.Vec2I;
 const Vec2U = common.Vec2U;
 const RectF = common.RectF;
 const Color = common.Color;
-const Shader = shaders.Shader;
 const ManagedShader = resources.ManagedShader;
 const ShaderHandle = resources.ShaderHandle;
 
 pub const GridRenderer = struct {
+    /// Refcounted handle to the shader.
     shader_handle: *ShaderHandle,
-    shader_pool: *ManagedShader,
-    shader: *const Shader,
+    /// The managed resource that owns the shader handle.
+    shader: *ManagedShader,
     color: Color = undefined,
     vao: u32 = 0,
     vboVertices: u32 = 0,
@@ -40,19 +40,18 @@ pub const GridRenderer = struct {
 
     pub fn init(
         alloc: std.mem.Allocator,
-        shader_pool: *ManagedShader,
+        shader: *ManagedShader,
         mapSize: Vec2I,
         tileSize: Vec2I,
         borderSize: usize,
         color: Color,
     ) !GridRenderer {
-        const shader_handle = shader_pool.acquire() orelse return error.NoShaderInPool;
-        errdefer shader_pool.release(shader_handle);
+        const shader_handle = shader.acquire() orelse return error.NoShaderInPool;
+        errdefer shader.release(shader_handle);
 
         var gr = GridRenderer{
             .shader_handle = shader_handle,
-            .shader_pool = shader_pool,
-            .shader = &shader_handle.val,
+            .shader = shader,
             .color = color,
             .alloc = alloc,
         };
@@ -79,7 +78,7 @@ pub const GridRenderer = struct {
     }
 
     pub fn deinit(self: *GridRenderer) void {
-        self.shader_pool.release(self.shader_handle);
+        self.shader.release(self.shader_handle);
         self.alloc.free(self.vertices);
         self.alloc.free(self.colorCoords);
         self.alloc.free(self.indices);
@@ -90,17 +89,16 @@ pub const GridRenderer = struct {
     }
 
     fn cacheShaderLocations(self: *GridRenderer) void {
-        self.attrCoord = @intCast(gl.getAttribLocation(self.shader.program, "coord3d"));
-        self.attrColor = @intCast(gl.getAttribLocation(self.shader.program, "color"));
-        self.uniformMVP = @intCast(gl.getUniformLocation(self.shader.program, "projectionMatrix"));
+        self.attrCoord = @intCast(gl.getAttribLocation(self.shader_handle.val.program, "coord3d"));
+        self.attrColor = @intCast(gl.getAttribLocation(self.shader_handle.val.program, "color"));
+        self.uniformMVP = @intCast(gl.getUniformLocation(self.shader_handle.val.program, "projectionMatrix"));
     }
 
     fn refreshShader(self: *GridRenderer) void {
         if (!self.shader_handle.dirty) return;
-        const new_handle = self.shader_pool.acquire() orelse return;
-        self.shader_pool.release(self.shader_handle);
+        const new_handle = self.shader.acquire() orelse return;
+        self.shader.release(self.shader_handle);
         self.shader_handle = new_handle;
-        self.shader = &new_handle.val;
         self.cacheShaderLocations();
     }
 
@@ -210,7 +208,7 @@ pub const GridRenderer = struct {
         self.refreshShader();
 
         const mvpArr = zmath.matToArr(mvp);
-        gl.useProgram(self.shader.program);
+        gl.useProgram(self.shader_handle.val.program);
         gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&mvpArr[0]));
 
         gl.disable(gl.TEXTURE_2D);

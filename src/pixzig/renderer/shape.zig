@@ -18,16 +18,18 @@ const RectF = common.RectF;
 const Color = common.Color;
 const Rotate = common.Rotate;
 const Texture = textures.Texture;
-const Shader = shaders.Shader;
 const ShaderHandle = resources.ShaderHandle;
 const ManagedShader = resources.ManagedShader;
 
 const NumColorCoords = 4 * 4 * C.MaxSprites;
 
 pub const ShapeBatchQueue = struct {
+    /// Refcounted handle to the shader. Refreshed in `begin` when the managed
+    /// resource signals a hot-reload.
     shader_handle: *ShaderHandle = undefined,
-    shader_pool: *ManagedShader = undefined,
-    shader: *const Shader = undefined,
+    /// The managed resource that owns the shader handle. Stored so we can
+    /// reacquire after a dirty signal without re-doing the name lookup.
+    shader: *ManagedShader = undefined,
     vao: u32 = 0,
     vboVertices: u32 = 0,
     vboColorCoords: u32 = 0,
@@ -50,15 +52,14 @@ pub const ShapeBatchQueue = struct {
 
     /// Creates buffers to contain the draw primitives and OpenGL VBOs to execute the draw
     /// commands with in a batch.
-    pub fn init(alloc: std.mem.Allocator, shader_pool: *ManagedShader) !ShapeBatchQueue {
-        const handle = shader_pool.acquire() orelse return error.NoShaderInPool;
-        errdefer shader_pool.release(handle);
+    pub fn init(alloc: std.mem.Allocator, shader: *ManagedShader) !ShapeBatchQueue {
+        const handle = shader.acquire() orelse return error.NoShaderInPool;
+        errdefer shader.release(handle);
 
         var batch = ShapeBatchQueue{
             .allocator = alloc,
             .shader_handle = handle,
-            .shader_pool = shader_pool,
-            .shader = &handle.val,
+            .shader = shader,
         };
 
         batch.vertices = try alloc.alloc(f32, C.NumVerts);
@@ -89,16 +90,16 @@ pub const ShapeBatchQueue = struct {
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         gl.enable(gl.TEXTURE_2D);
 
-        batch.attrCoord = @intCast(gl.getAttribLocation(batch.shader.program, "coord3d"));
-        batch.attrColor = @intCast(gl.getAttribLocation(batch.shader.program, "color"));
-        batch.uniformMVP = @intCast(gl.getUniformLocation(batch.shader.program, "projectionMatrix"));
+        batch.attrCoord = @intCast(gl.getAttribLocation(batch.shader_handle.val.program, "coord3d"));
+        batch.attrColor = @intCast(gl.getAttribLocation(batch.shader_handle.val.program, "color"));
+        batch.uniformMVP = @intCast(gl.getUniformLocation(batch.shader_handle.val.program, "projectionMatrix"));
 
         return batch;
     }
 
     /// Frees our OpenGL VBO resources and the internal buffers we use to queue up shapes.
     pub fn deinit(self: *ShapeBatchQueue) void {
-        self.shader_pool.release(self.shader_handle);
+        self.shader.release(self.shader_handle);
         gl.deleteBuffers(1, &self.vboVertices);
         gl.deleteBuffers(1, &self.vboColorCoords);
         gl.deleteBuffers(1, &self.vboIndices);
@@ -109,10 +110,9 @@ pub const ShapeBatchQueue = struct {
 
     fn refreshShader(self: *ShapeBatchQueue) void {
         if (!self.shader_handle.dirty) return;
-        const new_handle = self.shader_pool.acquire() orelse return;
-        self.shader_pool.release(self.shader_handle);
+        const new_handle = self.shader.acquire() orelse return;
+        self.shader.release(self.shader_handle);
         self.shader_handle = new_handle;
-        self.shader = &new_handle.val;
     }
 
     /// Begins a draw cycle for the shape batch, must be matched with a call to `end`
@@ -279,7 +279,7 @@ pub const ShapeBatchQueue = struct {
         std.debug.assert(self.begun);
         if (self.currNumShapes == 0) return;
 
-        gl.useProgram(self.shader.program);
+        gl.useProgram(self.shader_handle.val.program);
         gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&self.mvpArr[0]));
 
         //gl.disable(gl.TEXTURE_2D);

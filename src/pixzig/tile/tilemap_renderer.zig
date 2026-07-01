@@ -14,8 +14,6 @@ const Vec2I = common.Vec2I;
 const Vec2U = common.Vec2U;
 const RectF = common.RectF;
 const Color = common.Color;
-const Texture = textures.Texture;
-const Shader = shaders.Shader;
 const ManagedShader = resources.ManagedShader;
 const ShaderHandle = resources.ShaderHandle;
 const ManagedTexture = resources.ManagedTexture;
@@ -28,12 +26,14 @@ const TileIndexMap = @import("./tile_index_map.zig").TileIndexMap;
 
 pub const TileMapRenderer = struct {
     mapSize: Vec2U = undefined,
+    /// Refcounted handle to the shader.
     shader_handle: *ShaderHandle,
-    shader_pool: *ManagedShader,
-    shader: *const Shader,
+    /// The managed resource that owns the shader handle.
+    shader: *ManagedShader,
+    /// Refcounted handle to the texture.
     texture_handle: *TextureHandle,
-    texture_pool: *ManagedTexture,
-    texture: *const Texture,
+    /// The managed resource that owns the texture handle.
+    texture: *ManagedTexture,
     vao: u32 = 0,
     vboVertices: u32 = 0,
     vboTexCoords: u32 = 0,
@@ -52,21 +52,19 @@ pub const TileMapRenderer = struct {
 
     pub fn init(
         alloc: std.mem.Allocator,
-        shader_pool: *ManagedShader,
-        texture_pool: *ManagedTexture,
+        shader: *ManagedShader,
+        texture: *ManagedTexture,
     ) !TileMapRenderer {
-        const shader_handle = shader_pool.acquire() orelse return error.NoShaderInPool;
-        errdefer shader_pool.release(shader_handle);
-        const texture_handle = texture_pool.acquire() orelse return error.NoTextureInPool;
-        errdefer texture_pool.release(texture_handle);
+        const shader_handle = shader.acquire() orelse return error.NoShaderInPool;
+        errdefer shader.release(shader_handle);
+        const texture_handle = texture.acquire() orelse return error.NoTextureInPool;
+        errdefer texture.release(texture_handle);
 
         var tr = TileMapRenderer{
             .shader_handle = shader_handle,
-            .shader_pool = shader_pool,
-            .shader = &shader_handle.val,
+            .shader = shader,
             .texture_handle = texture_handle,
-            .texture_pool = texture_pool,
-            .texture = &texture_handle.val,
+            .texture = texture,
             .alloc = alloc,
             .tileIndexMap = TileIndexMap.init(alloc),
         };
@@ -87,8 +85,8 @@ pub const TileMapRenderer = struct {
     }
 
     pub fn deinit(self: *TileMapRenderer) void {
-        self.texture_pool.release(self.texture_handle);
-        self.shader_pool.release(self.shader_handle);
+        self.texture.release(self.texture_handle);
+        self.shader.release(self.shader_handle);
         gl.deleteVertexArrays(1, &self.vao);
         gl.deleteBuffers(1, &self.vboVertices);
         gl.deleteBuffers(1, &self.vboTexCoords);
@@ -102,26 +100,24 @@ pub const TileMapRenderer = struct {
     }
 
     fn cacheShaderLocations(self: *TileMapRenderer) void {
-        self.attrCoord = @intCast(gl.getAttribLocation(self.shader.program, "coord3d"));
-        self.attrTexCoord = @intCast(gl.getAttribLocation(self.shader.program, "texcoord"));
-        self.uniformMVP = @intCast(gl.getUniformLocation(self.shader.program, "projectionMatrix"));
+        self.attrCoord = @intCast(gl.getAttribLocation(self.shader_handle.val.program, "coord3d"));
+        self.attrTexCoord = @intCast(gl.getAttribLocation(self.shader_handle.val.program, "texcoord"));
+        self.uniformMVP = @intCast(gl.getUniformLocation(self.shader_handle.val.program, "projectionMatrix"));
     }
 
     fn refreshShader(self: *TileMapRenderer) void {
         if (!self.shader_handle.dirty) return;
-        const new_handle = self.shader_pool.acquire() orelse return;
-        self.shader_pool.release(self.shader_handle);
+        const new_handle = self.shader.acquire() orelse return;
+        self.shader.release(self.shader_handle);
         self.shader_handle = new_handle;
-        self.shader = &new_handle.val;
         self.cacheShaderLocations();
     }
 
     fn refreshTexture(self: *TileMapRenderer) void {
         if (!self.texture_handle.dirty) return;
-        const new_handle = self.texture_pool.acquire() orelse return;
-        self.texture_pool.release(self.texture_handle);
+        const new_handle = self.texture.acquire() orelse return;
+        self.texture.release(self.texture_handle);
         self.texture_handle = new_handle;
-        self.texture = &new_handle.val;
     }
 
     fn tileCoords(idx: i32, tileset: *TileSet) RectF {
@@ -372,13 +368,13 @@ pub const TileMapRenderer = struct {
         const layerWidth: usize = @intCast(tiles.size.x);
         const layerHeight: usize = @intCast(tiles.size.y);
         const mapSize: i32 = @intCast(layerWidth * layerHeight);
-        gl.useProgram(self.shader.program);
+        gl.useProgram(self.shader_handle.val.program);
         gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&mvpArr[0]));
 
         // Set 'tex' to use texture unit 0
         gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, self.texture.texture);
-        gl.uniform1i(gl.getUniformLocation(self.shader.program, "tex"), 0);
+        gl.bindTexture(gl.TEXTURE_2D, self.texture_handle.val.texture);
+        gl.uniform1i(gl.getUniformLocation(self.shader_handle.val.program, "tex"), 0);
 
         gl.bindVertexArray(self.vao);
         gl.enableVertexAttribArray(self.attrCoord);

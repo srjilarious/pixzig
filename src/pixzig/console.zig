@@ -292,7 +292,7 @@ pub const Console = struct {
     }
 
     fn scrollToBottomForArea(self: *Console, ui: *imgui.UiContext, area_height: f32) void {
-        const line_h: f32 = if (ui.text.atlas) |a| @floatFromInt(a.maxY) else 16;
+        const line_h: f32 = if (ui.text.font_handle) |h| @floatFromInt(h.val.maxY) else 16;
         const pad_y: f32 = @floatFromInt(ui.style.padding.y);
         const usable_h = @max(0.0, area_height - pad_y * 2.0);
         const visible: usize = @max(1, @as(usize, @intFromFloat(@floor(usable_h / line_h))));

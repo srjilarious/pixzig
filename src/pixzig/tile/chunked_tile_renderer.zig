@@ -9,8 +9,6 @@ const resources = @import("../resources.zig");
 const tilemap = @import("./tilemap.zig");
 
 const RectF = common.RectF;
-const Texture = textures.Texture;
-const Shader = shaders.Shader;
 const ManagedShader = resources.ManagedShader;
 const ShaderHandle = resources.ShaderHandle;
 const ManagedTexture = resources.ManagedTexture;
@@ -57,12 +55,14 @@ pub const ChunkedTileMapRenderer = struct {
     chunks: []TileChunk,
     chunks_wide: u32,
     chunks_tall: u32,
+    /// Refcounted handle to the shader.
     shader_handle: *ShaderHandle,
-    shader_pool: *ManagedShader,
-    shader: *const Shader,
+    /// The managed resource that owns the shader handle.
+    shader: *ManagedShader,
+    /// Refcounted handle to the texture.
     texture_handle: *TextureHandle,
-    texture_pool: *ManagedTexture,
-    texture: *const Texture,
+    /// The managed resource that owns the texture handle.
+    texture: *ManagedTexture,
     attr_coord: c_uint,
     attr_texcoord: c_uint,
     uniform_mvp: c_int,
@@ -78,14 +78,14 @@ pub const ChunkedTileMapRenderer = struct {
     /// is read lazily on the first render() call (all chunks start dirty=true).
     pub fn init(
         alloc: std.mem.Allocator,
-        shader_pool: *ManagedShader,
-        texture_pool: *ManagedTexture,
+        shader: *ManagedShader,
+        texture: *ManagedTexture,
         layer: *const TileLayer,
     ) !Self {
-        const shader_handle = shader_pool.acquire() orelse return error.NoShaderInPool;
-        errdefer shader_pool.release(shader_handle);
-        const texture_handle = texture_pool.acquire() orelse return error.NoTextureInPool;
-        errdefer texture_pool.release(texture_handle);
+        const shader_handle = shader.acquire() orelse return error.NoShaderInPool;
+        errdefer shader.release(shader_handle);
+        const texture_handle = texture.acquire() orelse return error.NoTextureInPool;
+        errdefer texture.release(texture_handle);
 
         const map_w: u32 = @intCast(layer.size.x);
         const map_h: u32 = @intCast(layer.size.y);
@@ -136,21 +136,18 @@ pub const ChunkedTileMapRenderer = struct {
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         gl.enable(gl.TEXTURE_2D);
 
-        const shader = &shader_handle.val;
         return .{
             .alloc = alloc,
             .chunks = chunks,
             .chunks_wide = chunks_wide,
             .chunks_tall = chunks_tall,
             .shader_handle = shader_handle,
-            .shader_pool = shader_pool,
             .shader = shader,
             .texture_handle = texture_handle,
-            .texture_pool = texture_pool,
-            .texture = &texture_handle.val,
-            .attr_coord = @intCast(gl.getAttribLocation(shader.program, "coord3d")),
-            .attr_texcoord = @intCast(gl.getAttribLocation(shader.program, "texcoord")),
-            .uniform_mvp = @intCast(gl.getUniformLocation(shader.program, "projectionMatrix")),
+            .texture = texture,
+            .attr_coord = @intCast(gl.getAttribLocation(shader_handle.val.program, "coord3d")),
+            .attr_texcoord = @intCast(gl.getAttribLocation(shader_handle.val.program, "texcoord")),
+            .uniform_mvp = @intCast(gl.getUniformLocation(shader_handle.val.program, "projectionMatrix")),
             .scratch_verts = scratch_verts,
             .scratch_texcoords = scratch_texcoords,
             .scratch_indices = scratch_indices,
@@ -158,8 +155,8 @@ pub const ChunkedTileMapRenderer = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.texture_pool.release(self.texture_handle);
-        self.shader_pool.release(self.shader_handle);
+        self.texture.release(self.texture_handle);
+        self.shader.release(self.shader_handle);
         for (self.chunks) |*chunk| {
             gl.deleteVertexArrays(1, &chunk.vao);
             gl.deleteBuffers(1, &chunk.vbo_coords);
@@ -174,21 +171,19 @@ pub const ChunkedTileMapRenderer = struct {
 
     fn refreshShader(self: *Self) void {
         if (!self.shader_handle.dirty) return;
-        const new_handle = self.shader_pool.acquire() orelse return;
-        self.shader_pool.release(self.shader_handle);
+        const new_handle = self.shader.acquire() orelse return;
+        self.shader.release(self.shader_handle);
         self.shader_handle = new_handle;
-        self.shader = &new_handle.val;
-        self.attr_coord = @intCast(gl.getAttribLocation(self.shader.program, "coord3d"));
-        self.attr_texcoord = @intCast(gl.getAttribLocation(self.shader.program, "texcoord"));
-        self.uniform_mvp = @intCast(gl.getUniformLocation(self.shader.program, "projectionMatrix"));
+        self.attr_coord = @intCast(gl.getAttribLocation(self.shader_handle.val.program, "coord3d"));
+        self.attr_texcoord = @intCast(gl.getAttribLocation(self.shader_handle.val.program, "texcoord"));
+        self.uniform_mvp = @intCast(gl.getUniformLocation(self.shader_handle.val.program, "projectionMatrix"));
     }
 
     fn refreshTexture(self: *Self) void {
         if (!self.texture_handle.dirty) return;
-        const new_handle = self.texture_pool.acquire() orelse return;
-        self.texture_pool.release(self.texture_handle);
+        const new_handle = self.texture.acquire() orelse return;
+        self.texture.release(self.texture_handle);
         self.texture_handle = new_handle;
-        self.texture = &new_handle.val;
     }
 
     /// Mark the chunk containing tile (x, y) as dirty.
@@ -222,12 +217,12 @@ pub const ChunkedTileMapRenderer = struct {
         const tw_f: f32 = @floatFromInt(layer.tileSize.x);
         const th_f: f32 = @floatFromInt(layer.tileSize.y);
 
-        gl.useProgram(self.shader.program);
+        gl.useProgram(self.shader_handle.val.program);
         gl.uniformMatrix4fv(self.uniform_mvp, 1, gl.FALSE, @ptrCast(&mvp_arr[0]));
 
         gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, self.texture.texture);
-        gl.uniform1i(gl.getUniformLocation(self.shader.program, "tex"), 0);
+        gl.bindTexture(gl.TEXTURE_2D, self.texture_handle.val.texture);
+        gl.uniform1i(gl.getUniformLocation(self.shader_handle.val.program, "tex"), 0);
 
         for (self.chunks) |*chunk| {
             // --- Viewport culling ---
