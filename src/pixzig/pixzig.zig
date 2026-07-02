@@ -50,6 +50,8 @@ pub const imgui = @import("./imgui.zig");
 pub const collision = @import("./collision.zig");
 pub const a_star = @import("./a_star.zig");
 pub const assets = @import("./assets.zig");
+pub const file_watcher = @import("./file_watcher.zig");
+pub const FileWatcher = file_watcher.FileWatcher;
 
 pub const windowing = @import("./window.zig");
 pub const WindowState = windowing.WindowState;
@@ -184,6 +186,7 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
                     self.engine.window_state.scale_factor,
                     &self.engine.viewport,
                 );
+                self.engine.resources.checkHotReload();
                 if (!app.update(self.engine, UpdateStepMs)) {
                     return false;
                 }
