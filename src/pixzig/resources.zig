@@ -8,6 +8,8 @@ const shaders = @import("./renderer/shaders.zig");
 const textures = @import("./renderer/textures.zig");
 const font_atlas_mod = @import("./renderer/font_atlas.zig");
 const file_watcher_mod = @import("./file_watcher.zig");
+const tilemap_mod = @import("./tile/tilemap.zig");
+const tiled_loader_mod = @import("./tile/tiled_loader.zig");
 
 const TextureImage = textures.TextureImage;
 const Texture = textures.Texture;
@@ -17,6 +19,8 @@ const CharToColor = textures.CharToColor;
 const SpackFile = textures.SpackFile;
 const FileWatcher = file_watcher_mod.FileWatcher;
 const WatchId = file_watcher_mod.WatchId;
+const TileMap = tilemap_mod.TileMap;
+const TiledMapXmlLoader = tiled_loader_mod.TiledMapXmlLoader;
 
 const Vec2U = common.Vec2U;
 const Vec2I = common.Vec2I;
@@ -45,6 +49,7 @@ pub const TextureHandle = AssetHandle(Texture);
 pub const TextureImageHandle = AssetHandle(TextureImage);
 pub const ShaderHandle = AssetHandle(Shader);
 pub const FontAtlasHandle = AssetHandle(FontAtlas);
+pub const TileMapHandle = AssetHandle(TileMap);
 
 // pub const SoundHandle = AssetHandler()
 
@@ -203,6 +208,10 @@ pub const ManagedShader = ManagedResource("Shader", Shader);
 /// inside the managed resource.
 pub const ManagedFont = ManagedResource("Font", FontAtlas);
 
+/// A TileMap owns allocated tile/layer/tileset data. Stored by value inside
+/// the managed resource; the free function calls deinit to release all memory.
+pub const ManagedTileMap = ManagedResource("TileMap", TileMap);
+
 fn freeTextureNoop(_: Texture) void {}
 
 fn freeTextureImage(t: TextureImage) void {
@@ -219,6 +228,11 @@ fn freeFontAtlas(fa: FontAtlas) void {
     copy.deinit();
 }
 
+fn freeTileMap(t: TileMap) void {
+    var copy = t;
+    copy.deinit();
+}
+
 // ---------------------------------------------------------------------------
 // Hot-reload support (active in debug builds only)
 // ---------------------------------------------------------------------------
@@ -229,6 +243,7 @@ const ReloadInfo = union(enum) {
     texture: struct { name: []const u8, path: []const u8 },
     atlas: struct { base_name: []const u8 },
     font_ttf: struct { name: []const u8, path: []const u8, font_size: f32 },
+    tilemap: struct { name: []const u8, path: []const u8 },
 
     /// Deep-copy all owned strings into `alloc`. The original slices are
     /// not freed; the caller decides when to release them.
@@ -246,6 +261,10 @@ const ReloadInfo = union(enum) {
                 .path = try alloc.dupe(u8, f.path),
                 .font_size = f.font_size,
             } },
+            .tilemap => |t| .{ .tilemap = .{
+                .name = try alloc.dupe(u8, t.name),
+                .path = try alloc.dupe(u8, t.path),
+            } },
         };
     }
 
@@ -259,6 +278,10 @@ const ReloadInfo = union(enum) {
             .font_ttf => |f| {
                 alloc.free(f.name);
                 alloc.free(f.path);
+            },
+            .tilemap => |t| {
+                alloc.free(t.name);
+                alloc.free(t.path);
             },
         }
     }
@@ -329,6 +352,7 @@ pub const ResourceManager = struct {
     shaders: std.StringHashMap(*ManagedShader),
     atlas: std.StringHashMap(*ManagedTexture),
     fonts: std.StringHashMap(*ManagedFont),
+    tilemaps: std.StringHashMap(*ManagedTileMap),
     alloc: std.mem.Allocator,
     /// Monotonic id assigned to each new ManagedResource the manager owns.
     /// Lookups inside a managed resource use generations; this id distinguishes
@@ -348,6 +372,7 @@ pub const ResourceManager = struct {
             .shaders = std.StringHashMap(*ManagedShader).init(alloc),
             .atlas = std.StringHashMap(*ManagedTexture).init(alloc),
             .fonts = std.StringHashMap(*ManagedFont).init(alloc),
+            .tilemaps = std.StringHashMap(*ManagedTileMap).init(alloc),
             .alloc = alloc,
             .gid = 0,
             .hot_reload = null,
@@ -388,6 +413,14 @@ pub const ResourceManager = struct {
         }
         self.fonts.deinit();
 
+        var tmit = self.tilemaps.iterator();
+        while (tmit.next()) |entry| {
+            entry.value_ptr.*.deinit();
+            self.alloc.destroy(entry.value_ptr.*);
+            self.alloc.free(entry.key_ptr.*);
+        }
+        self.tilemaps.deinit();
+
         if (self.hot_reload) |*hr| hr.deinit();
     }
 
@@ -416,6 +449,20 @@ pub const ResourceManager = struct {
                 const pool = try self.getOrCreateFontPool(f.name);
                 try pool.add(fa);
             },
+            .tilemap => |t| {
+                std.log.info("Hot reload: reloading tilemap '{s}' from '{s}'", .{ t.name, t.path });
+                const map = try TiledMapXmlLoader.initFromFile(t.path, self.alloc);
+                const pool = try self.getOrCreateTileMapPool(t.name);
+                try pool.add(map);
+                std.log.info("Hot reload: tilemap '{s}' reloaded, {} live handles marked dirty", .{
+                    t.name,
+                    blk: {
+                        var n: usize = 0;
+                        for (pool.res.items) |h| if (h != null and h.?.dirty) { n += 1; };
+                        break :blk n;
+                    },
+                });
+            },
         }
     }
 
@@ -434,12 +481,23 @@ pub const ResourceManager = struct {
             return;
         };
 
+        if (changed.items.len > 0) {
+            std.log.info("File watcher: {} file change(s) detected", .{changed.items.len});
+        }
         for (changed.items) |id| {
             if (hr.watches.get(id)) |info| {
-                std.log.info("Hot reloading resource (watch id {})", .{id});
+                const type_name = switch (info) {
+                    .texture => "texture",
+                    .atlas => "atlas",
+                    .font_ttf => "font",
+                    .tilemap => "tilemap",
+                };
+                std.log.info("Hot reloading {s} (watch id {})", .{ type_name, id });
                 self.reloadResource(info) catch |err| {
                     std.log.warn("Hot reload failed for watch id {}: {}", .{ id, err });
                 };
+            } else {
+                std.log.warn("File watcher fired for unknown watch id {}", .{id});
             }
         }
     }
@@ -500,6 +558,24 @@ pub const ResourceManager = struct {
         self.gid += 1;
 
         try self.shaders.put(keyOwned, pool);
+        return pool;
+    }
+
+    /// Returns the existing tilemap pool for `name`, or creates a new empty pool
+    /// (consuming one `gid`) and inserts it.
+    fn getOrCreateTileMapPool(self: *Self, name: []const u8) !*ManagedTileMap {
+        if (self.tilemaps.get(name)) |existing| return existing;
+
+        const keyOwned = try self.alloc.dupe(u8, name);
+        errdefer self.alloc.free(keyOwned);
+
+        const pool = try self.alloc.create(ManagedTileMap);
+        errdefer self.alloc.destroy(pool);
+
+        pool.* = ManagedTileMap.init(self.alloc, self.gid, freeTileMap);
+        self.gid += 1;
+
+        try self.tilemaps.put(keyOwned, pool);
         return pool;
     }
 
@@ -908,6 +984,54 @@ pub const ResourceManager = struct {
 
     pub fn releaseFontAtlas(self: *Self, handle: *FontAtlasHandle) void {
         var it = self.fonts.iterator();
+        while (it.next()) |entry| {
+            if (entry.value_ptr.*.id == handle.id) {
+                entry.value_ptr.*.release(handle);
+                return;
+            }
+        }
+        unreachable;
+    }
+
+    // -----------------------------------------------------------------------
+    // TileMap loading
+    // -----------------------------------------------------------------------
+
+    /// Loads a Tiled map from a .tmx file and registers it under `name`.
+    /// A second call with the same name marks the prior generation dirty so
+    /// holders can re-acquire the new data (hot-reload semantics matching
+    /// other load* methods).
+    ///
+    /// In debug builds, the .tmx file is watched and the map is reloaded
+    /// (with live handles marked dirty) when the file changes.
+    pub fn loadTileMap(self: *Self, name: []const u8, path: []const u8) !void {
+        const map = try TiledMapXmlLoader.initFromFile(path, self.alloc);
+        const pool = try self.getOrCreateTileMapPool(name);
+        try pool.add(map);
+
+        if (comptime builtin.mode == .Debug) {
+            self.ensureHotReload();
+            if (self.hot_reload) |*hr| {
+                hr.registerWatch(path, .{
+                    .tilemap = .{ .name = name, .path = path },
+                }) catch |err| {
+                    std.log.warn("Could not register tilemap watch for '{s}': {}", .{ path, err });
+                };
+            }
+        }
+    }
+
+    /// Acquires a refcounted handle to a tilemap by name. The handle stays
+    /// alive until released via `releaseTileMap`. The owning pool marks the
+    /// handle dirty when the map file is reloaded, signalling the caller to
+    /// release, re-acquire, and rebuild any renderer data.
+    pub fn acquireTileMap(self: *Self, name: []const u8) !*TileMapHandle {
+        const pool = self.tilemaps.get(name) orelse return error.NoTileMapWithThatName;
+        return pool.acquire() orelse return error.NoTileMapWithThatName;
+    }
+
+    pub fn releaseTileMap(self: *Self, handle: *TileMapHandle) void {
+        var it = self.tilemaps.iterator();
         while (it.next()) |entry| {
             if (entry.value_ptr.*.id == handle.id) {
                 entry.value_ptr.*.release(handle);

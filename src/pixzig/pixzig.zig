@@ -66,6 +66,9 @@ pub const Camera2D = camera.Camera2D;
 pub const Texture = textures.Texture;
 pub const TextureImage = textures.TextureImage;
 
+pub const TileMapHandle = resources.TileMapHandle;
+pub const ManagedTileMap = resources.ManagedTileMap;
+
 const ResourceManager = resources.ResourceManager;
 
 pub const Vec2I = common.Vec2I;

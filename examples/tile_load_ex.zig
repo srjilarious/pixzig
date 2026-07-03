@@ -25,16 +25,19 @@ pub const App = struct {
     camera: pixzig.Camera2D,
     mapRenderer: tile.TileMapRenderer,
     guy: RectF,
-    map: tile.TileMap,
+    tilemap_pool: *pixzig.ManagedTileMap,
+    map_handle: *pixzig.TileMapHandle,
     fps: FpsCounter,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         _ = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
 
         std.log.info("Loading tile map", .{});
-        const map = try tile.TiledMapXmlLoader.initFromFile("assets/level1a.tmx", alloc);
+        try eng.resources.loadTileMap("level1a", "assets/level1a.tmx");
+        const tilemap_pool = eng.resources.tilemaps.get("level1a") orelse return error.NoTileMapWithThatName;
+        const map_handle = tilemap_pool.acquire() orelse return error.NoTileMapWithThatName;
 
-        const tData = map.layers.items[1].tile(0, 0);
+        const tData = map_handle.val.layers.items[1].tile(0, 0);
         std.log.info("Tile 0,0 data: {any}", .{tData});
 
         std.log.info("Initializing map renderer.", .{});
@@ -43,14 +46,14 @@ pub const App = struct {
         var mapRender = try tile.TileMapRenderer.init(alloc, shader_pool, texture_pool);
 
         std.log.info("Creating tile renderering data.", .{});
-        try mapRender.recreateVertices(&map.tilesets.items[0], &map.layers.items[1]);
+        try mapRender.recreateVertices(&map_handle.val.tilesets.items[0], &map_handle.val.layers.items[1]);
 
         std.log.info("Done creating tile renderering data.", .{});
 
         const guy_rect = RectF.fromPosSize(33, 33, 32, 32);
         var cam = pixzig.Camera2D.init(eng.viewport.logical_size);
         cam.pos = guy_rect.centerF();
-        const layer = &map.layers.items[1];
+        const layer = &map_handle.val.layers.items[1];
         cam.bounds = .{
             .l = 0,
             .t = 0,
@@ -63,7 +66,8 @@ pub const App = struct {
             .alloc = alloc,
             .camera = cam,
             .mapRenderer = mapRender,
-            .map = map,
+            .tilemap_pool = tilemap_pool,
+            .map_handle = map_handle,
             .guy = guy_rect,
             .fps = FpsCounter.init(),
         };
@@ -72,7 +76,7 @@ pub const App = struct {
 
     pub fn deinit(self: *App) void {
         self.mapRenderer.deinit();
-        self.map.deinit();
+        self.tilemap_pool.release(self.map_handle);
         self.alloc.destroy(self);
     }
 
@@ -83,12 +87,39 @@ pub const App = struct {
 
         if (eng.inputs.keyboard.pressed(.escape)) return false;
 
+        if (self.map_handle.dirty) {
+            std.log.info("Tilemap handle dirty, re-acquiring and rebuilding renderer", .{});
+            const new_handle = self.tilemap_pool.acquire() orelse {
+                std.log.err("Failed to acquire reloaded tilemap handle", .{});
+                return true;
+            };
+            self.tilemap_pool.release(self.map_handle);
+            self.map_handle = new_handle;
+
+            const layer = &self.map_handle.val.layers.items[1];
+            self.camera.bounds = .{
+                .l = 0,
+                .t = 0,
+                .r = @floatFromInt(layer.size.x * layer.tileSize.x),
+                .b = @floatFromInt(layer.size.y * layer.tileSize.y),
+            };
+
+            self.mapRenderer.recreateVertices(
+                &self.map_handle.val.tilesets.items[0],
+                &self.map_handle.val.layers.items[1],
+            ) catch |err| {
+                std.log.err("Failed to rebuild tile renderer after hot reload: {}", .{err});
+                return true;
+            };
+            std.log.info("Tilemap renderer rebuilt after hot reload", .{});
+        }
+
         const MoveAmount = 3;
         if (eng.inputs.keyboard.down(.left)) {
             _ = pixzig.tile.Mover.moveLeft(
                 &self.guy,
                 MoveAmount,
-                &self.map.layers.items[1],
+                &self.map_handle.val.layers.items[1],
                 pixzig.tile.BlocksAll,
             );
         }
@@ -96,7 +127,7 @@ pub const App = struct {
             _ = pixzig.tile.Mover.moveRight(
                 &self.guy,
                 MoveAmount,
-                &self.map.layers.items[1],
+                &self.map_handle.val.layers.items[1],
                 pixzig.tile.BlocksAll,
             );
         }
@@ -104,7 +135,7 @@ pub const App = struct {
             _ = pixzig.tile.Mover.moveUp(
                 &self.guy,
                 MoveAmount,
-                &self.map.layers.items[1],
+                &self.map_handle.val.layers.items[1],
                 pixzig.tile.BlocksAll,
             );
         }
@@ -112,7 +143,7 @@ pub const App = struct {
             _ = pixzig.tile.Mover.moveDown(
                 &self.guy,
                 MoveAmount,
-                &self.map.layers.items[1],
+                &self.map_handle.val.layers.items[1],
                 pixzig.tile.BlocksAll,
             );
         }
@@ -126,7 +157,7 @@ pub const App = struct {
 
         self.fps.renderTick();
         const mvp = self.camera.matrix(&eng.viewport);
-        try self.mapRenderer.draw(&self.map.layers.items[1], mvp);
+        try self.mapRenderer.draw(&self.map_handle.val.layers.items[1], mvp);
 
         // Draw outline.
         eng.renderer.begin(mvp);

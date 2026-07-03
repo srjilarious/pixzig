@@ -89,6 +89,7 @@ pub const FileWatcher = struct {
             .filename = owned_filename,
         });
 
+        std.log.debug("FileWatcher: watching dir='{s}' file='{s}' id={} wd={}", .{ dir, owned_filename, id, wd });
         return id;
     }
 
@@ -119,11 +120,19 @@ pub const FileWatcher = struct {
                     @ptrCast(@alignCast(buf[off..].ptr));
 
                 if (ev.getName()) |name| {
+                    std.log.debug("inotify event: mask=0x{x} wd={} name='{s}'", .{ ev.mask, ev.wd, name });
+                    var matched = false;
                     for (self.entries.items) |e| {
                         if (e.wd == ev.wd and std.mem.eql(u8, e.filename, name)) {
                             try changed.append(alloc, e.id);
+                            matched = true;
                         }
                     }
+                    if (!matched) {
+                        std.log.debug("inotify event for '{s}' did not match any watched file", .{name});
+                    }
+                } else {
+                    std.log.debug("inotify event: mask=0x{x} wd={} (no filename)", .{ ev.mask, ev.wd });
                 }
 
                 off += event_size + ev.len;
