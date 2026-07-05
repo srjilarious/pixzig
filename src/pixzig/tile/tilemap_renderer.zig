@@ -24,7 +24,7 @@ const TileMap = tilemap.TileMap;
 const TileSet = tilemap.TileSet;
 const TileIndexMap = @import("./tile_index_map.zig").TileIndexMap;
 
-pub const TileMapRenderer = struct {
+pub const TiledLayerRenderer = struct {
     mapSize: Vec2U = undefined,
     /// Refcounted handle to the shader.
     shader_handle: *ShaderHandle,
@@ -54,13 +54,13 @@ pub const TileMapRenderer = struct {
         alloc: std.mem.Allocator,
         shader: *ManagedShader,
         texture: *ManagedTexture,
-    ) !TileMapRenderer {
+    ) !TiledLayerRenderer {
         const shader_handle = shader.acquire() orelse return error.NoShaderInPool;
         errdefer shader.release(shader_handle);
         const texture_handle = texture.acquire() orelse return error.NoTextureInPool;
         errdefer texture.release(texture_handle);
 
-        var tr = TileMapRenderer{
+        var tr = TiledLayerRenderer{
             .shader_handle = shader_handle,
             .shader = shader,
             .texture_handle = texture_handle,
@@ -84,7 +84,7 @@ pub const TileMapRenderer = struct {
         return tr;
     }
 
-    pub fn deinit(self: *TileMapRenderer) void {
+    pub fn deinit(self: *TiledLayerRenderer) void {
         self.texture.release(self.texture_handle);
         self.shader.release(self.shader_handle);
         gl.deleteVertexArrays(1, &self.vao);
@@ -99,13 +99,13 @@ pub const TileMapRenderer = struct {
         self.tileIndexMap.deinit();
     }
 
-    fn cacheShaderLocations(self: *TileMapRenderer) void {
+    fn cacheShaderLocations(self: *TiledLayerRenderer) void {
         self.attrCoord = @intCast(gl.getAttribLocation(self.shader_handle.val.program, "coord3d"));
         self.attrTexCoord = @intCast(gl.getAttribLocation(self.shader_handle.val.program, "texcoord"));
         self.uniformMVP = @intCast(gl.getUniformLocation(self.shader_handle.val.program, "projectionMatrix"));
     }
 
-    fn refreshShader(self: *TileMapRenderer) void {
+    fn refreshShader(self: *TiledLayerRenderer) void {
         if (!self.shader_handle.dirty) return;
         const new_handle = self.shader.acquire() orelse return;
         self.shader.release(self.shader_handle);
@@ -113,7 +113,7 @@ pub const TileMapRenderer = struct {
         self.cacheShaderLocations();
     }
 
-    fn refreshTexture(self: *TileMapRenderer) void {
+    fn refreshTexture(self: *TiledLayerRenderer) void {
         if (!self.texture_handle.dirty) return;
         const new_handle = self.texture.acquire() orelse return;
         self.texture.release(self.texture_handle);
@@ -147,7 +147,7 @@ pub const TileMapRenderer = struct {
         };
     }
 
-    fn dump(self: *TileMapRenderer) void {
+    fn dump(self: *TiledLayerRenderer) void {
         std.log.debug("*****************\n", .{});
 
         std.log.debug("### tileIndexMap:\n", .{});
@@ -174,7 +174,7 @@ pub const TileMapRenderer = struct {
         std.log.debug("*****************\n", .{});
     }
 
-    pub fn tileChanged(self: *TileMapRenderer, tileset: *TileSet, tiles: *TileLayer, loc: Vec2I, tile: i32) !void {
+    pub fn tileChanged(self: *TiledLayerRenderer, tileset: *TileSet, tiles: *TileLayer, loc: Vec2I, tile: i32) !void {
         const layerWidth: usize = @intCast(tiles.size.x);
         const layerHeight: usize = @intCast(tiles.size.y);
         if (loc.x < 0 or loc.x >= layerWidth) return;
@@ -249,7 +249,7 @@ pub const TileMapRenderer = struct {
         // self.dump();
     }
 
-    fn setTileRenderData(self: *TileMapRenderer, loc: Vec2I, vertIdx: usize, indicesIdx: usize, ts: Vec2I, tile: i32, tileset: *TileSet) void {
+    fn setTileRenderData(self: *TiledLayerRenderer, loc: Vec2I, vertIdx: usize, indicesIdx: usize, ts: Vec2I, tile: i32, tileset: *TileSet) void {
         const uv = tileCoords(tile, tileset);
         var idx = vertIdx;
         const x = loc.x;
@@ -293,7 +293,7 @@ pub const TileMapRenderer = struct {
         self.indices[indicesIdx + 5] = baseIdx + 3;
     }
 
-    pub fn recreateVertices(self: *TileMapRenderer, tileset: *TileSet, tiles: *TileLayer) !void {
+    pub fn recreateVertices(self: *TiledLayerRenderer, tileset: *TileSet, tiles: *TileLayer) !void {
 
         // const tw = tileset.tileSize.x;
         // const th = tileset.tileSize.y;
@@ -357,10 +357,10 @@ pub const TileMapRenderer = struct {
 
         self.numActualIndices = indicesIdx;
         self.numBuffVals = buffIdx;
-        std.log.info("TileMapRenderer.recreateVertices finished.", .{});
+        std.log.info("TiledLayerRenderer.recreateVertices finished.", .{});
     }
 
-    pub fn draw(self: *TileMapRenderer, tiles: *TileLayer, mvp: zmath.Mat) !void {
+    pub fn draw(self: *TiledLayerRenderer, tiles: *TileLayer, mvp: zmath.Mat) !void {
         self.refreshShader();
         self.refreshTexture();
 

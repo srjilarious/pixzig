@@ -480,6 +480,15 @@ pub const TileLayer = struct {
         return self.tileset.?.tile(tsIdx);
     }
 
+    pub fn floatPropWithDefault(self: *const TileLayer, name: []const u8, default: f32) f32 {
+        for (self.properties.items) |prop| {
+            if (std.mem.eql(u8, prop.name, name)) {
+                return std.fmt.parseFloat(f32, prop.value) catch default;
+            }
+        }
+        return default;
+    }
+
     /// A debug function to print the tile indices for the layer to the console.
     pub fn dumpLayer(self: *const TileLayer) void {
         for (0..@intCast(self.size.y)) |yy| {

@@ -34,10 +34,11 @@ pub const BlocksAll = tilemap.BlocksAll;
 pub const Kills = tilemap.Kills;
 pub const UserPropsStart = tilemap.UserPropsStart;
 
-pub const TileMapRenderer = @import("./tile/tilemap_renderer.zig").TileMapRenderer;
+pub const TiledLayerRenderer = @import("./tile/tilemap_renderer.zig").TiledLayerRenderer;
 pub const GridRenderer = @import("./tile/grid_renderer.zig").GridRenderer;
 
-pub const ChunkedTileMapRenderer = @import("./tile/chunked_tile_renderer.zig").ChunkedTileMapRenderer;
+pub const ChunkedTiledLayerRenderer = @import("./tile/chunked_tile_renderer.zig").ChunkedTiledLayerRenderer;
+pub const ChunkedTiledRenderer = @import("./tile/chunked_tiled_renderer.zig").ChunkedTiledRenderer;
 
 pub const Mover = @import("./tile/tile_mover.zig").Mover;
 

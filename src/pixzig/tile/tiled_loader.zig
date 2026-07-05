@@ -155,7 +155,18 @@ pub const TiledMapXmlLoader = struct {
             buffIdx += 1;
         }
 
-        // const propsNode = node.findChildByTag("properties").?;
+        if (node.findChildByTag("properties")) |propsNode| {
+            var props = propsNode.elements();
+            while (props.next()) |prop| {
+                const name = prop.getAttribute("name") orelse continue;
+                const value = prop.getAttribute("value") orelse continue;
+                const nameDup = try alloc.dupe(u8, name);
+                errdefer alloc.free(nameDup);
+                const valueDup = try alloc.dupe(u8, value);
+                errdefer alloc.free(valueDup);
+                try layer.properties.append(alloc, .{ .name = nameDup, .value = valueDup });
+            }
+        }
 
         return layer;
     }

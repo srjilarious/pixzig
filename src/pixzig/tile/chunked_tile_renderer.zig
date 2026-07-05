@@ -25,7 +25,7 @@ const MaxFloatsPerChunk = MaxVertsPerChunk * 2; // 8192 floats (x,y per vert)
 const MaxIndicesPerChunk = MaxTilesPerChunk * 6; // 6144 u16 indices
 
 /// Per-chunk GPU state. Holds only GL handles and bookkeeping — no CPU buffers.
-/// A single shared scratch buffer in ChunkedTileMapRenderer is used for builds.
+/// A single shared scratch buffer in ChunkedTiledLayerRenderer is used for builds.
 const TileChunk = struct {
     vao: u32,
     vbo_coords: u32,
@@ -50,7 +50,7 @@ const TileChunk = struct {
 ///
 /// Viewport culling is applied in render(): chunks whose world-space AABB
 /// does not intersect the supplied viewport rectangle are skipped entirely.
-pub const ChunkedTileMapRenderer = struct {
+pub const ChunkedTiledLayerRenderer = struct {
     alloc: std.mem.Allocator,
     chunks: []TileChunk,
     chunks_wide: u32,
@@ -184,6 +184,10 @@ pub const ChunkedTileMapRenderer = struct {
         const new_handle = self.texture.acquire() orelse return;
         self.texture.release(self.texture_handle);
         self.texture_handle = new_handle;
+    }
+
+    pub fn markAllDirty(self: *Self) void {
+        for (self.chunks) |*chunk| chunk.dirty = true;
     }
 
     /// Mark the chunk containing tile (x, y) as dirty.
