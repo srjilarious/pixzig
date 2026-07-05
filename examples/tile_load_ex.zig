@@ -98,8 +98,8 @@ pub const App = struct {
                 .b = @floatFromInt(main_layer.size.y * main_layer.tileSize.y),
             };
 
-            self.mapRenderer.markAllDirty();
-            std.log.info("Tilemap renderer marked dirty after hot reload", .{});
+            self.mapRenderer.rebuildAll(&self.map_handle.val);
+            std.log.info("Tilemap renderer rebuilt after hot reload", .{});
         }
 
         const MoveAmount = 3;
@@ -144,13 +144,18 @@ pub const App = struct {
         eng.renderer.clear(0, 0, 0.2, 1);
 
         self.fps.renderTick();
-        self.mapRenderer.render(&self.map_handle.val, &self.camera, &eng.viewport);
 
-        // Draw outline.
+        // Render tile layers below z=1 (background + main layer at z=0),
+        // then game objects, then foreground layers at z>=1.
+        // Set a `z` float property on a layer in Tiled to control ordering.
+        self.mapRenderer.renderLayersBelow(1.0, &self.map_handle.val, &self.camera, &eng.viewport);
+
         const mvp = self.camera.matrix(&eng.viewport);
         eng.renderer.begin(mvp);
         eng.renderer.drawRect(self.guy, Color.from(255, 255, 0, 200), 2);
         eng.renderer.end();
+
+        self.mapRenderer.renderLayersAbove(1.0, &self.map_handle.val, &self.camera, &eng.viewport);
     }
 };
 

@@ -177,6 +177,9 @@ pub const ChunkedTiledLayerRenderer = struct {
         self.attr_coord = @intCast(gl.getAttribLocation(self.shader_handle.val.program, "coord3d"));
         self.attr_texcoord = @intCast(gl.getAttribLocation(self.shader_handle.val.program, "texcoord"));
         self.uniform_mvp = @intCast(gl.getUniformLocation(self.shader_handle.val.program, "projectionMatrix"));
+        // Chunk VAOs bake in attrib pointer setup; rebuild them so they use the
+        // new attribute locations from the reloaded shader.
+        self.markAllDirty();
     }
 
     fn refreshTexture(self: *Self) void {
@@ -188,6 +191,17 @@ pub const ChunkedTiledLayerRenderer = struct {
 
     pub fn markAllDirty(self: *Self) void {
         for (self.chunks) |*chunk| chunk.dirty = true;
+    }
+
+    /// Immediately rebuild every chunk from `layer`, regardless of viewport.
+    /// Use this after a hot-reload of tile data so off-screen chunks don't
+    /// carry stale GPU state until the camera reaches them.
+    pub fn rebuildAll(self: *Self, layer: *const TileLayer) void {
+        const tileset = layer.tileset orelse return;
+        for (self.chunks) |*chunk| {
+            buildChunk(self, chunk, tileset, layer);
+            chunk.dirty = false;
+        }
     }
 
     /// Mark the chunk containing tile (x, y) as dirty.

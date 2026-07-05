@@ -20,11 +20,23 @@ const LayerEntry = struct {
     parallax_x: f32,
     parallax_y: f32,
     layer_index: usize,
+    /// Draw order depth. Layers are rendered lowest-z-first. Set via the
+    /// `z` float custom property on the layer in Tiled; defaults to 0.
+    z: f32,
 };
 
+fn entryLessThan(_: void, a: LayerEntry, b: LayerEntry) bool {
+    if (a.z != b.z) return a.z < b.z;
+    return a.layer_index < b.layer_index;
+}
+
 /// Renders all tile layers in a TileMap, one ChunkedTiledLayerRenderer per
-/// layer. Parallax per layer is read from the layer's `parallax_x` and
-/// `parallax_y` float properties (defaulting to 1.0 if absent).
+/// layer. Per-layer properties read from Tiled custom properties:
+///   `z`           - draw order depth (f32, default 0.0); lower renders first
+///   `parallax_x`  - horizontal scroll factor (f32, default 1.0)
+///   `parallax_y`  - vertical scroll factor   (f32, default 1.0)
+///
+/// Entries are sorted by z ascending at init time and remain in that order.
 pub const ChunkedTiledRenderer = struct {
     alloc: std.mem.Allocator,
     entries: []LayerEntry,
@@ -50,9 +62,12 @@ pub const ChunkedTiledRenderer = struct {
                 .parallax_x = layer.floatPropWithDefault("parallax_x", 1.0),
                 .parallax_y = layer.floatPropWithDefault("parallax_y", 1.0),
                 .layer_index = i,
+                .z = layer.floatPropWithDefault("z", 0.0),
             };
             inited += 1;
         }
+
+        std.sort.block(LayerEntry, entries, {}, entryLessThan);
 
         return .{ .alloc = alloc, .entries = entries };
     }
@@ -62,15 +77,23 @@ pub const ChunkedTiledRenderer = struct {
         self.alloc.free(self.entries);
     }
 
-    /// Mark all chunks in all layers as dirty, forcing a full GPU rebuild on
-    /// the next render call. Call this after a hot-reload of the map data.
+    /// Mark all chunks in all layers as dirty. Chunks rebuild lazily as they
+    /// come into view. Use rebuildAll for an immediate forced rebuild.
     pub fn markAllDirty(self: *Self) void {
         for (self.entries) |*e| e.renderer.markAllDirty();
     }
 
-    /// Render all layers in order. Each layer's MVP and culling viewport are
-    /// derived from `camera` and `viewport` adjusted by the layer's parallax
-    /// factors.
+    /// Immediately rebuild every chunk in every layer from the current map
+    /// data, regardless of viewport. Call this after a hot-reload of tile data
+    /// so off-screen chunks don't carry stale GPU state.
+    pub fn rebuildAll(self: *Self, map: *const TileMap) void {
+        for (self.entries) |*entry| {
+            const layer = map.layerByIndex(entry.layer_index) orelse continue;
+            entry.renderer.rebuildAll(layer);
+        }
+    }
+
+    /// Render all layers in ascending z order.
     pub fn render(
         self: *Self,
         map: *const TileMap,
@@ -78,14 +101,63 @@ pub const ChunkedTiledRenderer = struct {
         viewport: *const Viewport,
     ) void {
         for (self.entries) |*entry| {
-            const layer = map.layerByIndex(entry.layer_index) orelse continue;
-            const mvp = layerMvp(camera, viewport, entry.parallax_x, entry.parallax_y);
-            const vp_rect = layerViewport(camera, entry.parallax_x, entry.parallax_y);
-            entry.renderer.render(layer, mvp, vp_rect);
+            renderEntry(entry, map, camera, viewport);
+        }
+    }
+
+    /// Render a single layer by its original map index.
+    pub fn renderLayer(
+        self: *Self,
+        layer_index: usize,
+        map: *const TileMap,
+        camera: *const Camera2D,
+        viewport: *const Viewport,
+    ) void {
+        for (self.entries) |*entry| {
+            if (entry.layer_index == layer_index) {
+                renderEntry(entry, map, camera, viewport);
+                return;
+            }
+        }
+    }
+
+    /// Render all layers whose z is strictly less than `z_threshold`.
+    pub fn renderLayersBelow(
+        self: *Self,
+        z_threshold: f32,
+        map: *const TileMap,
+        camera: *const Camera2D,
+        viewport: *const Viewport,
+    ) void {
+        for (self.entries) |*entry| {
+            if (entry.z >= z_threshold) break; // entries are sorted; can stop early
+            renderEntry(entry, map, camera, viewport);
+        }
+    }
+
+    /// Render all layers whose z is greater than or equal to `z_threshold`.
+    pub fn renderLayersAbove(
+        self: *Self,
+        z_threshold: f32,
+        map: *const TileMap,
+        camera: *const Camera2D,
+        viewport: *const Viewport,
+    ) void {
+        for (self.entries) |*entry| {
+            if (entry.z >= z_threshold) {
+                renderEntry(entry, map, camera, viewport);
+            }
         }
     }
 
     // -------------------------------------------------------------------------
+
+    fn renderEntry(entry: *LayerEntry, map: *const TileMap, camera: *const Camera2D, viewport: *const Viewport) void {
+        const layer = map.layerByIndex(entry.layer_index) orelse return;
+        const mvp = layerMvp(camera, viewport, entry.parallax_x, entry.parallax_y);
+        const vp_rect = layerViewport(camera, entry.parallax_x, entry.parallax_y);
+        entry.renderer.render(layer, mvp, vp_rect);
+    }
 
     /// Build a camera MVP with the translation scaled by (px, py). This gives
     /// a parallax effect: a layer with px=0.5 scrolls at half the camera speed.
