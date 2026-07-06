@@ -40,6 +40,9 @@ fn entryLessThan(_: void, a: LayerEntry, b: LayerEntry) bool {
 pub const ChunkedTiledRenderer = struct {
     alloc: std.mem.Allocator,
     entries: []LayerEntry,
+    /// Retained so reload() can create renderers for newly added layers.
+    shader: *ManagedShader,
+    texture: *ManagedTexture,
 
     const Self = @This();
 
@@ -69,7 +72,7 @@ pub const ChunkedTiledRenderer = struct {
 
         std.sort.block(LayerEntry, entries, {}, entryLessThan);
 
-        return .{ .alloc = alloc, .entries = entries };
+        return .{ .alloc = alloc, .entries = entries, .shader = shader, .texture = texture };
     }
 
     pub fn deinit(self: *Self) void {
@@ -84,13 +87,45 @@ pub const ChunkedTiledRenderer = struct {
     }
 
     /// Immediately rebuild every chunk in every layer from the current map
-    /// data, regardless of viewport. Call this after a hot-reload of tile data
-    /// so off-screen chunks don't carry stale GPU state.
+    /// data, regardless of viewport. Only safe when the map's layer count and
+    /// structure are unchanged — use reload() after a hot-reload that may have
+    /// added, removed, or reordered layers.
     pub fn rebuildAll(self: *Self, map: *const TileMap) void {
         for (self.entries) |*entry| {
             const layer = map.layerByIndex(entry.layer_index) orelse continue;
             entry.renderer.rebuildAll(layer);
         }
+    }
+
+    /// Full hot-reload: tears down all layer renderers and rebuilds them from
+    /// the current map state. Handles added layers, removed layers, and
+    /// changes to z or parallax properties. On error the existing renderers
+    /// are left intact.
+    pub fn reload(self: *Self, map: *const TileMap) !void {
+        const n = map.layers.items.len;
+        const new_entries = try self.alloc.alloc(LayerEntry, n);
+        errdefer self.alloc.free(new_entries);
+
+        var inited: usize = 0;
+        errdefer for (new_entries[0..inited]) |*e| e.renderer.deinit();
+
+        for (map.layers.items, 0..) |*layer, i| {
+            new_entries[i] = .{
+                .renderer = try ChunkedTiledLayerRenderer.init(self.alloc, self.shader, self.texture, layer),
+                .parallax_x = layer.floatPropWithDefault("parallax_x", 1.0),
+                .parallax_y = layer.floatPropWithDefault("parallax_y", 1.0),
+                .layer_index = i,
+                .z = layer.floatPropWithDefault("z", 0.0),
+            };
+            new_entries[i].renderer.rebuildAll(layer);
+            inited += 1;
+        }
+
+        for (self.entries) |*e| e.renderer.deinit();
+        self.alloc.free(self.entries);
+        self.entries = new_entries;
+
+        std.sort.block(LayerEntry, self.entries, {}, entryLessThan);
     }
 
     /// Render all layers in ascending z order.

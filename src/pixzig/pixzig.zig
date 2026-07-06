@@ -52,6 +52,7 @@ pub const a_star = @import("./a_star.zig");
 pub const assets = @import("./assets.zig");
 pub const file_watcher = @import("./file_watcher.zig");
 pub const FileWatcher = file_watcher.FileWatcher;
+pub const GlTestContext = @import("./test_context.zig").GlTestContext;
 
 pub const windowing = @import("./window.zig");
 pub const WindowState = windowing.WindowState;

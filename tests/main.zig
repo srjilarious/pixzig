@@ -22,9 +22,12 @@ const Tests = blk: {
     testz.Group{ .name = "Viewport Tests", .tag = "viewport", .mod = @import("./viewport_tests.zig") },
     testz.Group{ .name = "Camera Tests", .tag = "camera", .mod = @import("./camera_tests.zig") },
     testz.Group{ .name = "Resources Tests", .tag = "resources", .mod = @import("./resources_tests.zig") },
+    testz.Group{ .name = "GL Renderer Tests", .tag = "gl", .mod = @import("./gl_renderer_tests.zig") },
 }, .{});
 };
 
 pub fn main(init: std.process.Init) !void {
+    try pixzig.GlTestContext.initGlobal();
+    defer pixzig.GlTestContext.deinitGlobal();
     try testz.testzRunner(Tests, init.minimal.args);
 }

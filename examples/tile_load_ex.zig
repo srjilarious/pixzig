@@ -98,8 +98,11 @@ pub const App = struct {
                 .b = @floatFromInt(main_layer.size.y * main_layer.tileSize.y),
             };
 
-            self.mapRenderer.rebuildAll(&self.map_handle.val);
-            std.log.info("Tilemap renderer rebuilt after hot reload", .{});
+            self.mapRenderer.reload(&self.map_handle.val) catch |err| {
+                std.log.err("Failed to reload map renderer: {}", .{err});
+                return true;
+            };
+            std.log.info("Tilemap renderer reloaded after hot reload", .{});
         }
 
         const MoveAmount = 3;
