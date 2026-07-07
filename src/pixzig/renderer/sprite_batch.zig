@@ -27,12 +27,10 @@ const ShaderHandle = resources.ShaderHandle;
 /// call.  This entire batch is drawn via the `flush` call which will happen on
 /// render, switching the current texture, or drawing more than C.MaxSprites.
 pub const SpriteBatchQueue = struct {
-    /// Refcounted handle to the shader. Refreshed in `begin` when the pool
-    /// signals a hot-reload.
-    shader_handle: *ShaderHandle,
-    /// The pool that owns the shader handle. Stored so we can reacquire
-    /// after a dirty signal without re-doing the name lookup.
-    shader: *ManagedShader,
+    /// Refcounted shader handle. Refreshed in `begin` when dirty.
+    /// The parent back-pointer on the handle is used to reacquire after
+    /// a hot-reload without re-doing the name lookup.
+    shader: *ShaderHandle,
     vao: u32 = 0,
     vboVertices: u32 = 0,
     vboTexCoords: u32 = 0,
@@ -58,12 +56,11 @@ pub const SpriteBatchQueue = struct {
     /// Initializes the SpriteBatchQueue, creating the buffers and OpenGL objects needed.
     pub fn init(alloc: std.mem.Allocator, shader: *ManagedShader) !SpriteBatchQueue {
         const handle = shader.acquire() orelse return error.NoShaderInPool;
-        errdefer shader.release(handle);
+        errdefer handle.release();
 
         var batch = SpriteBatchQueue{
             .allocator = alloc,
-            .shader_handle = handle,
-            .shader = shader,
+            .shader = handle,
         };
 
         batch.vertices = try alloc.alloc(f32, C.NumVerts);
@@ -102,7 +99,7 @@ pub const SpriteBatchQueue = struct {
 
     /// Cleans up the OpenGL objects associated with the SpriteBatchQueue and fress the buffer memory.
     pub fn deinit(self: *SpriteBatchQueue) void {
-        self.shader.release(self.shader_handle);
+        self.shader.release();
         gl.deleteBuffers(1, &self.vboVertices);
         gl.deleteBuffers(1, &self.vboTexCoords);
         gl.deleteBuffers(1, &self.vboIndices);
@@ -112,29 +109,24 @@ pub const SpriteBatchQueue = struct {
     }
 
     fn cacheShaderLocations(self: *SpriteBatchQueue) void {
-        self.attrCoord = @intCast(gl.getAttribLocation(self.shader_handle.val.program, "coord3d"));
-        self.attrTexCoord = @intCast(gl.getAttribLocation(self.shader_handle.val.program, "texcoord"));
-        self.uniformMVP = @intCast(gl.getUniformLocation(self.shader_handle.val.program, "projectionMatrix"));
+        self.attrCoord = @intCast(gl.getAttribLocation(self.shader.val.program, "coord3d"));
+        self.attrTexCoord = @intCast(gl.getAttribLocation(self.shader.val.program, "texcoord"));
+        self.uniformMVP = @intCast(gl.getUniformLocation(self.shader.val.program, "projectionMatrix"));
     }
 
-    /// If the shader was hot-reloaded, swap to the fresh handle and refetch
-    /// uniform/attribute locations (a new GL program means new ids).
     fn refreshShader(self: *SpriteBatchQueue) void {
-        if (!self.shader_handle.dirty) return;
-        const new_handle = self.shader.acquire() orelse return;
-        self.shader.release(self.shader_handle);
-        self.shader_handle = new_handle;
+        if (!self.shader.dirty) return;
+        self.shader = self.shader.reacquire();
         self.cacheShaderLocations();
     }
 
-    /// Swap to a different shader pool entirely (e.g. text renderer toggling
+    /// Swap to a different shader entirely (e.g. text renderer toggling
     /// between alpha and RGB pixel shaders). Releases the current handle,
-    /// acquires from `new_pool`, and re-caches uniform/attribute locations.
+    /// acquires from `newShader`, and re-caches uniform/attribute locations.
     pub fn swapShader(self: *SpriteBatchQueue, newShader: *ManagedShader) !void {
         const new_handle = newShader.acquire() orelse return error.NoShaderInPool;
-        self.shader.release(self.shader_handle);
-        self.shader = newShader;
-        self.shader_handle = new_handle;
+        self.shader.release();
+        self.shader = new_handle;
         self.cacheShaderLocations();
     }
 
@@ -296,14 +288,14 @@ pub const SpriteBatchQueue = struct {
 
         if (self.currNumSprites == 0) return;
 
-        gl.useProgram(self.shader_handle.val.program);
+        gl.useProgram(self.shader.val.program);
         gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&self.mvpArr[0]));
 
         // Set 'tex' to use texture unit 0
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, self.texture.?.texture);
 
-        gl.uniform1i(gl.getUniformLocation(self.shader_handle.val.program, "tex"), 0);
+        gl.uniform1i(gl.getUniformLocation(self.shader.val.program, "tex"), 0);
 
         gl.bindVertexArray(self.vao);
         gl.enableVertexAttribArray(self.attrCoord);

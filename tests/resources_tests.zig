@@ -3,7 +3,7 @@ const testz = @import("testz");
 const pixzig = @import("pixzig");
 
 const ManagedResource = pixzig.resources.ManagedResource;
-const AssetHandle = pixzig.resources.AssetHandle;
+const ManagedTexture = pixzig.resources.ManagedTexture;
 const ResourceManager = pixzig.resources.ResourceManager;
 const Texture = pixzig.Texture;
 const RectF = pixzig.RectF;
@@ -257,12 +257,16 @@ pub fn separateressAreIndependentTest(io: std.Io, alloc: std.mem.Allocator) !voi
 
 // --- ResourceManager atlas (no GL needed for addSubTexture / getTexture) ---
 
-fn dummyParentTexture() Texture {
-    return .{
+fn noopFreeTexture(_: Texture) void {}
+
+fn makeDummyParent(alloc: std.mem.Allocator) !ManagedTexture {
+    var m = ManagedTexture.init(alloc, 999, noopFreeTexture);
+    try m.add(.{
         .texture = 0,
         .size = .{ .x = 128, .y = 128 },
         .src = RectF.fromCoords(0, 0, 128, 128, 128, 128),
-    };
+    });
+    return m;
 }
 
 pub fn rmAddSubTextureRegistersAndGetReturnsItTest(io: std.Io, alloc: std.mem.Allocator) !void {
@@ -270,10 +274,11 @@ pub fn rmAddSubTextureRegistersAndGetReturnsItTest(io: std.Io, alloc: std.mem.Al
     var rm = ResourceManager.init(alloc);
     defer rm.deinit();
 
-    var parent = dummyParentTexture();
+    var parent = try makeDummyParent(alloc);
+    defer parent.deinit();
     const sub = try rm.addSubTexture(&parent, "foo", RectF.fromCoords(0, 0, 8, 8, 128, 128));
-    try testz.expectEqual(sub.size.x, 8);
-    try testz.expectEqual(sub.size.y, 8);
+    try testz.expectEqual(sub.get().?.val.size.x, 8);
+    try testz.expectEqual(sub.get().?.val.size.y, 8);
 
     const fetched = try rm.getTexture("foo");
     try testz.expectEqual(fetched, sub);
@@ -292,7 +297,8 @@ pub fn rmGidIncrementsOncePerDistinctNameTest(io: std.Io, alloc: std.mem.Allocat
     var rm = ResourceManager.init(alloc);
     defer rm.deinit();
 
-    var parent = dummyParentTexture();
+    var parent = try makeDummyParent(alloc);
+    defer parent.deinit();
     try testz.expectEqual(rm.gid, 0);
 
     _ = try rm.addSubTexture(&parent, "foo", RectF.fromCoords(0, 0, 8, 8, 128, 128));
@@ -311,7 +317,8 @@ pub fn rmAddSubTextureReloadMarksOldHandleDirtyTest(io: std.Io, alloc: std.mem.A
     var rm = ResourceManager.init(alloc);
     defer rm.deinit();
 
-    var parent = dummyParentTexture();
+    var parent = try makeDummyParent(alloc);
+    defer parent.deinit();
     _ = try rm.addSubTexture(&parent, "foo", RectF.fromCoords(0, 0, 8, 8, 128, 128));
 
     const res = rm.atlas.get("foo").?;
@@ -322,7 +329,7 @@ pub fn rmAddSubTextureReloadMarksOldHandleDirtyTest(io: std.Io, alloc: std.mem.A
     try testz.expectEqual(old_handle.dirty, true);
     try testz.expectEqual(res.get().?.generation, 2);
 
-    res.release(old_handle);
+    old_handle.release();
 }
 
 // --- acquireTexture / releaseTexture helpers ---
@@ -332,7 +339,8 @@ pub fn rmAcquireTextureBumpsRefCountTest(io: std.Io, alloc: std.mem.Allocator) !
     var rm = ResourceManager.init(alloc);
     defer rm.deinit();
 
-    var parent = dummyParentTexture();
+    var parent = try makeDummyParent(alloc);
+    defer parent.deinit();
     _ = try rm.addSubTexture(&parent, "foo", RectF.fromCoords(0, 0, 8, 8, 128, 128));
 
     const h1 = try rm.acquireTexture("foo");
@@ -341,8 +349,8 @@ pub fn rmAcquireTextureBumpsRefCountTest(io: std.Io, alloc: std.mem.Allocator) !
     try testz.expectEqual(h2.refCount, 2);
     try testz.expectEqual(h1, h2);
 
-    rm.releaseTexture(h2);
-    rm.releaseTexture(h1);
+    h2.release();
+    h1.release();
     try testz.expectEqual(rm.atlas.get("foo").?.get().?.refCount, 0);
 }
 
@@ -359,7 +367,8 @@ pub fn rmReloadVisibleAsDirtyThroughHelperTest(io: std.Io, alloc: std.mem.Alloca
     var rm = ResourceManager.init(alloc);
     defer rm.deinit();
 
-    var parent = dummyParentTexture();
+    var parent = try makeDummyParent(alloc);
+    defer parent.deinit();
     _ = try rm.addSubTexture(&parent, "foo", RectF.fromCoords(0, 0, 8, 8, 128, 128));
 
     const holder = try rm.acquireTexture("foo");
@@ -373,6 +382,6 @@ pub fn rmReloadVisibleAsDirtyThroughHelperTest(io: std.Io, alloc: std.mem.Alloca
     try testz.expectEqual(fresh.generation, 2);
     try testz.expectEqual(fresh.dirty, false);
 
-    rm.releaseTexture(holder);
-    rm.releaseTexture(fresh);
+    holder.release();
+    fresh.release();
 }

@@ -46,8 +46,8 @@ pub const App = struct {
         _ = try eng.resources.addSubTexture(bigtex, "guy", RectF.fromCoords(32, 32, 32, 32, 512, 512));
         const tex = try eng.resources.acquireTexture("guy");
 
-        const texPool = eng.resources.shaders.get(shaders.TextureShader) orelse return error.NoShaderWithThatName;
-        const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, texPool);
+        const tex_shader = try eng.resources.getShader(shaders.TextureShader);
+        const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, tex_shader);
 
         // var colorShader = try pixzig.shaders.Shader.init(
         //         &pixzig.shaders.ColorVertexShader,
@@ -105,7 +105,7 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        self.eng.resources.releaseTexture(self.tex);
+        self.tex.release();
         self.spriteBatch.deinit();
         self.collideGrid.deinit();
 

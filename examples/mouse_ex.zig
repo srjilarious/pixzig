@@ -40,7 +40,7 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        self.eng.resources.releaseTexture(self.tex);
+        self.tex.release();
     }
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {

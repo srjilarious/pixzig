@@ -10,6 +10,7 @@ const Rotate = common.Rotate;
 
 const Texture = textures.Texture;
 const ResourceManager = resources.ResourceManager;
+const ManagedTexture = resources.ManagedTexture;
 const TextureHandle = resources.TextureHandle;
 
 pub const Sprite = struct {
@@ -113,10 +114,9 @@ pub const FrameSequence = struct {
     frames: std.ArrayList(Frame),
     alloc: std.mem.Allocator,
     mode: AnimPlayMode,
-    /// Optional manager that owns the texture handles in `frames`. When set,
-    /// `deinit` releases each frame's handle so the JSON-loaded sequences
-    /// don't leak texture references.
-    texMgr: ?*ResourceManager = null,
+    /// When true, `deinit` releases each frame's texture handle. Set for
+    /// sequences loaded from JSON where this struct acquired the handles.
+    ownsHandles: bool = false,
 
     pub fn initEmpty(alloc: std.mem.Allocator) !FrameSequence {
         const frames: std.ArrayList(Frame) = .empty;
@@ -142,13 +142,10 @@ pub const FrameSequence = struct {
         };
     }
 
-    /// Lifetime contract: when `texMgr` is set the referenced ResourceManager
-    /// must outlive this FrameSequence — otherwise the per-frame release calls
-    /// touch freed pool state.
     pub fn deinit(self: *FrameSequence) void {
-        if (self.texMgr) |rm| {
+        if (self.ownsHandles) {
             for (self.frames.items) |frame| {
-                rm.releaseTexture(frame.tex);
+                frame.tex.release();
             }
         }
         self.frames.deinit(self.alloc);
@@ -239,7 +236,7 @@ pub const FrameSequenceManager = struct {
         // First load the frame sequences, since actor states need those for looking up.
         for (parsed.value.sequences) |fileSeq| {
             var seq = try FrameSequence.initEmpty(self.alloc);
-            seq.texMgr = texMgr;
+            seq.ownsHandles = true;
             // addSeq takes a shallow-copy of seq; on failure it just destroys the
             // allocation, so we remain responsible for freeing the frames backing array.
             errdefer seq.deinit();

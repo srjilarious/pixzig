@@ -47,10 +47,10 @@ pub fn spriteBatchSmokeTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     const ctx = glCtx();
 
-    var shader_pool = try ctx.makeManagedShader(alloc);
-    defer shader_pool.deinit();
+    var shader = try ctx.makeManagedShader(alloc);
+    defer shader.deinit();
 
-    var batch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &shader_pool);
+    var batch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &shader);
     defer batch.deinit();
 
     const mvp = zmath.identity();
@@ -62,10 +62,10 @@ pub fn tiledReloadAddsLayerTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     const ctx = glCtx();
 
-    var shader_pool = try ctx.makeManagedShader(alloc);
-    defer shader_pool.deinit();
-    var tex_pool = try ctx.makeDummyManagedTexture(alloc);
-    defer tex_pool.deinit();
+    var shader = try ctx.makeManagedShader(alloc);
+    defer shader.deinit();
+    var tex = try ctx.makeDummyManagedTexture(alloc);
+    defer tex.deinit();
 
     // Start with one layer.
     var map1 = try TileMap.init(alloc);
@@ -73,7 +73,7 @@ pub fn tiledReloadAddsLayerTest(io: std.Io, alloc: std.mem.Allocator) !void {
     const layer1 = try makeLayer(alloc);
     try map1.layers.append(alloc, layer1);
 
-    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, &shader_pool, &tex_pool);
+    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, &shader, &tex);
     defer renderer.deinit();
 
     try testz.expectEqual(renderer.entries.len, 1);
@@ -93,10 +93,10 @@ pub fn tiledReloadRemovesLayerTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     const ctx = glCtx();
 
-    var shader_pool = try ctx.makeManagedShader(alloc);
-    defer shader_pool.deinit();
-    var tex_pool = try ctx.makeDummyManagedTexture(alloc);
-    defer tex_pool.deinit();
+    var shader = try ctx.makeManagedShader(alloc);
+    defer shader.deinit();
+    var tex = try ctx.makeDummyManagedTexture(alloc);
+    defer tex.deinit();
 
     // Start with two layers.
     var map1 = try TileMap.init(alloc);
@@ -104,7 +104,7 @@ pub fn tiledReloadRemovesLayerTest(io: std.Io, alloc: std.mem.Allocator) !void {
     try map1.layers.append(alloc, try makeLayer(alloc));
     try map1.layers.append(alloc, try makeLayer(alloc));
 
-    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, &shader_pool, &tex_pool);
+    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, &shader, &tex);
     defer renderer.deinit();
 
     try testz.expectEqual(renderer.entries.len, 2);
@@ -123,10 +123,10 @@ pub fn tiledReloadZOrderTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     const ctx = glCtx();
 
-    var shader_pool = try ctx.makeManagedShader(alloc);
-    defer shader_pool.deinit();
-    var tex_pool = try ctx.makeDummyManagedTexture(alloc);
-    defer tex_pool.deinit();
+    var shader = try ctx.makeManagedShader(alloc);
+    defer shader.deinit();
+    var tex = try ctx.makeDummyManagedTexture(alloc);
+    defer tex.deinit();
 
     // Initial map: both layers at z=0, order by layer_index.
     var map1 = try TileMap.init(alloc);
@@ -134,7 +134,7 @@ pub fn tiledReloadZOrderTest(io: std.Io, alloc: std.mem.Allocator) !void {
     try map1.layers.append(alloc, try makeLayer(alloc));
     try map1.layers.append(alloc, try makeLayer(alloc));
 
-    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, &shader_pool, &tex_pool);
+    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, &shader, &tex);
     defer renderer.deinit();
 
     // Reload: layer 0 gets z=1, layer 1 stays z=0.

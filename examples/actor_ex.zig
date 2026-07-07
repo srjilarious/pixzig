@@ -62,8 +62,7 @@ pub const App = struct {
             .flip = .none,
         };
         var frseq = try pixzig.sprites.FrameSequence.init(alloc, &[_]Frame{ fr1, fr2, fr3 });
-        // texMgr makes seqMgr's eventual deinit release each frame's handle.
-        frseq.texMgr = &eng.resources;
+        frseq.ownsHandles = true;
         try app.seqMgr.addSeq("player_right", frseq);
 
         _ = try app.actor.addState(&.{ .name = "right", .sequence = app.seqMgr.getSeq("player_right").?, .flip = .none }, .{});
@@ -75,7 +74,7 @@ pub const App = struct {
     pub fn deinit(self: *App) void {
         self.seqMgr.deinit();
         self.actor.deinit();
-        self.eng.resources.releaseTexture(self.sprTex);
+        self.sprTex.release();
         self.alloc.destroy(self);
     }
 

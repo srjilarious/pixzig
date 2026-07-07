@@ -27,7 +27,7 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{});
 //* use for drawing sprites and shapes.
 pub const App = struct {
     alloc: std.mem.Allocator,
-    tex: *pixzig.Texture,
+    tex: *pixzig.TextureHandle,
     fps: FpsCounter,
 
     dest: [3]RectF,
@@ -45,7 +45,8 @@ pub const App = struct {
         //* resource manager also handles deinitialization of the texture when
         //* the engine is deinitialized, so we don't have to worry about freeing it ourselves.
 
-        const tex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
+        const texManaged = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
+        const tex = texManaged.acquire() orelse return error.NoTextureInPool;
 
         app.* = .{
             .alloc = alloc,
@@ -81,6 +82,7 @@ pub const App = struct {
 
     pub fn deinit(self: *App) void {
         std.log.info("Deiniting application..", .{});
+        self.tex.release();
         self.alloc.destroy(self);
     }
 
@@ -104,7 +106,7 @@ pub const App = struct {
 
         //* Here we're directly drawing a source rectangle from the texture to a destination rectangle on the screen.  The sprite batch will handle creating the vertices for this and batching it together with other draw calls.
         for (0..3) |idx| {
-            eng.renderer.draw(self.tex, self.dest[idx], self.srcCoords[idx]);
+            eng.renderer.draw(&self.tex.val, self.dest[idx], self.srcCoords[idx]);
         }
 
         //* Draw sprite outlines.

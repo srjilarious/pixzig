@@ -28,6 +28,7 @@ var g_fakeHandle: pixzig.resources.TextureHandle = .{
         .size = .{ .x = 16, .y = 16 },
         .src = .{ .l = 0, .t = 0, .r = 1, .b = 1 },
     },
+    .parent = undefined,
 };
 
 // Build a Sprite at (x, y) with a 16×16 size backed by the module-level fake

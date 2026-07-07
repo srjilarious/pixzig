@@ -26,14 +26,10 @@ const TileIndexMap = @import("./tile_index_map.zig").TileIndexMap;
 
 pub const TiledLayerRenderer = struct {
     mapSize: Vec2U = undefined,
-    /// Refcounted handle to the shader.
-    shader_handle: *ShaderHandle,
-    /// The managed resource that owns the shader handle.
-    shader: *ManagedShader,
-    /// Refcounted handle to the texture.
-    texture_handle: *TextureHandle,
-    /// The managed resource that owns the texture handle.
-    texture: *ManagedTexture,
+    /// Refcounted shader handle. Refreshed in `draw` when dirty.
+    shader: *ShaderHandle,
+    /// Refcounted texture handle. Refreshed in `draw` when dirty.
+    texture: *TextureHandle,
     vao: u32 = 0,
     vboVertices: u32 = 0,
     vboTexCoords: u32 = 0,
@@ -56,15 +52,13 @@ pub const TiledLayerRenderer = struct {
         texture: *ManagedTexture,
     ) !TiledLayerRenderer {
         const shader_handle = shader.acquire() orelse return error.NoShaderInPool;
-        errdefer shader.release(shader_handle);
+        errdefer shader_handle.release();
         const texture_handle = texture.acquire() orelse return error.NoTextureInPool;
-        errdefer texture.release(texture_handle);
+        errdefer texture_handle.release();
 
         var tr = TiledLayerRenderer{
-            .shader_handle = shader_handle,
-            .shader = shader,
-            .texture_handle = texture_handle,
-            .texture = texture,
+            .shader = shader_handle,
+            .texture = texture_handle,
             .alloc = alloc,
             .tileIndexMap = TileIndexMap.init(alloc),
         };
@@ -85,8 +79,8 @@ pub const TiledLayerRenderer = struct {
     }
 
     pub fn deinit(self: *TiledLayerRenderer) void {
-        self.texture.release(self.texture_handle);
-        self.shader.release(self.shader_handle);
+        self.texture.release();
+        self.shader.release();
         gl.deleteVertexArrays(1, &self.vao);
         gl.deleteBuffers(1, &self.vboVertices);
         gl.deleteBuffers(1, &self.vboTexCoords);
@@ -100,24 +94,20 @@ pub const TiledLayerRenderer = struct {
     }
 
     fn cacheShaderLocations(self: *TiledLayerRenderer) void {
-        self.attrCoord = @intCast(gl.getAttribLocation(self.shader_handle.val.program, "coord3d"));
-        self.attrTexCoord = @intCast(gl.getAttribLocation(self.shader_handle.val.program, "texcoord"));
-        self.uniformMVP = @intCast(gl.getUniformLocation(self.shader_handle.val.program, "projectionMatrix"));
+        self.attrCoord = @intCast(gl.getAttribLocation(self.shader.val.program, "coord3d"));
+        self.attrTexCoord = @intCast(gl.getAttribLocation(self.shader.val.program, "texcoord"));
+        self.uniformMVP = @intCast(gl.getUniformLocation(self.shader.val.program, "projectionMatrix"));
     }
 
     fn refreshShader(self: *TiledLayerRenderer) void {
-        if (!self.shader_handle.dirty) return;
-        const new_handle = self.shader.acquire() orelse return;
-        self.shader.release(self.shader_handle);
-        self.shader_handle = new_handle;
+        if (!self.shader.dirty) return;
+        self.shader = self.shader.reacquire();
         self.cacheShaderLocations();
     }
 
     fn refreshTexture(self: *TiledLayerRenderer) void {
-        if (!self.texture_handle.dirty) return;
-        const new_handle = self.texture.acquire() orelse return;
-        self.texture.release(self.texture_handle);
-        self.texture_handle = new_handle;
+        if (!self.texture.dirty) return;
+        self.texture = self.texture.reacquire();
     }
 
     fn tileCoords(idx: i32, tileset: *TileSet) RectF {
@@ -368,13 +358,13 @@ pub const TiledLayerRenderer = struct {
         const layerWidth: usize = @intCast(tiles.size.x);
         const layerHeight: usize = @intCast(tiles.size.y);
         const mapSize: i32 = @intCast(layerWidth * layerHeight);
-        gl.useProgram(self.shader_handle.val.program);
+        gl.useProgram(self.shader.val.program);
         gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&mvpArr[0]));
 
         // Set 'tex' to use texture unit 0
         gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, self.texture_handle.val.texture);
-        gl.uniform1i(gl.getUniformLocation(self.shader_handle.val.program, "tex"), 0);
+        gl.bindTexture(gl.TEXTURE_2D, self.texture.val.texture);
+        gl.uniform1i(gl.getUniformLocation(self.shader.val.program, "tex"), 0);
 
         gl.bindVertexArray(self.vao);
         gl.enableVertexAttribArray(self.attrCoord);

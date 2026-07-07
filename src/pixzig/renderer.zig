@@ -70,8 +70,7 @@ pub fn Renderer(opts: RendererOptions) type {
             var rend = try alloc.create(Impl);
 
             std.log.info("Initializing shaders.", .{});
-            _ = try resMgr.loadShader(shaders.TextureShader, &shaders.TexVertexShader, &shaders.TexPixelShader);
-            const texShader = resMgr.shaders.get(shaders.TextureShader).?;
+            const texShader = try resMgr.loadShader(shaders.TextureShader, &shaders.TexVertexShader, &shaders.TexPixelShader);
 
             std.log.info("Setting up {} sprite batch queues.", .{opts.numSpriteTextures});
             for (0..opts.numSpriteTextures) |idx| {
@@ -82,9 +81,8 @@ pub fn Renderer(opts: RendererOptions) type {
 
             if (opts.shapeRendering) {
                 std.log.info("Setting up shaders for shape renderering.", .{});
-                _ = try resMgr.loadShader(shaders.ColorShader, &shaders.ColorVertexShader, &shaders.ColorPixelShader);
-                const colorPool = resMgr.shaders.get(shaders.ColorShader).?;
-                rend.shapes = try ShapeBatchQueue.init(alloc, colorPool);
+                const colorShader = try resMgr.loadShader(shaders.ColorShader, &shaders.ColorVertexShader, &shaders.ColorPixelShader);
+                rend.shapes = try ShapeBatchQueue.init(alloc, colorShader);
             }
 
             if (opts.textRendering) {

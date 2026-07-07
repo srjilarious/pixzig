@@ -100,7 +100,7 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        self.eng.resources.releaseTexture(self.tex);
+        self.tex.release();
         flecs.query_fini(self.draw_query);
         _ = flecs.fini(self.world);
         self.alloc.destroy(self);

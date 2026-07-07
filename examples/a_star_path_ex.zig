@@ -63,8 +63,8 @@ pub const App = struct {
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app = try alloc.create(App);
 
-        const color_shader_pool = eng.resources.shaders.get(shaders.ColorShader) orelse return error.NoShaderWithThatName;
-        const grid = try GridRenderer.init(alloc, color_shader_pool, .{ .x = MapWidth, .y = MapHeight }, .{ .x = TileWidth, .y = TileHeight }, 1, Color{ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 });
+        const color_shader = try eng.resources.getShader(shaders.ColorShader);
+        const grid = try GridRenderer.init(alloc, color_shader, .{ .x = MapWidth, .y = MapHeight }, .{ .x = TileWidth, .y = TileHeight }, 1, Color{ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 });
 
         // Create a texture for the path tiles.
         const colorMap = &[_]CharToColor{
@@ -239,9 +239,9 @@ pub const App = struct {
         app.pathLayer = try TileLayer.initEmpty(alloc, .{ .x = MapWidth, .y = MapHeight }, .{ .x = TileWidth, .y = TileHeight });
         app.pathLayer.tileset = &app.tileSet;
 
-        const tex_shader_pool = eng.resources.shaders.get(shaders.TextureShader) orelse return error.NoShaderWithThatName;
-        const a_star_tex_pool = eng.resources.atlas.get("a_star") orelse return error.NoTextureWithThatName;
-        app.pathLayerRenderer = try tile.TileMapRenderer.init(alloc, tex_shader_pool, a_star_tex_pool);
+        const tex_shader = try eng.resources.getShader(shaders.TextureShader);
+        const a_star_tex = try eng.resources.getTexture("a_star");
+        app.pathLayerRenderer = try tile.TileMapRenderer.init(alloc, tex_shader, a_star_tex);
         // TODO: Change to pathLayer and make wall layer renderer.
         try app.pathLayerRenderer.recreateVertices(&app.tileSet, &app.layer);
 

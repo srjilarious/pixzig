@@ -23,19 +23,19 @@ fn scaleInt(value: i32, scale: f32) i32 {
 
 pub const TextRenderer = struct {
     spriteBatch: SpriteBatchQueue,
-    /// Pool refs (not pre-acquired handles) so setAtlas can swap the active
+    /// Pool refs (not pre-acquired handles) so setFont can swap the active
     /// shader on the underlying batch via swapShader. The batch itself owns
     /// whichever handle is currently in use.
     alphaShader: *resources.ManagedShader,
     texShader: *resources.ManagedShader,
     alloc: std.mem.Allocator,
-    /// Active font handle and managed resource. Released in deinit.
-    font_handle: ?*resources.FontAtlasHandle,
-    font: ?*resources.ManagedFont,
+    /// Active font handle. Released in deinit. The parent back-pointer is
+    /// used to reacquire after a hot-reload without re-doing the name lookup.
+    font: ?*resources.FontAtlasHandle,
 
     pub fn init(alloc: std.mem.Allocator, resMgr: *ResourceManager) !TextRenderer {
-        const texShader = resMgr.shaders.get(shaders.TextureShader) orelse return error.NoShaderWithThatName;
-        const alphaShader = resMgr.shaders.get(shaders.FontShader) orelse return error.NoShaderWithThatName;
+        const texShader = try resMgr.getShader(shaders.TextureShader);
+        const alphaShader = try resMgr.getShader(shaders.FontShader);
         var spriteBatch = try SpriteBatchQueue.init(alloc, texShader);
         errdefer spriteBatch.deinit();
 
@@ -44,25 +44,19 @@ pub const TextRenderer = struct {
             .spriteBatch = spriteBatch,
             .alphaShader = alphaShader,
             .texShader = texShader,
-            .font_handle = null,
             .font = null,
         };
     }
 
     pub fn deinit(self: *TextRenderer) void {
-        if (self.font_handle) |h| {
-            if (self.font) |p| p.release(h);
-        }
+        if (self.font) |h| h.release();
         self.spriteBatch.deinit();
     }
 
     fn refreshAtlas(self: *TextRenderer) void {
-        const handle = self.font_handle orelse return;
+        const handle = self.font orelse return;
         if (!handle.dirty) return;
-        const font = self.font.?;
-        const new_handle = font.acquire() orelse return;
-        font.release(handle);
-        self.font_handle = new_handle;
+        self.font = handle.reacquire();
     }
 
     pub fn begin(self: *TextRenderer, mvp: zmath.Mat) void {
@@ -86,13 +80,10 @@ pub const TextRenderer = struct {
         self: *TextRenderer,
         font: *resources.ManagedFont,
     ) !void {
-        if (self.font_handle) |old| {
-            if (self.font) |p| p.release(old);
-        }
-        self.font = font;
-        self.font_handle = font.acquire();
+        if (self.font) |h| h.release();
+        self.font = font.acquire();
 
-        const shader = if (self.font_handle.?.val.isAlpha) self.alphaShader else self.texShader;
+        const shader = if (self.font.?.val.isAlpha) self.alphaShader else self.texShader;
         try self.spriteBatch.swapShader(shader);
     }
 
@@ -106,16 +97,16 @@ pub const TextRenderer = struct {
             return drawSize;
         }
 
-        const posY = pos.y + self.font_handle.?.val.maxY;
+        const posY = pos.y + self.font.?.val.maxY;
         for (text) |c| {
-            const charDataPtr = self.font_handle.?.val.chars.get(@intCast(c));
+            const charDataPtr = self.font.?.val.chars.get(@intCast(c));
             if (charDataPtr == null) continue;
 
             const charData = charDataPtr.?;
 
             // Only draw if character has visual representation
             if (charData.size.x > 0 and charData.size.y > 0) {
-                self.spriteBatch.draw(&self.font_handle.?.val.texture, RectF.fromPosSize(currX + charData.bearing.x, posY - charData.bearing.y, charData.size.x, charData.size.y), charData.coords, .none);
+                self.spriteBatch.draw(&self.font.?.val.texture, RectF.fromPosSize(currX + charData.bearing.x, posY - charData.bearing.y, charData.size.x, charData.size.y), charData.coords, .none);
             }
 
             currX += @intCast(charData.advance);
@@ -136,9 +127,9 @@ pub const TextRenderer = struct {
             return drawSize;
         }
 
-        const posY = pos.y + scaleInt(self.font_handle.?.val.maxY, scale);
+        const posY = pos.y + scaleInt(self.font.?.val.maxY, scale);
         for (text) |c| {
-            const charDataPtr = self.font_handle.?.val.chars.get(@intCast(c));
+            const charDataPtr = self.font.?.val.chars.get(@intCast(c));
             if (charDataPtr == null) continue;
 
             const charData = charDataPtr.?;
@@ -146,7 +137,7 @@ pub const TextRenderer = struct {
             // Only draw if character has visual representation
             if (charData.size.x > 0 and charData.size.y > 0) {
                 self.spriteBatch.draw(
-                    &self.font_handle.?.val.texture,
+                    &self.font.?.val.texture,
                     RectF.fromPosSize(
                         currX + scaleInt(charData.bearing.x, scale),
                         posY - scaleInt(charData.bearing.y, scale),
@@ -179,9 +170,9 @@ pub const TextRenderer = struct {
             return drawSize;
         }
 
-        const posY = pos.y + self.font_handle.?.val.maxY;
+        const posY = pos.y + self.font.?.val.maxY;
         for (text) |c| {
-            const charDataPtr = self.font_handle.?.val.chars.get(@intCast(c));
+            const charDataPtr = self.font.?.val.chars.get(@intCast(c));
             if (charDataPtr == null) continue;
 
             const charData = charDataPtr.?;
@@ -215,7 +206,7 @@ pub const TextRenderer = struct {
                     dest.r = clip.r;
                 }
 
-                self.spriteBatch.draw(&self.font_handle.?.val.texture, dest, src, .none);
+                self.spriteBatch.draw(&self.font.?.val.texture, dest, src, .none);
             }
 
             currX += @intCast(charData.advance);
@@ -232,7 +223,7 @@ pub const TextRenderer = struct {
         var height: i32 = 0;
 
         for (text) |c| {
-            const charDataPtr = self.font_handle.?.val.chars.get(@intCast(c));
+            const charDataPtr = self.font.?.val.chars.get(@intCast(c));
             if (charDataPtr == null) continue;
 
             const charData = charDataPtr.?;

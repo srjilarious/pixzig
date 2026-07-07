@@ -55,14 +55,10 @@ pub const ChunkedTiledLayerRenderer = struct {
     chunks: []TileChunk,
     chunks_wide: u32,
     chunks_tall: u32,
-    /// Refcounted handle to the shader.
-    shader_handle: *ShaderHandle,
-    /// The managed resource that owns the shader handle.
-    shader: *ManagedShader,
-    /// Refcounted handle to the texture.
-    texture_handle: *TextureHandle,
-    /// The managed resource that owns the texture handle.
-    texture: *ManagedTexture,
+    /// Refcounted shader handle. Refreshed in `render` when dirty.
+    shader: *ShaderHandle,
+    /// Refcounted texture handle. Refreshed in `render` when dirty.
+    texture: *TextureHandle,
     attr_coord: c_uint,
     attr_texcoord: c_uint,
     uniform_mvp: c_int,
@@ -83,9 +79,9 @@ pub const ChunkedTiledLayerRenderer = struct {
         layer: *const TileLayer,
     ) !Self {
         const shader_handle = shader.acquire() orelse return error.NoShaderInPool;
-        errdefer shader.release(shader_handle);
+        errdefer shader_handle.release();
         const texture_handle = texture.acquire() orelse return error.NoTextureInPool;
-        errdefer texture.release(texture_handle);
+        errdefer texture_handle.release();
 
         const map_w: u32 = @intCast(layer.size.x);
         const map_h: u32 = @intCast(layer.size.y);
@@ -141,10 +137,8 @@ pub const ChunkedTiledLayerRenderer = struct {
             .chunks = chunks,
             .chunks_wide = chunks_wide,
             .chunks_tall = chunks_tall,
-            .shader_handle = shader_handle,
-            .shader = shader,
-            .texture_handle = texture_handle,
-            .texture = texture,
+            .shader = shader_handle,
+            .texture = texture_handle,
             .attr_coord = @intCast(gl.getAttribLocation(shader_handle.val.program, "coord3d")),
             .attr_texcoord = @intCast(gl.getAttribLocation(shader_handle.val.program, "texcoord")),
             .uniform_mvp = @intCast(gl.getUniformLocation(shader_handle.val.program, "projectionMatrix")),
@@ -155,8 +149,8 @@ pub const ChunkedTiledLayerRenderer = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.texture.release(self.texture_handle);
-        self.shader.release(self.shader_handle);
+        self.texture.release();
+        self.shader.release();
         for (self.chunks) |*chunk| {
             gl.deleteVertexArrays(1, &chunk.vao);
             gl.deleteBuffers(1, &chunk.vbo_coords);
@@ -170,23 +164,19 @@ pub const ChunkedTiledLayerRenderer = struct {
     }
 
     fn refreshShader(self: *Self) void {
-        if (!self.shader_handle.dirty) return;
-        const new_handle = self.shader.acquire() orelse return;
-        self.shader.release(self.shader_handle);
-        self.shader_handle = new_handle;
-        self.attr_coord = @intCast(gl.getAttribLocation(self.shader_handle.val.program, "coord3d"));
-        self.attr_texcoord = @intCast(gl.getAttribLocation(self.shader_handle.val.program, "texcoord"));
-        self.uniform_mvp = @intCast(gl.getUniformLocation(self.shader_handle.val.program, "projectionMatrix"));
+        if (!self.shader.dirty) return;
+        self.shader = self.shader.reacquire();
+        self.attr_coord = @intCast(gl.getAttribLocation(self.shader.val.program, "coord3d"));
+        self.attr_texcoord = @intCast(gl.getAttribLocation(self.shader.val.program, "texcoord"));
+        self.uniform_mvp = @intCast(gl.getUniformLocation(self.shader.val.program, "projectionMatrix"));
         // Chunk VAOs bake in attrib pointer setup; rebuild them so they use the
         // new attribute locations from the reloaded shader.
         self.markAllDirty();
     }
 
     fn refreshTexture(self: *Self) void {
-        if (!self.texture_handle.dirty) return;
-        const new_handle = self.texture.acquire() orelse return;
-        self.texture.release(self.texture_handle);
-        self.texture_handle = new_handle;
+        if (!self.texture.dirty) return;
+        self.texture = self.texture.reacquire();
     }
 
     pub fn markAllDirty(self: *Self) void {
@@ -235,12 +225,12 @@ pub const ChunkedTiledLayerRenderer = struct {
         const tw_f: f32 = @floatFromInt(layer.tileSize.x);
         const th_f: f32 = @floatFromInt(layer.tileSize.y);
 
-        gl.useProgram(self.shader_handle.val.program);
+        gl.useProgram(self.shader.val.program);
         gl.uniformMatrix4fv(self.uniform_mvp, 1, gl.FALSE, @ptrCast(&mvp_arr[0]));
 
         gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, self.texture_handle.val.texture);
-        gl.uniform1i(gl.getUniformLocation(self.shader_handle.val.program, "tex"), 0);
+        gl.bindTexture(gl.TEXTURE_2D, self.texture.val.texture);
+        gl.uniform1i(gl.getUniformLocation(self.shader.val.program, "tex"), 0);
 
         for (self.chunks) |*chunk| {
             // --- Viewport culling ---

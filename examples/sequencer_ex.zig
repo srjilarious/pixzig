@@ -103,7 +103,7 @@ pub const App = struct {
             .{ .tex = try eng.resources.acquireTexture("player_right_2"), .frameTimeMs = 70, .flip = .none },
             .{ .tex = try eng.resources.acquireTexture("player_right_3"), .frameTimeMs = 70, .flip = .none },
         });
-        right_seq.texMgr = &eng.resources;
+        right_seq.ownsHandles = true;
         try app.seqMgr.addSeq("player_right", right_seq);
 
         var down_seq = try FrameSequence.init(alloc, &[_]Frame{
@@ -111,7 +111,7 @@ pub const App = struct {
             .{ .tex = try eng.resources.acquireTexture("player_down_2"), .frameTimeMs = 70, .flip = .none },
             .{ .tex = try eng.resources.acquireTexture("player_down_3"), .frameTimeMs = 70, .flip = .none },
         });
-        down_seq.texMgr = &eng.resources;
+        down_seq.ownsHandles = true;
         try app.seqMgr.addSeq("player_down", down_seq);
 
         // --- Set up flecs world with Sprite and Actor components ---
@@ -150,7 +150,7 @@ pub const App = struct {
         _ = flecs.fini(self.world);
         self.seqPlayer.deinit();
         self.seqMgr.deinit();
-        self.eng.resources.releaseTexture(self.sprTex);
+        self.sprTex.release();
         self.alloc.destroy(self);
     }
 

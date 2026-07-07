@@ -81,9 +81,9 @@ pub const GlTestContext = struct {
         const vs_arr = [_]ShaderCode{shaders_mod.TexVertexShader};
         const fs_arr = [_]ShaderCode{shaders_mod.TexPixelShader};
         const shader = try Shader.init(&vs_arr, &fs_arr);
-        var pool = ManagedShader.init(alloc, 1, freeShaderImpl);
-        try pool.add(shader);
-        return pool;
+        var managed = ManagedShader.init(alloc, 1, freeShaderImpl);
+        try managed.add(shader);
+        return managed;
     }
 
     /// Returns a ManagedTexture containing a dummy Texture with no real GL object.
@@ -95,8 +95,8 @@ pub const GlTestContext = struct {
             .size = .{ .x = 128, .y = 128 },
             .src = .{ .l = 0, .t = 0, .r = 1, .b = 1 },
         };
-        var pool = ManagedTexture.init(alloc, 1, freeTextureNoop);
-        try pool.add(tex);
-        return pool;
+        var managed = ManagedTexture.init(alloc, 1, freeTextureNoop);
+        try managed.add(tex);
+        return managed;
     }
 };

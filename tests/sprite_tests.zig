@@ -3,15 +3,21 @@ const testz = @import("testz");
 const pixzig = @import("pixzig");
 const RectF = pixzig.RectF;
 const ResourceManager = pixzig.resources.ResourceManager;
+const ManagedTexture = pixzig.resources.ManagedTexture;
+const Texture = pixzig.Texture;
 const FrameSequenceManager = pixzig.sprites.FrameSequenceManager;
+
+fn noopFreeTexture(_: Texture) void {}
 
 fn createDummyTextureManager(alloc: std.mem.Allocator) !ResourceManager {
     var tm = ResourceManager.init(alloc);
-    var parent: pixzig.Texture = .{
+    var parent = ManagedTexture.init(alloc, 999, noopFreeTexture);
+    defer parent.deinit();
+    try parent.add(.{
         .texture = 0,
         .size = .{ .x = 128, .y = 128 },
         .src = RectF.fromCoords(0, 0, 128, 128, 128, 128),
-    };
+    });
     _ = try tm.addSubTexture(&parent, "player_right_1", RectF.fromCoords(0, 0, 8, 8, 128, 128));
     _ = try tm.addSubTexture(&parent, "player_right_2", RectF.fromCoords(8, 0, 8, 8, 128, 128));
     _ = try tm.addSubTexture(&parent, "player_right_3", RectF.fromCoords(16, 0, 8, 8, 128, 128));
