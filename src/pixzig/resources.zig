@@ -112,25 +112,24 @@ pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type
         /// are either marked dirty (if still referenced) or freed
         /// immediately (if no one holds them).
         pub fn add(self: *Self, obj: T) !void {
+            // Free unreferenced old versions first. Safe even if the insert
+            // below fails (refCount == 0 means no caller holds these), and
+            // creates null slots that insertHandle can reuse without allocating.
             for (self.res.items, 0..) |hOpt, i| {
                 if (hOpt) |h| {
                     if (h.refCount == 0) {
                         self.freeFunc(h.val);
                         self.alloc.destroy(h);
                         self.res.items[i] = null;
-                    } else {
-                        h.dirty = true;
                     }
                 }
             }
-
-            self.gen += 1;
 
             const handle = try self.alloc.create(Handle);
             errdefer self.alloc.destroy(handle);
             handle.* = .{
                 .id = self.id,
-                .generation = self.gen,
+                .generation = self.gen + 1,
                 .refCount = 0,
                 .dirty = false,
                 .val = obj,
@@ -138,6 +137,16 @@ pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type
             };
 
             try self.insertHandle(handle);
+
+            // Only mark still-referenced handles dirty after insertion succeeds.
+            // If insertHandle had failed, marking them dirty would leave callers
+            // with handles that get freed on release even though no new version exists.
+            self.gen += 1;
+            for (self.res.items) |hOpt| {
+                if (hOpt) |h| {
+                    if (h != handle) h.dirty = true;
+                }
+            }
         }
 
         /// Increment the refCount on the latest live handle for the resource.
@@ -700,7 +709,8 @@ pub const ResourceManager = struct {
 
         var texture: c_uint = undefined;
         gl.genTextures(1, &texture);
-        errdefer gl.deleteTextures(1, &texture);
+        var gl_texture_owned = false;
+        errdefer if (!gl_texture_owned) gl.deleteTextures(1, &texture);
 
         gl.bindTexture(gl.TEXTURE_2D, texture);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
@@ -715,6 +725,7 @@ pub const ResourceManager = struct {
             .texture = texture,
             .size = .{ .x = @intCast(width), .y = @intCast(height) },
         });
+        gl_texture_owned = true;
 
         const managed = try self.getOrCreateAtlasTexture(baseName);
         try managed.add(.{
