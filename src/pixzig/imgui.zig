@@ -631,7 +631,7 @@ pub const UiContext = struct {
         );
 
         // Title text — vertically centered in title bar
-        const line_h: f32 = if (self.text.font_handle) |a| @floatFromInt(a.val.maxY) else 16;
+        const line_h: f32 = if (self.text.font) |a| @floatFromInt(a.val.maxY) else 16;
         _ = self.text.drawString(title, .{
             .x = @intFromFloat(rect.l + pad_x),
             .y = @intFromFloat(rect.t + (title_h - line_h) / 2.0),
@@ -674,7 +674,7 @@ pub const UiContext = struct {
             const rect = win.rect;
             const mp = self.mouse_pos;
             if (mp.x >= rect.l and mp.x < rect.r and mp.y >= rect.t and mp.y < rect.b) {
-                const line_h: f32 = if (self.text.font_handle) |a| @floatFromInt(a.val.maxY) else 16;
+                const line_h: f32 = if (self.text.font) |a| @floatFromInt(a.val.maxY) else 16;
                 state.scroll_y = std.math.clamp(
                     state.scroll_y - self.scroll_delta * line_h * 3.0,
                     0.0,
@@ -845,7 +845,7 @@ pub const UiContext = struct {
 
     pub fn label(self: *UiContext, str: []const u8) void {
         const s = &self.style;
-        const line_h: i32 = if (self.text.font_handle) |a| a.val.maxY else 16;
+        const line_h: i32 = if (self.text.font) |a| a.val.maxY else 16;
         const h: f32 = @floatFromInt(line_h + s.item_spacing);
         const w: f32 = self.contentWidth();
         const rect = self.allocWidget(w, h);
@@ -932,7 +932,7 @@ pub const UiContext = struct {
         self.shapes.drawEnclosingRect(rect, s.window_border, 1);
 
         const ts = self.text.measureString(lbl);
-        const line_h: f32 = if (self.text.font_handle) |a| @floatFromInt(a.val.maxY) else 16;
+        const line_h: f32 = if (self.text.font) |a| @floatFromInt(a.val.maxY) else 16;
         const tx: i32 = @intFromFloat(rect.l + (width - @as(f32, @floatFromInt(ts.x))) / 2.0);
         const ty: i32 = @intFromFloat(rect.t + (h - line_h) / 2.0);
         _ = self.text.drawString(lbl, .{ .x = tx, .y = ty });
@@ -991,7 +991,7 @@ pub const UiContext = struct {
 
         // Centered label
         const ts = self.text.measureString(lbl);
-        const line_h: f32 = if (self.text.font_handle) |a| @floatFromInt(a.val.maxY) else 16;
+        const line_h: f32 = if (self.text.font) |a| @floatFromInt(a.val.maxY) else 16;
         const tx: i32 = @intFromFloat(rect.l + (w - @as(f32, @floatFromInt(ts.x))) / 2.0);
         const ty: i32 = @intFromFloat(rect.t + (h - line_h) / 2.0);
         _ = self.text.drawString(lbl, .{ .x = tx, .y = ty });
@@ -1033,7 +1033,7 @@ pub const UiContext = struct {
         self.shapes.drawFilledRect(rect, bg);
 
         const pad_x: f32 = @floatFromInt(s.padding.x);
-        const line_h: f32 = if (self.text.font_handle) |a| @floatFromInt(a.val.maxY) else 16;
+        const line_h: f32 = if (self.text.font) |a| @floatFromInt(a.val.maxY) else 16;
         const text_clip = RectF{ .l = rect.l + pad_x, .t = rect.t, .r = rect.r - pad_x, .b = rect.b };
         _ = self.text.drawClippedString(lbl, .{
             .x = @intFromFloat(rect.l + pad_x),
@@ -1189,7 +1189,7 @@ pub const UiContext = struct {
         }
 
         const item_sp: f32 = @floatFromInt(s.item_spacing);
-        const line_h: f32 = if (self.text.font_handle) |a| @floatFromInt(a.val.maxY) else 16;
+        const line_h: f32 = if (self.text.font) |a| @floatFromInt(a.val.maxY) else 16;
         _ = self.text.drawString(lbl, .{
             .x = @intFromFloat(box.r + item_sp * 2.0),
             .y = @intFromFloat(rect.t + (h - line_h) / 2.0),
@@ -1384,7 +1384,7 @@ pub const UiContext = struct {
         self.shapes.drawEnclosingRect(rect, border_col, 1);
 
         const pad_x: f32 = @floatFromInt(s.padding.x);
-        const line_h: f32 = if (self.text.font_handle) |a| @floatFromInt(a.val.maxY) else 16;
+        const line_h: f32 = if (self.text.font) |a| @floatFromInt(a.val.maxY) else 16;
         const ty: i32 = @intFromFloat(rect.t + (h - line_h) / 2.0);
         const text_clip = RectF{ .l = rect.l + pad_x, .t = rect.t, .r = rect.r - pad_x, .b = rect.b };
         _ = self.text.drawClippedString(buf[0..len.*], .{
@@ -1533,7 +1533,7 @@ pub const UiContext = struct {
         else
             std.fmt.bufPrint(&display_buf, "{}", .{value.*}) catch "?";
         const pad_x: f32 = @floatFromInt(s.padding.x);
-        const line_h: f32 = if (self.text.font_handle) |a| @floatFromInt(a.val.maxY) else 16;
+        const line_h: f32 = if (self.text.font) |a| @floatFromInt(a.val.maxY) else 16;
         const ty: i32 = @intFromFloat(rect.t + (h - line_h) / 2.0);
         const text_clip = RectF{ .l = rect.l + pad_x, .t = rect.t, .r = rect.r - pad_x, .b = rect.b };
         _ = self.text.drawClippedString(value_str, .{
@@ -1578,7 +1578,7 @@ pub const UiContext = struct {
         const w: f32 = self.contentWidth();
         const rect = self.allocWidget(w, area_height);
 
-        const line_h: i32 = if (self.text.font_handle) |a| a.val.maxY else 16;
+        const line_h: i32 = if (self.text.font) |a| a.val.maxY else 16;
         const line_hf: f32 = @floatFromInt(line_h);
         const pad_y: f32 = @floatFromInt(s.padding.y);
         const pad_x: f32 = @floatFromInt(s.padding.x);
@@ -1758,7 +1758,7 @@ pub const UiContext = struct {
         var val_buf: [24]u8 = undefined;
         const val_str = std.fmt.bufPrint(&val_buf, "{d:.2}", .{value.*}) catch "?";
         const ts = self.text.measureString(val_str);
-        const line_h: f32 = if (self.text.font_handle) |a| @floatFromInt(a.val.maxY) else 16;
+        const line_h: f32 = if (self.text.font) |a| @floatFromInt(a.val.maxY) else 16;
         _ = self.text.drawString(val_str, .{
             .x = @intFromFloat(rect.r - @as(f32, @floatFromInt(ts.x)) - @as(f32, @floatFromInt(s.padding.x))),
             .y = @intFromFloat(track_cy - line_h / 2.0),

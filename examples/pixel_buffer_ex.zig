@@ -29,7 +29,7 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        _ = self;
+        self.pixBuff.deinit();
     }
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {

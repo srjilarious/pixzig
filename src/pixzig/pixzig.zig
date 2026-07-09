@@ -127,7 +127,7 @@ pub const PixzigEngineInitOptions = struct {
     resizable: bool = true,
     /// Logical game resolution. When null, logical size tracks the framebuffer
     /// and projMat preserves the existing gameScale-based behavior.
-    logicalSize: ?Vec2I = .{ .x = 800, .y = 480 },
+    logicalSize: ?Vec2I = null,
     scalePolicy: windowing.ScalePolicy = .fit,
     renderInitOpts: renderer.RendererInitOpts = .{},
 };

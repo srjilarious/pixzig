@@ -798,7 +798,7 @@ pub const ResourceManager = struct {
 
         const spack = parsed.value;
 
-        const texImageManaged = self.textures.get(baseName) orelse return error.NoTextureWithThatName;
+        const texImageManaged = self.textures.get(utils.baseNameFromPath(baseName)) orelse return error.NoTextureWithThatName;
         const texImage = texImageManaged.get() orelse return error.NoTextureWithThatName;
         const sz: Vec2I = texImage.val.size.asVec2I();
 
