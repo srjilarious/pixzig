@@ -9,6 +9,8 @@ const KeyModifier = keyboard.KeyModifier;
 const Mouse = @import("./mouse.zig").Mouse;
 const InputManager = @import("./manager.zig").InputManager;
 const ScriptEngine = @import("../scripting.zig").ScriptEngine;
+const keychord = @import("./keychord.zig");
+pub const KeyChordPiece = keychord.KeyChordPiece;
 
 pub const Source = union(enum) {
     key: glfw.Key,
@@ -232,6 +234,7 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
         alloc: std.mem.Allocator,
         digitalBindings: std.ArrayList(DigitalBinding),
         axisBindings: std.ArrayList(AnalogBinding),
+        chordMap: keychord.KeyMap(Action),
         currIdx: usize,
         prevIdx: usize,
         digitalActionBuffers: [2]DigitalActionState,
@@ -240,11 +243,14 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
         const Self = @This();
 
         pub fn init(alloc: std.mem.Allocator) !*Self {
+            var chordMap = try keychord.KeyMap(Action).init(alloc);
+            errdefer chordMap.deinit();
             const actions = try alloc.create(Self);
             actions.* = .{
                 .alloc = alloc,
                 .digitalBindings = .empty,
                 .axisBindings = .empty,
+                .chordMap = chordMap,
                 .prevIdx = 0,
                 .currIdx = 1,
                 .digitalActionBuffers = .{
@@ -262,6 +268,7 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
         pub fn deinit(self: *Self) void {
             self.digitalBindings.deinit(self.alloc);
             self.axisBindings.deinit(self.alloc);
+            self.chordMap.deinit();
             self.alloc.destroy(self);
         }
 
@@ -346,6 +353,14 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
             try self.axisBindings.append(self.alloc, .{ .source = source, .axis = ax });
         }
 
+        pub fn bindChord(self: *Self, piece: KeyChordPiece, action: Action) !void {
+            _ = try self.chordMap.addKeyChord(piece.mod, piece.key, action, null);
+        }
+
+        pub fn bindChord2(self: *Self, piece1: KeyChordPiece, piece2: KeyChordPiece, action: Action) !void {
+            _ = try self.chordMap.addComplexChord(piece1, piece2, action, null);
+        }
+
         fn isSourceDown(source: Source, inputs: *const InputManager) bool {
             switch (source) {
                 .key => |k| return inputs.keyboard.down(k),
@@ -361,7 +376,8 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
         }
 
         /// Advances the action state by one tick, reading from `inputs`.
-        pub fn update(self: *Self, inputs: *const InputManager) bool {
+        /// `elapsedUs` is used for chord timeout and repeat tracking; pass 0 if not using chords.
+        pub fn update(self: *Self, inputs: *const InputManager, elapsedUs: f64) bool {
             const temp = self.currIdx;
             self.currIdx = self.prevIdx;
             self.prevIdx = temp;
@@ -372,6 +388,15 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
             for (self.digitalBindings.items) |binding| {
                 if (isSourceDown(binding.source, inputs)) {
                     curr.set(binding.action, true);
+                }
+            }
+
+            _ = self.chordMap.update(inputs.keyboard.currKeys(), elapsedUs);
+            if (self.chordMap.chords.downKey != .unknown) {
+                if (self.chordMap.chords.currChord) |chord| {
+                    if (chord.func) |action| {
+                        curr.set(action, true);
+                    }
                 }
             }
 

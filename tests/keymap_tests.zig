@@ -1,10 +1,10 @@
 const std = @import("std");
 const testz = @import("testz");
 const input = @import("pixzig").input;
-const KeyMap = input.KeyMap;
+const KeyMap = input.KeyMap([]const u8);
 const KeyChordPiece = input.KeyChordPiece;
 const KeyboardState = input.KeyboardState;
-const ChordTree = input.ChordTree;
+const ChordTree = input.ChordTree([]const u8);
 
 const keychord = input.keychord;
 
@@ -56,14 +56,14 @@ pub fn printKeyChordPieceTest(io: std.Io, alloc: std.mem.Allocator) !void {
     const len1 = try kp1.print(buff[0..]);
     try testz.expectEqualStr(buff[0..len1], "Ctrl+Shift+A");
 
-    var kc = try input.KeyChord.init(alloc, kp1, null);
+    var kc = try input.KeyChord([]const u8).init(alloc, kp1, null);
 
     // Only need to deinit the top key chord as it will free its children.
     defer kc.deinit();
 
     const kp2 = KeyChordPiece.from(.{ .alt = true }, .p);
-    const kc2 = try alloc.create(input.KeyChord);
-    kc2.* = try input.KeyChord.init(alloc, kp2, "another");
+    const kc2 = try alloc.create(input.KeyChord([]const u8));
+    kc2.* = try input.KeyChord([]const u8).init(alloc, kp2, "another");
 
     try kc.children.put(kp2, kc2);
     const len2 = try kc.print(buff[0..]);
@@ -90,7 +90,7 @@ pub fn simpleChordTreeUpdateTest(io: std.Io, alloc: std.mem.Allocator) !void {
     kbState.set(.a, true);
     {
         const res = kmap.update(&kbState, 1000);
-        try testz.expectEqual(res, input.ChordUpdateResult.none);
+        try testz.expectEqual(res, .none);
     }
 
     kbState.set(.right_control, true);
@@ -111,19 +111,19 @@ pub fn twoKeyChordUpdateTest(io: std.Io, alloc: std.mem.Allocator) !void {
     kbState.set(.k, true);
     {
         const res = kmap.update(&kbState, 1000);
-        try testz.expectEqual(res, input.ChordUpdateResult.none);
+        try testz.expectEqual(res, .none);
     }
 
     kbState.set(.right_control, true);
     {
         const res = kmap.update(&kbState, 1000);
-        try testz.expectEqual(res, input.ChordUpdateResult.none);
+        try testz.expectEqual(res, .none);
     }
 
     kbState.set(.k, false);
     {
         const res = kmap.update(&kbState, 1000);
-        try testz.expectEqual(res, input.ChordUpdateResult.none);
+        try testz.expectEqual(res, .none);
     }
 
     kbState.set(.l, true);
@@ -151,31 +151,31 @@ pub fn twoKeyChordUpdateDifferentModsTest(io: std.Io, alloc: std.mem.Allocator) 
     kbState.set(.k, true);
     {
         const res = kmap.update(&kbState, 1000);
-        try testz.expectEqual(res, input.ChordUpdateResult.none);
+        try testz.expectEqual(res, .none);
     }
 
     kbState.set(.right_control, true);
     {
         const res = kmap.update(&kbState, 1000);
-        try testz.expectEqual(res, input.ChordUpdateResult.none);
+        try testz.expectEqual(res, .none);
     }
 
     kbState.set(.k, false);
     {
         const res = kmap.update(&kbState, 1000);
-        try testz.expectEqual(res, input.ChordUpdateResult.none);
+        try testz.expectEqual(res, .none);
     }
 
     kbState.set(.left_super, true);
     {
         const res = kmap.update(&kbState, 1000);
-        try testz.expectEqual(res, input.ChordUpdateResult.none);
+        try testz.expectEqual(res, .none);
     }
 
     kbState.set(.right_control, false);
     {
         const res = kmap.update(&kbState, 1000);
-        try testz.expectEqual(res, input.ChordUpdateResult.none);
+        try testz.expectEqual(res, .none);
     }
 
     kbState.set(.F1, true);
@@ -196,7 +196,7 @@ pub fn repeatKeyChordTrigger(io: std.Io, alloc: std.mem.Allocator) !void {
     kbState.set(.a, true);
     {
         const res = kmap.update(&kbState, 1000);
-        try testz.expectEqual(res, input.ChordUpdateResult.none);
+        try testz.expectEqual(res, .none);
     }
 
     kbState.set(.right_control, true);
@@ -208,7 +208,7 @@ pub fn repeatKeyChordTrigger(io: std.Io, alloc: std.mem.Allocator) !void {
 
     {
         const res = kmap.update(&kbState, keychord.InitialRepeatRate - 1000);
-        try testz.expectEqual(res, input.ChordUpdateResult.none);
+        try testz.expectEqual(res, .none);
     }
 
     {
@@ -308,7 +308,7 @@ pub fn resetStopsRepeatTest(io: std.Io, alloc: std.mem.Allocator) !void {
 
     // Should be .none — not a spurious repeat or re-trigger.
     const res2 = kmap.update(&kbState, 1000);
-    try testz.expectEqual(res2, input.ChordUpdateResult.none);
+    try testz.expectEqual(res2, .none);
 }
 
 // After advancing mid-way through a two-key sequence, reset() should bring
@@ -325,7 +325,7 @@ pub fn resetMidSequenceTest(io: std.Io, alloc: std.mem.Allocator) !void {
     kbState.set(.k, true);
     kbState.set(.right_control, true);
     const res1 = kmap.update(&kbState, 1000);
-    try testz.expectEqual(res1, input.ChordUpdateResult.none);
+    try testz.expectEqual(res1, .none);
 
     // Reset mid-sequence.
     kbState.set(.k, false);
@@ -334,7 +334,7 @@ pub fn resetMidSequenceTest(io: std.Io, alloc: std.mem.Allocator) !void {
     // Ctrl+L alone should not trigger — back at root, not the intermediate node.
     kbState.set(.l, true);
     const res2 = kmap.update(&kbState, 1000);
-    try testz.expectEqual(res2, input.ChordUpdateResult.none);
+    try testz.expectEqual(res2, .none);
 }
 
 // After triggering and calling reset() while the key is still held, the next
@@ -380,12 +380,12 @@ pub fn timeoutReturnsResetResultTest(io: std.Io, alloc: std.mem.Allocator) !void
 
     // Burn past the timeout with a single large elapsed value.
     const res = kmap.update(&kbState, keychord.DefaultChordTimeoutUs + 1);
-    try testz.expectEqual(res, input.ChordUpdateResult.reset);
+    try testz.expectEqual(res, .reset);
 
     // After timeout, the second key alone should not trigger (back at root).
     kbState.set(.l, true);
     const res2 = kmap.update(&kbState, 1000);
-    try testz.expectEqual(res2, input.ChordUpdateResult.none);
+    try testz.expectEqual(res2, .none);
 }
 
 // ----------------------------------------------------------------------------

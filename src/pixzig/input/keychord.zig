@@ -79,250 +79,245 @@ pub const KeyChordPiece = struct {
     }
 };
 
-pub const KeyChord = struct {
-    alloc: std.mem.Allocator,
-    // The script func to call, can be straight lua code.
-    func: ?[]const u8, // Change to ArrayList of context/func.
-    piece: KeyChordPiece,
-    children: std.AutoHashMap(KeyChordPiece, *KeyChord),
+pub fn KeyChord(comptime T: type) type {
+    return struct {
+        alloc: std.mem.Allocator,
+        func: ?T,
+        piece: KeyChordPiece,
+        children: std.AutoHashMap(KeyChordPiece, *KeyChord(T)),
 
-    pub fn init(alloc: std.mem.Allocator, piece: KeyChordPiece, func: ?[]const u8) !KeyChord {
-        var fnc: ?[]const u8 = null;
-        if (func != null) {
-            fnc = try alloc.dupe(u8, func.?);
-        }
-        return .{
-            .alloc = alloc,
-            .func = fnc,
-            .piece = piece,
-            .children = std.AutoHashMap(KeyChordPiece, *KeyChord).init(alloc),
-        };
-    }
+        const Self = @This();
 
-    pub fn deinit(self: *KeyChord) void {
-        if (self.func != null) {
-            self.alloc.free(self.func.?);
+        pub fn init(alloc: std.mem.Allocator, piece: KeyChordPiece, func: ?T) !Self {
+            return .{
+                .alloc = alloc,
+                .func = func,
+                .piece = piece,
+                .children = std.AutoHashMap(KeyChordPiece, *KeyChord(T)).init(alloc),
+            };
         }
 
-        var it = self.children.valueIterator();
-        while (it.next()) |child| {
-            child.*.deinit();
-            self.alloc.destroy(child.*);
-        }
-        self.children.deinit();
-    }
-
-    pub fn print(self: *KeyChord, buff: []u8) !usize {
-        var len: usize = 0;
-
-        // Print ourself as a toplevel
-        if (self.func != null) {
-            len = try self.piece.print(buff);
-            const sl = try std.fmt.bufPrint(buff[len..], ": {s}", .{self.func.?});
-            len += sl.len;
-        }
-
-        var it = self.children.keyIterator();
-        while (it.next()) |k| {
-            // Print our selves first to show the full chain leading to this child.
-            len += try self.piece.print(buff[len..]);
-            _ = try std.fmt.bufPrint(buff[len..], ", ", .{});
-            len += 2;
-
-            // Now print the child.
-            len += try self.children.getPtr(k.*).?.*.print(buff[len..]);
-        }
-
-        return len;
-    }
-};
-
-pub const ChordUpdateResult = union(enum) { none: void, reset: void, triggered: *KeyChord };
-
-pub const ChordTree = struct {
-    alloc: std.mem.Allocator,
-    context: ?[]const u8,
-    downKey: glfw.Key,
-    currChord: ?*KeyChord,
-    rootChord: *KeyChord,
-    elapsedUsCounter: f64,
-    repeatCounter: f64,
-
-    pub fn init(alloc: std.mem.Allocator, context: ?[]const u8) !ChordTree {
-        const ctxt: ?[]const u8 = if (context) |c| try alloc.dupe(u8, c) else null;
-        errdefer if (ctxt) |c| alloc.free(c);
-
-        const root = try alloc.create(KeyChord);
-        errdefer alloc.destroy(root);
-        root.* = try KeyChord.init(alloc, KeyChordPiece.from(.{}, .unknown), null);
-
-        return .{
-            .alloc = alloc,
-            .context = ctxt,
-            .downKey = .unknown,
-            .currChord = root,
-            .rootChord = root,
-            .elapsedUsCounter = 0,
-            .repeatCounter = 0,
-        };
-    }
-
-    pub fn deinit(self: *ChordTree) void {
-        if (self.context != null) {
-            self.alloc.free(self.context.?);
-        }
-
-        self.rootChord.deinit();
-        self.alloc.destroy(self.rootChord);
-    }
-
-    pub fn reset(self: *ChordTree) void {
-        self.currChord = self.rootChord;
-        self.elapsedUsCounter = 0;
-        self.downKey = .unknown;
-    }
-
-    fn checkExpectedModsDown(chordMods: KeyModifier, kbMods: KeyModifier) bool {
-        return chordMods.alt == kbMods.alt and
-            chordMods.ctrl == kbMods.ctrl and
-            chordMods.shift == kbMods.shift and
-            chordMods.super == kbMods.super;
-    }
-
-    pub fn update(self: *ChordTree, kbState: *const KeyboardState, elapsedUs: f64) ChordUpdateResult {
-        if (self.downKey != .unknown) {
-            if (!checkExpectedModsDown(self.currChord.?.piece.mod, kbState.modifiers()) or kbState.up(self.downKey)) {
-                self.reset();
-                return .reset;
-            } else {
-                self.repeatCounter -= elapsedUs;
-                if (self.repeatCounter <= 0) {
-                    self.repeatCounter = DownRepeatRate;
-                    return .{ .triggered = self.currChord.? };
-                }
+        pub fn deinit(self: *Self) void {
+            var it = self.children.valueIterator();
+            while (it.next()) |child| {
+                child.*.deinit();
+                self.alloc.destroy(child.*);
             }
-        } else {
-            self.elapsedUsCounter += elapsedUs;
-            if (self.elapsedUsCounter > DefaultChordTimeoutUs) {
-                self.reset();
-                return .reset;
+            self.children.deinit();
+        }
+
+        pub fn print(self: *Self, buff: []u8) !usize {
+            var len: usize = 0;
+
+            if (self.func != null) {
+                len = try self.piece.print(buff);
+                // Use {s} for string slices, {} for everything else (enums, etc.)
+                const sl = if (comptime T == []const u8 or T == []u8)
+                    try std.fmt.bufPrint(buff[len..], ": {s}", .{self.func.?})
+                else
+                    try std.fmt.bufPrint(buff[len..], ": {}", .{self.func.?});
+                len += sl.len;
             }
 
-            var it = self.currChord.?.children.keyIterator();
+            var it = self.children.keyIterator();
             while (it.next()) |k| {
-                if (kbState.down(k.key)) {
-                    if (checkExpectedModsDown(k.mod, kbState.modifiers())) {
-                        self.elapsedUsCounter = 0.0;
-                        self.currChord = self.currChord.?.children.get(k.*).?;
-                        if (self.currChord.?.children.count() == 0) {
-                            self.downKey = k.key;
-                            self.repeatCounter = InitialRepeatRate;
-                            return .{ .triggered = self.currChord.? };
+                len += try self.piece.print(buff[len..]);
+                _ = try std.fmt.bufPrint(buff[len..], ", ", .{});
+                len += 2;
+                len += try self.children.getPtr(k.*).?.*.print(buff[len..]);
+            }
+
+            return len;
+        }
+    };
+}
+
+pub fn ChordUpdateResult(comptime T: type) type {
+    return union(enum) { none: void, reset: void, triggered: *KeyChord(T) };
+}
+
+pub fn ChordTree(comptime T: type) type {
+    return struct {
+        alloc: std.mem.Allocator,
+        context: ?[]const u8,
+        downKey: glfw.Key,
+        currChord: ?*KeyChord(T),
+        rootChord: *KeyChord(T),
+        elapsedUsCounter: f64,
+        repeatCounter: f64,
+
+        const Self = @This();
+
+        pub fn init(alloc: std.mem.Allocator, context: ?[]const u8) !Self {
+            const ctxt: ?[]const u8 = if (context) |c| try alloc.dupe(u8, c) else null;
+            errdefer if (ctxt) |c| alloc.free(c);
+
+            const root = try alloc.create(KeyChord(T));
+            errdefer alloc.destroy(root);
+            root.* = try KeyChord(T).init(alloc, KeyChordPiece.from(.{}, .unknown), null);
+
+            return .{
+                .alloc = alloc,
+                .context = ctxt,
+                .downKey = .unknown,
+                .currChord = root,
+                .rootChord = root,
+                .elapsedUsCounter = 0,
+                .repeatCounter = 0,
+            };
+        }
+
+        pub fn deinit(self: *Self) void {
+            if (self.context != null) {
+                self.alloc.free(self.context.?);
+            }
+
+            self.rootChord.deinit();
+            self.alloc.destroy(self.rootChord);
+        }
+
+        pub fn reset(self: *Self) void {
+            self.currChord = self.rootChord;
+            self.elapsedUsCounter = 0;
+            self.downKey = .unknown;
+        }
+
+        fn checkExpectedModsDown(chordMods: KeyModifier, kbMods: KeyModifier) bool {
+            return chordMods.alt == kbMods.alt and
+                chordMods.ctrl == kbMods.ctrl and
+                chordMods.shift == kbMods.shift and
+                chordMods.super == kbMods.super;
+        }
+
+        pub fn update(self: *Self, kbState: *const KeyboardState, elapsedUs: f64) ChordUpdateResult(T) {
+            if (self.downKey != .unknown) {
+                if (!checkExpectedModsDown(self.currChord.?.piece.mod, kbState.modifiers()) or kbState.up(self.downKey)) {
+                    self.reset();
+                    return .reset;
+                } else {
+                    self.repeatCounter -= elapsedUs;
+                    if (self.repeatCounter <= 0) {
+                        self.repeatCounter = DownRepeatRate;
+                        return .{ .triggered = self.currChord.? };
+                    }
+                }
+            } else {
+                self.elapsedUsCounter += elapsedUs;
+                if (self.elapsedUsCounter > DefaultChordTimeoutUs) {
+                    self.reset();
+                    return .reset;
+                }
+
+                var it = self.currChord.?.children.keyIterator();
+                while (it.next()) |k| {
+                    if (kbState.down(k.key)) {
+                        if (checkExpectedModsDown(k.mod, kbState.modifiers())) {
+                            self.elapsedUsCounter = 0.0;
+                            self.currChord = self.currChord.?.children.get(k.*).?;
+                            if (self.currChord.?.children.count() == 0) {
+                                self.downKey = k.key;
+                                self.repeatCounter = InitialRepeatRate;
+                                return .{ .triggered = self.currChord.? };
+                            }
                         }
                     }
                 }
             }
+            return .none;
         }
-        return .none;
-    }
-};
+    };
+}
 
-pub const KeyMap = struct {
-    chords: ChordTree,
-    //currentContext: ?*ChordTree,
-    // current context name?
-    //contexts: std.StringHashMap(*ChordTree),
-    alloc: std.mem.Allocator,
+pub fn KeyMap(comptime T: type) type {
+    return struct {
+        chords: ChordTree(T),
+        alloc: std.mem.Allocator,
 
-    pub fn init(alloc: std.mem.Allocator) !KeyMap {
-        return .{
-            .chords = try ChordTree.init(alloc, null),
-            .alloc = alloc,
-            // .contexts = try std.StringHashMap(*ChordTree).init(alloc),
-        };
-    }
+        const Self = @This();
 
-    pub fn deinit(self: *KeyMap) void {
-        self.chords.deinit();
-    }
-
-    pub fn addKeyChord(self: *KeyMap, mods: KeyModifier, key: glfw.Key, func: []const u8, context: ?[]const u8) !bool {
-        _ = context;
-        const kcp = KeyChordPiece.from(mods, key);
-        if (self.chords.rootChord.children.contains(kcp)) return false;
-
-        const chord = try self.alloc.create(KeyChord);
-        errdefer self.alloc.destroy(chord);
-        chord.* = try KeyChord.init(self.alloc, kcp, func);
-        errdefer chord.deinit();
-        try self.chords.rootChord.children.put(kcp, chord);
-        return true;
-    }
-
-    pub fn addTwoKeyChord(self: *KeyMap, mods: KeyModifier, key1: glfw.Key, key2: glfw.Key, func: []const u8, context: ?[]const u8) !bool {
-        _ = context;
-        const kcp1 = KeyChordPiece.from(mods, key1);
-
-        var chord1: *KeyChord = undefined;
-        if (!self.chords.rootChord.children.contains(kcp1)) {
-            chord1 = try self.alloc.create(KeyChord);
-            var chord1Committed = false;
-            errdefer if (!chord1Committed) self.alloc.destroy(chord1);
-            chord1.* = try KeyChord.init(self.alloc, kcp1, null);
-            errdefer if (!chord1Committed) chord1.deinit();
-            try self.chords.rootChord.children.put(kcp1, chord1);
-            chord1Committed = true;
-        } else {
-            chord1 = self.chords.rootChord.children.get(kcp1).?;
+        pub fn init(alloc: std.mem.Allocator) !Self {
+            return .{
+                .chords = try ChordTree(T).init(alloc, null),
+                .alloc = alloc,
+            };
         }
 
-        // Second key portion.
-        const kcp2 = KeyChordPiece.from(mods, key2);
-        if (chord1.children.contains(kcp2)) return false;
-
-        const chord2 = try self.alloc.create(KeyChord);
-        errdefer self.alloc.destroy(chord2);
-        chord2.* = try KeyChord.init(self.alloc, kcp2, func);
-        errdefer chord2.deinit();
-        try chord1.children.put(kcp2, chord2);
-        return true;
-    }
-
-    pub fn addComplexChord(self: *KeyMap, kcp1: KeyChordPiece, kcp2: KeyChordPiece, func: []const u8, context: ?[]const u8) !bool {
-        _ = context;
-        var chord1: *KeyChord = undefined;
-        if (!self.chords.rootChord.children.contains(kcp1)) {
-            chord1 = try self.alloc.create(KeyChord);
-            var chord1Committed = false;
-            errdefer if (!chord1Committed) self.alloc.destroy(chord1);
-            chord1.* = try KeyChord.init(self.alloc, kcp1, null);
-            errdefer if (!chord1Committed) chord1.deinit();
-            try self.chords.rootChord.children.put(kcp1, chord1);
-            chord1Committed = true;
-        } else {
-            chord1 = self.chords.rootChord.children.get(kcp1).?;
+        pub fn deinit(self: *Self) void {
+            self.chords.deinit();
         }
 
-        // Second key portion.
-        if (chord1.children.contains(kcp2)) return false;
+        pub fn addKeyChord(self: *Self, mods: KeyModifier, key: glfw.Key, func: T, context: ?[]const u8) !bool {
+            _ = context;
+            const kcp = KeyChordPiece.from(mods, key);
+            if (self.chords.rootChord.children.contains(kcp)) return false;
 
-        const chord2 = try self.alloc.create(KeyChord);
-        errdefer self.alloc.destroy(chord2);
-        chord2.* = try KeyChord.init(self.alloc, kcp2, func);
-        errdefer chord2.deinit();
-        try chord1.children.put(kcp2, chord2);
-        return true;
-    }
+            const chord = try self.alloc.create(KeyChord(T));
+            errdefer self.alloc.destroy(chord);
+            chord.* = try KeyChord(T).init(self.alloc, kcp, func);
+            errdefer chord.deinit();
+            try self.chords.rootChord.children.put(kcp, chord);
+            return true;
+        }
 
-    pub fn update(self: *KeyMap, kbState: *const KeyboardState, elapsedUs: f64) ChordUpdateResult {
-        return self.chords.update(kbState, elapsedUs);
-    }
+        pub fn addTwoKeyChord(self: *Self, mods: KeyModifier, key1: glfw.Key, key2: glfw.Key, func: T, context: ?[]const u8) !bool {
+            _ = context;
+            const kcp1 = KeyChordPiece.from(mods, key1);
 
-    pub fn reset(self: *KeyMap) void {
-        self.chords.reset();
-    }
+            var chord1: *KeyChord(T) = undefined;
+            if (!self.chords.rootChord.children.contains(kcp1)) {
+                chord1 = try self.alloc.create(KeyChord(T));
+                var chord1Committed = false;
+                errdefer if (!chord1Committed) self.alloc.destroy(chord1);
+                chord1.* = try KeyChord(T).init(self.alloc, kcp1, null);
+                errdefer if (!chord1Committed) chord1.deinit();
+                try self.chords.rootChord.children.put(kcp1, chord1);
+                chord1Committed = true;
+            } else {
+                chord1 = self.chords.rootChord.children.get(kcp1).?;
+            }
 
-    // pub fn printKeyMap(self: *KeyMap) void {
-    //
-    // }
-};
+            const kcp2 = KeyChordPiece.from(mods, key2);
+            if (chord1.children.contains(kcp2)) return false;
+
+            const chord2 = try self.alloc.create(KeyChord(T));
+            errdefer self.alloc.destroy(chord2);
+            chord2.* = try KeyChord(T).init(self.alloc, kcp2, func);
+            errdefer chord2.deinit();
+            try chord1.children.put(kcp2, chord2);
+            return true;
+        }
+
+        pub fn addComplexChord(self: *Self, kcp1: KeyChordPiece, kcp2: KeyChordPiece, func: T, context: ?[]const u8) !bool {
+            _ = context;
+            var chord1: *KeyChord(T) = undefined;
+            if (!self.chords.rootChord.children.contains(kcp1)) {
+                chord1 = try self.alloc.create(KeyChord(T));
+                var chord1Committed = false;
+                errdefer if (!chord1Committed) self.alloc.destroy(chord1);
+                chord1.* = try KeyChord(T).init(self.alloc, kcp1, null);
+                errdefer if (!chord1Committed) chord1.deinit();
+                try self.chords.rootChord.children.put(kcp1, chord1);
+                chord1Committed = true;
+            } else {
+                chord1 = self.chords.rootChord.children.get(kcp1).?;
+            }
+
+            if (chord1.children.contains(kcp2)) return false;
+
+            const chord2 = try self.alloc.create(KeyChord(T));
+            errdefer self.alloc.destroy(chord2);
+            chord2.* = try KeyChord(T).init(self.alloc, kcp2, func);
+            errdefer chord2.deinit();
+            try chord1.children.put(kcp2, chord2);
+            return true;
+        }
+
+        pub fn update(self: *Self, kbState: *const KeyboardState, elapsedUs: f64) ChordUpdateResult(T) {
+            return self.chords.update(kbState, elapsedUs);
+        }
+
+        pub fn reset(self: *Self) void {
+            self.chords.reset();
+        }
+    };
+}

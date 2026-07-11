@@ -25,18 +25,18 @@ pub fn basicKbActions(io: std.Io, alloc: std.mem.Allocator) !void {
 
     try actions.bind(.jump, .{ .key = .space });
     try actions.bind(.shoot, .{ .key = .a });
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectFalse(actions.down(.jump));
     try testz.expectFalse(actions.down(.shoot));
 
     inputs.keyboard.currKeys_mut().set(.space, true);
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectTrue(actions.down(.jump));
     try testz.expectFalse(actions.down(.shoot));
 
     inputs.keyboard.currKeys_mut().clear();
     inputs.keyboard.currKeys_mut().set(.a, true);
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectFalse(actions.down(.jump));
     try testz.expectTrue(actions.down(.shoot));
 }
@@ -50,7 +50,7 @@ pub fn multipleBindingKbActions(io: std.Io, alloc: std.mem.Allocator) !void {
     try actions.bind(.jump, .{ .key = .space });
     try actions.bind(.shoot, .{ .key = .a });
     try actions.bind(.shoot, .{ .key = .z });
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
 
     try testz.expectFalse(actions.down(.jump));
     try testz.expectTrue(actions.up(.jump));
@@ -59,22 +59,22 @@ pub fn multipleBindingKbActions(io: std.Io, alloc: std.mem.Allocator) !void {
     try testz.expectTrue(actions.up(.shoot));
 
     inputs.keyboard.currKeys_mut().set(.a, true);
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectFalse(actions.down(.jump));
     try testz.expectTrue(actions.down(.shoot));
 
     inputs.keyboard.currKeys_mut().set(.z, true);
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectFalse(actions.down(.jump));
     try testz.expectTrue(actions.down(.shoot));
 
     inputs.keyboard.currKeys_mut().set(.z, false);
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectFalse(actions.down(.jump));
     try testz.expectTrue(actions.down(.shoot));
 
     inputs.keyboard.currKeys_mut().set(.a, false);
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectFalse(actions.down(.jump));
     try testz.expectFalse(actions.down(.shoot));
 }
@@ -87,18 +87,18 @@ pub fn basicMouseAction(io: std.Io, alloc: std.mem.Allocator) !void {
 
     try actions.bind(.jump, .{ .mouse_button = .left });
     try actions.bind(.shoot, .{ .mouse_button = .right });
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectFalse(actions.down(.jump));
     try testz.expectFalse(actions.down(.shoot));
 
     inputs.mouse.curr_mut().set(.left, true);
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectTrue(actions.down(.jump));
     try testz.expectFalse(actions.down(.shoot));
 
     inputs.mouse.curr_mut().clear();
     inputs.mouse.curr_mut().set(.right, true);
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectFalse(actions.down(.jump));
     try testz.expectTrue(actions.down(.shoot));
 }
@@ -115,7 +115,7 @@ pub fn buttonsAxisNoInput(io: std.Io, alloc: std.mem.Allocator) !void {
             .positive = .{ .key = .right },
         },
     });
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectEqual(actions.axis(.move_x), 0.0);
 }
 
@@ -132,7 +132,7 @@ pub fn buttonsAxisPositive(io: std.Io, alloc: std.mem.Allocator) !void {
         },
     });
     inputs.keyboard.currKeys_mut().set(.right, true);
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectEqual(actions.axis(.move_x), 1.0);
 }
 
@@ -150,7 +150,7 @@ pub fn buttonsAxisNegative(io: std.Io, alloc: std.mem.Allocator) !void {
     });
 
     inputs.keyboard.currKeys_mut().set(.left, true);
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectEqual(actions.axis(.move_x), -1.0);
 }
 
@@ -168,7 +168,7 @@ pub fn buttonsAxisBothPressed(io: std.Io, alloc: std.mem.Allocator) !void {
     });
     inputs.keyboard.currKeys_mut().set(.left, true);
     inputs.keyboard.currKeys_mut().set(.right, true);
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectEqual(actions.axis(.move_x), 0.0);
 }
 
@@ -192,7 +192,7 @@ pub fn buttonsAxisIndependentAxes(io: std.Io, alloc: std.mem.Allocator) !void {
     });
     inputs.keyboard.currKeys_mut().set(.right, true);
     inputs.keyboard.currKeys_mut().set(.up, true);
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectEqual(actions.axis(.move_x), 1.0);
     try testz.expectEqual(actions.axis(.move_y), 1.0);
 }
@@ -219,13 +219,13 @@ pub fn loadFromLuaKeyBinding(io: std.Io, alloc: std.mem.Allocator) !void {
     try actions.loadFromLua(&eng, "bindings");
 
     inputs.keyboard.currKeys_mut().set(.space, true);
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectTrue(actions.down(.jump));
     try testz.expectFalse(actions.down(.shoot));
 
     inputs.keyboard.currKeys_mut().clear();
     inputs.keyboard.currKeys_mut().set(.z, true);
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectFalse(actions.down(.jump));
     try testz.expectTrue(actions.down(.shoot));
 }
@@ -249,7 +249,7 @@ pub fn loadFromLuaMouseBinding(io: std.Io, alloc: std.mem.Allocator) !void {
     try actions.loadFromLua(&eng, "bindings");
 
     inputs.mouse.curr_mut().set(.left, true);
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectTrue(actions.down(.jump));
 }
 
@@ -272,12 +272,12 @@ pub fn loadFromLuaButtonsAxis(io: std.Io, alloc: std.mem.Allocator) !void {
     try actions.loadFromLua(&eng, "bindings");
 
     inputs.keyboard.currKeys_mut().set(.d, true);
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectEqual(actions.axis(.move_x), 1.0);
 
     inputs.keyboard.currKeys_mut().clear();
     inputs.keyboard.currKeys_mut().set(.a, true);
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectEqual(actions.axis(.move_x), -1.0);
 }
 
@@ -351,9 +351,96 @@ pub fn loadFromLuaMixedBindings(io: std.Io, alloc: std.mem.Allocator) !void {
     inputs.keyboard.currKeys_mut().set(.space, true);
     inputs.keyboard.currKeys_mut().set(.right, true);
     inputs.keyboard.currKeys_mut().set(.up, true);
-    _ = actions.update(&inputs);
+    _ = actions.update(&inputs, 0);
     try testz.expectTrue(actions.down(.jump));
     try testz.expectFalse(actions.down(.shoot));
     try testz.expectEqual(actions.axis(.move_x), 1.0);
     try testz.expectEqual(actions.axis(.move_y), 1.0);
+}
+
+// --- chord bindings ---
+
+pub fn singleKeyChordAction(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var inputs = InputManager.init(.{});
+    var actions = try input.ActionMap(TestActions, TestAxes).init(alloc);
+    defer actions.deinit();
+
+    try actions.bindChord(.{ .mod = .{ .ctrl = true }, .key = .a }, .jump);
+
+    // No keys down -- action should be up.
+    _ = actions.update(&inputs, 1000);
+    try testz.expectFalse(actions.down(.jump));
+
+    // Ctrl+A down -- should trigger jump.
+    inputs.keyboard.currKeys_mut().set(.a, true);
+    inputs.keyboard.currKeys_mut().set(.right_control, true);
+    _ = actions.update(&inputs, 1000);
+    try testz.expectTrue(actions.down(.jump));
+    try testz.expectTrue(actions.pressed(.jump));
+
+    // Key still held -- down stays true, pressed becomes false.
+    _ = actions.update(&inputs, 1000);
+    try testz.expectTrue(actions.down(.jump));
+    try testz.expectFalse(actions.pressed(.jump));
+
+    // Release key -- action goes up.
+    inputs.keyboard.currKeys_mut().set(.a, false);
+    _ = actions.update(&inputs, 1000);
+    try testz.expectFalse(actions.down(.jump));
+    try testz.expectTrue(actions.released(.jump));
+}
+
+pub fn twoKeyChordAction(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var inputs = InputManager.init(.{});
+    var actions = try input.ActionMap(TestActions, TestAxes).init(alloc);
+    defer actions.deinit();
+
+    try actions.bindChord2(
+        .{ .mod = .{ .ctrl = true }, .key = .k },
+        .{ .mod = .{ .ctrl = true }, .key = .l },
+        .shoot,
+    );
+
+    // First key of chord -- no trigger yet.
+    inputs.keyboard.currKeys_mut().set(.k, true);
+    inputs.keyboard.currKeys_mut().set(.right_control, true);
+    _ = actions.update(&inputs, 1000);
+    try testz.expectFalse(actions.down(.shoot));
+
+    // Release first key, press second key -- chord fires.
+    inputs.keyboard.currKeys_mut().set(.k, false);
+    _ = actions.update(&inputs, 1000);
+    inputs.keyboard.currKeys_mut().set(.l, true);
+    _ = actions.update(&inputs, 1000);
+    try testz.expectTrue(actions.down(.shoot));
+
+    // Release second key -- action goes up.
+    inputs.keyboard.currKeys_mut().set(.l, false);
+    _ = actions.update(&inputs, 1000);
+    try testz.expectFalse(actions.down(.shoot));
+}
+
+pub fn chordAndKeyIndependent(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var inputs = InputManager.init(.{});
+    var actions = try input.ActionMap(TestActions, TestAxes).init(alloc);
+    defer actions.deinit();
+
+    // Regular key for jump, chord for shoot.
+    try actions.bind(.jump, .{ .key = .space });
+    try actions.bindChord(.{ .mod = .{ .ctrl = true }, .key = .s }, .shoot);
+
+    inputs.keyboard.currKeys_mut().set(.space, true);
+    _ = actions.update(&inputs, 1000);
+    try testz.expectTrue(actions.down(.jump));
+    try testz.expectFalse(actions.down(.shoot));
+
+    inputs.keyboard.currKeys_mut().set(.space, false);
+    inputs.keyboard.currKeys_mut().set(.s, true);
+    inputs.keyboard.currKeys_mut().set(.right_control, true);
+    _ = actions.update(&inputs, 1000);
+    try testz.expectFalse(actions.down(.jump));
+    try testz.expectTrue(actions.down(.shoot));
 }
