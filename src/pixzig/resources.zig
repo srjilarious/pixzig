@@ -379,6 +379,9 @@ pub const ResourceManager = struct {
     textures: std.StringHashMap(*ManagedTextureImage),
     shaders: std.StringHashMap(*ManagedShader),
     atlas: std.StringHashMap(*ManagedTexture),
+    /// Tracks which frame names each atlas registered so stale frames can be
+    /// removed when the atlas JSON changes during hot-reload.
+    atlas_manifests: std.StringHashMap(std.ArrayListUnmanaged([]const u8)),
     fonts: std.StringHashMap(*ManagedFont),
     tilemaps: std.StringHashMap(*ManagedTileMap),
     alloc: std.mem.Allocator,
@@ -399,6 +402,7 @@ pub const ResourceManager = struct {
             .textures = std.StringHashMap(*ManagedTextureImage).init(alloc),
             .shaders = std.StringHashMap(*ManagedShader).init(alloc),
             .atlas = std.StringHashMap(*ManagedTexture).init(alloc),
+            .atlas_manifests = std.StringHashMap(std.ArrayListUnmanaged([]const u8)).init(alloc),
             .fonts = std.StringHashMap(*ManagedFont).init(alloc),
             .tilemaps = std.StringHashMap(*ManagedTileMap).init(alloc),
             .alloc = alloc,
@@ -424,6 +428,14 @@ pub const ResourceManager = struct {
             self.alloc.free(entry.key_ptr.*);
         }
         self.atlas.deinit();
+
+        var amit = self.atlas_manifests.iterator();
+        while (amit.next()) |entry| {
+            for (entry.value_ptr.items) |name| self.alloc.free(name);
+            entry.value_ptr.deinit(self.alloc);
+            self.alloc.free(entry.key_ptr.*);
+        }
+        self.atlas_manifests.deinit();
 
         var sit = self.shaders.iterator();
         while (sit.next()) |entry| {
@@ -813,6 +825,12 @@ pub const ResourceManager = struct {
         const texImage = texImageManaged.get() orelse return error.NoTextureWithThatName;
         const sz: Vec2I = texImage.val.size.asVec2I();
 
+        var new_manifest: std.ArrayListUnmanaged([]const u8) = .empty;
+        errdefer {
+            for (new_manifest.items) |name| self.alloc.free(name);
+            new_manifest.deinit(self.alloc);
+        }
+
         var num: usize = 0;
         for (spack.frames) |frame| {
             const managed = try self.getOrCreateAtlasTexture(frame.name);
@@ -829,7 +847,32 @@ pub const ResourceManager = struct {
                 ),
             });
 
+            const name_owned = try self.alloc.dupe(u8, frame.name);
+            errdefer self.alloc.free(name_owned);
+            try new_manifest.append(self.alloc, name_owned);
+
             num += 1;
+        }
+
+        // Remove atlas entries for frames absent from the new JSON.
+        if (self.atlas_manifests.getPtr(baseName)) |old_manifest| {
+            outer: for (old_manifest.items) |old_name| {
+                for (new_manifest.items) |new_name| {
+                    if (std.mem.eql(u8, old_name, new_name)) continue :outer;
+                }
+                if (self.atlas.fetchRemove(old_name)) |kv| {
+                    kv.value.deinit();
+                    self.alloc.destroy(kv.value);
+                    self.alloc.free(kv.key);
+                }
+            }
+            for (old_manifest.items) |name| self.alloc.free(name);
+            old_manifest.deinit(self.alloc);
+            old_manifest.* = new_manifest;
+        } else {
+            const key_owned = try self.alloc.dupe(u8, baseName);
+            errdefer self.alloc.free(key_owned);
+            try self.atlas_manifests.put(key_owned, new_manifest);
         }
 
         return num;
