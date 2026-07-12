@@ -73,6 +73,35 @@ fn parseSource(lua: *Lua, entry_abs: i32) !Source {
     }
 }
 
+// Parses a single chord piece from a string like "ctrl+a", "ctrl+shift+f1", "space".
+// Modifier tokens (ctrl, alt, shift, super) are case-insensitive. The key token
+// must match a glfw.Key field name (e.g. "a", "space", "f1", "enter").
+fn parseChordPieceFromString(piece_str: []const u8) !KeyChordPiece {
+    var mod = KeyModifier{};
+    var key: ?glfw.Key = null;
+
+    var it = std.mem.splitScalar(u8, piece_str, '+');
+    while (it.next()) |raw_token| {
+        const token = std.mem.trim(u8, raw_token, " ");
+        if (token.len == 0) continue;
+        if (std.ascii.eqlIgnoreCase(token, "ctrl")) {
+            mod.ctrl = true;
+        } else if (std.ascii.eqlIgnoreCase(token, "alt")) {
+            mod.alt = true;
+        } else if (std.ascii.eqlIgnoreCase(token, "shift")) {
+            mod.shift = true;
+        } else if (std.ascii.eqlIgnoreCase(token, "super")) {
+            mod.super = true;
+        } else {
+            var lower_buf: [32]u8 = undefined;
+            const lower = std.ascii.lowerString(lower_buf[0..@min(token.len, lower_buf.len)], token);
+            key = std.meta.stringToEnum(glfw.Key, lower) orelse return error.UnknownKey;
+        }
+    }
+
+    return KeyChordPiece.from(mod, key orelse return error.MissingChordKey);
+}
+
 fn parseAxisSource(lua: *Lua, entry_abs: i32) !AxisSource {
     _ = lua.getField(entry_abs, "type");
     const type_str = try lua.toString(-1);
@@ -304,8 +333,36 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
                     };
                     lua.pop(1);
 
-                    const source = try parseSource(lua, entry_abs);
-                    try self.bind(act, source);
+                    _ = lua.getField(entry_abs, "type");
+                    const type_str = try lua.toString(-1);
+                    const is_chord = std.mem.eql(u8, type_str, "chord");
+                    lua.pop(1);
+
+                    if (is_chord) {
+                        _ = lua.getField(entry_abs, "key");
+                        defer lua.pop(1);
+                        const chord_str = try lua.toString(-1);
+
+                        var pieces: [2]KeyChordPiece = undefined;
+                        var num_pieces: usize = 0;
+                        var piece_it = std.mem.splitScalar(u8, chord_str, ' ');
+                        while (piece_it.next()) |piece_str| {
+                            if (piece_str.len == 0) continue;
+                            if (num_pieces >= 2) return error.InvalidChordPieceCount;
+                            pieces[num_pieces] = try parseChordPieceFromString(piece_str);
+                            num_pieces += 1;
+                        }
+
+                        if (num_pieces == 0) return error.InvalidChordPieceCount;
+                        if (num_pieces == 1) {
+                            try self.bindChord(pieces[0], act);
+                        } else {
+                            try self.bindChord2(pieces[0], pieces[1], act);
+                        }
+                    } else {
+                        const source = try parseSource(lua, entry_abs);
+                        try self.bind(act, source);
+                    }
                 } else {
                     _ = lua.getField(entry_abs, "axis");
                     if (lua.isNil(-1)) {

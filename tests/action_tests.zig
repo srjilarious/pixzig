@@ -444,3 +444,69 @@ pub fn chordAndKeyIndependent(io: std.Io, alloc: std.mem.Allocator) !void {
     try testz.expectFalse(actions.down(.jump));
     try testz.expectTrue(actions.down(.shoot));
 }
+
+// --- loadFromLua chord bindings ---
+
+const luaSingleKeyChord =
+    \\bindings = {
+    \\    { action="jump", type="chord", key="ctrl+a" },
+    \\}
+;
+
+pub fn loadFromLuaSingleKeyChord(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var eng = try ScriptEngine.init(alloc);
+    defer eng.deinit();
+    try eng.run(luaSingleKeyChord);
+
+    var inputs = InputManager.init(.{});
+    var actions = try input.ActionMap(TestActions, TestAxes).init(alloc);
+    defer actions.deinit();
+
+    try actions.loadFromLua(&eng, "bindings");
+
+    inputs.keyboard.currKeys_mut().set(.a, true);
+    inputs.keyboard.currKeys_mut().set(.right_control, true);
+    _ = actions.update(&inputs, 1000);
+    try testz.expectTrue(actions.down(.jump));
+
+    inputs.keyboard.currKeys_mut().set(.a, false);
+    _ = actions.update(&inputs, 1000);
+    try testz.expectFalse(actions.down(.jump));
+}
+
+const luaTwoKeyChord =
+    \\bindings = {
+    \\    { action="shoot", type="chord", key="ctrl+k ctrl+l" },
+    \\}
+;
+
+pub fn loadFromLuaTwoKeyChord(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var eng = try ScriptEngine.init(alloc);
+    defer eng.deinit();
+    try eng.run(luaTwoKeyChord);
+
+    var inputs = InputManager.init(.{});
+    var actions = try input.ActionMap(TestActions, TestAxes).init(alloc);
+    defer actions.deinit();
+
+    try actions.loadFromLua(&eng, "bindings");
+
+    // First piece -- no trigger yet.
+    inputs.keyboard.currKeys_mut().set(.k, true);
+    inputs.keyboard.currKeys_mut().set(.right_control, true);
+    _ = actions.update(&inputs, 1000);
+    try testz.expectFalse(actions.down(.shoot));
+
+    // Release first, press second -- chord fires.
+    inputs.keyboard.currKeys_mut().set(.k, false);
+    _ = actions.update(&inputs, 1000);
+    inputs.keyboard.currKeys_mut().set(.l, true);
+    _ = actions.update(&inputs, 1000);
+    try testz.expectTrue(actions.down(.shoot));
+
+    inputs.keyboard.currKeys_mut().set(.l, false);
+    _ = actions.update(&inputs, 1000);
+    try testz.expectFalse(actions.down(.shoot));
+}
