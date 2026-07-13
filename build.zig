@@ -36,6 +36,181 @@ pub const EngineData = struct {
     pixeng_mod: *std.Build.Module,
 };
 
+// ---------------------------------------------------------------------------
+// Asset manifest build support
+// ---------------------------------------------------------------------------
+
+pub const AssetEntry = struct {
+    id: []const u8,
+    kind: []const u8,
+    path: []const u8,
+    /// Only required when kind == "font".
+    font_size: ?f32 = null,
+};
+
+pub const GroupEntry = struct {
+    name: []const u8,
+    assets: []const []const u8,
+};
+
+/// Inline manifest definition for use directly in build.zig.
+pub const ManifestDef = struct {
+    root: []const u8 = "assets",
+    groups: []const GroupEntry = &.{},
+    assets: []const AssetEntry = &.{},
+};
+
+/// Returned by `manifestFromFile` / `manifestFromDef`; wire to an exe with `addTo`.
+pub const ManifestHandle = struct {
+    b: *std.Build,
+    /// Non-null for file-based manifests: absolute path to the source JSON.
+    file_abs_path: ?[]const u8,
+    /// Non-null for inline manifests: the serialised JSON content.
+    inline_json: ?[]const u8,
+    /// For inline manifests: absolute path to the directory that contains the
+    /// assets root (i.e. the build root, so `root` in the JSON resolves there).
+    inline_base_dir: []const u8,
+
+    /// Wire the manifest into `exe`.
+    ///
+    /// **Dev mode** (`is_package == false`):
+    ///   - File-based: `manifest_path` = absolute path, assets read from source tree.
+    ///   - Inline: `manifest_json` / `manifest_base_dir` build options carry the
+    ///     JSON content and asset root; no file needed.
+    ///
+    /// **Package mode** (`is_package == true`):
+    ///   All assets + the manifest JSON are copied to
+    ///   `<prefix>/bin/<exe_name>/assets/` and `manifest_path` is set to the
+    ///   relative path `assets/manifest.json`.
+    pub fn addTo(
+        self: ManifestHandle,
+        exe: *std.Build.Step.Compile,
+        is_package: bool,
+        src_assets_dir: []const u8,
+    ) void {
+        const b = self.b;
+        const exe_name = exe.name;
+        const opts = b.addOptions();
+
+        if (!is_package) {
+            if (self.file_abs_path) |abs_path| {
+                // File-based dev: absolute path, read at runtime.
+                opts.addOption([]const u8, "manifest_path", abs_path);
+                opts.addOption([]const u8, "manifest_json", "");
+                opts.addOption([]const u8, "manifest_base_dir", "");
+            } else {
+                // Inline dev: embed JSON content + asset root as build options.
+                opts.addOption([]const u8, "manifest_path", "");
+                opts.addOption([]const u8, "manifest_json", self.inline_json.?);
+                opts.addOption([]const u8, "manifest_base_dir", self.inline_base_dir);
+            }
+        } else {
+            // Package mode: copy assets + manifest to install tree.
+            const dest_subdir = b.pathJoin(&.{ "bin", exe_name });
+
+            const copy_assets = b.addInstallDirectory(.{
+                .source_dir = b.path(src_assets_dir),
+                .install_dir = .{ .custom = dest_subdir },
+                .install_subdir = "assets",
+            });
+            exe.step.dependOn(&copy_assets.step);
+
+            // Determine the source manifest file to install.
+            const manifest_src: std.Build.LazyPath = if (self.file_abs_path) |ap|
+                .{ .cwd_relative = ap }
+            else blk: {
+                // Write inline JSON to a WriteFile step for installation.
+                const wf = b.addWriteFiles();
+                break :blk wf.add("manifest.json", self.inline_json.?);
+            };
+
+            const install_manifest = b.addInstallFile(
+                manifest_src,
+                b.pathJoin(&.{ dest_subdir, "assets", "manifest.json" }),
+            );
+            exe.step.dependOn(&install_manifest.step);
+
+            // At runtime exe cwd is <prefix>/bin/<exe_name>/,
+            // so manifest is at assets/manifest.json relative to cwd.
+            opts.addOption([]const u8, "manifest_path", "assets/manifest.json");
+            opts.addOption([]const u8, "manifest_json", "");
+            opts.addOption([]const u8, "manifest_base_dir", "");
+        }
+
+        exe.root_module.addOptions("manifest_options", opts);
+    }
+};
+
+/// Reference an existing manifest JSON file in the repository.
+/// The file is used as-is in dev mode; it is copied to the install dir in package mode.
+pub fn manifestFromFile(b: *std.Build, path: []const u8) ManifestHandle {
+    return .{
+        .b = b,
+        .file_abs_path = b.pathFromRoot(path),
+        .inline_json = null,
+        .inline_base_dir = b.pathFromRoot("."),
+    };
+}
+
+/// Define a manifest inline in build.zig. The struct is serialised to JSON and
+/// embedded as a build option so no file I/O is needed in dev mode.
+/// `src_assets_root` is the directory the manifest's `root` field is relative to
+/// (typically the repo root, i.e. `b.pathFromRoot(".")`).
+pub fn manifestFromDef(b: *std.Build, def: ManifestDef) ManifestHandle {
+    const json = generateManifestJson(b.allocator, def) catch @panic("OOM generating manifest JSON");
+    return .{
+        .b = b,
+        .file_abs_path = null,
+        .inline_json = json,
+        .inline_base_dir = b.pathFromRoot("."),
+    };
+}
+
+fn jsonAppend(buf: *std.ArrayList(u8), alloc: std.mem.Allocator, comptime fmt: []const u8, args: anytype) !void {
+    const s = try std.fmt.allocPrint(alloc, fmt, args);
+    defer alloc.free(s);
+    try buf.appendSlice(alloc, s);
+}
+
+fn generateManifestJson(alloc: std.mem.Allocator, def: ManifestDef) ![]u8 {
+    var buf: std.ArrayList(u8) = .empty;
+    errdefer buf.deinit(alloc);
+
+    try buf.appendSlice(alloc, "{\n  \"version\": 1,\n");
+    try jsonAppend(&buf, alloc, "  \"root\": \"{s}\",\n", .{def.root});
+
+    // Groups object
+    try buf.appendSlice(alloc, "  \"groups\": {\n");
+    for (def.groups, 0..) |group, gi| {
+        try jsonAppend(&buf, alloc, "    \"{s}\": [", .{group.name});
+        for (group.assets, 0..) |id, ai| {
+            try jsonAppend(&buf, alloc, "\"{s}\"", .{id});
+            if (ai + 1 < group.assets.len) try buf.appendSlice(alloc, ", ");
+        }
+        try buf.appendSlice(alloc, "]");
+        if (gi + 1 < def.groups.len) try buf.appendSlice(alloc, ",");
+        try buf.appendSlice(alloc, "\n");
+    }
+    try buf.appendSlice(alloc, "  },\n");
+
+    // Assets array
+    try buf.appendSlice(alloc, "  \"assets\": [\n");
+    for (def.assets, 0..) |asset, ai| {
+        try jsonAppend(&buf, alloc, "    {{\"id\": \"{s}\", \"kind\": \"{s}\", \"path\": \"{s}\"", .{
+            asset.id, asset.kind, asset.path,
+        });
+        if (asset.font_size) |fs| {
+            try jsonAppend(&buf, alloc, ", \"font_size\": {d}", .{fs});
+        }
+        try buf.appendSlice(alloc, "}");
+        if (ai + 1 < def.assets.len) try buf.appendSlice(alloc, ",");
+        try buf.appendSlice(alloc, "\n");
+    }
+    try buf.appendSlice(alloc, "  ]\n}\n");
+
+    return buf.toOwnedSlice(alloc);
+}
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -245,6 +420,38 @@ pub fn build(b: *std.Build) void {
         }
 
         if (target.result.os.tag != .emscripten) {
+            // Manifest example -- uses the inline manifestFromDef API.
+            {
+                const is_package = b.option(bool, "package", "Package assets to the output directory") orelse false;
+
+                const manifest_ex_mod = b.createModule(.{
+                    .root_source_file = b.path("examples/manifest_ex.zig"),
+                    .target = target,
+                    .optimize = optimize,
+                });
+                const manifest_ex = buildExample(
+                    b, target, optimize,
+                    engDat.engine_lib, engDat.pixeng_mod,
+                    "manifest_ex", manifest_ex_mod, &.{},
+                );
+
+                const manifest = manifestFromDef(b, .{
+                    .root = "assets",
+                    .groups = &.{
+                        .{ .name = "game", .assets = &.{ "pac_tiles" } },
+                    },
+                    .assets = &.{
+                        .{ .id = "pac_tiles", .kind = "atlas", .path = "pac-tiles" },
+                    },
+                });
+                manifest.addTo(manifest_ex, is_package, assets_dir);
+
+                const install_manifest_ex = b.addInstallArtifact(manifest_ex, .{
+                    .dest_dir = .{ .override = .{ .custom = b.pathJoin(&.{ "bin", "manifest_ex" }) } },
+                });
+                build_all_step.dependOn(&install_manifest_ex.step);
+            }
+
             // Sprite packer tool
             const spack_mod = b.createModule(.{
                 .root_source_file = b.path("tools/spack/spack.zig"),

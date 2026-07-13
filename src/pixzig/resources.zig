@@ -270,6 +270,8 @@ fn freeTileMap(t: TileMap) void {
 const ReloadInfo = union(enum) {
     texture: struct { name: []const u8, path: []const u8 },
     atlas: struct { base_name: []const u8 },
+    /// Atlas where the resource name differs from the file base name.
+    atlas_named: struct { name: []const u8, base_path: []const u8 },
     font_ttf: struct { name: []const u8, path: []const u8, font_size: f32 },
     tilemap: struct { name: []const u8, path: []const u8 },
 
@@ -283,6 +285,10 @@ const ReloadInfo = union(enum) {
             } },
             .atlas => |a| .{ .atlas = .{
                 .base_name = try alloc.dupe(u8, a.base_name),
+            } },
+            .atlas_named => |a| .{ .atlas_named = .{
+                .name = try alloc.dupe(u8, a.name),
+                .base_path = try alloc.dupe(u8, a.base_path),
             } },
             .font_ttf => |f| .{ .font_ttf = .{
                 .name = try alloc.dupe(u8, f.name),
@@ -303,6 +309,10 @@ const ReloadInfo = union(enum) {
                 alloc.free(t.path);
             },
             .atlas => |a| alloc.free(a.base_name),
+            .atlas_named => |a| {
+                alloc.free(a.name);
+                alloc.free(a.base_path);
+            },
             .font_ttf => |f| {
                 alloc.free(f.name);
                 alloc.free(f.path);
@@ -484,6 +494,7 @@ pub const ResourceManager = struct {
         switch (info) {
             .texture => |t| _ = try self.loadTextureImpl(t.name, t.path),
             .atlas => |a| _ = try self.loadAtlasImpl(a.base_name),
+            .atlas_named => |a| _ = try self.loadAtlasNamedImpl(a.name, a.base_path),
             .font_ttf => |f| {
                 const fa = try FontAtlas.initFromTtfFile(f.path, f.font_size, self.alloc);
                 const managed = try self.getOrCreateFont(f.name);
@@ -529,6 +540,7 @@ pub const ResourceManager = struct {
                 const type_name = switch (info) {
                     .texture => "texture",
                     .atlas => "atlas",
+                    .atlas_named => "atlas",
                     .font_ttf => "font",
                     .tilemap => "tilemap",
                 };
@@ -804,12 +816,14 @@ pub const ResourceManager = struct {
     // -----------------------------------------------------------------------
 
     /// Internal: loads a texture atlas without registering hot-reload watches.
-    fn loadAtlasImpl(self: *Self, baseName: []const u8) !usize {
-        const imageName = try utils.addExtension(self.alloc, baseName, ".png");
+    /// `name` is the resource key; `base_path` is the file path base (without
+    /// extension). When both are equal this is an ordinary loadAtlas call.
+    fn loadAtlasNamedImpl(self: *Self, name: []const u8, base_path: []const u8) !usize {
+        const imageName = try utils.addExtension(self.alloc, base_path, ".png");
         defer self.alloc.free(imageName);
-        _ = try self.loadTextureImpl(baseName, imageName);
+        _ = try self.loadTextureImpl(name, imageName);
 
-        const jsonName = try utils.addExtension(self.alloc, baseName, ".json");
+        const jsonName = try utils.addExtension(self.alloc, base_path, ".json");
         defer self.alloc.free(jsonName);
 
         const io = std.Io.Threaded.global_single_threaded.io();
@@ -821,13 +835,13 @@ pub const ResourceManager = struct {
 
         const spack = parsed.value;
 
-        const texImageManaged = self.textures.get(utils.baseNameFromPath(baseName)) orelse return error.NoTextureWithThatName;
+        const texImageManaged = self.textures.get(utils.baseNameFromPath(name)) orelse return error.NoTextureWithThatName;
         const texImage = texImageManaged.get() orelse return error.NoTextureWithThatName;
         const sz: Vec2I = texImage.val.size.asVec2I();
 
         var new_manifest: std.ArrayListUnmanaged([]const u8) = .empty;
         errdefer {
-            for (new_manifest.items) |name| self.alloc.free(name);
+            for (new_manifest.items) |n| self.alloc.free(n);
             new_manifest.deinit(self.alloc);
         }
 
@@ -855,7 +869,7 @@ pub const ResourceManager = struct {
         }
 
         // Remove atlas entries for frames absent from the new JSON.
-        if (self.atlas_manifests.getPtr(baseName)) |old_manifest| {
+        if (self.atlas_manifests.getPtr(name)) |old_manifest| {
             outer: for (old_manifest.items) |old_name| {
                 for (new_manifest.items) |new_name| {
                     if (std.mem.eql(u8, old_name, new_name)) continue :outer;
@@ -866,16 +880,20 @@ pub const ResourceManager = struct {
                     self.alloc.free(kv.key);
                 }
             }
-            for (old_manifest.items) |name| self.alloc.free(name);
+            for (old_manifest.items) |n| self.alloc.free(n);
             old_manifest.deinit(self.alloc);
             old_manifest.* = new_manifest;
         } else {
-            const key_owned = try self.alloc.dupe(u8, baseName);
+            const key_owned = try self.alloc.dupe(u8, name);
             errdefer self.alloc.free(key_owned);
             try self.atlas_manifests.put(key_owned, new_manifest);
         }
 
         return num;
+    }
+
+    fn loadAtlasImpl(self: *Self, baseName: []const u8) !usize {
+        return self.loadAtlasNamedImpl(baseName, baseName);
     }
 
     /// Loads a texture atlas from a base name. This looks for a .png and
@@ -904,6 +922,34 @@ pub const ResourceManager = struct {
                     std.log.warn("Could not register atlas PNG watch for '{s}': {}", .{ imageName, err });
                 };
                 hr.registerWatch(jsonName, .{ .atlas = .{ .base_name = baseName } }) catch |err| {
+                    std.log.warn("Could not register atlas JSON watch for '{s}': {}", .{ jsonName, err });
+                };
+            }
+        }
+
+        return num;
+    }
+
+    /// Like `loadAtlas` but stores the resource under `name` instead of the
+    /// base name of `base_path`. Use this when the manifest asset id should
+    /// differ from the file name on disk (e.g. id="main_sprites", path="pac-tiles").
+    /// After loading, `acquireTexture(name)` returns a handle to the full atlas
+    /// image; individual frames remain accessible by their frame names.
+    pub fn loadAtlasNamed(self: *Self, name: []const u8, base_path: []const u8) !usize {
+        const num = try self.loadAtlasNamedImpl(name, base_path);
+
+        if (comptime builtin.mode == .Debug) {
+            self.ensureHotReload();
+            if (self.hot_reload) |*hr| {
+                const imageName = try utils.addExtension(self.alloc, base_path, ".png");
+                defer self.alloc.free(imageName);
+                const jsonName = try utils.addExtension(self.alloc, base_path, ".json");
+                defer self.alloc.free(jsonName);
+
+                hr.registerWatch(imageName, .{ .atlas_named = .{ .name = name, .base_path = base_path } }) catch |err| {
+                    std.log.warn("Could not register atlas PNG watch for '{s}': {}", .{ imageName, err });
+                };
+                hr.registerWatch(jsonName, .{ .atlas_named = .{ .name = name, .base_path = base_path } }) catch |err| {
                     std.log.warn("Could not register atlas JSON watch for '{s}': {}", .{ jsonName, err });
                 };
             }
