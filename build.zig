@@ -70,6 +70,9 @@ pub const ManifestHandle = struct {
     /// For inline manifests: absolute path to the directory that contains the
     /// assets root (i.e. the build root, so `root` in the JSON resolves there).
     inline_base_dir: []const u8,
+    /// Individual file paths (relative to `assets/`) for Emscripten --preload-file.
+    /// If empty, the entire assets directory is preloaded.
+    emcc_files: []const []const u8 = &.{},
 
     /// Wire the manifest into `exe`.
     ///
@@ -158,11 +161,24 @@ pub fn manifestFromFile(b: *std.Build, path: []const u8) ManifestHandle {
 /// (typically the repo root, i.e. `b.pathFromRoot(".")`).
 pub fn manifestFromDef(b: *std.Build, def: ManifestDef) ManifestHandle {
     const json = generateManifestJson(b.allocator, def) catch @panic("OOM generating manifest JSON");
+
+    // Build the emcc file list: atlas assets expand to .json + .png; others use path as-is.
+    var files: std.ArrayList([]const u8) = .empty;
+    for (def.assets) |asset| {
+        if (std.mem.eql(u8, asset.kind, "atlas")) {
+            files.append(b.allocator, b.fmt("{s}.json", .{asset.path})) catch @panic("OOM");
+            files.append(b.allocator, b.fmt("{s}.png", .{asset.path})) catch @panic("OOM");
+        } else {
+            files.append(b.allocator, asset.path) catch @panic("OOM");
+        }
+    }
+
     return .{
         .b = b,
         .file_abs_path = null,
         .inline_json = json,
         .inline_base_dir = b.pathFromRoot("."),
+        .emcc_files = files.toOwnedSlice(b.allocator) catch @panic("OOM"),
     };
 }
 
@@ -216,6 +232,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const build_examples = b.option(bool, "build_examples", "Build the examples") orelse true;
+    const is_package = b.option(bool, "package", "Package assets to the output directory") orelse false;
 
     // Build the engine as a static library
     const engDat = buildEngine(b, target, optimize);
@@ -230,150 +247,185 @@ pub fn build(b: *std.Build) void {
     const examples = [_]struct {
         name: []const u8,
         path: []const u8,
-        assets: []const []const u8,
+        manifest_def: ManifestDef = .{},
         extraMods: []const []const u8 = &.{},
         buildForWeb: bool = true,
     }{
         .{
             .name = "audio_ex",
             .path = "examples/audio_ex.zig",
-            .assets = &.{
-                "laserShoot.wav",
+            .manifest_def = .{
+                .assets = &.{
+                    .{ .id = "laserShoot", .kind = "raw", .path = "laserShoot.wav" },
+                },
             },
         },
         .{
             .name = "tile_load_ex",
             .path = "examples/tile_load_ex.zig",
-            .assets = &.{
-                "mario_grassish2.png",
-                "level1a.tmx",
+            .manifest_def = .{
+                .groups = &.{.{ .name = "boot", .assets = &.{ "tiles", "level1a" } }},
+                .assets = &.{
+                    .{ .id = "tiles", .kind = "texture", .path = "mario_grassish2.png" },
+                    .{ .id = "level1a", .kind = "tilemap", .path = "level1a.tmx" },
+                },
             },
         },
         .{
             .name = "natetris",
             .path = "games/natetris/natetris.zig",
-            .assets = &.{},
         },
         .{
             .name = "actor_ex",
             .path = "examples/actor_ex.zig",
-            .assets = &.{
-                "pac-tiles.json",
-                "pac-tiles.png",
+            .manifest_def = .{
+                .groups = &.{.{ .name = "boot", .assets = &.{"pac-tiles"} }},
+                .assets = &.{
+                    .{ .id = "pac-tiles", .kind = "atlas", .path = "pac-tiles" },
+                },
             },
         },
         .{
             .name = "sequencer_ex",
             .path = "examples/sequencer_ex.zig",
-            .assets = &.{
-                "pac-tiles.json",
-                "pac-tiles.png",
-                "circle_move.lua",
+            .manifest_def = .{
+                .groups = &.{.{ .name = "boot", .assets = &.{ "pac-tiles", "circle_move" } }},
+                .assets = &.{
+                    .{ .id = "pac-tiles", .kind = "atlas", .path = "pac-tiles" },
+                    .{ .id = "circle_move", .kind = "raw", .path = "circle_move.lua" },
+                },
             },
         },
         .{
             .name = "collision_ex",
             .path = "examples/collision_ex.zig",
-            .assets = &.{
-                "mario_grassish2.png",
-                "level1a.tmx",
-                "pac-tiles.png",
+            .manifest_def = .{
+                .groups = &.{.{ .name = "boot", .assets = &.{"tiles"} }},
+                .assets = &.{
+                    .{ .id = "tiles", .kind = "texture", .path = "pac-tiles.png" },
+                },
             },
         },
         .{
             .name = "flecs_ex",
             .path = "examples/flecs_ex.zig",
-            .assets = &.{
-                "mario_grassish2.png",
+            .manifest_def = .{
+                .groups = &.{.{ .name = "boot", .assets = &.{"tiles"} }},
+                .assets = &.{
+                    .{ .id = "tiles", .kind = "texture", .path = "mario_grassish2.png" },
+                },
             },
         },
         .{
             .name = "a_star_path_ex",
             .path = "examples/a_star_path_ex.zig",
-            .assets = &.{},
         },
         .{
             .name = "gameloop_ex",
             .path = "examples/gameloop_ex.zig",
-            .assets = &.{},
         },
         .{
             .name = "gamepad_ex",
             .path = "examples/gamepad_ex.zig",
-            .assets = &.{},
         },
         .{
             .name = "game_state_ex",
             .path = "examples/game_state_ex.zig",
-            .assets = &.{},
         },
         .{
             .name = "render_ex",
             .path = "examples/render_ex.zig",
-            .assets = &.{
-                "mario_grassish2.png",
+            .manifest_def = .{
+                .groups = &.{.{ .name = "boot", .assets = &.{"tiles"} }},
+                .assets = &.{
+                    .{ .id = "tiles", .kind = "texture", .path = "mario_grassish2.png" },
+                },
             },
         },
         .{
             .name = "grid_render_ex",
             .path = "examples/grid_render_ex.zig",
-            .assets = &.{},
         },
         .{
             .name = "console2_ex",
             .path = "examples/console2_ex.zig",
-            .assets = &.{
-                "Roboto-Medium.ttf",
+            .manifest_def = .{
+                .assets = &.{
+                    .{ .id = "Roboto-Medium", .kind = "raw", .path = "Roboto-Medium.ttf" },
+                },
             },
         },
         .{
             .name = "console_ex",
             .path = "examples/console_ex.zig",
-            .assets = &.{
-                "Roboto-Medium.ttf",
+            .manifest_def = .{
+                .assets = &.{
+                    .{ .id = "Roboto-Medium", .kind = "raw", .path = "Roboto-Medium.ttf" },
+                },
             },
         },
         .{
             .name = "imgui_ex",
             .path = "examples/imgui_ex.zig",
-            .assets = &.{
-                "Roboto-Medium.ttf",
-                "mario_grassish2.png",
+            .manifest_def = .{
+                .assets = &.{
+                    .{ .id = "Roboto-Medium", .kind = "raw", .path = "Roboto-Medium.ttf" },
+                    .{ .id = "tiles", .kind = "texture", .path = "mario_grassish2.png" },
+                },
             },
         },
         .{
             .name = "text_rendering_ex",
             .path = "examples/text_rendering_ex.zig",
-            .assets = &.{
-                "Roboto-Medium.ttf",
+            .manifest_def = .{
+                .assets = &.{
+                    .{ .id = "Roboto-Medium", .kind = "raw", .path = "Roboto-Medium.ttf" },
+                },
             },
         },
         .{
             .name = "bitmap_text_rendering_ex",
             .path = "examples/bitmap_text_rendering_ex.zig",
-            .assets = &.{
-                "font5r.png",
+            .manifest_def = .{
+                .assets = &.{
+                    .{ .id = "font5r", .kind = "raw", .path = "font5r.png" },
+                },
             },
         },
         .{
             .name = "pixel_buffer_ex",
             .path = "examples/pixel_buffer_ex.zig",
-            .assets = &.{},
         },
         .{
             .name = "mouse_ex",
             .path = "examples/mouse_ex.zig",
-            .assets = &.{
-                "mario_grassish2.png",
+            .manifest_def = .{
+                .groups = &.{.{ .name = "boot", .assets = &.{"tiles"} }},
+                .assets = &.{
+                    .{ .id = "tiles", .kind = "texture", .path = "mario_grassish2.png" },
+                },
             },
+        },
+        // manifest_ex: demonstrates manifest-based asset loading at runtime.
+        .{
+            .name = "manifest_ex",
+            .path = "examples/manifest_ex.zig",
+            .manifest_def = .{
+                .groups = &.{.{ .name = "game", .assets = &.{"pac_tiles"} }},
+                .assets = &.{
+                    .{ .id = "pac_tiles", .kind = "atlas", .path = "pac-tiles" },
+                },
+            },
+            .buildForWeb = false,
         },
         // Unit tests
         .{
             .name = "tests",
             .path = "tests/main.zig",
-            // .path = "tests/main.zig",
-            .assets = &.{
-                "Roboto-Medium.ttf",
+            .manifest_def = .{
+                .assets = &.{
+                    .{ .id = "Roboto-Medium", .kind = "raw", .path = "Roboto-Medium.ttf" },
+                },
             },
             .extraMods = &.{"testz"},
             .buildForWeb = false,
@@ -396,6 +448,7 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             });
 
+            const manifest = manifestFromDef(b, example_info.manifest_def);
             const exe = buildExample(
                 b,
                 target,
@@ -404,7 +457,8 @@ pub fn build(b: *std.Build) void {
                 engDat.pixeng_mod,
                 example_info.name,
                 exe_mod,
-                example_info.assets,
+                manifest,
+                is_package,
             );
 
             for (example_info.extraMods) |em| {
@@ -420,45 +474,13 @@ pub fn build(b: *std.Build) void {
         }
 
         if (target.result.os.tag != .emscripten) {
-            // Manifest example -- uses the inline manifestFromDef API.
-            {
-                const is_package = b.option(bool, "package", "Package assets to the output directory") orelse false;
-
-                const manifest_ex_mod = b.createModule(.{
-                    .root_source_file = b.path("examples/manifest_ex.zig"),
-                    .target = target,
-                    .optimize = optimize,
-                });
-                const manifest_ex = buildExample(
-                    b, target, optimize,
-                    engDat.engine_lib, engDat.pixeng_mod,
-                    "manifest_ex", manifest_ex_mod, &.{},
-                );
-
-                const manifest = manifestFromDef(b, .{
-                    .root = "assets",
-                    .groups = &.{
-                        .{ .name = "game", .assets = &.{ "pac_tiles" } },
-                    },
-                    .assets = &.{
-                        .{ .id = "pac_tiles", .kind = "atlas", .path = "pac-tiles" },
-                    },
-                });
-                manifest.addTo(manifest_ex, is_package, assets_dir);
-
-                const install_manifest_ex = b.addInstallArtifact(manifest_ex, .{
-                    .dest_dir = .{ .override = .{ .custom = b.pathJoin(&.{ "bin", "manifest_ex" }) } },
-                });
-                build_all_step.dependOn(&install_manifest_ex.step);
-            }
-
             // Sprite packer tool
             const spack_mod = b.createModule(.{
                 .root_source_file = b.path("tools/spack/spack.zig"),
                 .target = target,
                 .optimize = optimize,
             });
-            const spack = buildExample(b, target, optimize, engDat.engine_lib, engDat.pixeng_mod, "spack", spack_mod, &.{});
+            const spack = buildExample(b, target, optimize, engDat.engine_lib, engDat.pixeng_mod, "spack", spack_mod, manifestFromDef(b, .{}), is_package);
             const zargs = b.dependency("zargunaught", .{});
             spack.root_module.addImport("zargunaught", zargs.module("zargunaught"));
 
@@ -636,16 +658,20 @@ pub fn buildGame(
         }
     };
 
-    return buildExample(
-        b,
-        target,
-        optimize,
-        engine_lib,
-        engine_mod,
-        name,
-        exe_mod,
-        assets,
-    );
+    const is_package = b.option(bool, "package", "Package assets to the output directory") orelse false;
+
+    // Wrap the file list in an empty inline manifest for the new buildExample API.
+    // emcc_files carries the original list so Emscripten preloading still works.
+    const empty_json = generateManifestJson(b.allocator, .{}) catch @panic("OOM");
+    const manifest = ManifestHandle{
+        .b = b,
+        .file_abs_path = null,
+        .inline_json = empty_json,
+        .inline_base_dir = b.pathFromRoot("."),
+        .emcc_files = assets,
+    };
+
+    return buildExample(b, target, optimize, engine_lib, engine_mod, name, exe_mod, manifest, is_package);
 }
 
 pub fn buildExample(
@@ -656,7 +682,8 @@ pub fn buildExample(
     pixeng_mod: *std.Build.Module,
     name: []const u8,
     exe_mod: *std.Build.Module,
-    assets: []const []const u8,
+    manifest: ManifestHandle,
+    is_package: bool,
 ) *std.Build.Step.Compile {
     const exe = blk: {
         if (target.result.os.tag == .emscripten) {
@@ -714,9 +741,13 @@ pub fn buildExample(
                 b.path("src/shell.html").getPath(b),
             });
 
-            // Add all of the specified assets
-            for (assets) |asset| {
-                emcc_command.addArgs(&[_][]const u8{ "--preload-file", b.pathJoin(&.{ assets_dir, asset }) });
+            // Preload assets: use explicit file list when available, else whole dir.
+            if (manifest.emcc_files.len > 0) {
+                for (manifest.emcc_files) |asset| {
+                    emcc_command.addArgs(&[_][]const u8{ "--preload-file", b.pathJoin(&.{ assets_dir, asset }) });
+                }
+            } else {
+                emcc_command.addArgs(&[_][]const u8{ "--preload-file", b.fmt("{s}@/{s}", .{ assets_dir, assets_dir }) });
             }
 
             emcc_command.addFileArg(exe.getEmittedBin());
@@ -730,13 +761,6 @@ pub fn buildExample(
                 emcc_command.addArg(obj_path);
             }
 
-            // const zgui = pixeng_mod.owner.dependency("zgui", .{
-            //     .target = target,
-            //     .backend = .glfw_opengl3,
-            // });
-            // const gui_dep = zgui.artifact("imgui");
-            // emcc_command.addFileArg(gui_dep.getEmittedBin());
-
             // Lua
             const ziglua = pixeng_mod.owner.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
             const lua_dep = ziglua.artifact("lua");
@@ -747,7 +771,6 @@ pub fn buildExample(
             const zaudio_dep = zaudio.artifact("miniaudio");
             emcc_command.addFileArg(zaudio_dep.getEmittedBin());
 
-            // emcc_command.addFileArg(.getEmittedBin());
             emcc_command.step.dependOn(&exe.step);
 
             const install = emcc_command;
@@ -757,23 +780,21 @@ pub fn buildExample(
             build_step.dependOn(&install.step);
         },
         else => {
-            // _ = engine_lib;
-            //exe.linkLibrary(engine_lib.?);
+            const out_path = b.pathJoin(&.{ "bin", name });
 
-            const path = b.pathJoin(&.{ "bin", name });
+            // Wire the manifest (dev: embed JSON/path; package: copy assets + install manifest).
+            manifest.addTo(exe, is_package, assets_dir);
 
-            const install_content_step = b.addInstallDirectory(.{
-                .source_dir = b.path(assets_dir),
-                .install_dir = .{ .custom = path },
-                .install_subdir = "assets",
-                .include_extensions = assets,
-            });
-            exe.step.dependOn(&install_content_step.step);
-
-            const install_ex = b.addInstallArtifact(exe, .{ .dest_dir = .{ .override = .{ .custom = path } } });
+            const install_ex = b.addInstallArtifact(exe, .{ .dest_dir = .{ .override = .{ .custom = out_path } } });
 
             const run_cmd = b.addRunArtifact(exe);
-            run_cmd.setCwd(.{ .cwd_relative = b.pathJoin(&.{ b.install_prefix, path }) });
+            if (is_package) {
+                // Package mode: exe runs from install dir where assets were copied.
+                run_cmd.setCwd(.{ .cwd_relative = b.pathJoin(&.{ b.install_prefix, out_path }) });
+            } else {
+                // Dev mode: exe runs from repo root so it can read assets in-place.
+                run_cmd.setCwd(b.path("."));
+            }
             run_cmd.step.dependOn(&install_ex.step);
 
             if (b.args) |args| {

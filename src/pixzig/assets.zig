@@ -8,7 +8,11 @@ const TileMapHandle = resources.TileMapHandle;
 /// The default icon used for applications in pixzig.
 pub const icon48x48 = @embedFile("assets/pixzig_icon.png");
 
-pub const AssetKind = enum { texture, atlas, font, tilemap };
+/// Asset kinds for use in manifests. `raw` marks files that must be present
+/// at runtime but are not loaded through `ResourceManager` (e.g. audio files,
+/// Lua scripts, fonts consumed directly by the renderer). `loadGroup` skips
+/// raw assets -- they produce no ref-counted handle.
+pub const AssetKind = enum { texture, atlas, font, tilemap, raw };
 
 /// A ref-counted handle to any asset type. Call `release()` when done.
 pub const AnyHandle = union(enum) {
@@ -50,6 +54,12 @@ const AssetJsonEntry = struct {
 /// Resources are loaded lazily per group. The manifest acquires ref-counted
 /// handles on `loadGroup` and releases them on `unloadGroup`, so the ref count
 /// drops to zero only when all callers have also released their own handles.
+///
+/// **Boot group**: if the manifest JSON contains a group named `"boot"`, it is
+/// loaded automatically when the manifest is opened (via `loadFromFile` or
+/// `loadFromJson`). This makes those assets immediately available without a
+/// separate `loadGroup("boot")` call. Use it for assets that must exist at
+/// startup, such as common UI elements or the initial game resources.
 pub const AssetManifest = struct {
     alloc: std.mem.Allocator,
     res: *ResourceManager,
@@ -83,7 +93,10 @@ pub const AssetManifest = struct {
         defer alloc.free(file_contents);
 
         const manifest_dir = std.fs.path.dirname(manifest_path) orelse ".";
-        return loadFromJsonImpl(alloc, res, file_contents, manifest_dir);
+        var result = try loadFromJsonImpl(alloc, res, file_contents, manifest_dir);
+        errdefer result.deinit();
+        if (result.groups.contains("boot")) try result.loadGroup("boot");
+        return result;
     }
 
     /// Parse an inline manifest JSON string. `assets_root` is the absolute (or
@@ -96,7 +109,10 @@ pub const AssetManifest = struct {
         json_content: []const u8,
         assets_root: []const u8,
     ) !Self {
-        return loadFromJsonImpl(alloc, res, json_content, assets_root);
+        var result = try loadFromJsonImpl(alloc, res, json_content, assets_root);
+        errdefer result.deinit();
+        if (result.groups.contains("boot")) try result.loadGroup("boot");
+        return result;
     }
 
     fn loadFromJsonImpl(
@@ -153,6 +169,7 @@ pub const AssetManifest = struct {
 
     /// Load all assets in `group_name`, acquiring ref-counted handles.
     /// Calling this on an already-loaded group is a no-op.
+    /// Assets with kind `raw` are skipped (no ResourceManager handle is created).
     pub fn loadGroup(self: *Self, group_name: []const u8) !void {
         if (self.loaded.contains(group_name)) return;
 
@@ -161,13 +178,13 @@ pub const AssetManifest = struct {
             return error.UnknownGroup;
         };
 
-        var handles = try self.alloc.alloc(AnyHandle, ids.len);
-        errdefer self.alloc.free(handles);
+        var handles: std.ArrayListUnmanaged(AnyHandle) = .empty;
+        errdefer {
+            for (handles.items) |h| h.release();
+            handles.deinit(self.alloc);
+        }
 
-        var loaded_count: usize = 0;
-        errdefer for (handles[0..loaded_count]) |h| h.release();
-
-        for (ids, 0..) |id, i| {
+        for (ids) |id| {
             const def = self.defs.get(id) orelse {
                 std.log.err("AssetManifest: group '{s}' references unknown asset '{s}'", .{ group_name, id });
                 return error.UnknownAsset;
@@ -175,28 +192,28 @@ pub const AssetManifest = struct {
             const full_path = try std.fs.path.join(self.alloc, &.{ self.root_dir, def.path });
             defer self.alloc.free(full_path);
 
-            handles[i] = switch (def.kind) {
-                .texture => blk: {
+            switch (def.kind) {
+                .raw => {}, // present on disk but not loaded into ResourceManager
+                .texture => {
                     _ = try self.res.loadTexture(id, full_path);
-                    break :blk .{ .texture = try self.res.acquireTexture(id) };
+                    try handles.append(self.alloc, .{ .texture = try self.res.acquireTexture(id) });
                 },
-                .atlas => blk: {
+                .atlas => {
                     _ = try self.res.loadAtlasNamed(id, full_path);
-                    break :blk .{ .texture = try self.res.acquireTexture(id) };
+                    try handles.append(self.alloc, .{ .texture = try self.res.acquireTexture(id) });
                 },
-                .font => blk: {
+                .font => {
                     try self.res.loadFontFromTtfFile(id, full_path, def.font_size);
-                    break :blk .{ .font = try self.res.acquireFontAtlas(id) };
+                    try handles.append(self.alloc, .{ .font = try self.res.acquireFontAtlas(id) });
                 },
-                .tilemap => blk: {
+                .tilemap => {
                     try self.res.loadTileMap(id, full_path);
-                    break :blk .{ .tilemap = try self.res.acquireTileMap(id) };
+                    try handles.append(self.alloc, .{ .tilemap = try self.res.acquireTileMap(id) });
                 },
-            };
-            loaded_count += 1;
+            }
         }
 
-        try self.loaded.put(group_name, handles);
+        try self.loaded.put(group_name, try handles.toOwnedSlice(self.alloc));
     }
 
     /// Release the manifest's ref-counted handles for all assets in `group_name`.
@@ -227,6 +244,7 @@ pub const AssetManifest = struct {
         if (std.mem.eql(u8, s, "atlas")) return .atlas;
         if (std.mem.eql(u8, s, "font")) return .font;
         if (std.mem.eql(u8, s, "tilemap")) return .tilemap;
+        if (std.mem.eql(u8, s, "raw")) return .raw;
         return null;
     }
 };
