@@ -8,7 +8,7 @@
   <property name="player_start_y" value="4"/>
   <property name="start_script" value="assets.scripts.level1"/>
  </properties>
- <tileset firstgid="1" name="main_tiles" tilewidth="32" tileheight="32" tilecount="256" columns="16">
+ <tileset firstgid="1" name="main_tiles" tilewidth="32" tileheight="32" tilecount="75" columns="16">
   <image source="../zig-out/bin/tile_load_ex/assets/mario_grassish2.png" width="512" height="512"/>
   <tile id="0">
    <properties>
@@ -441,7 +441,7 @@
  </layer>
  <layer id="2" name="main_layer" width="150" height="42">
   <properties>
-   <property name="z" type="float" value="1"/>
+   <property name="z" type="float" value="0.5"/>
   </properties>
   <data encoding="csv">
 100,0,63,117,118,117,41,41,41,41,118,117,118,64,133,134,63,117,41,41,41,41,118,64,0,0,0,63,117,118,117,118,64,0,0,63,117,41,41,41,41,118,64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,63,117,118,117,118,117,41,41,41,41,41,41,41,41,41,41,41,41,118,117,118,117,118,64,63,117,118,117,118,64,0,0,63,117,41,41,41,41,118,64,0,0,0,0,0,0,0,0,0,0,39,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,65,39,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,98,

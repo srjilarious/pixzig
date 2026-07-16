@@ -243,6 +243,10 @@ pub const TiledMapXmlLoader = struct {
                 errdefer newTile.deinit();
 
                 const tileId = try std.fmt.parseInt(usize, child.getAttribute("id").?, 0);
+                if (tileId >= tileset.tiles.items.len) {
+                    const extraTile = Tile{ .core = Clear, .properties = null, .alloc = alloc };
+                    try tileset.tiles.appendNTimes(alloc, extraTile, tileId - tileset.tiles.items.len + 1);
+                }
                 tileset.tiles.items[tileId] = newTile;
             } else if (std.mem.eql(u8, child.tag, "image")) {
                 tileset.textureSize = .{ .x = try std.fmt.parseInt(i32, child.getAttribute("width").?, 0), .y = try std.fmt.parseInt(i32, child.getAttribute("height").?, 0) };
