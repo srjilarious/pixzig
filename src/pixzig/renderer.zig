@@ -176,7 +176,7 @@ pub fn Renderer(opts: RendererOptions) type {
             self.impl.batches[0].draw(texture, dest, srcCoords, .none);
         }
 
-        pub fn drawSprite(self: *Self, sprite: *Sprite) void {
+        pub fn drawSprite(self: *Self, sprite: *const Sprite) void {
             // TODO: Handle batches
             self.impl.batches[0].drawSprite(sprite);
         }

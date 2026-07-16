@@ -50,7 +50,7 @@ pub const SpriteBatchQueue = struct {
     currNumSprites: usize = 0,
 
     mvpArr: [16]f32 = .{0} ** 16,
-    texture: ?*Texture = null,
+    texture: ?*const Texture = null,
     begun: bool = false,
 
     /// Initializes the SpriteBatchQueue, creating the buffers and OpenGL objects needed.
@@ -141,12 +141,12 @@ pub const SpriteBatchQueue = struct {
     }
 
     // Enqueues drawing a `Sprite`
-    pub fn drawSprite(self: *SpriteBatchQueue, sprite: *Sprite) void {
+    pub fn drawSprite(self: *SpriteBatchQueue, sprite: *const Sprite) void {
         self.draw(&sprite.texture.val, sprite.dest, sprite.src_coords, sprite.rotate);
     }
 
     /// Enqueues drawing a portion of a texture to the screen, with optional 90deg rotation or flips.
-    pub fn draw(self: *SpriteBatchQueue, texture: *Texture, dest: RectF, srcCoords: RectF, rot: Rotate) void {
+    pub fn draw(self: *SpriteBatchQueue, texture: *const Texture, dest: RectF, srcCoords: RectF, rot: Rotate) void {
         std.debug.assert(self.begun);
 
         if (self.texture == null) {
