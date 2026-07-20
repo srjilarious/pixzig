@@ -8,7 +8,7 @@ Pixzig renders sprites, rectangles, and optional text. Submit drawing between `r
 pub fn render(self: *App, eng: *AppRunner.Engine) void {
     eng.renderer.clear(0.0, 0.0, 0.2, 1.0);
 
-    eng.renderer.begin(eng.uiMatrix());
+    eng.renderer.begin(eng.projection());
     // Issue draw calls.
 
     eng.renderer.end();
@@ -19,47 +19,76 @@ pub fn render(self: *App, eng: *AppRunner.Engine) void {
 
 ## Loading Textures
 
-Load a raw PNG:
+Resources are reference-counted. `loadTexture` registers the file and returns a `*ManagedTexture`. Call `acquire()` on it to get a `*TextureHandle` with a bumped refcount, store the handle in your app, and call `handle.release()` in `deinit`.
 
 ```zig
-const tex: *pixzig.Texture = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
+// During App.init:
+const managed = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
+self.tex = managed.acquire() orelse return error.NoTexture;
+
+// During App.deinit:
+self.tex.release();
 ```
 
-Load a sprite atlas. `loadAtlas("assets/pac-tiles")` reads matching `.json` and `.png` files:
+To draw, pass a pointer to the `Texture` value inside the handle:
+
+```zig
+eng.renderer.draw(&self.tex.val, dest, srcCoords);
+```
+
+`acquireTexture` is a convenience that combines the lookup and acquire in one call:
+
+```zig
+self.tex = try eng.resources.acquireTexture("tiles");
+```
+
+### Atlas Loading
+
+`loadAtlas` reads matching `.json` and `.png` files. Each named frame in the JSON becomes its own texture entry. Acquire individual frames by their frame name:
 
 ```zig
 _ = try eng.resources.loadAtlas("assets/pac-tiles");
-
-const frame = try eng.resources.getTexture("player_right_1");
+self.player_tex = try eng.resources.acquireTexture("player_right_1");
 ```
 
-The atlas JSON lists named rectangular regions inside the PNG. Each named frame becomes a `Texture` with pre-set UV coordinates.
+`loadAtlasNamed` lets the resource id differ from the filename:
+
+```zig
+_ = try eng.resources.loadAtlasNamed("main_sprites", "assets/pac-tiles");
+```
 
 ## Drawing Sprites
 
-Draw a texture into an arbitrary destination rectangle:
+`Sprite.create` takes a `*TextureHandle` and a size in logical pixels:
 
 ```zig
-// tex: *pixzig.Texture
-// dest: logical-coordinate destination
-// src: normalized UV region
-eng.renderer.draw(tex, dest, src);
-```
-
-Use `RectF.fromPosSize` for logical-coordinate rectangles and `RectF.fromCoords` for normalized UVs from texture pixels:
-
-```zig
-const dest = RectF.fromPosSize(10, 10, 32, 32);          // x, y, w, h
-const src  = RectF.fromCoords(32, 32, 32, 32, 512, 512); // px, py, pw, ph, texW, texH
-eng.renderer.draw(tex, dest, src);
-```
-
-Draw a `Sprite` with `drawSprite`:
-
-```zig
-const spr = Sprite.create(frame, .{ .x = 16, .y = 16 });
+var spr = pixzig.sprites.Sprite.create(self.player_tex, .{ .x = 16, .y = 16 });
+spr.setPos(100, 50);
 eng.renderer.drawSprite(&spr);
 ```
+
+To draw a raw texture region instead:
+
+```zig
+const dest = RectF.fromPosSize(10, 10, 32, 32);
+const src  = RectF.fromCoords(32, 32, 32, 32, 512, 512); // px, py, pw, ph, texW, texH
+eng.renderer.draw(&self.tex.val, dest, src);
+```
+
+## Hot Reload
+
+In debug builds, the resource manager watches texture, atlas, font, and tilemap files for changes. When a file changes, it reloads the asset and marks any live handles dirty. If you need to respond to a reload (for example to rebuild a renderer), check `handle.dirty` each tick and call `handle.reacquire()`:
+
+```zig
+pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
+    _ = delta;
+    if (self.tex.dirty) self.tex = self.tex.reacquire();
+    // ...
+    return true;
+}
+```
+
+`reacquire` atomically upgrades to the latest generation and releases the old handle. In release builds, `dirty` is always false and `reacquire` is a no-op.
 
 ## Shape Rendering
 
@@ -72,7 +101,7 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{
 ```
 
 ```zig
-const yellow = Color.from(255, 255, 0, 200); // RGBA 0–255
+const yellow = Color.from(255, 255, 0, 200); // RGBA 0-255
 const rect   = RectF.fromPosSize(50, 50, 100, 40);
 
 eng.renderer.drawRect(rect, yellow, 2);
@@ -92,29 +121,37 @@ const appRunner = try AppRunner.init("My Game", alloc, .{
 });
 ```
 
-Render with `eng.uiMatrix()`. With `.integer_fit`, logical pixels use an integer framebuffer scale and unused space is letterboxed.
+Pass `eng.projection()` to `renderer.begin`. With `.integer_fit`, the logical grid is scaled to the largest integer multiple that fits, and the remainder is letterboxed.
 
 ## Full Sprite+Shape Example
 
 ```zig
-pub fn render(self: *App, eng: *AppRunner.Engine) void {
-    eng.renderer.clear(0, 0, 0.2, 1);
-    self.fps.renderTick();
+pub const App = struct {
+    tex: *pixzig.TextureHandle,
 
-    eng.renderer.begin(eng.uiMatrix());
-
-    for (0..3) |i| {
-        eng.renderer.draw(self.tex, self.dest[i], self.srcCoords[i]);
+    pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
+        const app = try alloc.create(App);
+        const managed = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
+        app.* = .{ .tex = managed.acquire() orelse return error.NoTexture };
+        return app;
     }
 
-    for (0..3) |i| {
-        eng.renderer.drawRect(self.dest[i], Color.from(255, 255, 0, 200), 2);
+    pub fn deinit(self: *App) void {
+        self.tex.release();
+        self.alloc.destroy(self);
     }
 
-    for (0..3) |i| {
-        eng.renderer.drawFilledRect(self.destRects[i], self.colorRects[i]);
-    }
+    pub fn render(self: *App, eng: *AppRunner.Engine) void {
+        eng.renderer.clear(0, 0, 0.2, 1);
+        eng.renderer.begin(eng.projection());
 
-    eng.renderer.end();
-}
+        eng.renderer.draw(&self.tex.val, RectF.fromPosSize(10, 10, 32, 32),
+                          RectF.fromCoords(32, 32, 32, 32, 512, 512));
+
+        eng.renderer.drawRect(RectF.fromPosSize(10, 10, 32, 32),
+                              Color.from(255, 255, 0, 200), 2);
+
+        eng.renderer.end();
+    }
+};
 ```

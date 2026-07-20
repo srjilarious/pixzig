@@ -137,10 +137,7 @@ This registers five Lua globals:
 | `seq_set_actor_state(h, eid, name)` | Append a SetActorStateStep |
 | `seq_play(h)` | Submit the sequence to the player |
 
-Each registered function captures its `SeqScriptingContext`, so separate Lua
-states can bind separate sequence players. Keep the context alive while its
-Lua state may call these functions; during shutdown, deinitialize the Lua
-state before the context.
+Each binding captures its `SeqScriptingContext`, so separate Lua states can drive separate sequence players. Keep the context alive as long as the Lua state may call these functions. On shutdown, deinitialize the Lua state before the context.
 
 Set entity ID and position globals from Zig before running the script:
 

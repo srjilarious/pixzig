@@ -12,6 +12,7 @@ const ScriptEngine = @import("../scripting.zig").ScriptEngine;
 const keychord = @import("./keychord.zig");
 pub const KeyChordPiece = keychord.KeyChordPiece;
 
+/// A single digital (on/off) input source for an action binding.
 pub const Source = union(enum) {
     key: glfw.Key,
     // key_with_mods: struct {
@@ -31,6 +32,9 @@ pub const Source = union(enum) {
     // },
 };
 
+/// A continuous (analog) input source for an axis binding.
+/// `buttons` maps a negative/positive button pair to a [-1, +1] value.
+/// `gamepad_axis` reads a physical stick or trigger with a configurable deadzone.
 pub const AxisSource = union(enum) {
     buttons: struct {
         negative: Source,
@@ -152,6 +156,12 @@ fn parseAxisSource(lua: *Lua, entry_abs: i32) !AxisSource {
     }
 }
 
+/// Returns a comptime-specialised action map for the given `Action` and `Axes` enums.
+///
+/// Binds named actions/axes to physical inputs (keys, mouse buttons, gamepad axes) and
+/// produces pressed/released/down/axis queries each tick.  Supports both direct bindings
+/// and key-chord bindings for a single `Action` enum.  The returned type is heap-allocated
+/// via `init`; call `deinit` to free.
 pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
     const DigitalBinding = struct {
         source: Source,
@@ -301,6 +311,9 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
             self.alloc.destroy(self);
         }
 
+        /// Reads bindings from a Lua table stored in the global `global_name`.
+        /// Each entry is a table with an `action` or `axis` string key and a `type` field.
+        /// Supported types: `"key"`, `"mouse_button"`, `"gamepad_button"`, `"chord"`, `"buttons"`, `"gamepad_axis"`.
         pub fn loadFromLua(self: *Self, script: *const ScriptEngine, global_name: [:0]const u8) !void {
             const lua = script.lua;
 
@@ -402,18 +415,23 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
             return &self.axisActionBuffers[self.currIdx];
         }
 
+        /// Binds a digital action to a physical input source.  Multiple bindings for the
+        /// same action are OR-ed together each tick.
         pub fn bind(self: *Self, action: Action, source: Source) !void {
             try self.digitalBindings.append(self.alloc, .{ .source = source, .action = action });
         }
 
+        /// Binds a continuous axis to an analog source.
         pub fn bindAxis(self: *Self, ax: Axes, source: AxisSource) !void {
             try self.axisBindings.append(self.alloc, .{ .source = source, .axis = ax });
         }
 
+        /// Binds a single-key chord to an action.
         pub fn bindChord(self: *Self, piece: KeyChordPiece, action: Action) !void {
             _ = try self.chordMap.addKeyChord(piece.mod, piece.key, action, null);
         }
 
+        /// Binds a two-key chord to an action.
         pub fn bindChord2(self: *Self, piece1: KeyChordPiece, piece2: KeyChordPiece, action: Action) !void {
             _ = try self.chordMap.addComplexChord(piece1, piece2, action, null);
         }
@@ -485,24 +503,29 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
             return false;
         }
 
+        /// True when the action is not held this tick.
         pub fn up(self: *const Self, action: Action) bool {
             return self.currDigital().up(action);
         }
 
+        /// True while the action is held this tick.
         pub fn down(self: *const Self, action: Action) bool {
             return self.currDigital().down(action);
         }
 
+        /// Returns the current value of an analog axis in [-1, +1].
         pub fn axis(self: *const Self, ax: Axes) f32 {
             const axisIdx = helpers.getIndexForAxis(ax);
             return self.currAnalog().axes[axisIdx];
         }
 
+        /// True on the first tick the action becomes held (rising edge).
         pub fn pressed(self: *const Self, action: Action) bool {
             const actionIdx = helpers.getIndexForAction(action);
             return (self.currDigital().downIdx(actionIdx) and !self.prevDigital().downIdx(actionIdx));
         }
 
+        /// True on the first tick the action is no longer held (falling edge).
         pub fn released(self: *const Self, action: Action) bool {
             const actionIdx = helpers.getIndexForAction(action);
             return (!self.currDigital().downIdx(actionIdx) and self.prevDigital().downIdx(actionIdx));

@@ -10,10 +10,14 @@ const getIndexForKey = keyboard.getIndexForKey;
 const KeyModifier = keyboard.KeyModifier;
 const KeyboardState = keyboard.KeyboardState;
 
+/// How long (microseconds) a partial chord can sit unfinished before it resets.
 pub const DefaultChordTimeoutUs: f64 = 2e6;
+/// Delay (microseconds) before a held key starts repeating.
 pub const InitialRepeatRate: f64 = 1e5;
+/// Interval (microseconds) between subsequent repeats once a key is held.
 pub const DownRepeatRate: f64 = 2e4;
 
+/// One key + modifier combination within a chord sequence.
 pub const KeyChordPiece = struct {
     key: glfw.Key,
     mod: KeyModifier,
@@ -79,6 +83,8 @@ pub const KeyChordPiece = struct {
     }
 };
 
+/// A node in a chord tree. Leaf nodes carry a `func` payload; interior nodes have `func == null`.
+/// Children are indexed by the next `KeyChordPiece` in the sequence.
 pub fn KeyChord(comptime T: type) type {
     return struct {
         alloc: std.mem.Allocator,
@@ -132,10 +138,15 @@ pub fn KeyChord(comptime T: type) type {
     };
 }
 
+/// Result returned by `ChordTree.update` each tick.
+/// `.triggered` carries the matched leaf node (which holds the payload `T`).
+/// `.reset` means the partial match timed out or a modifier changed.
 pub fn ChordUpdateResult(comptime T: type) type {
     return union(enum) { none: void, reset: void, triggered: *KeyChord(T) };
 }
 
+/// Stateful prefix-tree walker that matches key sequences against registered chords.
+/// Advances on each `update` call, resetting on timeout or modifier change.
 pub fn ChordTree(comptime T: type) type {
     return struct {
         alloc: std.mem.Allocator,
@@ -228,6 +239,9 @@ pub fn ChordTree(comptime T: type) type {
     };
 }
 
+/// A higher-level chord registry backed by a `ChordTree`.
+/// Register single-key or two-key chords with `addKeyChord` / `addTwoKeyChord` / `addComplexChord`,
+/// then call `update` each tick with the current keyboard state.
 pub fn KeyMap(comptime T: type) type {
     return struct {
         chords: ChordTree(T),
@@ -246,6 +260,7 @@ pub fn KeyMap(comptime T: type) type {
             self.chords.deinit();
         }
 
+        /// Registers a single-piece chord. Returns `false` if the chord already exists.
         pub fn addKeyChord(self: *Self, mods: KeyModifier, key: glfw.Key, func: T, context: ?[]const u8) !bool {
             _ = context;
             const kcp = KeyChordPiece.from(mods, key);
@@ -259,6 +274,7 @@ pub fn KeyMap(comptime T: type) type {
             return true;
         }
 
+        /// Registers a two-piece chord (press key1, then key2). Returns `false` if that exact sequence already exists.
         pub fn addTwoKeyChord(self: *Self, mods: KeyModifier, key1: glfw.Key, key2: glfw.Key, func: T, context: ?[]const u8) !bool {
             _ = context;
             const kcp1 = KeyChordPiece.from(mods, key1);
@@ -287,6 +303,7 @@ pub fn KeyMap(comptime T: type) type {
             return true;
         }
 
+        /// Like `addTwoKeyChord` but takes full `KeyChordPiece` values, allowing per-piece modifier sets.
         pub fn addComplexChord(self: *Self, kcp1: KeyChordPiece, kcp2: KeyChordPiece, func: T, context: ?[]const u8) !bool {
             _ = context;
             var chord1: *KeyChord(T) = undefined;

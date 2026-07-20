@@ -513,10 +513,26 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             }
         }
 
-        /// Projection matrix for the logical/UI coordinate space (raster convention,
-        /// y=0 at top). Prefer this over projMat for new code.
-        pub fn uiMatrix(self: *const Self) zmath.Mat {
+        /// Projection matrix for the logical game coordinate space.
+        /// Maps (0,0)..(logicalW, logicalH) with y=0 at the top-left.
+        /// Use this for all game rendering. Equivalent to `viewport.projection()`.
+        pub fn projection(self: *const Self) zmath.Mat {
             return self.viewport.projection();
+        }
+
+        /// Projection matrix for the full framebuffer in actual pixels.
+        /// Maps (0,0)..(framebufferW, framebufferH) with y=0 at the top-left.
+        /// Use this for UI or debug overlays that should be positioned in screen
+        /// pixels rather than logical game coordinates.
+        pub fn screenProjection(self: *const Self) zmath.Mat {
+            const fw: f32 = @floatFromInt(self.window_state.framebuffer_size.x);
+            const fh: f32 = @floatFromInt(self.window_state.framebuffer_size.y);
+            return zmath.orthographicOffCenterLhGl(0, fw, 0, fh, -0.1, 1000);
+        }
+
+        /// Deprecated: use `projection()` instead.
+        pub fn uiMatrix(self: *const Self) zmath.Mat {
+            return self.projection();
         }
 
         /// Converts a GLFW window-coordinate position to framebuffer pixels,

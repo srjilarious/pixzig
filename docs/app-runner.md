@@ -34,7 +34,7 @@ pub fn main() !void {
 }
 ```
 
-[](sym:AppRunner.init) creates the GLFW window, loads OpenGL, and initializes engine systems. If audio is enabled, it initializes [](sym:AudioEngine). `appRunner.run(app)` calls `app.deinit()` and releases engine resources when the loop exits.
+[](sym:AppRunner.init) creates the GLFW window, loads OpenGL, and initializes engine systems. If audio is enabled it also initializes [](sym:AudioEngine). `appRunner.run(app)` calls `app.deinit()` and releases engine resources when the loop exits.
 
 ## The App Interface
 
@@ -54,7 +54,7 @@ pub const App = struct {
 
 The engine reference `eng` gives you access to:
 
-| Field | Type | Description |
+| Member | Type / Return | Description |
 |---|---|---|
 | `eng.inputs` | `input.InputManager` | Keyboard, mouse, and configured gamepads |
 | `eng.renderer` | `Renderer` | Sprite, shape, and text drawing |
@@ -63,6 +63,8 @@ The engine reference `eng` gives you access to:
 | `eng.audio` | `AudioEngine` | Sound playback (if enabled) |
 | `eng.window` | `*glfw.Window` | Raw GLFW window handle |
 | `eng.allocator` | `std.mem.Allocator` | Engine-owned allocator |
+| `eng.projection()` | `zmath.Mat` | Orthographic matrix for the logical coordinate space; use this as the MVP base for all game rendering |
+| `eng.screenProjection()` | `zmath.Mat` | Orthographic matrix for the full framebuffer in actual pixels; use for UI overlays that should be in screen-pixel coordinates |
 
 ## Game Loop Details
 

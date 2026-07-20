@@ -16,20 +16,33 @@ Declare pixzig as a dependency in your `build.zig.zon`:
 },
 ```
 
-In your `build.zig`, pull in the engine module and library using `buildGame`:
+In your `build.zig`, import `buildGame` from pixzig's build module and call it with the dependency object:
 
 ```zig
-const exe_mod = b.createModule(.{ .root_source_file = b.path("src/main.zig"), ... });
+const buildGame = @import("pixzig").buildGame;
 
-const pixzig = b.dependency("pixzig", .{ .target = target, .optimize = optimize });
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
 
-const exe = pixzig.buildGame(b, target, optimize,
-    pixzig,
-    pixzig.module("pixzig"),
-    "my_game",
-    exe_mod,
-    &.{ "my_atlas.json", "my_atlas.png" },
-);
+    const pixzig_dep = b.dependency("pixzig", .{ .target = target, .build_examples = false });
+
+    const exe_mod = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const game = buildGame(b, target, optimize,
+        pixzig_dep,
+        pixzig_dep.module("pixzig"),
+        "my_game",
+        exe_mod,
+        &.{ "my_atlas.json", "my_atlas.png" },
+    );
+
+    b.default_step.dependOn(&game.step);
+}
 ```
 
 ## A Minimal Example

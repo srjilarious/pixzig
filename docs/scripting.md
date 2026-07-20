@@ -118,7 +118,7 @@ seq_play(h)
 
 ## Tips
 
-- Use `runScript` for data-driven config and level scripts that live on disk.
+- Use `runScript` for config and level scripts that live on disk.
 - Use `run` for short, generated, or unit-tested code strings.
-- Keep Zig functions registered via `registerFunc` small and stateless; use the `SeqScriptingContext` or a similar context struct for anything that needs to touch engine state.
-- Lua 5.3 integers are 64-bit signed. Cast flecs entity IDs with `@intCast(entity_id)` when pushing (entity IDs fit in i64 for reasonable values).
+- Keep functions registered via `registerFunc` stateless. Use `SeqScriptingContext` or a similar context struct when the function needs to touch engine state.
+- Lua 5.3 integers are 64-bit signed. Cast flecs entity IDs with `@intCast(entity_id)` before pushing.

@@ -379,12 +379,14 @@ const HotReload = struct {
 // ResourceManager
 // ---------------------------------------------------------------------------
 
-/// A structure for managing game resources, particularly rendering ones:
-/// textures, shaders and texture atlases. The resource manager is responsible
-/// for loading and unloading these resources, as well as providing access to
-/// them for the rest of the application. It also handles deallocating them
-/// and their OpenGL resources, if any, when the resource manager is
-/// deinitialized.
+/// Owns all loaded game assets: textures, shaders, atlases, fonts, and tilemaps.
+/// Each resource type is stored in a `ManagedResource` pool that supports multiple
+/// generations and ref-counting.  Callers interact via handles (`*TextureHandle`, etc.)
+/// obtained from `acquire*` methods; call `handle.release()` when done.
+///
+/// In debug builds, all file-backed resources are watched via `FileWatcher`.
+/// When a file changes, the resource is reloaded and live handles are marked
+/// dirty so callers can call `handle.reacquire()` to upgrade to the new version.
 pub const ResourceManager = struct {
     textures: std.StringHashMap(*ManagedTextureImage),
     shaders: std.StringHashMap(*ManagedShader),
@@ -421,7 +423,8 @@ pub const ResourceManager = struct {
         };
     }
 
-    // Deinitializes the resource manager, freeing all resources and their OpenGL resources.
+    /// Frees all managed resources and their backing OpenGL objects.
+    /// All handles must be released before calling this.
     pub fn deinit(self: *Self) void {
         var tit = self.textures.iterator();
         while (tit.next()) |entry| {
