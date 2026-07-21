@@ -476,6 +476,12 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             }
         }
 
+        /// Shows or hides the system mouse cursor over the window.
+        pub fn showCursor(self: *Self, visible: bool) void {
+            const mode: glfw.Cursor.Mode = if (visible) .normal else .hidden;
+            glfw.setInputMode(self.window, .cursor, mode) catch {};
+        }
+
         /// Called each frame (after glfw.pollEvents) to pick up resize events
         /// recorded by the framebuffer-size callback. Rebuilds the viewport and
         /// updates projMat when the framebuffer has changed.

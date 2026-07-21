@@ -30,6 +30,8 @@ pub const App = struct {
 
         const tex = try eng.resources.acquireTexture("guy");
 
+        eng.showCursor(false);
+
         return .{
             .fps = FpsCounter.init(),
             .alloc = alloc,
