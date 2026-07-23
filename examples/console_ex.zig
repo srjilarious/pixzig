@@ -97,7 +97,7 @@ pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig Console Test Example", .{});
 
     const appRunner = try AppRunner.init("Pixzig: Console Test Example.", init.gpa, .{ .renderInitOpts = .{
-        .fontFace = "assets/Roboto-Medium.ttf",
+        .font = .{ .path = .{ .face = "assets/Roboto-Medium.ttf" } },
     } });
 
     std.log.info("Initializing app.\n", .{});

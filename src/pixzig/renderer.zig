@@ -41,10 +41,16 @@ pub const RendererOptions = struct {
     textRendering: bool = false,
 };
 
+/// Specifies the default font for the renderer — either a TTF file path to
+/// load at init time, or the id of a font already in the ResourceManager.
+pub const FontSource = union(enum) {
+    path: struct { face: [:0]const u8, size: f32 = 20.0 },
+    id: []const u8,
+};
+
 /// Runtime initialization options for the renderer.
 pub const RendererInitOpts = struct {
-    fontFace: ?[:0]const u8 = null,
-    fontSize: f32 = 20.0,
+    font: ?FontSource = null,
 };
 
 /// A rendering interface that provides methods for drawing sprites, shapes
@@ -96,10 +102,18 @@ pub fn Renderer(opts: RendererOptions) type {
 
                 rend.text = try TextRenderer.init(alloc, resMgr);
 
-                if (initOpts.fontFace != null) {
-                    try resMgr.loadFontFromTtfFile(DefaultFontName, initOpts.fontFace.?, initOpts.fontSize);
-                    const font = resMgr.fonts.get(DefaultFontName).?;
-                    try rend.text.setFont(font);
+                if (initOpts.font) |src| {
+                    switch (src) {
+                        .path => |p| {
+                            try resMgr.loadFontFromTtfFile(DefaultFontName, p.face, p.size);
+                            const font = resMgr.fonts.get(DefaultFontName).?;
+                            try rend.text.setFont(font);
+                        },
+                        .id => |id| {
+                            const font = resMgr.fonts.get(id) orelse return error.NoFontWithThatName;
+                            try rend.text.setFont(font);
+                        },
+                    }
                 } else {
                     if (builtin.mode == .Debug) {
                         std.log.warn("No default font provided. Text rendering will not work until a FontAtlas is set.", .{});
@@ -132,6 +146,14 @@ pub fn Renderer(opts: RendererOptions) type {
             }
 
             self.alloc.destroy(self.impl);
+        }
+
+        /// Set the renderer's default font to an already-loaded font in `resMgr`.
+        /// Useful when the font is loaded post-init (e.g. via a manifest boot group).
+        pub fn setDefaultFont(self: *Self, resMgr: *ResourceManager, id: []const u8) !void {
+            std.debug.assert(opts.textRendering);
+            const font = resMgr.fonts.get(id) orelse return error.NoFontWithThatName;
+            self.impl.text.setFont(font);
         }
 
         pub fn begin(self: *Self, mvp: zmath.Mat) void {

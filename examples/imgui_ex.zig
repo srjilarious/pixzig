@@ -286,7 +286,7 @@ pub fn main(init: std.process.Init) !void {
         .{
             .scalePolicy = .integer_fit,
             .logicalSize = .{ .x = 1200, .y = 720 },
-            .renderInitOpts = .{ .fontFace = "assets/Roboto-Medium.ttf" },
+            .renderInitOpts = .{ .font = .{ .path = .{ .face = "assets/Roboto-Medium.ttf" } } },
         },
     );
     const app = try App.init(init.gpa, appRunner.engine);

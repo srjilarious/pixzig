@@ -71,7 +71,7 @@ pub const App = struct {
 pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig Test Rendering Example", .{});
     const appRunner = try AppRunner.init("Pixzig Text Rendering Example.", init.gpa, .{ .renderInitOpts = .{
-        .fontFace = "assets/Roboto-Medium.ttf",
+        .font = .{ .path = .{ .face = "assets/Roboto-Medium.ttf" } },
     } });
     const app = try App.init(init.gpa, appRunner.engine);
 
