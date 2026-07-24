@@ -555,5 +555,46 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         pub fn windowToLogical(self: *const Self, pos: Vec2F) ?Vec2F {
             return self.viewport.framebufferToLogical(self.windowToFramebuffer(pos));
         }
+
+        /// Captures the current framebuffer and writes it to a PNG file at `path`.
+        /// The framebuffer is read at full resolution (not logical size).
+        pub fn captureScreenshot(self: *const Self, alloc: std.mem.Allocator, path: []const u8) !void {
+            const w: usize = @intCast(self.window_state.framebuffer_size.x);
+            const h: usize = @intCast(self.window_state.framebuffer_size.y);
+            const row_size = w * 4;
+
+            const pixels = try alloc.alloc(u8, h * row_size);
+            defer alloc.free(pixels);
+
+            gl.readPixels(0, 0, @intCast(w), @intCast(h), gl.RGBA, gl.UNSIGNED_BYTE, pixels.ptr);
+
+            // OpenGL reads bottom-to-top; flip vertically so the PNG is top-to-bottom.
+            const tmp = try alloc.alloc(u8, row_size);
+            defer alloc.free(tmp);
+            var top: usize = 0;
+            var bot: usize = h - 1;
+            while (top < bot) : ({
+                top += 1;
+                bot -= 1;
+            }) {
+                @memcpy(tmp, pixels[top * row_size ..][0..row_size]);
+                @memcpy(pixels[top * row_size ..][0..row_size], pixels[bot * row_size ..][0..row_size]);
+                @memcpy(pixels[bot * row_size ..][0..row_size], tmp);
+            }
+
+            const path_z = try alloc.dupeZ(u8, path);
+            defer alloc.free(path_z);
+
+            const img = stbi.Image{
+                .data = pixels,
+                .width = @intCast(w),
+                .height = @intCast(h),
+                .num_components = 4,
+                .bytes_per_component = 1,
+                .bytes_per_row = @intCast(row_size),
+                .is_hdr = false,
+            };
+            try stbi.Image.writeToFile(img, path_z, .png);
+        }
     };
 }
