@@ -351,7 +351,7 @@ pub fn build(b: *std.Build) void {
             .path = "examples/console2_ex.zig",
             .manifest_def = .{
                 .assets = &.{
-                    .{ .id = "Roboto-Medium", .kind = "raw", .path = "Roboto-Medium.ttf" },
+                    .{ .id = "Roboto-Medium", .kind = "font", .path = "Roboto-Medium.ttf", .font_size = 20.0 },
                 },
             },
         },
@@ -360,7 +360,7 @@ pub fn build(b: *std.Build) void {
             .path = "examples/console_ex.zig",
             .manifest_def = .{
                 .assets = &.{
-                    .{ .id = "Roboto-Medium", .kind = "raw", .path = "Roboto-Medium.ttf" },
+                    .{ .id = "Roboto-Medium", .kind = "font", .path = "Roboto-Medium.ttf", .font_size = 20.0 },
                 },
             },
         },
@@ -369,7 +369,7 @@ pub fn build(b: *std.Build) void {
             .path = "examples/imgui_ex.zig",
             .manifest_def = .{
                 .assets = &.{
-                    .{ .id = "Roboto-Medium", .kind = "raw", .path = "Roboto-Medium.ttf" },
+                    .{ .id = "Roboto-Medium", .kind = "font", .path = "Roboto-Medium.ttf", .font_size = 20.0 },
                     .{ .id = "tiles", .kind = "texture", .path = "mario_grassish2.png" },
                 },
             },
@@ -379,7 +379,7 @@ pub fn build(b: *std.Build) void {
             .path = "examples/text_rendering_ex.zig",
             .manifest_def = .{
                 .assets = &.{
-                    .{ .id = "Roboto-Medium", .kind = "raw", .path = "Roboto-Medium.ttf" },
+                    .{ .id = "Roboto-Medium", .kind = "font", .path = "Roboto-Medium.ttf", .font_size = 20.0 },
                 },
             },
         },
@@ -424,7 +424,7 @@ pub fn build(b: *std.Build) void {
             .path = "tests/main.zig",
             .manifest_def = .{
                 .assets = &.{
-                    .{ .id = "Roboto-Medium", .kind = "raw", .path = "Roboto-Medium.ttf" },
+                    .{ .id = "Roboto-Medium", .kind = "font", .path = "Roboto-Medium.ttf", .font_size = 20.0 },
                 },
             },
             .extraMods = &.{"testz"},

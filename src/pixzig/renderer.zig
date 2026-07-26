@@ -153,7 +153,7 @@ pub fn Renderer(opts: RendererOptions) type {
         pub fn setDefaultFont(self: *Self, resMgr: *ResourceManager, id: []const u8) !void {
             std.debug.assert(opts.textRendering);
             const font = resMgr.fonts.get(id) orelse return error.NoFontWithThatName;
-            self.impl.text.setFont(font);
+            try self.impl.text.setFont(font);
         }
 
         pub fn begin(self: *Self, mvp: zmath.Mat) void {
