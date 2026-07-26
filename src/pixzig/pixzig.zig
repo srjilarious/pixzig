@@ -556,45 +556,59 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             return self.viewport.framebufferToLogical(self.windowToFramebuffer(pos));
         }
 
-        /// Captures the current framebuffer and writes it to a PNG file at `path`.
-        /// The framebuffer is read at full resolution (not logical size).
+        /// Captures the current framebuffer at logical resolution and writes it to a PNG file at `path`.
         pub fn captureScreenshot(self: *const Self, alloc: std.mem.Allocator, path: []const u8) !void {
-            const w: usize = @intCast(self.window_state.framebuffer_size.x);
-            const h: usize = @intCast(self.window_state.framebuffer_size.y);
-            const row_size = w * 4;
+            const fb_w: usize = @intCast(self.window_state.framebuffer_size.x);
+            const fb_h: usize = @intCast(self.window_state.framebuffer_size.y);
+            const fb_row = fb_w * 4;
 
-            const pixels = try alloc.alloc(u8, h * row_size);
+            const pixels = try alloc.alloc(u8, fb_h * fb_row);
             defer alloc.free(pixels);
 
-            gl.readPixels(0, 0, @intCast(w), @intCast(h), gl.RGBA, gl.UNSIGNED_BYTE, pixels.ptr);
+            gl.readPixels(0, 0, @intCast(fb_w), @intCast(fb_h), gl.RGBA, gl.UNSIGNED_BYTE, pixels.ptr);
 
             // OpenGL reads bottom-to-top; flip vertically so the PNG is top-to-bottom.
-            const tmp = try alloc.alloc(u8, row_size);
+            const tmp = try alloc.alloc(u8, fb_row);
             defer alloc.free(tmp);
             var top: usize = 0;
-            var bot: usize = h - 1;
+            var bot: usize = fb_h - 1;
             while (top < bot) : ({
                 top += 1;
                 bot -= 1;
             }) {
-                @memcpy(tmp, pixels[top * row_size ..][0..row_size]);
-                @memcpy(pixels[top * row_size ..][0..row_size], pixels[bot * row_size ..][0..row_size]);
-                @memcpy(pixels[bot * row_size ..][0..row_size], tmp);
+                @memcpy(tmp, pixels[top * fb_row ..][0..fb_row]);
+                @memcpy(pixels[top * fb_row ..][0..fb_row], pixels[bot * fb_row ..][0..fb_row]);
+                @memcpy(pixels[bot * fb_row ..][0..fb_row], tmp);
             }
+
+            const fb_img = stbi.Image{
+                .data = pixels,
+                .width = @intCast(fb_w),
+                .height = @intCast(fb_h),
+                .num_components = 4,
+                .bytes_per_component = 1,
+                .bytes_per_row = @intCast(fb_row),
+                .is_hdr = false,
+            };
+
+            const log_w: u32 = @intCast(self.viewport.logical_size.x);
+            const log_h: u32 = @intCast(self.viewport.logical_size.y);
+
+            // Only resize if logical size differs from framebuffer size (e.g. HiDPI).
+            const out_img = if (log_w != fb_img.width or log_h != fb_img.height) blk: {
+                const resized = fb_img.resize(log_w, log_h);
+                break :blk resized;
+            } else fb_img;
+            // fb_img.data is owned by `pixels` (our allocator); only call deinit on a resized copy.
+            defer if (out_img.data.ptr != fb_img.data.ptr) {
+                var m = out_img;
+                m.deinit();
+            };
 
             const path_z = try alloc.dupeZ(u8, path);
             defer alloc.free(path_z);
 
-            const img = stbi.Image{
-                .data = pixels,
-                .width = @intCast(w),
-                .height = @intCast(h),
-                .num_components = 4,
-                .bytes_per_component = 1,
-                .bytes_per_row = @intCast(row_size),
-                .is_hdr = false,
-            };
-            try stbi.Image.writeToFile(img, path_z, .png);
+            try stbi.Image.writeToFile(out_img, path_z, .png);
         }
     };
 }
