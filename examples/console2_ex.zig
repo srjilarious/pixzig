@@ -17,10 +17,12 @@ const console = pixzig.console2;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
+const manifest_options = @import("manifest_options");
 const AppRunner = pixzig.PixzigAppRunner(App, .{
     .rendererOpts = .{
         .textRendering = true,
     },
+    .manifestOpts = manifest_options,
 });
 
 pub const App = struct {
@@ -95,9 +97,9 @@ pub const App = struct {
 pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig Console Test Example", .{});
 
-    const appRunner = try AppRunner.init("Pixzig: Console Test Example.", init.gpa, .{ .renderInitOpts = .{
-        .font = .{ .path = .{ .face = "assets/Roboto-Medium.ttf" } },
-    } });
+    const appRunner = try AppRunner.init("Pixzig: Console Test Example.", init.gpa, .{
+        .renderInitOpts = .{ .font = .{ .id = "Roboto-Medium" } },
+    });
 
     std.log.info("Initializing app.\n", .{});
     const app: *App = try App.init(init.gpa, appRunner.engine);

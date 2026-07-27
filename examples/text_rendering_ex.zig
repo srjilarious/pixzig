@@ -17,7 +17,11 @@ const FpsCounter = pixzig.utils.FpsCounter;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{ .rendererOpts = .{ .textRendering = true } });
+const manifest_options = @import("manifest_options");
+const AppRunner = pixzig.PixzigAppRunner(App, .{
+    .rendererOpts = .{ .textRendering = true },
+    .manifestOpts = manifest_options,
+});
 
 pub const App = struct {
     fps: FpsCounter,
@@ -70,9 +74,9 @@ pub const App = struct {
 
 pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig Test Rendering Example", .{});
-    const appRunner = try AppRunner.init("Pixzig Text Rendering Example.", init.gpa, .{ .renderInitOpts = .{
-        .font = .{ .path = .{ .face = "assets/Roboto-Medium.ttf" } },
-    } });
+    const appRunner = try AppRunner.init("Pixzig Text Rendering Example.", init.gpa, .{
+        .renderInitOpts = .{ .font = .{ .id = "Roboto-Medium" } },
+    });
     const app = try App.init(init.gpa, appRunner.engine);
 
     appRunner.run(app);

@@ -48,6 +48,31 @@ const AssetJsonEntry = struct {
     font_size: ?f32 = null,
 };
 
+/// Abstracts over file-path vs inline-JSON manifest sources. Produced at
+/// comptime by `fromOptions` from the `manifest_options` build module, then
+/// used at runtime to open the manifest.
+pub const ManifestSource = union(enum) {
+    file: []const u8,
+    json: struct { content: []const u8, base_dir: []const u8 },
+
+    pub fn fromOptions(comptime Opts: type) ManifestSource {
+        return if (Opts.manifest_path.len > 0)
+            .{ .file = Opts.manifest_path }
+        else
+            .{ .json = .{
+                .content = Opts.manifest_json,
+                .base_dir = Opts.manifest_base_dir,
+            } };
+    }
+
+    pub fn load(self: ManifestSource, alloc: std.mem.Allocator, res: *ResourceManager) !AssetManifest {
+        return switch (self) {
+            .file => |path| AssetManifest.loadFromFile(alloc, res, path),
+            .json => |j| AssetManifest.loadFromJson(alloc, res, j.content, j.base_dir),
+        };
+    }
+};
+
 /// Loads and manages a JSON asset manifest. Multiple manifests may coexist;
 /// each interacts with the shared `ResourceManager`.
 ///

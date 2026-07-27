@@ -23,11 +23,13 @@ const imgui = pixzig.imgui;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
+const manifest_options = @import("manifest_options");
 const AppRunner = pixzig.PixzigAppRunner(App, .{
     .rendererOpts = .{
         .textRendering = true,
     },
     .inputOpts = .{ .mouse = true },
+    .manifestOpts = manifest_options,
 });
 
 const MaxLogLines = 200;
@@ -286,7 +288,7 @@ pub fn main(init: std.process.Init) !void {
         .{
             .scalePolicy = .integer_fit,
             .logicalSize = .{ .x = 1200, .y = 720 },
-            .renderInitOpts = .{ .font = .{ .path = .{ .face = "assets/Roboto-Medium.ttf" } } },
+            .renderInitOpts = .{ .font = .{ .id = "Roboto-Medium" } },
         },
     );
     const app = try App.init(init.gpa, appRunner.engine);

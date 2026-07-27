@@ -350,6 +350,7 @@ pub fn build(b: *std.Build) void {
             .name = "console2_ex",
             .path = "examples/console2_ex.zig",
             .manifest_def = .{
+                .groups = &.{.{ .name = "boot", .assets = &.{"Roboto-Medium"} }},
                 .assets = &.{
                     .{ .id = "Roboto-Medium", .kind = "font", .path = "Roboto-Medium.ttf", .font_size = 20.0 },
                 },
@@ -359,6 +360,7 @@ pub fn build(b: *std.Build) void {
             .name = "console_ex",
             .path = "examples/console_ex.zig",
             .manifest_def = .{
+                .groups = &.{.{ .name = "boot", .assets = &.{"Roboto-Medium"} }},
                 .assets = &.{
                     .{ .id = "Roboto-Medium", .kind = "font", .path = "Roboto-Medium.ttf", .font_size = 20.0 },
                 },
@@ -368,6 +370,7 @@ pub fn build(b: *std.Build) void {
             .name = "imgui_ex",
             .path = "examples/imgui_ex.zig",
             .manifest_def = .{
+                .groups = &.{.{ .name = "boot", .assets = &.{"Roboto-Medium"} }},
                 .assets = &.{
                     .{ .id = "Roboto-Medium", .kind = "font", .path = "Roboto-Medium.ttf", .font_size = 20.0 },
                     .{ .id = "tiles", .kind = "texture", .path = "mario_grassish2.png" },
@@ -378,6 +381,7 @@ pub fn build(b: *std.Build) void {
             .name = "text_rendering_ex",
             .path = "examples/text_rendering_ex.zig",
             .manifest_def = .{
+                .groups = &.{.{ .name = "boot", .assets = &.{"Roboto-Medium"} }},
                 .assets = &.{
                     .{ .id = "Roboto-Medium", .kind = "font", .path = "Roboto-Medium.ttf", .font_size = 20.0 },
                 },

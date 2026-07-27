@@ -52,6 +52,7 @@ pub const a_star = @import("./a_star.zig");
 pub const assets = @import("./assets.zig");
 pub const AssetManifest = assets.AssetManifest;
 pub const AssetKind = assets.AssetKind;
+pub const ManifestSource = assets.ManifestSource;
 pub const file_watcher = @import("./file_watcher.zig");
 pub const FileWatcher = file_watcher.FileWatcher;
 pub const GlTestContext = @import("./test_context.zig").GlTestContext;
@@ -115,6 +116,13 @@ pub const PixzigEngineOptions = struct {
 
     /// Input options.
     inputOpts: input.InputOptions = .{},
+
+    /// Optional manifest module to load automatically during engine init.
+    /// Set to `@import("manifest_options")` to wire in the build-generated
+    /// manifest. The manifest is loaded before the renderer so that any fonts
+    /// in the boot group are available for `renderInitOpts.font = .{ .id = ... }`.
+    /// The engine owns the manifest and deinits it on shutdown.
+    manifestOpts: ?type = null,
 };
 
 /// Runtime initialization options for the Pixzig Engine.  These options are
@@ -265,6 +273,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         inputs: Inputs,
         renderer: Renderer = undefined,
         audio: audio.AudioEngine = undefined,
+        manifest: if (engOpts.manifestOpts != null) assets.AssetManifest else void,
 
         const Self = @This();
         pub const Renderer = renderer.Renderer(engOpts.rendererOpts);
@@ -390,6 +399,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 .viewport = vp,
                 .resources = ResourceManager.init(allocator),
                 .inputs = input.InputManager.init(engOpts.inputOpts),
+                .manifest = if (engOpts.manifestOpts != null) undefined else {},
             };
 
             // Store a pointer to window_state in the GLFW user pointer so the
@@ -401,6 +411,12 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             if (eng.inputs.mouse_enabled) {
                 input.mouse.setScrollTarget(&eng.inputs.mouse);
                 _ = eng.window.setScrollCallback(input.mouse.scrollCallback);
+            }
+
+            // ----------------------------------------------------------------
+            if (engOpts.manifestOpts) |ManifestMod| {
+                std.log.info("Loading asset manifest.", .{});
+                eng.manifest = try assets.ManifestSource.fromOptions(ManifestMod).load(allocator, &eng.resources);
             }
 
             // ----------------------------------------------------------------
@@ -435,6 +451,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             }
 
             self.renderer.deinit();
+            if (comptime engOpts.manifestOpts != null) self.manifest.deinit();
             self.resources.deinit();
             stbi.deinit();
 
