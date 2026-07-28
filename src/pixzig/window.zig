@@ -142,6 +142,20 @@ pub const Viewport = struct {
         return zmath.orthographicOffCenterLhGl(0, lw, 0, lh, -0.1, 1000);
     }
 
+    /// Sets the GL viewport to the full framebuffer and disables scissor testing,
+    /// then returns a projection matrix whose coordinate space matches the
+    /// framebuffer dimensions in pixels.  Use this for overlay UI passes that
+    /// should span the entire window including any letterbox / pillarbox bars.
+    /// Call eng.viewport.apply() at the start of the next game render pass to
+    /// restore the clipped game viewport.
+    pub fn applyFullscreen(self: *const Viewport) zmath.Mat {
+        gl.disable(gl.SCISSOR_TEST);
+        gl.viewport(0, 0, self.framebuffer_size.x, self.framebuffer_size.y);
+        const fw: f32 = @floatFromInt(self.framebuffer_size.x);
+        const fh: f32 = @floatFromInt(self.framebuffer_size.y);
+        return zmath.orthographicOffCenterLhGl(0, fw, 0, fh, -0.1, 1000);
+    }
+
     /// Converts a framebuffer-space position to logical coordinates.
     /// Returns null when pos_fb falls in a letterbox or pillarbox region.
     pub fn framebufferToLogical(self: *const Viewport, pos_fb: Vec2F) ?Vec2F {

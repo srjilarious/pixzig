@@ -23,6 +23,9 @@ pub const MouseState = struct {
     buttons: std.StaticBitSet(NumMouseButtons),
     /// Raw GLFW cursor position in window coordinates (from getCursorPos()).
     raw_pos: Vec2F,
+    /// Cursor position in framebuffer pixels (raw_pos * scale_factor).
+    /// Suitable for passing to any Viewport.framebufferToLogical() call.
+    fb_pos: Vec2F,
     /// Logical game coordinates after viewport mapping.  Set to (-1, -1) when
     /// the cursor is outside the viewport (letterbox / pillarbox region).
     logical_pos: Vec2F,
@@ -34,6 +37,7 @@ pub const MouseState = struct {
         return .{
             .buttons = buttons,
             .raw_pos = .{ .x = 0, .y = 0 },
+            .fb_pos = .{ .x = 0, .y = 0 },
             .logical_pos = .{ .x = -1, .y = -1 },
             .scroll_delta = .{ .x = 0, .y = 0 },
         };
@@ -68,6 +72,7 @@ pub const MouseState = struct {
     pub fn clear(self: *MouseState) void {
         self.buttons.setRangeValue(.{ .start = 0, .end = NumMouseButtons }, false);
         self.raw_pos = .{ .x = 0, .y = 0 };
+        self.fb_pos = .{ .x = 0, .y = 0 };
         self.logical_pos = .{ .x = -1, .y = -1 };
         self.scroll_delta = .{ .x = 0, .y = 0 };
     }
@@ -190,6 +195,17 @@ pub const Mouse = struct {
     /// Raw GLFW cursor position in window coordinates for the previous frame.
     pub fn lastRawPos(self: *const Mouse) Vec2F {
         return self.prev().raw_pos;
+    }
+
+    /// Cursor position in framebuffer pixels for the current frame.
+    /// Use with Viewport.framebufferToLogical() to map into any coordinate space.
+    pub fn fbPos(self: *const Mouse) Vec2F {
+        return self.curr().fb_pos;
+    }
+
+    /// Cursor position in framebuffer pixels for the previous frame.
+    pub fn lastFbPos(self: *const Mouse) Vec2F {
+        return self.prev().fb_pos;
     }
 
     /// Scroll wheel delta for the current frame (x = horizontal, y = vertical).

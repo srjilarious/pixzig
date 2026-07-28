@@ -333,10 +333,11 @@ pub const UiContext = struct {
     /// Latch keyboard and mouse input for this update step.
     /// Must be called from app.update(), after mouse.update().
     pub fn update(self: *UiContext) void {
-        // mouse.pos() already returns logical game coordinates ((-1,-1) when
-        // the cursor is in a letterbox/pillarbox region), so no extra
-        // conversion is needed here.
-        self.mouse_pos = self.mouse.pos();
+        // Re-derive mouse position from the framebuffer-space cursor position
+        // through this UI's own viewport, so the coordinates match whichever
+        // projection is used when draw() is called.
+        self.mouse_pos = self.viewport.framebufferToLogical(self.mouse.fbPos()) orelse
+            Vec2F{ .x = -1, .y = -1 };
         self.left_down = self.mouse.down(.left);
         if (self.mouse.pressed(.left)) self.left_pressed = true;
         if (self.mouse.released(.left)) self.left_released = true;

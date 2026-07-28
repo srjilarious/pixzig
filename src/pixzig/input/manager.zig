@@ -66,6 +66,7 @@ pub const InputManager = struct {
             self.mouse.update(window);
             const raw = self.mouse.rawPos();
             const fb = Vec2F{ .x = raw.x * scale_factor.x, .y = raw.y * scale_factor.y };
+            self.mouse.curr_mut().fb_pos = fb;
             self.mouse.curr_mut().logical_pos =
                 viewport.framebufferToLogical(fb) orelse Vec2F{ .x = -1, .y = -1 };
         }
