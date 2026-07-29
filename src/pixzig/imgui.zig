@@ -333,6 +333,10 @@ pub const UiContext = struct {
     /// Latch keyboard and mouse input for this update step.
     /// Must be called from app.update(), after mouse.update().
     pub fn update(self: *UiContext) void {
+        // Advance the frame counter here (fixed update rate) so cursor-blink
+        // logic based on frame/N runs at a stable speed regardless of FPS.
+        self.frame +%= 1;
+
         // Re-derive mouse position from the framebuffer-space cursor position
         // through this UI's own viewport, so the coordinates match whichever
         // projection is used when draw() is called.
@@ -394,7 +398,6 @@ pub const UiContext = struct {
         // Scene sprites should be behind all window layers.
         self.sprites.flush();
         self.hot_id = 0;
-        self.frame +%= 1;
         self.tab_focus_count = 0;
     }
 
