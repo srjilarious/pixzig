@@ -14,7 +14,7 @@ pub const AudioOptions = struct {
     maxConcurrentSounds: u8 = DefaultMaxConcurrentSounds,
 };
 
-/// A named soundm, with a number of concurrently playable instances.
+/// A named sound, with a number of concurrently playable instances.
 pub const Sound = struct {
     snds: std.ArrayList(*zaudio.Sound),
     name: []const u8,
@@ -81,7 +81,7 @@ pub const AudioEngine = struct {
         errdefer sndList.deinit(self.allocator);
         try sndList.append(self.allocator, sound);
 
-        try self.sounds.put(name, Sound{
+        try self.sounds.put(nameDupe, Sound{
             .snds = sndList,
             .name = nameDupe,
         });

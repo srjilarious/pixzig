@@ -120,6 +120,12 @@ pub const ChunkedTiledLayerRenderer = struct {
                 chunks[idx] = chunk;
             }
         }
+        errdefer for (chunks) |*c| {
+            gl.deleteVertexArrays(1, &c.vao);
+            gl.deleteBuffers(1, &c.vbo_coords);
+            gl.deleteBuffers(1, &c.vbo_texcoords);
+            gl.deleteBuffers(1, &c.ibo);
+        };
 
         const scratch_verts = try alloc.alloc(f32, MaxFloatsPerChunk);
         errdefer alloc.free(scratch_verts);

@@ -319,7 +319,12 @@ pub const TiledLayerRenderer = struct {
         self.cpuBuffersInitialized = true;
 
         std.log.debug("Creating {} vertices\n", .{self.vertices.len});
-        // self.tileIndexMap.clearRetainingCapacity();
+        self.tileIndexMap.clearRetainingCapacity();
+        errdefer {
+            self.numActualIndices = 0;
+            self.numBuffVals = 0;
+            self.tileIndexMap.clearRetainingCapacity();
+        }
         var buffIdx: usize = 0;
         var idx: usize = 0;
         var indicesIdx: usize = 0;

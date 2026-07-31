@@ -285,6 +285,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         /// and `engOpts` parameters.
         pub fn init(title: [:0]const u8, allocator: std.mem.Allocator, options: PixzigEngineInitOptions) !*Self {
             try glfw.init();
+            errdefer glfw.terminate();
 
             std.log.debug("GLFW initialized.\n", .{});
 
@@ -313,6 +314,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 }
             };
             const window = try glfw.createWindow(options.windowSize.x, options.windowSize.y, title, monitor, null);
+            errdefer window.destroy();
             window.setSizeLimits(400, 400, -1, -1);
 
             glfw.makeContextCurrent(window);
@@ -386,6 +388,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             // ----------------------------------------------------------------
             std.log.debug("Initializing STBI.", .{});
             stbi.init(allocator);
+            errdefer stbi.deinit();
 
             // ----------------------------------------------------------------
             const eng = try allocator.create(Self);
@@ -401,6 +404,10 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 .inputs = input.InputManager.init(engOpts.inputOpts),
                 .manifest = if (engOpts.manifestOpts != null) undefined else {},
             };
+            errdefer {
+                eng.resources.deinit();
+                allocator.destroy(eng);
+            }
 
             // Store a pointer to window_state in the GLFW user pointer so the
             // framebuffer-size callback can record resize events without
@@ -418,10 +425,12 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 std.log.info("Loading asset manifest.", .{});
                 eng.manifest = try assets.ManifestSource.fromOptions(ManifestMod).load(allocator, &eng.resources);
             }
+            errdefer if (comptime engOpts.manifestOpts != null) eng.manifest.deinit();
 
             // ----------------------------------------------------------------
             std.log.info("Initializing Renderer.", .{});
             eng.renderer = try Renderer.init(allocator, &eng.resources, options.renderInitOpts);
+            errdefer eng.renderer.deinit();
             if (engOpts.defaultIcon) {
                 std.log.debug("Setting default window icon.", .{});
                 var defaultIcon = std.Io.Reader.fixed(assets.icon48x48);

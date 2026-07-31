@@ -252,40 +252,33 @@ pub const FrameSequenceManager = struct {
 
         // Next load the actor states
         for (parsed.value.states) |fileState| {
-            const nameDupe = try self.alloc.dupe(u8, fileState.name);
-            errdefer self.alloc.free(nameDupe);
-
-            const nextStateDupe: ?[]const u8 = if (fileState.nextStateName) |ns|
-                try self.alloc.dupe(u8, ns)
-            else
-                null;
-            errdefer if (nextStateDupe) |ns| self.alloc.free(ns);
-
-            const new = try self.alloc.create(ActorState);
-            errdefer self.alloc.destroy(new);
-            new.name = nameDupe;
-            new.nextState = nextStateDupe;
-            new.sequence = self.sequences.get(fileState.frameSeqName).?;
-            new.flip = fileState.flip;
-            try self.actorStates.put(nameDupe, new);
+            try self.addState(.{
+                .name = fileState.name,
+                .nextState = fileState.nextStateName,
+                .sequence = self.sequences.get(fileState.frameSeqName).?,
+                .flip = fileState.flip,
+            });
         }
     }
 
     pub fn addSeq(self: *Self, name: []const u8, seq: FrameSequence) !void {
         const new = try self.alloc.create(FrameSequence);
         new.* = seq;
-        // On error, just free the allocation — frames backing array belongs to the
-        // caller's copy of seq so the caller's errdefer will handle it.
         errdefer self.alloc.destroy(new);
+
+        if (self.sequences.getPtr(name)) |oldPtr| {
+            oldPtr.*.deinit();
+            self.alloc.destroy(oldPtr.*);
+            oldPtr.* = new;
+            return;
+        }
+
         const nameCopy = try self.alloc.dupe(u8, name);
         errdefer self.alloc.free(nameCopy);
         try self.sequences.put(nameCopy, new);
     }
 
     pub fn addState(self: *Self, state: ActorState) !void {
-        const nameDupe = try self.alloc.dupe(u8, state.name);
-        errdefer self.alloc.free(nameDupe);
-
         const nextStateDupe: ?[]const u8 = if (state.nextState) |ns|
             try self.alloc.dupe(u8, ns)
         else
@@ -295,9 +288,21 @@ pub const FrameSequenceManager = struct {
         const new = try self.alloc.create(ActorState);
         errdefer self.alloc.destroy(new);
         new.* = state;
-        new.name = nameDupe;
         new.nextState = nextStateDupe;
 
+        if (self.actorStates.getPtr(state.name)) |oldPtr| {
+            // deinit frees value.name (not the key), and they share the same
+            // bytes, so reuse the old name allocation to keep the key valid.
+            new.name = oldPtr.*.name;
+            if (oldPtr.*.nextState) |ns| self.alloc.free(ns);
+            self.alloc.destroy(oldPtr.*);
+            oldPtr.* = new;
+            return;
+        }
+
+        const nameDupe = try self.alloc.dupe(u8, state.name);
+        errdefer self.alloc.free(nameDupe);
+        new.name = nameDupe;
         try self.actorStates.put(nameDupe, new);
     }
 
@@ -332,6 +337,7 @@ pub const Actor = struct {
         var iterator = self.states.iterator();
         while (iterator.next()) |kv| {
             self.alloc.free(kv.key_ptr.*);
+            if (kv.value_ptr.*.nextState) |ns| self.alloc.free(ns);
             self.alloc.destroy(kv.value_ptr.*);
         }
         self.states.deinit();
@@ -339,8 +345,6 @@ pub const Actor = struct {
 
     pub fn addState(self: *Actor, state: *const ActorState, opts: AddStateOpts) !*Actor {
         const nameToUse = opts.name orelse state.name;
-        const nameCopy = try self.alloc.dupe(u8, nameToUse);
-        errdefer self.alloc.free(nameCopy);
 
         const nextStateCopy: ?[]const u8 = if (state.nextState) |ns|
             try self.alloc.dupe(u8, ns)
@@ -351,9 +355,22 @@ pub const Actor = struct {
         const val = try self.alloc.create(ActorState);
         errdefer self.alloc.destroy(val);
         val.* = state.*;
-        val.name = nameCopy;
         val.nextState = nextStateCopy;
 
+        if (self.states.getPtr(nameToUse)) |oldPtr| {
+            // deinit frees the key (which == val.name), so reuse the old key
+            // bytes as val.name to keep the key valid after we free the old entry.
+            val.name = oldPtr.*.name;
+            if (oldPtr.*.nextState) |ns| self.alloc.free(ns);
+            if (self.currState == oldPtr.*) self.currState = val;
+            self.alloc.destroy(oldPtr.*);
+            oldPtr.* = val;
+            return self;
+        }
+
+        const nameCopy = try self.alloc.dupe(u8, nameToUse);
+        errdefer self.alloc.free(nameCopy);
+        val.name = nameCopy;
         try self.states.put(nameCopy, val);
         if (self.currState == null) {
             self.currState = val;

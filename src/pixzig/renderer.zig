@@ -74,6 +74,7 @@ pub fn Renderer(opts: RendererOptions) type {
 
         pub fn init(alloc: std.mem.Allocator, resMgr: *ResourceManager, initOpts: RendererInitOpts) !Self {
             var rend = try alloc.create(Impl);
+            errdefer alloc.destroy(rend);
 
             std.log.info("Initializing shaders.", .{});
             const texShader = try resMgr.loadShader(shaders.TextureShader, &shaders.TexVertexShader, &shaders.TexPixelShader);
