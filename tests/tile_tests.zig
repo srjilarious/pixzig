@@ -144,6 +144,113 @@ pub fn tiledObjGroupIteratorTest(io: std.Io, alloc: std.mem.Allocator) !void {
     try testz.expectEqual(it.next(), null);
 }
 
+pub fn csvTooManyEntriesTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    // 2x2 layer expects 4 tiles; 5 are supplied.
+    const xmlStr =
+        \\<layer id="1" name="test" width="2" height="2">
+        \\  <data encoding="csv">
+        \\    1,2,3,4,5
+        \\  </data>
+        \\</layer>
+    ;
+    const doc = try xml.parse(alloc, xmlStr);
+    defer doc.deinit();
+    var no_tilesets: [0]tile.TileSet = .{};
+    if (tile.TiledMapXmlLoader.initTileLayerFromElement(alloc, doc.root, &no_tilesets)) |layer| {
+        var l = layer;
+        l.deinit();
+        try testz.failWith(error.ExpectedTooManyTileEntriesError);
+    } else |err| {
+        try testz.expectEqual(err, error.TooManyTileEntries);
+    }
+}
+
+pub fn csvTooFewEntriesTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    // 2x2 layer expects 4 tiles; only 3 are supplied.
+    const xmlStr =
+        \\<layer id="1" name="test" width="2" height="2">
+        \\  <data encoding="csv">
+        \\    1,2,3
+        \\  </data>
+        \\</layer>
+    ;
+    const doc = try xml.parse(alloc, xmlStr);
+    defer doc.deinit();
+    var no_tilesets: [0]tile.TileSet = .{};
+    if (tile.TiledMapXmlLoader.initTileLayerFromElement(alloc, doc.root, &no_tilesets)) |layer| {
+        var l = layer;
+        l.deinit();
+        try testz.failWith(error.ExpectedTooFewTileEntriesError);
+    } else |err| {
+        try testz.expectEqual(err, error.TooFewTileEntries);
+    }
+}
+
+pub fn csvInvalidGidTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    // One entry is not a valid integer.
+    const xmlStr =
+        \\<layer id="1" name="test" width="2" height="2">
+        \\  <data encoding="csv">
+        \\    1,abc,3,4
+        \\  </data>
+        \\</layer>
+    ;
+    const doc = try xml.parse(alloc, xmlStr);
+    defer doc.deinit();
+    var no_tilesets: [0]tile.TileSet = .{};
+    if (tile.TiledMapXmlLoader.initTileLayerFromElement(alloc, doc.root, &no_tilesets)) |layer| {
+        var l = layer;
+        l.deinit();
+        try testz.failWith(error.ExpectedInvalidTileGidError);
+    } else |err| {
+        try testz.expectEqual(err, error.InvalidTileGid);
+    }
+}
+
+pub fn multiTilesetFirstgidTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    // Two tilesets: tiles1 owns GIDs 1-16, tiles2 owns GIDs 17+.
+    // The layer uses GIDs from tiles2, so the local indices should be GID - 17.
+    const xmlStr =
+        \\<map version="1.9" tiledversion="1.9.2" orientation="orthogonal" renderorder="right-down" width="2" height="2" tilewidth="8" tileheight="8">
+        \\ <tileset firstgid="1" name="tiles1" tilewidth="8" tileheight="8" tilecount="16" columns="4">
+        \\   <image source="sprites1.png" width="32" height="32"/>
+        \\ </tileset>
+        \\ <tileset firstgid="17" name="tiles2" tilewidth="8" tileheight="8" tilecount="16" columns="4">
+        \\   <image source="sprites2.png" width="32" height="32"/>
+        \\ </tileset>
+        \\ <layer id="1" name="test_layer" width="2" height="2">
+        \\   <data encoding="csv">
+        \\     17,18,0,0
+        \\   </data>
+        \\ </layer>
+        \\</map>
+    ;
+    const doc = try xml.parse(alloc, xmlStr);
+    defer doc.deinit();
+    var map = tile.TiledMapXmlLoader.initFromElement(doc.root, alloc) catch |err| {
+        try testz.failWith(err);
+        return;
+    };
+    defer map.deinit();
+
+    try testz.expectEqual(map.tilesets.items.len, 2);
+
+    const layer = map.layerByName("test_layer").?;
+    // GID 17 → tiles2, local index 0
+    try testz.expectEqual(layer.tiles.items[0], 0);
+    // GID 18 → tiles2, local index 1
+    try testz.expectEqual(layer.tiles.items[1], 1);
+    // GID 0 → empty
+    try testz.expectEqual(layer.tiles.items[2], -1);
+    try testz.expectEqual(layer.tiles.items[3], -1);
+    // Layer's tileset should be tiles2
+    try testz.expectEqualStr(layer.tileset.?.name.?, "tiles2");
+}
+
 pub fn getLayerAndObjGroupTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     const xmlStr =

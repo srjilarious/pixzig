@@ -24,6 +24,34 @@ fn intFromFloatAttr(node: *xml.Element, attr: []const u8) !i32 {
     return val;
 }
 
+/// Maps a Tiled global tile ID to a local tileset index stored in a layer's
+/// tile array (-1 = empty). Sets layer.tileset and layer.tileSize on the first
+/// non-empty tile encountered. If no tileset covers the GID, logs a warning
+/// and returns -1.
+fn resolveGid(gid: u32, tilesets: []TileSet, layer: *TileLayer) i32 {
+    if (gid == 0) return -1;
+
+    var best_idx: ?usize = null;
+    for (tilesets, 0..) |ts, i| {
+        if (ts.firstgid <= gid) {
+            if (best_idx == null or ts.firstgid > tilesets[best_idx.?].firstgid) {
+                best_idx = i;
+            }
+        }
+    }
+
+    if (best_idx) |i| {
+        if (layer.tileset == null) {
+            layer.tileset = &tilesets[i];
+            layer.tileSize = tilesets[i].tileSize;
+        }
+        return @intCast(gid - tilesets[i].firstgid);
+    }
+
+    std.log.warn("No tileset covers GID {}, treating as empty", .{gid});
+    return -1;
+}
+
 pub const TiledMapXmlLoader = struct {
     /// Initializes a tile map from a Tiled map file. This will read the XML
     /// from the file and set up the tilesets, layers, and object groups
@@ -74,7 +102,7 @@ pub const TiledMapXmlLoader = struct {
 
                 try map.tilesets.append(alloc, newTileset);
             } else if (std.mem.eql(u8, elem.tag, "layer")) {
-                var newLayer = try initTileLayerFromElement(alloc, elem);
+                var newLayer = try initTileLayerFromElement(alloc, elem, map.tilesets.items);
                 errdefer newLayer.deinit();
 
                 std.log.debug("Loaded a tile layer: '{?s}'", .{newLayer.name});
@@ -108,7 +136,13 @@ pub const TiledMapXmlLoader = struct {
     /// Initializes a layer from an XML element in the tilemap.  This will read
     /// the tile data from the XML and set up the layer's tiles accordingly.
     /// It will also read any properties defined on the layer in the XML.
-    pub fn initTileLayerFromElement(alloc: std.mem.Allocator, node: *xml.Element) !TileLayer {
+    ///
+    /// `tilesets` must be the parent map's tileset list (fully loaded before
+    /// this call). Each GID in the CSV is resolved to a local tileset index
+    /// and the layer's tileset pointer is set to whichever tileset owns the
+    /// first non-empty tile. Tiled maps always emit tilesets before layers, so
+    /// passing map.tilesets.items at call time is safe.
+    pub fn initTileLayerFromElement(alloc: std.mem.Allocator, node: *xml.Element, tilesets: []TileSet) !TileLayer {
         var layer = try TileLayer.init(alloc);
         errdefer layer.deinit();
 
@@ -140,19 +174,36 @@ pub const TiledMapXmlLoader = struct {
         }
 
         // Resize the layer to have space for all of our tile indices.
-        try layer.tiles.resize(alloc, @intCast(layer.size.x * layer.size.y));
+        const expectedCount: usize = @intCast(layer.size.x * layer.size.y);
+        try layer.tiles.resize(alloc, expectedCount);
 
-        const tileDataVal = node.getCharData("data").?;
-        var it = std.mem.tokenizeAny(u8, tileDataVal, ",\n");
+        const tileDataVal = node.getCharData("data") orelse {
+            std.log.err("Empty data element in tile layer '{s}'", .{debugName});
+            return error.EmptyDataInTileLayer;
+        };
+        var it = std.mem.tokenizeAny(u8, tileDataVal, ",\n\r");
         var buffIdx: usize = 0;
-        while (it.next()) |curr| {
-            const idx = std.fmt.parseInt(i32, curr, 0) catch |err| {
-                std.log.err("Unable to parse index: {s}: {}", .{ curr, err });
-                continue;
+        while (it.next()) |token| {
+            const trimmed = std.mem.trim(u8, token, " \t");
+            if (trimmed.len == 0) continue;
+
+            if (buffIdx >= expectedCount) {
+                std.log.err("Too many tile entries in layer '{s}': expected {}", .{ debugName, expectedCount });
+                return error.TooManyTileEntries;
+            }
+
+            const gid = std.fmt.parseInt(u32, trimmed, 0) catch {
+                std.log.err("Invalid tile GID '{s}' in layer '{s}'", .{ trimmed, debugName });
+                return error.InvalidTileGid;
             };
 
-            layer.tiles.items[buffIdx] = idx - 1;
+            layer.tiles.items[buffIdx] = resolveGid(gid, tilesets, &layer);
             buffIdx += 1;
+        }
+
+        if (buffIdx != expectedCount) {
+            std.log.err("Too few tile entries in layer '{s}': expected {}, got {}", .{ debugName, expectedCount, buffIdx });
+            return error.TooFewTileEntries;
         }
 
         if (node.findChildByTag("properties")) |propsNode| {
@@ -231,6 +282,10 @@ pub const TiledMapXmlLoader = struct {
         tileset.tileSize = .{ .x = try std.fmt.parseInt(i32, node.getAttribute("tilewidth").?, 0), .y = try std.fmt.parseInt(i32, node.getAttribute("tileheight").?, 0) };
 
         tileset.columns = try std.fmt.parseInt(i32, node.getAttribute("columns").?, 0);
+
+        if (node.getAttribute("firstgid")) |str| {
+            tileset.firstgid = try std.fmt.parseInt(u32, str, 0);
+        }
 
         const tileCount = try std.fmt.parseInt(usize, node.getAttribute("tilecount").?, 0);
         const baseTile = Tile{ .core = Clear, .properties = null, .alloc = alloc };
@@ -330,7 +385,7 @@ pub const TiledMapXmlLoader = struct {
         errdefer tile.deinit();
 
         if (!std.mem.eql(u8, node.tag, "tile")) return error.BadNodeTag;
-        const propsNode = node.findChildByTag("properties").?;
+        const propsNode = node.findChildByTag("properties") orelse return tile;
 
         var propsChildren = propsNode.elements();
         while (propsChildren.next()) |prop| {

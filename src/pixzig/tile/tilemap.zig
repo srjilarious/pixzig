@@ -178,6 +178,9 @@ pub const TileSet = struct {
     tileSize: Vec2I,
     textureSize: Vec2I,
     columns: i32,
+    /// The first global tile ID this tileset occupies. Set from the Tiled map's
+    /// firstgid attribute; used to map layer GIDs to local tileset indices.
+    firstgid: u32,
     name: ?[]const u8,
     alloc: std.mem.Allocator,
 
@@ -187,6 +190,7 @@ pub const TileSet = struct {
             .tileSize = .{ .x = 0, .y = 0 },
             .textureSize = .{ .x = 0, .y = 0 },
             .columns = 0,
+            .firstgid = 1,
             .name = null,
             .alloc = alloc,
         };
@@ -202,6 +206,7 @@ pub const TileSet = struct {
             .tileSize = tileSize,
             .textureSize = textureSize,
             .columns = @divFloor(textureSize.x, tileSize.x),
+            .firstgid = 1,
             .name = null,
             .alloc = alloc,
         };
