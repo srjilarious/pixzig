@@ -66,6 +66,10 @@ pub const TileIndexMap = struct {
         }
     }
 
+    pub fn clearRetainingCapacity(self: *Self) void {
+        self.arr.clearRetainingCapacity();
+    }
+
     pub fn put(self: *Self, tileIndex: usize, bufferIndex: usize) !bool {
         const val: KV = .{ .tileIdx = tileIndex, .bufferIdx = bufferIndex };
         if (self.getIdxFromTileIndex(tileIndex)) |idx| {
