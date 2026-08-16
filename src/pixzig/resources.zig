@@ -822,10 +822,9 @@ pub const ResourceManager = struct {
     /// `name` is the resource key; `base_path` is the file path base (without
     /// extension). When both are equal this is an ordinary loadAtlas call.
     fn loadAtlasNamedImpl(self: *Self, name: []const u8, base_path: []const u8) !usize {
-        const imageName = try utils.addExtension(self.alloc, base_path, ".png");
-        defer self.alloc.free(imageName);
-        _ = try self.loadTextureImpl(name, imageName);
-
+        // Read and validate the JSON before touching the base texture: if the
+        // atlas fails to load, the previous texture (if any, from an earlier
+        // load of this same name) must be left untouched and still valid.
         const jsonName = try utils.addExtension(self.alloc, base_path, ".json");
         defer self.alloc.free(jsonName);
 
@@ -837,6 +836,22 @@ pub const ResourceManager = struct {
         defer parsed.deinit();
 
         const spack = parsed.value;
+
+        // Reject frame names that collide with a texture/frame owned by a
+        // different atlas (or a plain loaded texture). Frames already owned
+        // by this same atlas from a prior load are an expected reload, not a
+        // collision.
+        const prev_frames: ?[]const []const u8 = if (self.atlas_manifests.get(name)) |pm| pm.items else null;
+        for (spack.frames) |frame| {
+            if (self.atlas.contains(frame.name) and !ownedByFrameList(prev_frames, frame.name)) {
+                std.log.err("AssetManifest: atlas '{s}' frame '{s}' collides with an existing texture owned elsewhere", .{ name, frame.name });
+                return error.AtlasFrameNameCollision;
+            }
+        }
+
+        const imageName = try utils.addExtension(self.alloc, base_path, ".png");
+        defer self.alloc.free(imageName);
+        _ = try self.loadTextureImpl(name, imageName);
 
         const texImageManaged = self.textures.get(utils.baseNameFromPath(name)) orelse return error.NoTextureWithThatName;
         const texImage = texImageManaged.get() orelse return error.NoTextureWithThatName;
@@ -897,6 +912,14 @@ pub const ResourceManager = struct {
 
     fn loadAtlasImpl(self: *Self, baseName: []const u8) !usize {
         return self.loadAtlasNamedImpl(baseName, baseName);
+    }
+
+    fn ownedByFrameList(frames: ?[]const []const u8, frame_name: []const u8) bool {
+        const list = frames orelse return false;
+        for (list) |n| {
+            if (std.mem.eql(u8, n, frame_name)) return true;
+        }
+        return false;
     }
 
     /// Loads a texture atlas from a base name. This looks for a .png and

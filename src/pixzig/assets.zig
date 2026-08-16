@@ -159,7 +159,12 @@ pub const AssetManifest = struct {
 
         var it = parsed.value.groups.map.iterator();
         while (it.next()) |entry| {
-            try groups.put(entry.key_ptr.*, entry.value_ptr.*);
+            const gop = try groups.getOrPut(entry.key_ptr.*);
+            if (gop.found_existing) {
+                std.log.err("AssetManifest: duplicate group '{s}'", .{entry.key_ptr.*});
+                return error.DuplicateGroup;
+            }
+            gop.value_ptr.* = entry.value_ptr.*;
         }
 
         var defs = std.StringHashMap(AssetDef).init(alloc);
@@ -174,11 +179,16 @@ pub const AssetManifest = struct {
                 std.log.err("AssetManifest: font '{s}' missing required font_size field", .{entry.id});
                 return error.MissingFontSize;
             }
-            try defs.put(entry.id, .{
+            const gop = try defs.getOrPut(entry.id);
+            if (gop.found_existing) {
+                std.log.err("AssetManifest: duplicate asset id '{s}'", .{entry.id});
+                return error.DuplicateAssetId;
+            }
+            gop.value_ptr.* = .{
                 .kind = kind,
                 .path = entry.path,
                 .font_size = entry.font_size orelse 0,
-            });
+            };
         }
 
         return .{
