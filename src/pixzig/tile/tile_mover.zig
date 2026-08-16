@@ -74,7 +74,7 @@ pub const Mover = struct {
         const top: i32 = @intFromFloat(objRect.t - amount);
         const left: i32 = @intFromFloat(@ceil(objRect.l) + 0.5);
         const right: i32 = @intFromFloat(@floor(objRect.r) - 0.5);
-        const height = objRect.width();
+        const height = objRect.height();
 
         const topTileY = @divTrunc(top, layer.tileSize.y);
         const tX_Start = @divTrunc(left, layer.tileSize.x);
@@ -100,7 +100,7 @@ pub const Mover = struct {
         const bottom: i32 = @intFromFloat(objRect.b + amount);
         const left: i32 = @intFromFloat(@ceil(objRect.l) + 0.5);
         const right: i32 = @intFromFloat(@floor(objRect.r) - 0.5);
-        const height = objRect.width();
+        const height = objRect.height();
 
         const bottomTileY = @divTrunc(bottom, layer.tileSize.y);
         const tX_Start = @divTrunc(left, layer.tileSize.x);
