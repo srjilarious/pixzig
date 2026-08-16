@@ -67,17 +67,21 @@ pub const ShapeBatchQueue = struct {
         errdefer alloc.free(batch.indices);
 
         gl.genVertexArrays(1, &batch.vao);
+        errdefer gl.deleteVertexArrays(1, &batch.vao);
         gl.bindVertexArray(batch.vao);
 
         gl.genBuffers(1, &batch.vboVertices);
+        errdefer gl.deleteBuffers(1, &batch.vboVertices);
         gl.bindBuffer(gl.ARRAY_BUFFER, batch.vboVertices);
         gl.bufferData(gl.ARRAY_BUFFER, @sizeOf(f32) * C.NumVerts, &batch.vertices[0], gl.DYNAMIC_DRAW);
 
         gl.genBuffers(1, &batch.vboColorCoords);
+        errdefer gl.deleteBuffers(1, &batch.vboColorCoords);
         gl.bindBuffer(gl.ARRAY_BUFFER, batch.vboColorCoords);
         gl.bufferData(gl.ARRAY_BUFFER, @sizeOf(f32) * NumColorCoords, &batch.colorCoords[0], gl.DYNAMIC_DRAW);
 
         gl.genBuffers(1, &batch.vboIndices);
+        errdefer gl.deleteBuffers(1, &batch.vboIndices);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, batch.vboIndices);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, C.NumIndices * @sizeOf(u16), &batch.indices[0], gl.DYNAMIC_DRAW);
 

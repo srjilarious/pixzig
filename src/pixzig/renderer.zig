@@ -76,20 +76,36 @@ pub fn Renderer(opts: RendererOptions) type {
             var rend = try alloc.create(Impl);
             errdefer alloc.destroy(rend);
 
+            // Tracks exactly which fields of `rend` are live so a later
+            // failure unwinds only what actually got initialized, in
+            // reverse construction order.
+            var batchesInit: usize = 0;
+            var overlaysInit = false;
+            var shapesInit = false;
+            var textInit = false;
+            errdefer {
+                if (textInit) rend.text.deinit();
+                if (shapesInit) rend.shapes.deinit();
+                if (overlaysInit) rend.overlays.deinit();
+                for (0..batchesInit) |idx| rend.batches[idx].deinit();
+            }
+
             std.log.info("Initializing shaders.", .{});
             const texShader = try resMgr.loadShader(shaders.TextureShader, &shaders.TexVertexShader, &shaders.TexPixelShader);
 
             std.log.info("Setting up {} sprite batch queues.", .{opts.numSpriteTextures});
             for (0..opts.numSpriteTextures) |idx| {
-                const sbq = try SpriteBatchQueue.init(alloc, texShader);
-                rend.batches[idx] = sbq;
+                rend.batches[idx] = try SpriteBatchQueue.init(alloc, texShader);
+                batchesInit += 1;
             }
             rend.overlays = try SpriteBatchQueue.init(alloc, texShader);
+            overlaysInit = true;
 
             if (opts.shapeRendering) {
                 std.log.info("Setting up shaders for shape renderering.", .{});
                 const colorShader = try resMgr.loadShader(shaders.ColorShader, &shaders.ColorVertexShader, &shaders.ColorPixelShader);
                 rend.shapes = try ShapeBatchQueue.init(alloc, colorShader);
+                shapesInit = true;
             }
 
             if (opts.textRendering) {
@@ -102,6 +118,7 @@ pub fn Renderer(opts: RendererOptions) type {
                 }
 
                 rend.text = try TextRenderer.init(alloc, resMgr);
+                textInit = true;
 
                 if (initOpts.font) |src| {
                     switch (src) {

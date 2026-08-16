@@ -113,6 +113,7 @@ pub const FontAtlas = struct {
         // Generate OpenGL texture
         var charTex: c_uint = undefined;
         gl.genTextures(1, &charTex);
+        errdefer gl.deleteTextures(1, &charTex);
         gl.bindTexture(gl.TEXTURE_2D, charTex);
 
         const format = if (builtin.os.tag == .emscripten) gl.ALPHA else gl.RED;
