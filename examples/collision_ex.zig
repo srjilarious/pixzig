@@ -29,7 +29,6 @@ pub const App = struct {
     eng: *AppRunner.Engine,
     scrollOffset: Vec2F,
     spriteBatch: pixzig.renderer.SpriteBatchQueue,
-    tex: *pixzig.resources.TextureHandle,
     collideGrid: CollisionGridEntity,
     // colorShader: pixzig.shaders.Shader,
     // shapeBatch: pixzig.renderer.ShapeBatchQueue,
@@ -44,7 +43,6 @@ pub const App = struct {
 
         const bigtex = try eng.resources.loadTexture("tiles", "assets/pac-tiles.png");
         _ = try eng.resources.addSubTexture(bigtex, "guy", RectF.fromCoords(32, 32, 32, 32, 512, 512));
-        const tex = try eng.resources.acquireTexture("guy");
 
         const tex_shader = try eng.resources.getShader(shaders.TextureShader);
         const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, tex_shader);
@@ -86,7 +84,6 @@ pub const App = struct {
             .paused = false,
             .spriteBatch = spriteBatch,
             // .shapeBatch = shapeBatch,
-            .tex = tex,
             .collideGrid = try CollisionGridEntity.init(alloc, .{ .x=100, .y=100}, .{.x=8, .y=8}),
             // .colorShader = colorShader,
             .fps = FpsCounter.init(),
@@ -105,7 +102,16 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        self.tex.release();
+        // Release each live entity's sprite texture handle before the world
+        // (and its component storage) goes away.
+        var it = flecs.query_iter(self.world, self.draw_query);
+        while (flecs.query_next(&it)) {
+            const spr = flecs.field(&it, Sprite, 0).?;
+            for (0..it.count()) |idx| {
+                spr[idx].deinit();
+            }
+        }
+
         self.spriteBatch.deinit();
         self.collideGrid.deinit();
 
@@ -122,7 +128,8 @@ pub const App = struct {
         _ = which;
         // const srcX: i32 = @intCast(32*@rem(which, 16));
         // const srcY: i32 = @intCast(32*@divTrunc(which, 16));
-        var spr = Sprite.create(self.tex,
+        const tex = try self.eng.resources.acquireTexture("guy");
+        var spr = Sprite.create(tex,
                 .{ .x = 32, .y = 32});
 
         spr.setPos(x, y);
@@ -221,6 +228,7 @@ pub const App = struct {
             for(0..num) |idx| {
                 std.log.debug("Hit {?}\n", .{hits[idx]});
                 _ = try self.collideGrid.removeRect(RectF.fromPosSize(mousePos.x, mousePos.y, 16, 16), hits[idx].?);
+                if (flecs.get_mut(self.world, hits[idx].?, Sprite)) |spr| spr.deinit();
                 flecs.delete(self.world, hits[idx].?);
             }
         }

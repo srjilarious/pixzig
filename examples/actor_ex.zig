@@ -25,7 +25,6 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{ .gameScale = 8.0 });
 pub const App = struct {
     alloc: std.mem.Allocator,
     eng: *AppRunner.Engine,
-    sprTex: *pixzig.resources.TextureHandle,
     spr: Sprite,
     actor: Actor,
     seqMgr: FrameSequenceManager,
@@ -39,7 +38,6 @@ pub const App = struct {
         app.* = .{
             .alloc = alloc,
             .eng = eng,
-            .sprTex = sprTex,
             .spr = Sprite.create(sprTex, .{ .x = 16, .y = 16 }),
             .actor = try pixzig.sprites.Actor.init(alloc),
             .seqMgr = try FrameSequenceManager.init(alloc),
@@ -74,7 +72,7 @@ pub const App = struct {
     pub fn deinit(self: *App) void {
         self.seqMgr.deinit();
         self.actor.deinit();
-        self.sprTex.release();
+        self.spr.deinit();
         self.alloc.destroy(self);
     }
 

@@ -14,8 +14,8 @@ const ManagedTexture = resources.ManagedTexture;
 const TextureHandle = resources.TextureHandle;
 
 pub const Sprite = struct {
-    /// Non-owning handle to a managed texture. The sprite never acquires
-    /// or releases — the creator of the sprite owns the handle.
+    /// Owning handle to a managed texture, transferred in by `create`. Call
+    /// `deinit()` when the sprite is no longer needed to release it.
     texture: *TextureHandle,
     src_coords: RectF,
     dest: RectF,
@@ -23,6 +23,8 @@ pub const Sprite = struct {
     flip: Flip,
     rotate: Rotate,
 
+    /// Takes ownership of `tex` (an already-acquired handle). The sprite
+    /// releases it in `deinit()`; the caller must not release it separately.
     pub fn create(tex: *TextureHandle, size: Vec2F) Sprite {
         return Sprite{
             .texture = tex,
@@ -32,6 +34,12 @@ pub const Sprite = struct {
             .flip = .none,
             .rotate = .none,
         };
+    }
+
+    /// Releases the sprite's texture handle. Call exactly once, when the
+    /// sprite is no longer needed.
+    pub fn deinit(self: *Sprite) void {
+        self.texture.release();
     }
 
     pub fn setPos(self: *Sprite, x: i32, y: i32) void {

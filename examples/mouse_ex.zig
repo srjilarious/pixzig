@@ -21,7 +21,6 @@ pub const App = struct {
     fps: FpsCounter,
     alloc: std.mem.Allocator,
     eng: *AppRunner.Engine,
-    tex: *pixzig.resources.TextureHandle,
     pointer: pixzig.sprites.Sprite,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !App {
@@ -36,13 +35,12 @@ pub const App = struct {
             .fps = FpsCounter.init(),
             .alloc = alloc,
             .eng = eng,
-            .tex = tex,
             .pointer = pixzig.sprites.Sprite.create(tex, .{ .x = 32, .y = 32 }),
         };
     }
 
     pub fn deinit(self: *App) void {
-        self.tex.release();
+        self.pointer.deinit();
     }
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {

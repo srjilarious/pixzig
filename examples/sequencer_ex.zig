@@ -75,7 +75,6 @@ pub const FlashStep = struct {
 pub const App = struct {
     alloc: std.mem.Allocator,
     eng: *AppRunner.Engine,
-    sprTex: *pixzig.resources.TextureHandle,
     world: *flecs.world_t,
     entity: flecs.entity_t,
     seqMgr: FrameSequenceManager,
@@ -121,8 +120,8 @@ pub const App = struct {
 
         app.entity = flecs.new_entity(app.world, "player");
 
-        app.sprTex = try eng.resources.acquireTexture("player_right_1");
-        const spr = Sprite.create(app.sprTex, .{ .x = 16, .y = 16 });
+        const sprTex = try eng.resources.acquireTexture("player_right_1");
+        const spr = Sprite.create(sprTex, .{ .x = 16, .y = 16 });
         flecs.set(app.world, app.entity, Sprite, spr);
 
         var actor = try Actor.init(alloc);
@@ -147,10 +146,14 @@ pub const App = struct {
         if (flecs.get_mut(self.world, self.entity, Actor)) |actor| {
             actor.deinit();
         }
+        // Release the sprite's texture handle while its ECS component
+        // storage (and thus the Sprite value itself) is still alive.
+        if (flecs.get_mut(self.world, self.entity, Sprite)) |spr| {
+            spr.deinit();
+        }
         _ = flecs.fini(self.world);
         self.seqPlayer.deinit();
         self.seqMgr.deinit();
-        self.sprTex.release();
         self.alloc.destroy(self);
     }
 

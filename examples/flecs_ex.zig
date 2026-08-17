@@ -35,7 +35,6 @@ pub const App = struct {
     alloc: std.mem.Allocator,
     eng: *AppRunner.Engine,
     scrollOffset: Vec2F,
-    tex: *pixzig.resources.TextureHandle,
     fps: FpsCounter,
     paused: bool,
     world: *flecs.world_t,
@@ -45,8 +44,6 @@ pub const App = struct {
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const bigtex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
         _ = try eng.resources.addSubTexture(bigtex, "guy", RectF.fromCoords(192, 64, 32, 32, 512, 512));
-
-        const tex = try eng.resources.acquireTexture("guy");
 
         std.log.info("Initializing world.\n", .{});
 
@@ -80,7 +77,6 @@ pub const App = struct {
             .eng = eng,
             .scrollOffset = .{ .x = 0, .y = 0 },
             .paused = false,
-            .tex = tex,
             .fps = FpsCounter.init(),
             .world = world,
             .update_query = update_query,
@@ -92,7 +88,7 @@ pub const App = struct {
         var prng = std.Random.DefaultPrng.init(0xdeadbeef);
         var random = prng.random();
         for (0..50) |_| {
-            app.spawn(&random, 1, 10, 50, true);
+            try app.spawn(&random, 1, 10, 50, true);
         }
 
         std.log.info("Done initializing the app.", .{});
@@ -100,20 +96,30 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        self.tex.release();
+        // Release each live entity's sprite texture handle before the world
+        // (and its component storage) goes away.
+        var it = flecs.query_iter(self.world, self.draw_query);
+        while (flecs.query_next(&it)) {
+            const spr = flecs.field(&it, Sprite, 0).?;
+            for (0..it.count()) |idx| {
+                spr[idx].deinit();
+            }
+        }
+
         flecs.query_fini(self.draw_query);
         _ = flecs.fini(self.world);
         self.alloc.destroy(self);
     }
 
-    pub fn spawn(self: *App, random: *std.Random, which: usize, x: i32, y: i32, val: bool) void {
+    pub fn spawn(self: *App, random: *std.Random, which: usize, x: i32, y: i32, val: bool) !void {
         std.log.info("Creating entity", .{});
         const ent = flecs.new_id(self.world);
         _ = which;
         // const srcX: i32 = @intCast(32*@rem(which, 16));
         // const srcY:i32 = @intCast(32*@divTrunc(which, 16));
         std.log.info("  - Creating sprite", .{});
-        var spr = Sprite.create(self.tex, .{ .x = 32, .y = 32 });
+        const tex = try self.eng.resources.acquireTexture("guy");
+        var spr = Sprite.create(tex, .{ .x = 32, .y = 32 });
 
         spr.setPos(x, y);
         std.log.info("  - Setting sprite", .{});
