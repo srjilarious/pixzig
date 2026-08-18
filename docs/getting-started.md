@@ -16,10 +16,11 @@ Declare pixzig as a dependency in your `build.zig.zon`:
 },
 ```
 
-In your `build.zig`, import `buildGame` from pixzig's build module and call it with the dependency object:
+In your `build.zig`, import `buildGame` and a manifest constructor from pixzig's build module and call `buildGame` with a `ManifestHandle` as the final argument:
 
 ```zig
 const buildGame = @import("pixzig").buildGame;
+const manifestFromDef = @import("pixzig").manifestFromDef;
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -33,17 +34,23 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // No assets yet; pass an empty manifest. See the Asset Manifest doc to
+    // add textures, atlases, fonts, and other assets.
+    const manifest = manifestFromDef(b, .{});
+
     const game = buildGame(b, target, optimize,
         pixzig_dep,
         pixzig_dep.module("pixzig"),
         "my_game",
         exe_mod,
-        &.{ "my_atlas.json", "my_atlas.png" },
+        manifest,
     );
 
     b.default_step.dependOn(&game.step);
 }
 ```
+
+`manifestFromDef` defines assets inline; use `manifestFromFile(b, "assets/manifest.json")` instead if the manifest lives as a separate JSON file. See [Asset Manifest](assets.html) for the full manifest format and runtime loading options.
 
 ## A Minimal Example
 

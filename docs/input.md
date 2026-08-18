@@ -40,6 +40,8 @@ pub fn update(self: *App, eng: *AppRunner.Engine, _: f64) bool {
 `bind` may be called more than once for the same action. Digital bindings accept keys, mouse buttons, and gamepad buttons. Axis bindings accept a keyboard button pair or a gamepad axis.
 Call `self.actions.deinit()` from `App.deinit`.
 
+`update`'s return value is currently unused (it always returns `false`); ignore it as the example above does. Gamepad button and axis bindings always read gamepad slot 0, regardless of `inputOpts.numGamepads`.
+
 ## Input Manager
 
 The input manager exposes raw device state:

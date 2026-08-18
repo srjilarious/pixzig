@@ -36,6 +36,11 @@ pub const TextRenderer = textMod.TextRenderer;
 /// shapeRendering to false and the related code will not be included in the
 ///  final binary.
 pub const RendererOptions = struct {
+    /// Number of sprite batch queues to allocate. `begin`/`end`/`deinit`
+    /// operate on all of them, but the public draw calls (`draw`,
+    /// `drawSprite`, `drawTexture`, `drawFullTexture`) currently only submit
+    /// to `batches[0]` — there is no API yet to route a draw call to a
+    /// different batch index, so raising this above 1 has no visible effect.
     numSpriteTextures: u8 = 1,
     shapeRendering: bool = true,
     textRendering: bool = false,
@@ -174,6 +179,10 @@ pub fn Renderer(opts: RendererOptions) type {
             try self.impl.text.setFont(font);
         }
 
+        /// Starts a frame: opens all sprite batches (plus shape/text batches
+        /// if enabled) with the given model-view-projection matrix. Pair
+        /// with `end()`; draw calls between them are buffered, not submitted
+        /// immediately.
         pub fn begin(self: *Self, mvp: zmath.Mat) void {
             for (0..self.impl.batches.len) |idx| {
                 self.impl.batches[idx].begin(mvp);
@@ -189,6 +198,8 @@ pub fn Renderer(opts: RendererOptions) type {
             }
         }
 
+        /// Flushes every open batch queue (sprites, overlays, shapes, text),
+        /// issuing the actual GL draw calls buffered since `begin()`.
         pub fn end(self: *Self) void {
             for (0..self.impl.batches.len) |idx| {
                 self.impl.batches[idx].end();
@@ -211,16 +222,20 @@ pub fn Renderer(opts: RendererOptions) type {
             gl.clear(gl.COLOR_BUFFER_BIT);
         }
 
+        /// Draws a texture region. Always submits to `batches[0]`, regardless
+        /// of `RendererOptions.numSpriteTextures`; see the field doc there.
         pub fn draw(self: *Self, texture: *Texture, dest: RectF, srcCoords: RectF) void {
             // TODO: Handle multiple batches
             self.impl.batches[0].draw(texture, dest, srcCoords, .none);
         }
 
+        /// Draws a `Sprite`. Always submits to `batches[0]`; see `draw()`.
         pub fn drawSprite(self: *Self, sprite: *const Sprite) void {
             // TODO: Handle batches
             self.impl.batches[0].drawSprite(sprite);
         }
 
+        /// Equivalent to `draw()`. Always submits to `batches[0]`.
         pub fn drawTexture(self: *Self, texture: *Texture, dest: RectF, srcCoords: RectF) void {
             self.impl.batches[0].draw(texture, dest, srcCoords, .none);
         }
@@ -230,33 +245,45 @@ pub fn Renderer(opts: RendererOptions) type {
             self.impl.overlays.draw(texture, dest, srcCoords, .none);
         }
 
+        /// Draws the whole texture at `pos`, scaled uniformly by `scale`.
+        /// Always submits to `batches[0]`; see `draw()`.
         pub fn drawFullTexture(self: *Self, texture: *Texture, pos: Vec2I, scale: f32) void {
             const tsx = @as(f32, @floatFromInt(texture.size.x)) * scale;
             const tsy = @as(f32, @floatFromInt(texture.size.y)) * scale;
             self.impl.batches[0].draw(texture, RectF.fromPosSize(pos.x, pos.y, @intFromFloat(tsx), @intFromFloat(tsy)), texture.src, .none);
         }
 
+        /// Requires `RendererOptions.shapeRendering == true`. Only checked
+        /// with `std.debug.assert`, so calling this when shape rendering is
+        /// compiled out is undefined behavior in release builds (`shapes` is
+        /// `undefined`), not a caught error.
         pub fn drawFilledRect(self: *Self, dest: RectF, color: Color) void {
             std.debug.assert(opts.shapeRendering);
             self.impl.shapes.drawFilledRect(dest, color);
         }
 
+        /// Requires `RendererOptions.shapeRendering == true`; see `drawFilledRect()`.
         pub fn drawRect(self: *Self, dest: RectF, color: Color, lineWidth: u8) void {
             std.debug.assert(opts.shapeRendering);
             self.impl.shapes.drawRect(dest, color, lineWidth);
         }
 
         // This moves the outline of the rect to enclose the dest by lineWidth.
+        /// Requires `RendererOptions.shapeRendering == true`; see `drawFilledRect()`.
         pub fn drawEnclosingRect(self: *Self, dest: RectF, color: Color, lineWidth: u8) void {
             std.debug.assert(opts.shapeRendering);
             self.impl.shapes.drawEnclosingRect(dest, color, lineWidth);
         }
 
+        /// Requires `RendererOptions.textRendering == true`. Only checked
+        /// with `std.debug.assert`; see `drawFilledRect()` for the release-build
+        /// caveat. Also traps if no default font has been set (see `setDefaultFont`).
         pub fn drawString(self: *Self, text: []const u8, pos: Vec2I) Vec2I {
             std.debug.assert(opts.textRendering);
             return self.impl.text.drawString(text, pos);
         }
 
+        /// Requires `RendererOptions.textRendering == true`; see `drawString()`.
         pub fn drawScaledString(self: *Self, text: []const u8, pos: Vec2I, scale: f32) Vec2I {
             std.debug.assert(opts.textRendering);
             return self.impl.text.drawScaledString(text, pos, scale);

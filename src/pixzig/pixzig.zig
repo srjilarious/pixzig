@@ -10,8 +10,12 @@
 //!
 //! The `PixzigEngineOptions` and `PixzigEngineInitOptions` structures allow
 //! configuring the engine at compile time and runtime, respectively, so that
-//! unused features can be stripped out by the compiler and the engine can be
-//! tailored to the needs of the application.
+//! unused engine *code paths* (e.g. the audio update loop, gamepad polling)
+//! can be stripped out by the compiler and the engine can be tailored to the
+//! needs of the application. This does not change which native dependencies
+//! get linked: `build.zig` always links GLFW, OpenGL, flecs, zaudio/miniaudio,
+//! Lua, XML, and STB TrueType into every engine build regardless of
+//! `PixzigEngineOptions`.
 const std = @import("std");
 const builtin = @import("builtin");
 pub const glfw = @import("zglfw");
@@ -89,11 +93,13 @@ pub const Color = common.Color;
 pub const Color8 = common.Color8;
 
 /// Compile-time options for configuring the Pixzig Engine.  These options
-/// allow enabling or disabling features of the engine at compile time, so
-/// that unused code can be stripped out by the compiler. For example, if
-/// audio is not needed, setting `audioOpts.enabled` to false will prevent
-/// the audio engine handling code blocks in the engine from being included
-/// in the final binary.
+/// allow enabling or disabling engine code paths at compile time. For
+/// example, if audio is not needed, setting `audioOpts.enabled` to false will
+/// prevent the audio engine handling code blocks in the engine from being
+/// included in the final binary. This only strips *engine* code; the native
+/// dependencies themselves (GLFW, OpenGL, flecs, zaudio/miniaudio, Lua, XML,
+/// STB TrueType) are always linked in by `build.zig`, so disabling a feature
+/// here does not shrink the set of linked libraries.
 pub const PixzigEngineOptions = struct {
     /// Whether the default pixzig icon should be set, can be changed with
     /// PixzigEngine.setIcon

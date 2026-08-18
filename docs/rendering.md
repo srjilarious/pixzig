@@ -59,12 +59,18 @@ _ = try eng.resources.loadAtlasNamed("main_sprites", "assets/pac-tiles");
 
 ## Drawing Sprites
 
-`Sprite.create` takes a `*TextureHandle` and a size in logical pixels:
+`Sprite.create` takes ownership of an already-acquired `*TextureHandle` and a size in logical pixels. The sprite releases the handle in its own `deinit()`; don't release the handle separately:
 
 ```zig
+// During App.init:
 var spr = pixzig.sprites.Sprite.create(self.player_tex, .{ .x = 16, .y = 16 });
 spr.setPos(100, 50);
+
+// Each frame:
 eng.renderer.drawSprite(&spr);
+
+// During App.deinit:
+spr.deinit();
 ```
 
 To draw a raw texture region instead:
@@ -108,6 +114,8 @@ eng.renderer.drawRect(rect, yellow, 2);
 eng.renderer.drawEnclosingRect(rect, Color.from(255, 0, 255, 200), 2);
 eng.renderer.drawFilledRect(rect, Color.from(100, 200, 255, 128));
 ```
+
+Calling a shape or text draw function when the corresponding option is compiled out is only checked with a debug assertion. In a release build it isn't a caught error — it reads an uninitialized batch, which is undefined behavior. Only call these when the matching `rendererOpts` flag is `true`.
 
 ## Logical Resolution
 

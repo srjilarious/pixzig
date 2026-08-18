@@ -3,10 +3,18 @@ const ziglua = @import("ziglua");
 
 const Lua = ziglua.Lua;
 
+/// Signature required by `registerFunc`. Arguments are read off the Lua stack
+/// by index (1-based); the return value is the number of values pushed back
+/// onto the stack for Lua to receive.
 pub const LuaFunc = fn (*Lua) i32;
+
+/// Wraps a Lua 5.3 state (via `ziglua`) with the standard libraries opened.
+/// Owns the underlying `*Lua`; call `deinit()` to close it.
 pub const ScriptEngine = struct {
     lua: *Lua,
 
+    /// Creates a new Lua state and opens the standard libraries (string,
+    /// table, math, etc).
     pub fn init(allocator: std.mem.Allocator) !ScriptEngine {
         var lua = try Lua.init(allocator);
         lua.openLibs();
@@ -17,11 +25,18 @@ pub const ScriptEngine = struct {
         self.lua.deinit();
     }
 
+    /// Registers `func` as a global Lua function named `name`. Prefer
+    /// stateless functions here; use a context struct (see
+    /// `sequencer.SeqScriptingContext`) when the function needs to touch
+    /// engine state.
     pub fn registerFunc(self: *ScriptEngine, name: [:0]const u8, comptime func: LuaFunc) !void {
         self.lua.pushFunction(ziglua.wrap(func));
         self.lua.setGlobal(name);
     }
 
+    /// Compiles and runs an inline Lua code string. On a syntax or runtime
+    /// error, logs the Lua error message and returns `error.SyntaxError` /
+    /// `error.ScriptError`.
     pub fn run(self: *ScriptEngine, code: [:0]const u8) !void {
         // Compile a line of Lua code
         self.lua.loadString(code) catch {
@@ -43,11 +58,21 @@ pub const ScriptEngine = struct {
         };
     }
 
+    /// Runs a Lua file from disk. Raises the same errors as `run()` on
+    /// syntax or runtime failure.
     pub fn runScript(self: *ScriptEngine, file: [:0]const u8) !void {
         try self.lua.doFile(file);
     }
 
-    // pub fn getValue(self: *const ScriptEngine)
+    /// Reads the global Lua table named `globalName` into a Zig struct `T`.
+    /// `T` must be default-constructible (`.{}`) and every field must be
+    /// present in the Lua table with a matching type — a missing field or a
+    /// type mismatch returns `error.InvalidFieldType`, it does not fall back
+    /// to the Zig default. Supported field types: `bool`, `int`, `float`,
+    /// and `?[]u8` (heap-allocated with the Lua allocator; caller frees it,
+    /// e.g. via the struct's own `deinit`). Any other field type returns
+    /// `error.UnsupportedFieldType`; a missing or non-table global returns
+    /// `error.InvalidConfigTable`.
     pub fn loadStruct(
         self: *const ScriptEngine,
         comptime T: type,

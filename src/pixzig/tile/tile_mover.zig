@@ -8,6 +8,12 @@ const RectF = common.RectF;
 
 const Clear = tilemap.Clear;
 
+/// Axis-aligned tile collision helpers. Each `moveX` function tries to move
+/// `objRect` by `amount` along one axis, checking the row/column of tiles
+/// `objRect` would sweep into against `tileMask` (see `tile.Clear`,
+/// `tile.BlocksLeft`, etc.). Returns `true` and clamps `objRect` to the
+/// blocking tile's edge if a tile matching `tileMask` was hit, or `false`
+/// after moving the full `amount` if the path was clear.
 pub const Mover = struct {
 
     // fn isTileMovable(x: i32, y: i32) bool {

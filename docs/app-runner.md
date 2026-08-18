@@ -17,6 +17,8 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{
 
 [](sym:PixzigEngineOptions) is evaluated at compile time. Use it to enable rendering, audio, and input features required by the application.
 
+Note that these options strip unused engine *code paths* only, not native dependencies: `build.zig` always links GLFW, OpenGL, flecs, zaudio/miniaudio, Lua, XML, and STB TrueType into every build regardless of which options are set.
+
 ## Initialising
 
 ```zig

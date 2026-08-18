@@ -24,9 +24,10 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
         /// directions.
         gridSize: Vec2U,
 
-        /// The total extent of the grid in pixels. This is calculated as
-        /// gridSize * cellSize and is used for bounds checking when inserting
-        /// or querying objects.
+        /// The total extent of the grid in pixels, calculated as gridSize *
+        /// cellSize at `init` time. Not currently read by `insert`/`insertRect`/
+        /// `removeRect` for bounds checking, and not updated by `resize` — treat
+        /// it as informational only until that is fixed.
         gridExtent: Vec2U,
 
         /// The size of each cell in pixels. This determines how the world
@@ -69,10 +70,11 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
         }
 
         /// Resizes the collision grid to the new specified grid size. This
-        /// will change the number of cells in the grid and the total extent
-        /// of the grid in pixels. The contents of the grid are not preserved
-        /// during resizing, so it is recommended to clear and reinsert
-        /// objects after resizing.
+        /// changes the number of cells in the grid, but does **not** update
+        /// `gridExtent` and does not preserve, migrate, or clear existing
+        /// cell contents (known gap — see the engine review doc). Call
+        /// `reset()` after resizing to put the grid back into a known state
+        /// before inserting.
         pub fn resize(self: *Self, sz: Vec2U) !void {
             std.log.debug("** Resizing collision grid to {} x {}\n", .{ sz.x, sz.y });
             self.gridSize = sz;
@@ -92,6 +94,10 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
         }
 
         /// Inserts an object into the collision grid based on its pixel position.
+        /// Does not bounds-check `pixelPos` against the grid extent first —
+        /// a position outside the grid indexes out of bounds rather than
+        /// returning an error. Callers must keep `pixelPos` within
+        /// `gridSize * cellSize` themselves.
         pub fn insert(self: *Self, pixelPos: Vec2U, obj: T) !void {
             const cx: usize = @as(usize, @intCast(pixelPos.x)) / self.cellSize.x;
             const cy: usize = @as(usize, @intCast(pixelPos.y)) / self.cellSize.y;
@@ -109,7 +115,11 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
         }
 
         /// Inserts an object into the collision grid based on its bounding
-        /// rectangle.
+        /// rectangle, covering every cell the rectangle overlaps. Cells past
+        /// the top/left edge of the grid (negative `bounds.l`/`bounds.t`) are
+        /// not handled: converting a negative coordinate to an unsigned cell
+        /// index is undefined behavior, so `bounds` must lie within the
+        /// grid's positive extent.
         pub fn insertRect(self: *Self, bounds: RectF, obj: T) !void {
             const cx: usize = @as(usize, @intFromFloat(bounds.l)) / self.cellSize.x;
             const cy: usize = @as(usize, @intFromFloat(bounds.t)) / self.cellSize.y;

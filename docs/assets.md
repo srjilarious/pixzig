@@ -56,6 +56,31 @@ const manifest = manifestFromDef(b, .{
 
 ## Loading at Runtime
 
+There are two ways to open a manifest at runtime: let the engine load it automatically during init (`manifestOpts`), or load it yourself in `App.init` for more control over sequencing.
+
+### Engine-Managed Manifest (`manifestOpts`)
+
+Set `manifestOpts` on `PixzigEngineOptions` to the build-generated `manifest_options` module, and the engine loads the manifest itself before the renderer is set up (so boot-group fonts are available for `renderInitOpts.font`):
+
+```zig
+const manifest_options = @import("manifest_options");
+
+const AppRunner = pixzig.PixzigAppRunner(App, .{
+    .manifestOpts = manifest_options,
+});
+```
+
+The engine owns the resulting `AssetManifest` and deinits it on shutdown; access it as `eng.manifest`:
+
+```zig
+try eng.manifest.loadGroup("game");
+self.player_tex = try eng.resources.acquireTexture("player_right_1");
+```
+
+Use this path when you want boot-group assets (fonts, the initial atlas) available before your app's `init` runs. Use the manual path below when you need to choose the manifest source at runtime or defer loading until later in `init`.
+
+### Manual Runtime Loading
+
 Import `manifest_options` from the build system and open the manifest in `App.init`:
 
 ```zig

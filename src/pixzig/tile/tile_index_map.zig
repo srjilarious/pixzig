@@ -1,5 +1,10 @@
 const std = @import("std");
 
+/// Bidirectional mapping between a tile's flat grid index and the slot it
+/// occupies in a renderer's packed vertex buffer. `TiledLayerRenderer` keeps
+/// only non-empty tiles in its vertex buffer; when a tile is removed the last
+/// buffer slot is swapped into the gap (`removeByTileIndex` + `update`), so
+/// this map is how the renderer finds which grid tile now lives at that slot.
 pub const TileIndexMap = struct {
     const KV = struct {
         tileIdx: usize,
@@ -66,6 +71,9 @@ pub const TileIndexMap = struct {
         }
     }
 
+    /// Empties the map without freeing its backing array, so a full rebuild
+    /// (e.g. `TiledLayerRenderer.recreateVertices`) can repopulate it without
+    /// reallocating.
     pub fn clearRetainingCapacity(self: *Self) void {
         self.arr.clearRetainingCapacity();
     }
