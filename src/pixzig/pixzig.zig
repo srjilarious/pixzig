@@ -42,6 +42,7 @@ pub const resources = @import("./resources.zig");
 pub const renderer = @import("./renderer.zig");
 pub const sprites = @import("./renderer/sprites.zig");
 pub const pixel_buffer = @import("./renderer/pixel_buffer.zig");
+pub const quad3d = @import("./renderer/quad3d_batch.zig");
 pub const audio = @import("./audio.zig");
 pub const sequencer = @import("./sequencer.zig");
 pub const system = @import("./system.zig");
@@ -70,6 +71,9 @@ pub const InputOptions = input.InputOptions;
 
 pub const camera = @import("./camera.zig");
 pub const Camera2D = camera.Camera2D;
+
+pub const camera3d = @import("./camera3d.zig");
+pub const Camera3D = camera3d.Camera3D;
 
 pub const Texture = textures.Texture;
 pub const TextureImage = textures.TextureImage;

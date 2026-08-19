@@ -50,6 +50,13 @@ pub const Vec2F = struct {
     }
 };
 
+/// A float 3d vector
+pub const Vec3F = struct {
+    x: f32,
+    y: f32,
+    z: f32,
+};
+
 /// A floating point rectangle structure stored as left, top, right, bottom.
 /// This is used for texture coordinates and rendering rectangles in
 /// particular.  We assume a raster coordinate system where the top-left is
