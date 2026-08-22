@@ -126,3 +126,8 @@ class GamepadAxis:
     RIGHT_Y = 3
     LEFT_TRIGGER = 4
     RIGHT_TRIGGER = 5
+
+
+class MouseAxis:
+    X = 0
+    Y = 1

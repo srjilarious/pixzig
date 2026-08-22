@@ -75,6 +75,13 @@ class _PzAssetManifest(ctypes.Structure):
 PzAssetManifestPtr = ctypes.POINTER(_PzAssetManifest)
 
 
+class _PzActionMap(ctypes.Structure):
+    """Opaque action map handle; never inspected from Python."""
+
+
+PzActionMapPtr = ctypes.POINTER(_PzActionMap)
+
+
 def _sig(name, argtypes, restype):
     fn = getattr(_lib, name)
     fn.argtypes = argtypes
@@ -177,6 +184,28 @@ pz_manifest_load = _sig("pz_manifest_load", [PzEnginePtr, c_char_p], PzAssetMani
 pz_manifest_load_group = _sig("pz_manifest_load_group", [PzAssetManifestPtr, c_char_p], c_int32)
 pz_manifest_unload_group = _sig("pz_manifest_unload_group", [PzAssetManifestPtr, c_char_p], None)
 pz_manifest_destroy = _sig("pz_manifest_destroy", [PzAssetManifestPtr], None)
+
+# --- Action maps ---------------------------------------------------------
+pz_action_map_create = _sig("pz_action_map_create", [PzEnginePtr], PzActionMapPtr)
+pz_action_map_destroy = _sig("pz_action_map_destroy", [PzActionMapPtr], None)
+pz_action_map_update = _sig("pz_action_map_update", [PzActionMapPtr, ctypes.c_double], None)
+pz_action_bind_key = _sig("pz_action_bind_key", [PzActionMapPtr, c_int32, c_int], c_int32)
+pz_action_bind_mouse_button = _sig("pz_action_bind_mouse_button", [PzActionMapPtr, c_int32, c_int], c_int32)
+pz_action_bind_gamepad_button = _sig("pz_action_bind_gamepad_button", [PzActionMapPtr, c_int32, c_int], c_int32)
+pz_action_bind_axis_buttons = _sig(
+    "pz_action_bind_axis_buttons", [PzActionMapPtr, c_int32, c_int, c_int], c_int32
+)
+pz_action_bind_axis_gamepad = _sig(
+    "pz_action_bind_axis_gamepad", [PzActionMapPtr, c_int32, c_int, c_float], c_int32
+)
+pz_action_bind_axis_mouse = _sig(
+    "pz_action_bind_axis_mouse", [PzActionMapPtr, c_int32, c_int, c_float, c_float], c_int32
+)
+pz_action_up = _sig("pz_action_up", [PzActionMapPtr, c_int32], c_bool)
+pz_action_down = _sig("pz_action_down", [PzActionMapPtr, c_int32], c_bool)
+pz_action_pressed = _sig("pz_action_pressed", [PzActionMapPtr, c_int32], c_bool)
+pz_action_released = _sig("pz_action_released", [PzActionMapPtr, c_int32], c_bool)
+pz_action_axis = _sig("pz_action_axis", [PzActionMapPtr, c_int32], c_float)
 
 # --- Shapes and text -----------------------------------------------------
 pz_draw_filled_rect = _sig(

@@ -8,6 +8,7 @@ import os
 import time
 
 from . import _native as _n
+from .action import ActionMap
 from .camera import Camera
 from .input import Gamepad, Keyboard, Mouse
 from .manifest import AssetManifest
@@ -76,6 +77,14 @@ class PixzigApp:
         if not handle:
             raise _n.PixzigError(_n.last_error())
         return AssetManifest(handle)
+
+    # --- Action mapping ---------------------------------------------------
+
+    def create_action_map(self) -> ActionMap:
+        handle = _n.pz_action_map_create(self._eng)
+        if not handle:
+            raise _n.PixzigError(_n.last_error())
+        return ActionMap(handle)
 
     # --- Camera ----------------------------------------------------------
 

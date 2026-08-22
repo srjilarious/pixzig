@@ -38,6 +38,47 @@ const PzAssetManifest = struct {
     registry_index: usize,
 };
 
+// ---------------------------------------------------------------------------
+// Action mapping. `pixzig.input.ActionMap(Action, Axes)` is comptime-generic
+// over user-defined enums, which Python can't supply. Instead, freeze one
+// instantiation over synthetic fixed-capacity "slot" enums (mirroring the
+// single frozen `Engine` instantiation above); Python assigns each named
+// action/axis a slot integer and the two never leave the Python wrapper.
+// ---------------------------------------------------------------------------
+
+const MaxFfiActions = 64;
+const MaxFfiAxes = 32;
+
+fn SlotEnum(comptime count: usize) type {
+    @setEvalBranchQuota(count * 2000);
+    var names: [count][]const u8 = undefined;
+    for (0..count) |i| {
+        names[i] = std.fmt.comptimePrint("slot_{d}", .{i});
+    }
+    const IntTag = std.math.IntFittingRange(0, count - 1);
+    return @Enum(IntTag, .exhaustive, &names, &std.simd.iota(IntTag, count));
+}
+
+const FfiAction = SlotEnum(MaxFfiActions);
+const FfiAxis = SlotEnum(MaxFfiAxes);
+const FfiActionMap = pixzig.input.ActionMap(FfiAction, FfiAxis);
+
+fn ffiAction(slot: i32) ?FfiAction {
+    if (slot < 0 or slot >= MaxFfiActions) return null;
+    return @enumFromInt(@as(std.meta.Tag(FfiAction), @intCast(slot)));
+}
+
+fn ffiAxis(slot: i32) ?FfiAxis {
+    if (slot < 0 or slot >= MaxFfiAxes) return null;
+    return @enumFromInt(@as(std.meta.Tag(FfiAxis), @intCast(slot)));
+}
+
+const PzActionMap = struct {
+    eng: *PzEngine,
+    map: *FfiActionMap,
+    registry_index: usize,
+};
+
 /// Appends `wrapper` to `list` and records its index for O(1) removal later.
 fn registryAdd(comptime T: type, list: *std.ArrayList(*T), alloc: std.mem.Allocator, wrapper: *T) !void {
     wrapper.registry_index = list.items.len;
@@ -60,6 +101,7 @@ const PzEngine = struct {
     cameras: std.ArrayList(*PzCamera),
     tilemap_renderers: std.ArrayList(*PzTilemapRenderer),
     manifests: std.ArrayList(*PzAssetManifest),
+    action_maps: std.ArrayList(*PzActionMap),
 };
 
 var g_last_error_buf: [256]u8 = undefined;
@@ -107,6 +149,7 @@ export fn pz_init(title: [*:0]const u8, width: i32, height: i32) callconv(.c) ?*
         .cameras = .empty,
         .tilemap_renderers = .empty,
         .manifests = .empty,
+        .action_maps = .empty,
     };
     return pz;
 }
@@ -135,6 +178,12 @@ export fn pz_deinit(eng: *PzEngine) callconv(.c) void {
         eng.alloc.destroy(m);
     }
     eng.manifests.deinit(eng.alloc);
+
+    for (eng.action_maps.items) |am| {
+        am.map.deinit();
+        eng.alloc.destroy(am);
+    }
+    eng.action_maps.deinit(eng.alloc);
 
     eng.engine.deinit();
     eng.alloc.destroy(eng);
@@ -527,6 +576,152 @@ export fn pz_manifest_destroy(m: *PzAssetManifest) callconv(.c) void {
     m.manifest.deinit();
     registryRemove(PzAssetManifest, &m.eng.manifests, m);
     m.eng.alloc.destroy(m);
+}
+
+// ---------------------------------------------------------------------------
+// Action maps. Maps are opaque handles (*PzActionMap); valid from
+// pz_action_map_create until pz_action_map_destroy. `action`/`axis`
+// parameters are slot indices in [0, MaxFfiActions)/[0, MaxFfiAxes) -- the
+// Python wrapper owns the name -> slot bookkeeping, this layer only ever
+// sees integers.
+// ---------------------------------------------------------------------------
+
+export fn pz_action_map_create(eng: *PzEngine) callconv(.c) ?*PzActionMap {
+    const map = FfiActionMap.init(eng.alloc) catch |err| {
+        setLastErrorErr(err);
+        return null;
+    };
+    errdefer map.deinit();
+
+    const wrapper = eng.alloc.create(PzActionMap) catch |err| {
+        setLastErrorErr(err);
+        return null;
+    };
+    wrapper.* = .{ .eng = eng, .map = map, .registry_index = undefined };
+    registryAdd(PzActionMap, &eng.action_maps, eng.alloc, wrapper) catch |err| {
+        eng.alloc.destroy(wrapper);
+        setLastErrorErr(err);
+        return null;
+    };
+    return wrapper;
+}
+
+export fn pz_action_map_destroy(am: *PzActionMap) callconv(.c) void {
+    am.map.deinit();
+    registryRemove(PzActionMap, &am.eng.action_maps, am);
+    am.eng.alloc.destroy(am);
+}
+
+export fn pz_action_map_update(am: *PzActionMap, elapsed_us: f64) callconv(.c) void {
+    _ = am.map.update(&am.eng.engine.inputs, elapsed_us);
+}
+
+export fn pz_action_bind_key(am: *PzActionMap, action_slot: i32, key: c_int) callconv(.c) i32 {
+    const act = ffiAction(action_slot) orelse {
+        setLastErrorMsg("invalid action slot");
+        return -1;
+    };
+    am.map.bind(act, .{ .key = @enumFromInt(key) }) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    return 0;
+}
+
+export fn pz_action_bind_mouse_button(am: *PzActionMap, action_slot: i32, button: c_int) callconv(.c) i32 {
+    const act = ffiAction(action_slot) orelse {
+        setLastErrorMsg("invalid action slot");
+        return -1;
+    };
+    am.map.bind(act, .{ .mouse_button = @enumFromInt(button) }) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    return 0;
+}
+
+export fn pz_action_bind_gamepad_button(am: *PzActionMap, action_slot: i32, button: c_int) callconv(.c) i32 {
+    const act = ffiAction(action_slot) orelse {
+        setLastErrorMsg("invalid action slot");
+        return -1;
+    };
+    am.map.bind(act, .{ .gamepad_button = @enumFromInt(@as(u8, @intCast(button))) }) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    return 0;
+}
+
+export fn pz_action_bind_axis_buttons(am: *PzActionMap, axis_slot: i32, neg_key: c_int, pos_key: c_int) callconv(.c) i32 {
+    const ax = ffiAxis(axis_slot) orelse {
+        setLastErrorMsg("invalid axis slot");
+        return -1;
+    };
+    am.map.bindAxis(ax, .{ .buttons = .{
+        .negative = .{ .key = @enumFromInt(neg_key) },
+        .positive = .{ .key = @enumFromInt(pos_key) },
+    } }) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    return 0;
+}
+
+export fn pz_action_bind_axis_gamepad(am: *PzActionMap, axis_slot: i32, gamepad_axis: c_int, deadzone: f32) callconv(.c) i32 {
+    const ax = ffiAxis(axis_slot) orelse {
+        setLastErrorMsg("invalid axis slot");
+        return -1;
+    };
+    am.map.bindAxis(ax, .{ .gamepad_axis = .{
+        .axis = @enumFromInt(@as(u8, @intCast(gamepad_axis))),
+        .deadzone = deadzone,
+    } }) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    return 0;
+}
+
+export fn pz_action_bind_axis_mouse(am: *PzActionMap, axis_slot: i32, mouse_axis: c_int, sensitivity: f32, clamp: f32) callconv(.c) i32 {
+    const ax = ffiAxis(axis_slot) orelse {
+        setLastErrorMsg("invalid axis slot");
+        return -1;
+    };
+    const ma: pixzig.input.action.MouseAxis = if (mouse_axis == 0) .x else .y;
+    am.map.bindAxis(ax, .{ .mouse_axis = .{
+        .axis = ma,
+        .sensitivity = sensitivity,
+        .clamp = clamp,
+    } }) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    return 0;
+}
+
+export fn pz_action_up(am: *PzActionMap, action_slot: i32) callconv(.c) bool {
+    const act = ffiAction(action_slot) orelse return true;
+    return am.map.up(act);
+}
+
+export fn pz_action_down(am: *PzActionMap, action_slot: i32) callconv(.c) bool {
+    const act = ffiAction(action_slot) orelse return false;
+    return am.map.down(act);
+}
+
+export fn pz_action_pressed(am: *PzActionMap, action_slot: i32) callconv(.c) bool {
+    const act = ffiAction(action_slot) orelse return false;
+    return am.map.pressed(act);
+}
+
+export fn pz_action_released(am: *PzActionMap, action_slot: i32) callconv(.c) bool {
+    const act = ffiAction(action_slot) orelse return false;
+    return am.map.released(act);
+}
+
+export fn pz_action_axis(am: *PzActionMap, axis_slot: i32) callconv(.c) f32 {
+    const ax = ffiAxis(axis_slot) orelse return 0;
+    return am.map.axis(ax);
 }
 
 // ---------------------------------------------------------------------------
