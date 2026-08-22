@@ -112,6 +112,54 @@ pub const TextPixelShader_Web: ShaderCode =
     \\ }
 ;
 
+/// A 2d vertex shader for tinted text: passes through texcoord plus a
+/// per-vertex color for the pixel shader to multiply against the font
+/// atlas's alpha mask, so each glyph draw can carry its own fg color.
+pub const TextColorVertexShader: ShaderCode =
+    \\#version 300 es
+    \\in vec2 coord3d;
+    \\in vec2 texcoord;
+    \\in vec4 color;
+    \\out vec2 Texcoord;
+    \\out vec4 Col;
+    \\
+    \\uniform mat4 projectionMatrix;
+    \\
+    \\void main() {
+    \\    gl_Position = projectionMatrix * vec4(coord3d, 0.0, 1.0);
+    \\    Texcoord = texcoord;
+    \\    Col = color;
+    \\}
+;
+
+/// Tints the font atlas's alpha mask (red channel on desktop GL) by the
+/// per-vertex color.
+pub const TextColorPixelShader_Desktop: ShaderCode =
+    \\ #version 300 es
+    \\ precision mediump float;
+    \\ in vec2 Texcoord;
+    \\ in vec4 Col;
+    \\ uniform sampler2D tex;
+    \\ out vec4 fragColor;
+    \\ void main() {
+    \\   fragColor = vec4(Col.rgb, Col.a * texture(tex, Texcoord).r);
+    \\ }
+;
+
+/// Web/WASM variant: the font atlas mask lives in the alpha channel instead
+/// of red (see TextPixelShader_Web).
+pub const TextColorPixelShader_Web: ShaderCode =
+    \\ #version 300 es
+    \\ precision mediump float;
+    \\ in vec2 Texcoord;
+    \\ in vec4 Col;
+    \\ uniform sampler2D tex;
+    \\ out vec4 fragColor;
+    \\ void main() {
+    \\   fragColor = vec4(Col.rgb, Col.a * texture(tex, Texcoord).a);
+    \\ }
+;
+
 /// A vertex shader that maps the pixel position to the screen position
 pub const PixBuffVertexShader: ShaderCode =
     \\#version 300 es
@@ -132,6 +180,9 @@ pub const TextureShader = "texture_shader";
 
 /// Our text/font shader.
 pub const FontShader = "font_shader";
+
+/// Our tinted text/font shader (per-draw fg color).
+pub const TextColorShader = "text_color_shader";
 
 /// Our pixel buffer shader that maps directly to the screen pixels.
 pub const PixelBuffShader = "pixel_buffer_shader";

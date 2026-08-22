@@ -6,12 +6,21 @@ const common = @import("../common.zig");
 const resources = @import("../resources.zig");
 const shaders = @import("./shaders.zig");
 const font_atlas = @import("./font_atlas.zig");
+const quad_batch = @import("./quad_batch.zig");
+const C = @import("./constants.zig");
 
 const Vec2I = common.Vec2I;
 const RectF = common.RectF;
+const Color = common.Color;
 const Shader = shaders.Shader;
 const ResourceManager = resources.ResourceManager;
 const SpriteBatchQueue = @import("./sprite_batch.zig").SpriteBatchQueue;
+
+/// Dedicated batch for tinted text: same position/texcoord layout as
+/// `SpriteBatchQueue`, plus a per-vertex color stream so each glyph draw can
+/// carry its own fg color. Kept separate from `SpriteBatchQueue` (used
+/// everywhere else in the engine) so that shared type is untouched.
+const ColorBatch = quad_batch.QuadBatch(.{ .posDim = 2, .texDim = 2, .colorDim = 4 });
 
 pub const FontAtlas = font_atlas.FontAtlas;
 pub const Character = font_atlas.Character;
@@ -23,6 +32,10 @@ fn scaleInt(value: i32, scale: f32) i32 {
 
 pub const TextRenderer = struct {
     spriteBatch: SpriteBatchQueue,
+    /// Separate batch (own shader, own VAO/VBOs) for `drawStringColored`;
+    /// see `ColorBatch`'s doc comment for why it isn't folded into
+    /// `spriteBatch`.
+    colorBatch: ColorBatch,
     /// Pool refs (not pre-acquired handles) so setFont can swap the active
     /// shader on the underlying batch via swapShader. The batch itself owns
     /// whichever handle is currently in use.
@@ -36,12 +49,16 @@ pub const TextRenderer = struct {
     pub fn init(alloc: std.mem.Allocator, resMgr: *ResourceManager) !TextRenderer {
         const texShader = try resMgr.getShader(shaders.TextureShader);
         const alphaShader = try resMgr.getShader(shaders.FontShader);
+        const colorShader = try resMgr.getShader(shaders.TextColorShader);
         var spriteBatch = try SpriteBatchQueue.init(alloc, texShader);
         errdefer spriteBatch.deinit();
+        var colorBatch = try ColorBatch.init(alloc, colorShader, C.MaxSprites);
+        errdefer colorBatch.deinit();
 
         return TextRenderer{
             .alloc = alloc,
             .spriteBatch = spriteBatch,
+            .colorBatch = colorBatch,
             .alphaShader = alphaShader,
             .texShader = texShader,
             .font = null,
@@ -51,6 +68,7 @@ pub const TextRenderer = struct {
     pub fn deinit(self: *TextRenderer) void {
         if (self.font) |h| h.release();
         self.spriteBatch.deinit();
+        self.colorBatch.deinit();
     }
 
     fn refreshAtlas(self: *TextRenderer) void {
@@ -61,15 +79,18 @@ pub const TextRenderer = struct {
 
     pub fn begin(self: *TextRenderer, mvp: zmath.Mat) void {
         self.spriteBatch.begin(mvp);
+        self.colorBatch.begin(mvp);
     }
 
     pub fn end(self: *TextRenderer) void {
         self.spriteBatch.end();
+        self.colorBatch.end();
     }
 
     /// Flushes queued text while keeping the renderer open for further draws.
     pub fn flush(self: *TextRenderer) void {
         self.spriteBatch.flush();
+        self.colorBatch.flush();
     }
 
     /// Adopt a new font for rendering. Releases any previously held handle,
@@ -107,6 +128,62 @@ pub const TextRenderer = struct {
             // Only draw if character has visual representation
             if (charData.size.x > 0 and charData.size.y > 0) {
                 self.spriteBatch.draw(&self.font.?.val.texture, RectF.fromPosSize(currX + charData.bearing.x, posY - charData.bearing.y, charData.size.x, charData.size.y), charData.coords, .none);
+            }
+
+            currX += @intCast(charData.advance);
+            drawSize.x += @intCast(charData.advance);
+            drawSize.y = @max(drawSize.y, charData.size.y);
+        }
+
+        return drawSize;
+    }
+
+    /// Like `drawString`, but tints every glyph by `color` instead of
+    /// rendering plain white. Uses a separate shader/batch (see
+    /// `ColorBatch`), so it expects an alpha-mask (TTF-packed) font atlas --
+    /// a bitmap font's RGBA texture would only have its red channel sampled.
+    pub fn drawStringColored(self: *TextRenderer, text: []const u8, pos: Vec2I, color: Color) Vec2I {
+        var currX: i32 = pos.x;
+
+        var drawSize: Vec2I = .{ .x = 0, .y = 0 };
+
+        if (self.font == null) {
+            std.log.err("TextRenderer: No Font set. Cannot draw text.", .{});
+            return drawSize;
+        }
+
+        const colors: [4][4]f32 = .{
+            .{ color.r, color.g, color.b, color.a },
+            .{ color.r, color.g, color.b, color.a },
+            .{ color.r, color.g, color.b, color.a },
+            .{ color.r, color.g, color.b, color.a },
+        };
+
+        const posY = pos.y + self.font.?.val.maxY;
+        for (text) |c| {
+            const charDataPtr = self.font.?.val.chars.get(@intCast(c));
+            if (charDataPtr == null) continue;
+
+            const charData = charDataPtr.?;
+
+            if (charData.size.x > 0 and charData.size.y > 0) {
+                const dest = RectF.fromPosSize(currX + charData.bearing.x, posY - charData.bearing.y, charData.size.x, charData.size.y);
+                const src = charData.coords;
+
+                const positions: [4][2]f32 = .{
+                    .{ dest.l, dest.b },
+                    .{ dest.l, dest.t },
+                    .{ dest.r, dest.t },
+                    .{ dest.r, dest.b },
+                };
+                const texCoords: [4][2]f32 = .{
+                    .{ src.l, src.b },
+                    .{ src.l, src.t },
+                    .{ src.r, src.t },
+                    .{ src.r, src.b },
+                };
+
+                self.colorBatch.addQuad(&self.font.?.val.texture, positions, texCoords, colors);
             }
 
             currX += @intCast(charData.advance);

@@ -121,8 +121,10 @@ pub fn Renderer(opts: RendererOptions) type {
 
                 if (builtin.os.tag == .emscripten) {
                     _ = try resMgr.loadShader(shaders.FontShader, &shaders.TexVertexShader, &shaders.TextPixelShader_Web);
+                    _ = try resMgr.loadShader(shaders.TextColorShader, &shaders.TextColorVertexShader, &shaders.TextColorPixelShader_Web);
                 } else {
                     _ = try resMgr.loadShader(shaders.FontShader, &shaders.TexVertexShader, &shaders.TextPixelShader_Desktop);
+                    _ = try resMgr.loadShader(shaders.TextColorShader, &shaders.TextColorVertexShader, &shaders.TextColorPixelShader_Desktop);
                 }
 
                 rend.text = try TextRenderer.init(alloc, resMgr);
@@ -290,6 +292,19 @@ pub fn Renderer(opts: RendererOptions) type {
         pub fn drawScaledString(self: *Self, text: []const u8, pos: Vec2I, scale: f32) Vec2I {
             std.debug.assert(opts.textRendering);
             return self.impl.text.drawScaledString(text, pos, scale);
+        }
+
+        /// Like `drawString`, but tints every glyph by `color` instead of
+        /// rendering plain white. Requires `RendererOptions.textRendering == true`.
+        pub fn drawStringColored(self: *Self, text: []const u8, pos: Vec2I, color: Color) Vec2I {
+            std.debug.assert(opts.textRendering);
+            return self.impl.text.drawStringColored(text, pos, color);
+        }
+
+        /// Measures `text` without drawing it. Requires `RendererOptions.textRendering == true`.
+        pub fn measureString(self: *Self, text: []const u8) Vec2I {
+            std.debug.assert(opts.textRendering);
+            return self.impl.text.measureString(text);
         }
     };
 }
