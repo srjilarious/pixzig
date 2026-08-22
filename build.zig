@@ -129,13 +129,19 @@ pub const ManifestHandle = struct {
 
             const install_manifest = b.addInstallFile(
                 manifest_src,
-                b.pathJoin(&.{ dest_subdir, "assets", "manifest.json" }),
+                b.pathJoin(&.{ dest_subdir, "manifest.json" }),
             );
             exe.step.dependOn(&install_manifest.step);
 
-            // At runtime exe cwd is <prefix>/bin/<exe_name>/,
-            // so manifest is at assets/manifest.json relative to cwd.
-            opts.addOption([]const u8, "manifest_path", "assets/manifest.json");
+            // The manifest is installed beside assets/, not inside it: its
+            // `root` field (e.g. "assets") is resolved relative to the
+            // manifest's own directory, so nesting the manifest inside
+            // assets/ would make asset paths resolve to assets/assets/...
+            // `manifest_path` is relative; `AssetManifest.loadFromFile`
+            // resolves it against the running executable's own directory
+            // (not the process cwd), so the package works no matter where
+            // it's launched from.
+            opts.addOption([]const u8, "manifest_path", "manifest.json");
             opts.addOption([]const u8, "manifest_json", "");
             opts.addOption([]const u8, "manifest_base_dir", "");
         }
