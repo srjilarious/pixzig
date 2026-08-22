@@ -4,11 +4,13 @@ Subclass it, override `update` and `render`, and call `run()`. The fixed-
 timestep loop below mirrors pixzig's own `PixzigAppRunner.gameLoopCore`
 (src/pixzig/pixzig.zig), just owned by Python instead of Zig.
 """
+import os
 import time
 
 from . import _native as _n
 from .camera import Camera
 from .input import Gamepad, Keyboard, Mouse
+from .manifest import AssetManifest
 from .shapes import Shapes
 from .sprite import Sprite
 from .text import Text
@@ -61,6 +63,19 @@ class PixzigApp:
         if not handle:
             raise _n.PixzigError(_n.last_error())
         return TileMapRenderer(handle)
+
+    def load_manifest(self, path: str) -> AssetManifest:
+        # A relative path is resolved (by AssetManifest.loadFromFile, Zig
+        # side) against the running executable's own directory -- for a
+        # packaged Zig build that's the game, but under Python it would be
+        # the Python interpreter's install directory. Resolve to an absolute
+        # path against the current working directory here instead, matching
+        # the cwd-relative convention load_texture/load_tilemap already use.
+        abs_path = os.path.abspath(path)
+        handle = _n.pz_manifest_load(self._eng, abs_path.encode("utf-8"))
+        if not handle:
+            raise _n.PixzigError(_n.last_error())
+        return AssetManifest(handle)
 
     # --- Camera ----------------------------------------------------------
 

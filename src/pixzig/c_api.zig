@@ -32,6 +32,12 @@ const PzTilemapRenderer = struct {
     registry_index: usize,
 };
 
+const PzAssetManifest = struct {
+    eng: *PzEngine,
+    manifest: pixzig.AssetManifest,
+    registry_index: usize,
+};
+
 /// Appends `wrapper` to `list` and records its index for O(1) removal later.
 fn registryAdd(comptime T: type, list: *std.ArrayList(*T), alloc: std.mem.Allocator, wrapper: *T) !void {
     wrapper.registry_index = list.items.len;
@@ -53,6 +59,7 @@ const PzEngine = struct {
     sprites: std.ArrayList(*PzSprite),
     cameras: std.ArrayList(*PzCamera),
     tilemap_renderers: std.ArrayList(*PzTilemapRenderer),
+    manifests: std.ArrayList(*PzAssetManifest),
 };
 
 var g_last_error_buf: [256]u8 = undefined;
@@ -99,6 +106,7 @@ export fn pz_init(title: [*:0]const u8, width: i32, height: i32) callconv(.c) ?*
         .sprites = .empty,
         .cameras = .empty,
         .tilemap_renderers = .empty,
+        .manifests = .empty,
     };
     return pz;
 }
@@ -121,6 +129,12 @@ export fn pz_deinit(eng: *PzEngine) callconv(.c) void {
         eng.alloc.destroy(tr);
     }
     eng.tilemap_renderers.deinit(eng.alloc);
+
+    for (eng.manifests.items) |m| {
+        m.manifest.deinit();
+        eng.alloc.destroy(m);
+    }
+    eng.manifests.deinit(eng.alloc);
 
     eng.engine.deinit();
     eng.alloc.destroy(eng);
@@ -467,6 +481,52 @@ export fn pz_tilemap_check_reload(tr: *PzTilemapRenderer) callconv(.c) bool {
         return false;
     };
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// Asset manifests. Manifests are opaque handles (*PzAssetManifest); valid
+// from pz_manifest_load until pz_manifest_destroy. Assets loaded via
+// pz_manifest_load_group are registered in the shared ResourceManager under
+// their manifest id, so they're then usable directly by name with
+// pz_sprite_create / pz_tilemap_renderer_create / pz_set_default_font -- no
+// separate FFI surface needed to consume them.
+// ---------------------------------------------------------------------------
+
+export fn pz_manifest_load(eng: *PzEngine, path: [*:0]const u8) callconv(.c) ?*PzAssetManifest {
+    const manifest = pixzig.AssetManifest.loadFromFile(eng.alloc, &eng.engine.resources, std.mem.span(path)) catch |err| {
+        setLastErrorErr(err);
+        return null;
+    };
+
+    const wrapper = eng.alloc.create(PzAssetManifest) catch |err| {
+        setLastErrorErr(err);
+        return null;
+    };
+    wrapper.* = .{ .eng = eng, .manifest = manifest, .registry_index = undefined };
+    registryAdd(PzAssetManifest, &eng.manifests, eng.alloc, wrapper) catch |err| {
+        eng.alloc.destroy(wrapper);
+        setLastErrorErr(err);
+        return null;
+    };
+    return wrapper;
+}
+
+export fn pz_manifest_load_group(m: *PzAssetManifest, group_name: [*:0]const u8) callconv(.c) i32 {
+    m.manifest.loadGroup(std.mem.span(group_name)) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    return 0;
+}
+
+export fn pz_manifest_unload_group(m: *PzAssetManifest, group_name: [*:0]const u8) callconv(.c) void {
+    m.manifest.unloadGroup(std.mem.span(group_name));
+}
+
+export fn pz_manifest_destroy(m: *PzAssetManifest) callconv(.c) void {
+    m.manifest.deinit();
+    registryRemove(PzAssetManifest, &m.eng.manifests, m);
+    m.eng.alloc.destroy(m);
 }
 
 // ---------------------------------------------------------------------------

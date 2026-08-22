@@ -68,6 +68,13 @@ class _PzTilemapRenderer(ctypes.Structure):
 PzTilemapRendererPtr = ctypes.POINTER(_PzTilemapRenderer)
 
 
+class _PzAssetManifest(ctypes.Structure):
+    """Opaque asset manifest handle; never inspected from Python."""
+
+
+PzAssetManifestPtr = ctypes.POINTER(_PzAssetManifest)
+
+
 def _sig(name, argtypes, restype):
     fn = getattr(_lib, name)
     fn.argtypes = argtypes
@@ -164,6 +171,12 @@ pz_tilemap_render = _sig("pz_tilemap_render", [PzTilemapRendererPtr, PzCameraPtr
 pz_tilemap_render_below = _sig("pz_tilemap_render_below", [PzTilemapRendererPtr, PzCameraPtr, c_float], None)
 pz_tilemap_render_above = _sig("pz_tilemap_render_above", [PzTilemapRendererPtr, PzCameraPtr, c_float], None)
 pz_tilemap_check_reload = _sig("pz_tilemap_check_reload", [PzTilemapRendererPtr], c_bool)
+
+# --- Asset manifests ---------------------------------------------------
+pz_manifest_load = _sig("pz_manifest_load", [PzEnginePtr, c_char_p], PzAssetManifestPtr)
+pz_manifest_load_group = _sig("pz_manifest_load_group", [PzAssetManifestPtr, c_char_p], c_int32)
+pz_manifest_unload_group = _sig("pz_manifest_unload_group", [PzAssetManifestPtr, c_char_p], None)
+pz_manifest_destroy = _sig("pz_manifest_destroy", [PzAssetManifestPtr], None)
 
 # --- Shapes and text -----------------------------------------------------
 pz_draw_filled_rect = _sig(
