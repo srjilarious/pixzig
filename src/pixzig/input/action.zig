@@ -32,9 +32,18 @@ pub const Source = union(enum) {
     // },
 };
 
+/// Which component of the mouse's per-frame movement delta a `mouse_axis`
+/// binding reads.
+pub const MouseAxis = enum { x, y };
+
 /// A continuous (analog) input source for an axis binding.
 /// `buttons` maps a negative/positive button pair to a [-1, +1] value.
 /// `gamepad_axis` reads a physical stick or trigger with a configurable deadzone.
+/// `mouse_axis` reads the mouse's raw per-frame movement delta (in window
+/// pixels), scaled by `sensitivity` and clamped to `[-clamp, +clamp]`. Unlike
+/// the other sources, its natural range isn't [-1, +1] -- `sensitivity` and
+/// `clamp` together bound how far a single frame of mouse motion can turn or
+/// move the game's response.
 pub const AxisSource = union(enum) {
     buttons: struct {
         negative: Source,
@@ -43,6 +52,11 @@ pub const AxisSource = union(enum) {
     gamepad_axis: struct {
         axis: glfw.Gamepad.Axis,
         deadzone: f32 = 0.18,
+    },
+    mouse_axis: struct {
+        axis: MouseAxis,
+        sensitivity: f32 = 1.0,
+        clamp: f32 = 1.0,
     },
 };
 
@@ -111,6 +125,7 @@ fn parseAxisSource(lua: *Lua, entry_abs: i32) !AxisSource {
     const type_str = try lua.toString(-1);
     const is_buttons = std.mem.eql(u8, type_str, "buttons");
     const is_gpad_axis = std.mem.eql(u8, type_str, "gamepad_axis");
+    const is_mouse_axis = std.mem.eql(u8, type_str, "mouse_axis");
     lua.pop(1);
 
     if (is_buttons) {
@@ -135,7 +150,11 @@ fn parseAxisSource(lua: *Lua, entry_abs: i32) !AxisSource {
             .positive = .{ .key = pos_key },
         } };
     } else if (is_gpad_axis) {
-        _ = lua.getField(entry_abs, "axis");
+        // Field is "stick", not "axis": the entry's "axis" key already names
+        // the *target* game axis (e.g. "turn") this binding feeds; reusing it
+        // here for the physical gamepad axis would silently clobber that
+        // value in the Lua table literal (last write to a duplicate key wins).
+        _ = lua.getField(entry_abs, "stick");
         const axis_str = try lua.toString(-1);
         const ax = std.meta.stringToEnum(glfw.Gamepad.Axis, axis_str) orelse {
             lua.pop(1);
@@ -151,6 +170,33 @@ fn parseAxisSource(lua: *Lua, entry_abs: i32) !AxisSource {
         lua.pop(1);
 
         return .{ .gamepad_axis = .{ .axis = ax, .deadzone = deadzone } };
+    } else if (is_mouse_axis) {
+        // Field is "component" (x/y), not "axis" -- see the gamepad_axis
+        // comment above for why: it would collide with the entry's own
+        // top-level "axis" (target game axis) key.
+        _ = lua.getField(entry_abs, "component");
+        const axis_str = try lua.toString(-1);
+        const ax = std.meta.stringToEnum(MouseAxis, axis_str) orelse {
+            lua.pop(1);
+            return error.UnknownMouseAxis;
+        };
+        lua.pop(1);
+
+        _ = lua.getField(entry_abs, "sensitivity");
+        const sensitivity: f32 = if (!lua.isNil(-1))
+            @floatCast(try lua.toNumber(-1))
+        else
+            1.0;
+        lua.pop(1);
+
+        _ = lua.getField(entry_abs, "clamp");
+        const clamp: f32 = if (!lua.isNil(-1))
+            @floatCast(try lua.toNumber(-1))
+        else
+            1.0;
+        lua.pop(1);
+
+        return .{ .mouse_axis = .{ .axis = ax, .sensitivity = sensitivity, .clamp = clamp } };
     } else {
         return error.UnknownAxisSourceType;
     }
@@ -313,7 +359,7 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
 
         /// Reads bindings from a Lua table stored in the global `global_name`.
         /// Each entry is a table with an `action` or `axis` string key and a `type` field.
-        /// Supported types: `"key"`, `"mouse_button"`, `"gamepad_button"`, `"chord"`, `"buttons"`, `"gamepad_axis"`.
+        /// Supported types: `"key"`, `"mouse_button"`, `"gamepad_button"`, `"chord"`, `"buttons"`, `"gamepad_axis"`, `"mouse_axis"`.
         pub fn loadFromLua(self: *Self, script: *const ScriptEngine, global_name: [:0]const u8) !void {
             const lua = script.lua;
 
@@ -496,8 +542,24 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
                             if (@abs(val) < ga.deadzone) val = 0;
                         }
                     },
+                    .mouse_axis => |ma| {
+                        if (inputs.mouse_enabled) {
+                            const currPos = inputs.mouse.rawPos();
+                            const prevPos = inputs.mouse.lastRawPos();
+                            const delta: f32 = switch (ma.axis) {
+                                .x => currPos.x - prevPos.x,
+                                .y => currPos.y - prevPos.y,
+                            };
+                            val = std.math.clamp(delta * ma.sensitivity, -ma.clamp, ma.clamp);
+                        }
+                    },
                 }
-                currAxes.set(binding.axis, val);
+                // Multiple bindings on the same axis (e.g. arrow keys and
+                // WASD both bound to "turn", or keyboard turning combined
+                // with mouse look) accumulate rather than overwrite one
+                // another -- each contributes its own value for the frame.
+                const axisIdx = helpers.getIndexForAxis(binding.axis);
+                currAxes.axes[axisIdx] += val;
             }
 
             return false;
