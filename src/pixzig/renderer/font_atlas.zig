@@ -35,8 +35,11 @@ pub const FontAtlas = struct {
         defer alloc.free(glyphBuffer);
         @memset(glyphBuffer, 0); // Initialize to black
 
-        // Pack ASCII printable characters (32-126)
-        const num_chars = 126 - 32;
+        // Pack ASCII printable characters (32-126 inclusive, space through
+        // tilde) -- stbtt_PackFontRange packs `num_chars` codepoints
+        // starting at 32, so this needs +1 or codepoint 126 ('~') is
+        // silently left out of the atlas.
+        const num_chars = 126 - 32 + 1;
         const packed_chars = try alloc.alloc(stb_tt.c.stbtt_packedchar, num_chars);
         defer alloc.free(packed_chars);
 
