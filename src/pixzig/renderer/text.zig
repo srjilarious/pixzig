@@ -25,6 +25,8 @@ const ColorBatch = quad_batch.QuadBatch(.{ .posDim = 2, .texDim = 2, .colorDim =
 pub const FontAtlas = font_atlas.FontAtlas;
 pub const Character = font_atlas.Character;
 pub const stb_tt = font_atlas.stb_tt;
+pub const FontMetrics = font_atlas.FontMetrics;
+pub const measureFontFile = font_atlas.measureFontFile;
 
 fn scaleInt(value: i32, scale: f32) i32 {
     return @as(i32, @intFromFloat(@as(f32, @floatFromInt(value)) * scale));

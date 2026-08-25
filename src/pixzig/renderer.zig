@@ -27,6 +27,8 @@ const Texture = textures.Texture;
 const ResourceManager = resources.ResourceManager;
 const Shader = shaders.Shader;
 pub const FontAtlas = textMod.FontAtlas;
+pub const FontMetrics = textMod.FontMetrics;
+pub const measureFontFile = textMod.measureFontFile;
 
 pub const QuadBatch = quad_batch.QuadBatch;
 pub const BatchLayout = quad_batch.BatchLayout;

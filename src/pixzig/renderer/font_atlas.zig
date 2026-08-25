@@ -14,6 +14,58 @@ const Texture = textures.Texture;
 
 pub const Character = struct { coords: RectF, size: Vec2I, bearing: Vec2I, advance: i32 };
 
+/// Font metrics scaled to a target pixel size, without packing any glyphs
+/// into a texture -- unlike `initFromTtf*`, this needs no GL context, so it
+/// can run before a window/renderer exists (e.g. to size a window from the
+/// font it's about to load).
+pub const FontMetrics = struct {
+    /// Horizontal advance of a representative glyph ('M'). For a monospace
+    /// font this is every glyph's advance, i.e. the terminal cell width.
+    advance: i32,
+    /// ascent - descent + line_gap: the font's recommended line-to-line
+    /// spacing, i.e. the terminal cell height.
+    line_height: i32,
+    /// Ascent alone, for baseline placement.
+    ascent: i32,
+};
+
+fn measureFontData(fontData: []const u8, fontSize: f32) !FontMetrics {
+    var font_info: stb_tt.c.stbtt_fontinfo = undefined;
+    if (stb_tt.c.stbtt_InitFont(&font_info, fontData.ptr, 0) == 0) return error.InvalidFont;
+
+    var ascent: i32 = undefined;
+    var descent: i32 = undefined;
+    var line_gap: i32 = undefined;
+    stb_tt.c.stbtt_GetFontVMetrics(&font_info, &ascent, &descent, &line_gap);
+
+    var advance: i32 = undefined;
+    var lsb: i32 = undefined;
+    stb_tt.c.stbtt_GetCodepointHMetrics(&font_info, 'M', &advance, &lsb);
+
+    const scale = stb_tt.c.stbtt_ScaleForPixelHeight(&font_info, fontSize);
+    const scaled = struct {
+        fn of(value: i32, s: f32) i32 {
+            return @intFromFloat(@round(s * @as(f32, @floatFromInt(value))));
+        }
+    }.of;
+
+    return .{
+        .advance = scaled(advance, scale),
+        .line_height = scaled(ascent - descent + line_gap, scale),
+        .ascent = scaled(ascent, scale),
+    };
+}
+
+/// Reads `fontPath` and returns its `FontMetrics` at `fontSize`. No GL
+/// context required -- safe to call before window/renderer creation.
+pub fn measureFontFile(fontPath: []const u8, fontSize: f32, alloc: std.mem.Allocator) !FontMetrics {
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const fontData = try std.Io.Dir.cwd().readFileAlloc(io, fontPath, alloc, .unlimited);
+    defer alloc.free(fontData);
+
+    return measureFontData(fontData, fontSize);
+}
+
 pub const FontAtlas = struct {
     chars: std.AutoHashMap(u32, Character),
     texture: Texture,
