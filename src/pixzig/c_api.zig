@@ -13,10 +13,31 @@ const FfiOpts = pixzig.PixzigEngineOptions{
 };
 const Engine = pixzig.PixzigEngine(FfiOpts);
 
+const PzSprite = struct {
+    eng: *PzEngine,
+    sprite: pixzig.sprites.Sprite,
+    registry_index: usize,
+};
+
+/// Appends `wrapper` to `list` and records its index for O(1) removal later.
+fn registryAdd(comptime T: type, list: *std.ArrayList(*T), alloc: std.mem.Allocator, wrapper: *T) !void {
+    wrapper.registry_index = list.items.len;
+    try list.append(alloc, wrapper);
+}
+
+/// Swap-removes `wrapper` from `list` in O(1), fixing up the moved entry's
+/// stored index.
+fn registryRemove(comptime T: type, list: *std.ArrayList(*T), wrapper: *T) void {
+    _ = list.swapRemove(wrapper.registry_index);
+    if (wrapper.registry_index < list.items.len) {
+        list.items[wrapper.registry_index].registry_index = wrapper.registry_index;
+    }
+}
+
 const PzEngine = struct {
     engine: *Engine,
     alloc: std.mem.Allocator,
-    sprites: std.ArrayList(?pixzig.sprites.Sprite),
+    sprites: std.ArrayList(*PzSprite),
 };
 
 var g_last_error_buf: [256]u8 = undefined;
@@ -66,8 +87,9 @@ export fn pz_init(title: [*:0]const u8, width: i32, height: i32) callconv(.c) ?*
 }
 
 export fn pz_deinit(eng: *PzEngine) callconv(.c) void {
-    for (eng.sprites.items) |*slot| {
-        if (slot.*) |*spr| spr.deinit();
+    for (eng.sprites.items) |spr| {
+        spr.sprite.deinit();
+        eng.alloc.destroy(spr);
     }
     eng.sprites.deinit(eng.alloc);
     eng.engine.deinit();
@@ -153,6 +175,16 @@ export fn pz_gamepad_button_down(eng: *PzEngine, idx: c_int, btn: c_int) callcon
     return eng.engine.inputs.gamepad(@intCast(idx)).down(@enumFromInt(@as(u8, @intCast(btn))));
 }
 
+export fn pz_gamepad_button_pressed(eng: *PzEngine, idx: c_int, btn: c_int) callconv(.c) bool {
+    if (idx < 0 or idx >= pixzig.input.MaxGamepads) return false;
+    return eng.engine.inputs.gamepad(@intCast(idx)).pressed(@enumFromInt(@as(u8, @intCast(btn))));
+}
+
+export fn pz_gamepad_button_released(eng: *PzEngine, idx: c_int, btn: c_int) callconv(.c) bool {
+    if (idx < 0 or idx >= pixzig.input.MaxGamepads) return false;
+    return eng.engine.inputs.gamepad(@intCast(idx)).released(@enumFromInt(@as(u8, @intCast(btn))));
+}
+
 export fn pz_gamepad_axis(eng: *PzEngine, idx: c_int, axis: c_int) callconv(.c) f32 {
     if (idx < 0 or idx >= pixzig.input.MaxGamepads) return 0;
     return eng.engine.inputs.gamepad(@intCast(idx)).axis(@enumFromInt(@as(u8, @intCast(axis))));
@@ -164,6 +196,23 @@ export fn pz_gamepad_axis(eng: *PzEngine, idx: c_int, axis: c_int) callconv(.c) 
 
 export fn pz_load_texture(eng: *PzEngine, name: [*:0]const u8, path: [*:0]const u8) callconv(.c) i32 {
     _ = eng.engine.resources.loadTexture(std.mem.span(name), std.mem.span(path)) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    return 0;
+}
+
+export fn pz_texture_sub(eng: *PzEngine, base_name: [*:0]const u8, new_name: [*:0]const u8, x: i32, y: i32, w: i32, h: i32) callconv(.c) i32 {
+    const managed = eng.engine.resources.getTexture(std.mem.span(base_name)) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    const current = managed.get() orelse {
+        setLastErrorMsg("texture not loaded");
+        return -1;
+    };
+    const coords = pixzig.RectF.fromCoords(x, y, w, h, @intCast(current.val.size.x), @intCast(current.val.size.y));
+    _ = eng.engine.resources.addSubTexture(managed, std.mem.span(new_name), coords) catch |err| {
         setLastErrorErr(err);
         return -1;
     };
@@ -187,66 +236,54 @@ export fn pz_set_default_font(eng: *PzEngine, name: [*:0]const u8) callconv(.c) 
 }
 
 // ---------------------------------------------------------------------------
-// Sprites. sprite_id is an index into a per-engine slot table; -1 means
-// "no such sprite" on lookups that must return a value.
+// Sprites. Sprites are opaque handles (*PzSprite); valid from pz_sprite_create
+// until pz_sprite_destroy.
 // ---------------------------------------------------------------------------
 
-fn getSprite(eng: *PzEngine, sprite_id: i32) ?*pixzig.sprites.Sprite {
-    if (sprite_id < 0) return null;
-    const idx: usize = @intCast(sprite_id);
-    if (idx >= eng.sprites.items.len) return null;
-    if (eng.sprites.items[idx]) |*s| return s;
-    return null;
-}
-
-export fn pz_sprite_create(eng: *PzEngine, texture_name: [*:0]const u8) callconv(.c) i32 {
+export fn pz_sprite_create(eng: *PzEngine, texture_name: [*:0]const u8) callconv(.c) ?*PzSprite {
     const handle = eng.engine.resources.acquireTexture(std.mem.span(texture_name)) catch |err| {
         setLastErrorErr(err);
-        return -1;
+        return null;
     };
     const size = pixzig.Vec2F{
         .x = @floatFromInt(handle.val.size.x),
         .y = @floatFromInt(handle.val.size.y),
     };
-    const sprite = pixzig.sprites.Sprite.create(handle, size);
+    var sprite = pixzig.sprites.Sprite.create(handle, size);
+    errdefer sprite.deinit();
 
-    for (eng.sprites.items, 0..) |slot, i| {
-        if (slot == null) {
-            eng.sprites.items[i] = sprite;
-            return @intCast(i);
-        }
-    }
-    eng.sprites.append(eng.alloc, sprite) catch |err| {
+    const wrapper = eng.alloc.create(PzSprite) catch |err| {
         setLastErrorErr(err);
-        return -1;
+        return null;
     };
-    return @intCast(eng.sprites.items.len - 1);
+    wrapper.* = .{ .eng = eng, .sprite = sprite, .registry_index = undefined };
+    registryAdd(PzSprite, &eng.sprites, eng.alloc, wrapper) catch |err| {
+        eng.alloc.destroy(wrapper);
+        setLastErrorErr(err);
+        return null;
+    };
+    return wrapper;
 }
 
-export fn pz_sprite_set_pos(eng: *PzEngine, sprite_id: i32, x: i32, y: i32) callconv(.c) void {
-    const spr = getSprite(eng, sprite_id) orelse {
-        setLastErrorMsg("invalid sprite id");
-        return;
-    };
-    spr.setPos(x, y);
+export fn pz_sprite_set_pos(spr: *PzSprite, x: i32, y: i32) callconv(.c) void {
+    spr.sprite.setPos(x, y);
 }
 
-export fn pz_sprite_draw(eng: *PzEngine, sprite_id: i32) callconv(.c) void {
-    const spr = getSprite(eng, sprite_id) orelse {
-        setLastErrorMsg("invalid sprite id");
-        return;
-    };
-    eng.engine.renderer.drawSprite(spr);
+export fn pz_sprite_get_rect(spr: *PzSprite, out_x: *f32, out_y: *f32, out_w: *f32, out_h: *f32) callconv(.c) void {
+    out_x.* = spr.sprite.dest.l;
+    out_y.* = spr.sprite.dest.t;
+    out_w.* = spr.sprite.dest.width();
+    out_h.* = spr.sprite.dest.height();
 }
 
-export fn pz_sprite_destroy(eng: *PzEngine, sprite_id: i32) callconv(.c) void {
-    if (sprite_id < 0) return;
-    const idx: usize = @intCast(sprite_id);
-    if (idx >= eng.sprites.items.len) return;
-    if (eng.sprites.items[idx]) |*s| {
-        s.deinit();
-        eng.sprites.items[idx] = null;
-    }
+export fn pz_sprite_draw(spr: *PzSprite) callconv(.c) void {
+    spr.eng.engine.renderer.drawSprite(&spr.sprite);
+}
+
+export fn pz_sprite_destroy(spr: *PzSprite) callconv(.c) void {
+    spr.sprite.deinit();
+    registryRemove(PzSprite, &spr.eng.sprites, spr);
+    spr.eng.alloc.destroy(spr);
 }
 
 // ---------------------------------------------------------------------------

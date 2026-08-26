@@ -47,6 +47,13 @@ class _PzEngine(ctypes.Structure):
 PzEnginePtr = ctypes.POINTER(_PzEngine)
 
 
+class _PzSprite(ctypes.Structure):
+    """Opaque sprite handle; never inspected from Python."""
+
+
+PzSpritePtr = ctypes.POINTER(_PzSprite)
+
+
 def _sig(name, argtypes, restype):
     fn = getattr(_lib, name)
     fn.argtypes = argtypes
@@ -96,18 +103,26 @@ pz_mouse_button_pressed = _sig("pz_mouse_button_pressed", [PzEnginePtr, c_int], 
 pz_mouse_button_released = _sig("pz_mouse_button_released", [PzEnginePtr, c_int], c_bool)
 pz_gamepad_connected = _sig("pz_gamepad_connected", [PzEnginePtr, c_int], c_bool)
 pz_gamepad_button_down = _sig("pz_gamepad_button_down", [PzEnginePtr, c_int, c_int], c_bool)
+pz_gamepad_button_pressed = _sig("pz_gamepad_button_pressed", [PzEnginePtr, c_int, c_int], c_bool)
+pz_gamepad_button_released = _sig("pz_gamepad_button_released", [PzEnginePtr, c_int, c_int], c_bool)
 pz_gamepad_axis = _sig("pz_gamepad_axis", [PzEnginePtr, c_int, c_int], c_float)
 
 # --- Resources -------------------------------------------------------------
 pz_load_texture = _sig("pz_load_texture", [PzEnginePtr, c_char_p, c_char_p], c_int32)
+pz_texture_sub = _sig("pz_texture_sub", [PzEnginePtr, c_char_p, c_char_p, c_int32, c_int32, c_int32, c_int32], c_int32)
 pz_load_font = _sig("pz_load_font", [PzEnginePtr, c_char_p, c_char_p, c_float], c_int32)
 pz_set_default_font = _sig("pz_set_default_font", [PzEnginePtr, c_char_p], c_int32)
 
 # --- Sprites -----------------------------------------------------------
-pz_sprite_create = _sig("pz_sprite_create", [PzEnginePtr, c_char_p], c_int32)
-pz_sprite_set_pos = _sig("pz_sprite_set_pos", [PzEnginePtr, c_int32, c_int32, c_int32], None)
-pz_sprite_draw = _sig("pz_sprite_draw", [PzEnginePtr, c_int32], None)
-pz_sprite_destroy = _sig("pz_sprite_destroy", [PzEnginePtr, c_int32], None)
+pz_sprite_create = _sig("pz_sprite_create", [PzEnginePtr, c_char_p], PzSpritePtr)
+pz_sprite_set_pos = _sig("pz_sprite_set_pos", [PzSpritePtr, c_int32, c_int32], None)
+pz_sprite_get_rect = _sig(
+    "pz_sprite_get_rect",
+    [PzSpritePtr, ctypes.POINTER(c_float), ctypes.POINTER(c_float), ctypes.POINTER(c_float), ctypes.POINTER(c_float)],
+    None,
+)
+pz_sprite_draw = _sig("pz_sprite_draw", [PzSpritePtr], None)
+pz_sprite_destroy = _sig("pz_sprite_destroy", [PzSpritePtr], None)
 
 # --- Shapes and text -----------------------------------------------------
 pz_draw_filled_rect = _sig(

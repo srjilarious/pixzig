@@ -51,5 +51,11 @@ class Gamepad:
     def down(self, button: int) -> bool:
         return bool(_n.pz_gamepad_button_down(self._eng, self.index, button))
 
+    def pressed(self, button: int) -> bool:
+        return bool(_n.pz_gamepad_button_pressed(self._eng, self.index, button))
+
+    def released(self, button: int) -> bool:
+        return bool(_n.pz_gamepad_button_released(self._eng, self.index, button))
+
     def axis(self, axis: int) -> float:
         return _n.pz_gamepad_axis(self._eng, self.index, axis)

@@ -37,11 +37,19 @@ class PixzigApp:
     def load_texture(self, name: str, path: str) -> None:
         _n.check(_n.pz_load_texture(self._eng, name.encode("utf-8"), path.encode("utf-8")) == 0)
 
+    def create_subtexture(self, base_name: str, new_name: str, x: int, y: int, w: int, h: int) -> None:
+        _n.check(
+            _n.pz_texture_sub(
+                self._eng, base_name.encode("utf-8"), new_name.encode("utf-8"), int(x), int(y), int(w), int(h)
+            )
+            == 0
+        )
+
     def load_sprite(self, texture_name: str) -> Sprite:
-        sprite_id = _n.pz_sprite_create(self._eng, texture_name.encode("utf-8"))
-        if sprite_id < 0:
+        handle = _n.pz_sprite_create(self._eng, texture_name.encode("utf-8"))
+        if not handle:
             raise _n.PixzigError(_n.last_error())
-        return Sprite(self._eng, sprite_id)
+        return Sprite(handle)
 
     # --- Overridable hooks -----------------------------------------------
 
