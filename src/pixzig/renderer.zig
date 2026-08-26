@@ -6,6 +6,7 @@ const gl = @import("zopengl").bindings;
 const zmath = @import("zmath");
 
 pub const constants = @import("./renderer/constants.zig");
+pub const quad_batch = @import("./renderer/quad_batch.zig");
 pub const sprite_batch = @import("./renderer/sprite_batch.zig");
 pub const shape = @import("./renderer/shape.zig");
 pub const stb_tt = @import("stb_truetype");
@@ -27,6 +28,8 @@ const ResourceManager = resources.ResourceManager;
 const Shader = shaders.Shader;
 pub const FontAtlas = textMod.FontAtlas;
 
+pub const QuadBatch = quad_batch.QuadBatch;
+pub const BatchLayout = quad_batch.BatchLayout;
 pub const SpriteBatchQueue = sprite_batch.SpriteBatchQueue;
 pub const ShapeBatchQueue = shape.ShapeBatchQueue;
 pub const TextRenderer = textMod.TextRenderer;
