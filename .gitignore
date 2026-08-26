@@ -5,3 +5,5 @@ zig-pkg/
 zig-out/
 docs-out/
 imgui.ini
+__pycache__/
+*.pyc

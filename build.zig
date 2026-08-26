@@ -243,6 +243,8 @@ pub fn build(b: *std.Build) void {
     // Build the engine as a static library
     const engDat = buildEngine(b, target, optimize);
 
+    buildPythonFfi(b, target, optimize, engDat.pixeng_mod);
+
     if (target.result.os.tag == .emscripten) {
         const engine_step = b.step("build-engine", "Build the pixzig object file for Emscripten");
         engine_step.dependOn(&engDat.engine_lib.step);
@@ -658,6 +660,56 @@ fn buildEngine(
     }
 
     return .{ .engine_lib = engine_lib, .pixeng_mod = pixeng };
+}
+
+/// Builds `libpixzig_ffi`, a dynamic library exposing the flat C ABI defined
+/// in `src/pixzig/c_api.zig`, for use from Python (or any other C-caller).
+/// Only registered under the opt-in `python-ffi` step, never part of the
+/// default build. Desktop targets only; there's no C-caller for a wasm
+/// shared library in this project.
+fn buildPythonFfi(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    pixeng_mod: *std.Build.Module,
+) void {
+    if (target.result.os.tag == .emscripten) return;
+
+    const ffi_mod = b.createModule(.{
+        .root_source_file = b.path("src/pixzig/c_api.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    ffi_mod.addImport("pixzig", pixeng_mod);
+
+    const ffi_lib = b.addLibrary(.{
+        .name = "pixzig_ffi",
+        .root_module = ffi_mod,
+        .linkage = .dynamic,
+    });
+    ffi_lib.root_module.link_libc = true;
+
+    // Same native libraries linked into the static engine lib in
+    // buildEngine, re-linked here since a dynamic library is a separate
+    // Compile step with its own link inputs.
+    const zglfw = b.dependency("zglfw", .{ .target = target });
+    ffi_lib.root_module.linkLibrary(zglfw.artifact("glfw"));
+
+    const zflecs = b.dependency("zflecs", .{ .target = target });
+    ffi_lib.root_module.linkLibrary(zflecs.artifact("flecs"));
+
+    const zaudio = b.dependency("zaudio", .{ .target = target });
+    ffi_lib.root_module.linkLibrary(zaudio.artifact("miniaudio"));
+
+    const ziglua = b.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
+    ffi_lib.root_module.linkLibrary(ziglua.artifact("lua"));
+
+    const install_ffi = b.addInstallArtifact(ffi_lib, .{
+        .dest_dir = .{ .override = .{ .custom = "python" } },
+    });
+
+    const python_ffi_step = b.step("python-ffi", "Build the pixzig C FFI shared library for Python bindings");
+    python_ffi_step.dependOn(&install_ffi.step);
 }
 
 pub fn buildGame(
