@@ -54,6 +54,20 @@ class _PzSprite(ctypes.Structure):
 PzSpritePtr = ctypes.POINTER(_PzSprite)
 
 
+class _PzCamera(ctypes.Structure):
+    """Opaque camera handle; never inspected from Python."""
+
+
+PzCameraPtr = ctypes.POINTER(_PzCamera)
+
+
+class _PzTilemapRenderer(ctypes.Structure):
+    """Opaque tilemap renderer handle; never inspected from Python."""
+
+
+PzTilemapRendererPtr = ctypes.POINTER(_PzTilemapRenderer)
+
+
 def _sig(name, argtypes, restype):
     fn = getattr(_lib, name)
     fn.argtypes = argtypes
@@ -90,6 +104,7 @@ pz_poll_events = _sig("pz_poll_events", [PzEnginePtr], None)
 pz_update_input = _sig("pz_update_input", [PzEnginePtr], None)
 pz_swap_buffers = _sig("pz_swap_buffers", [PzEnginePtr], None)
 pz_render_begin = _sig("pz_render_begin", [PzEnginePtr], None)
+pz_render_begin_world = _sig("pz_render_begin_world", [PzEnginePtr, PzCameraPtr], None)
 pz_render_clear = _sig("pz_render_clear", [PzEnginePtr, c_float, c_float, c_float, c_float], None)
 pz_render_end = _sig("pz_render_end", [PzEnginePtr], None)
 
@@ -123,6 +138,32 @@ pz_sprite_get_rect = _sig(
 )
 pz_sprite_draw = _sig("pz_sprite_draw", [PzSpritePtr], None)
 pz_sprite_destroy = _sig("pz_sprite_destroy", [PzSpritePtr], None)
+
+# --- Camera ----------------------------------------------------------------
+pz_camera_create = _sig("pz_camera_create", [PzEnginePtr], PzCameraPtr)
+pz_camera_destroy = _sig("pz_camera_destroy", [PzCameraPtr], None)
+pz_camera_set_pos = _sig("pz_camera_set_pos", [PzCameraPtr, c_float, c_float], None)
+pz_camera_get_pos = _sig("pz_camera_get_pos", [PzCameraPtr, ctypes.POINTER(c_float), ctypes.POINTER(c_float)], None)
+pz_camera_set_zoom = _sig("pz_camera_set_zoom", [PzCameraPtr, c_float], None)
+pz_camera_get_zoom = _sig("pz_camera_get_zoom", [PzCameraPtr], c_float)
+pz_camera_set_bounds = _sig("pz_camera_set_bounds", [PzCameraPtr, c_float, c_float, c_float, c_float], None)
+pz_camera_clear_bounds = _sig("pz_camera_clear_bounds", [PzCameraPtr], None)
+
+# --- Tilemap -----------------------------------------------------------
+pz_load_tilemap = _sig("pz_load_tilemap", [PzEnginePtr, c_char_p, c_char_p], c_int32)
+pz_tilemap_renderer_create = _sig(
+    "pz_tilemap_renderer_create", [PzEnginePtr, c_char_p, c_char_p], PzTilemapRendererPtr
+)
+pz_tilemap_renderer_destroy = _sig("pz_tilemap_renderer_destroy", [PzTilemapRendererPtr], None)
+pz_tilemap_pixel_size = _sig(
+    "pz_tilemap_pixel_size",
+    [PzTilemapRendererPtr, c_int32, ctypes.POINTER(c_float), ctypes.POINTER(c_float)],
+    None,
+)
+pz_tilemap_render = _sig("pz_tilemap_render", [PzTilemapRendererPtr, PzCameraPtr], None)
+pz_tilemap_render_below = _sig("pz_tilemap_render_below", [PzTilemapRendererPtr, PzCameraPtr, c_float], None)
+pz_tilemap_render_above = _sig("pz_tilemap_render_above", [PzTilemapRendererPtr, PzCameraPtr, c_float], None)
+pz_tilemap_check_reload = _sig("pz_tilemap_check_reload", [PzTilemapRendererPtr], c_bool)
 
 # --- Shapes and text -----------------------------------------------------
 pz_draw_filled_rect = _sig(

@@ -19,6 +19,19 @@ const PzSprite = struct {
     registry_index: usize,
 };
 
+const PzCamera = struct {
+    eng: *PzEngine,
+    camera: pixzig.Camera2D,
+    registry_index: usize,
+};
+
+const PzTilemapRenderer = struct {
+    eng: *PzEngine,
+    map: *pixzig.TileMapHandle,
+    renderer: pixzig.tile.ChunkedTiledRenderer,
+    registry_index: usize,
+};
+
 /// Appends `wrapper` to `list` and records its index for O(1) removal later.
 fn registryAdd(comptime T: type, list: *std.ArrayList(*T), alloc: std.mem.Allocator, wrapper: *T) !void {
     wrapper.registry_index = list.items.len;
@@ -38,6 +51,8 @@ const PzEngine = struct {
     engine: *Engine,
     alloc: std.mem.Allocator,
     sprites: std.ArrayList(*PzSprite),
+    cameras: std.ArrayList(*PzCamera),
+    tilemap_renderers: std.ArrayList(*PzTilemapRenderer),
 };
 
 var g_last_error_buf: [256]u8 = undefined;
@@ -82,6 +97,8 @@ export fn pz_init(title: [*:0]const u8, width: i32, height: i32) callconv(.c) ?*
         .engine = engine,
         .alloc = alloc,
         .sprites = .empty,
+        .cameras = .empty,
+        .tilemap_renderers = .empty,
     };
     return pz;
 }
@@ -92,6 +109,19 @@ export fn pz_deinit(eng: *PzEngine) callconv(.c) void {
         eng.alloc.destroy(spr);
     }
     eng.sprites.deinit(eng.alloc);
+
+    for (eng.cameras.items) |cam| {
+        eng.alloc.destroy(cam);
+    }
+    eng.cameras.deinit(eng.alloc);
+
+    for (eng.tilemap_renderers.items) |tr| {
+        tr.renderer.deinit();
+        tr.map.release();
+        eng.alloc.destroy(tr);
+    }
+    eng.tilemap_renderers.deinit(eng.alloc);
+
     eng.engine.deinit();
     eng.alloc.destroy(eng);
 }
@@ -121,6 +151,13 @@ export fn pz_swap_buffers(eng: *PzEngine) callconv(.c) void {
 
 export fn pz_render_begin(eng: *PzEngine) callconv(.c) void {
     eng.engine.renderer.begin(eng.engine.uiMatrix());
+}
+
+/// Like pz_render_begin, but begins a world-space pass using the given
+/// camera's matrix instead of screen-space UI coordinates. Use this to draw
+/// sprites/shapes interleaved with tilemap layers (see pz_tilemap_render_*).
+export fn pz_render_begin_world(eng: *PzEngine, cam: *PzCamera) callconv(.c) void {
+    eng.engine.renderer.begin(cam.camera.matrix(&eng.engine.viewport));
 }
 
 export fn pz_render_clear(eng: *PzEngine, r: f32, g: f32, b: f32, a: f32) callconv(.c) void {
@@ -284,6 +321,152 @@ export fn pz_sprite_destroy(spr: *PzSprite) callconv(.c) void {
     spr.sprite.deinit();
     registryRemove(PzSprite, &spr.eng.sprites, spr);
     spr.eng.alloc.destroy(spr);
+}
+
+// ---------------------------------------------------------------------------
+// Camera. Cameras are opaque handles (*PzCamera); valid from pz_camera_create
+// until pz_camera_destroy. Used with pz_render_begin_world and the
+// pz_tilemap_render_* functions.
+// ---------------------------------------------------------------------------
+
+export fn pz_camera_create(eng: *PzEngine) callconv(.c) ?*PzCamera {
+    const wrapper = eng.alloc.create(PzCamera) catch |err| {
+        setLastErrorErr(err);
+        return null;
+    };
+    wrapper.* = .{
+        .eng = eng,
+        .camera = pixzig.Camera2D.init(eng.engine.viewport.logical_size),
+        .registry_index = undefined,
+    };
+    registryAdd(PzCamera, &eng.cameras, eng.alloc, wrapper) catch |err| {
+        eng.alloc.destroy(wrapper);
+        setLastErrorErr(err);
+        return null;
+    };
+    return wrapper;
+}
+
+export fn pz_camera_destroy(cam: *PzCamera) callconv(.c) void {
+    registryRemove(PzCamera, &cam.eng.cameras, cam);
+    cam.eng.alloc.destroy(cam);
+}
+
+export fn pz_camera_set_pos(cam: *PzCamera, x: f32, y: f32) callconv(.c) void {
+    cam.camera.pos = .{ .x = x, .y = y };
+}
+
+export fn pz_camera_get_pos(cam: *PzCamera, out_x: *f32, out_y: *f32) callconv(.c) void {
+    out_x.* = cam.camera.pos.x;
+    out_y.* = cam.camera.pos.y;
+}
+
+export fn pz_camera_set_zoom(cam: *PzCamera, zoom: f32) callconv(.c) void {
+    cam.camera.zoom = zoom;
+}
+
+export fn pz_camera_get_zoom(cam: *PzCamera) callconv(.c) f32 {
+    return cam.camera.zoom;
+}
+
+export fn pz_camera_set_bounds(cam: *PzCamera, l: f32, t: f32, r: f32, b: f32) callconv(.c) void {
+    cam.camera.bounds = .{ .l = l, .t = t, .r = r, .b = b };
+}
+
+export fn pz_camera_clear_bounds(cam: *PzCamera) callconv(.c) void {
+    cam.camera.bounds = null;
+}
+
+// ---------------------------------------------------------------------------
+// Tilemap loading + chunked rendering. Renderers are opaque handles
+// (*PzTilemapRenderer); valid from pz_tilemap_renderer_create until
+// pz_tilemap_renderer_destroy.
+// ---------------------------------------------------------------------------
+
+export fn pz_load_tilemap(eng: *PzEngine, name: [*:0]const u8, path: [*:0]const u8) callconv(.c) i32 {
+    eng.engine.resources.loadTileMap(std.mem.span(name), std.mem.span(path)) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    return 0;
+}
+
+export fn pz_tilemap_renderer_create(eng: *PzEngine, map_name: [*:0]const u8, texture_name: [*:0]const u8) callconv(.c) ?*PzTilemapRenderer {
+    const map = eng.engine.resources.acquireTileMap(std.mem.span(map_name)) catch |err| {
+        setLastErrorErr(err);
+        return null;
+    };
+    const shader = eng.engine.resources.getShader(pixzig.shaders.TextureShader) catch |err| {
+        setLastErrorErr(err);
+        map.release();
+        return null;
+    };
+    const texture = eng.engine.resources.getTexture(std.mem.span(texture_name)) catch |err| {
+        setLastErrorErr(err);
+        map.release();
+        return null;
+    };
+    var renderer = pixzig.tile.ChunkedTiledRenderer.init(eng.alloc, &map.val, shader, texture) catch |err| {
+        setLastErrorErr(err);
+        map.release();
+        return null;
+    };
+    errdefer renderer.deinit();
+
+    const wrapper = eng.alloc.create(PzTilemapRenderer) catch |err| {
+        setLastErrorErr(err);
+        map.release();
+        return null;
+    };
+    wrapper.* = .{ .eng = eng, .map = map, .renderer = renderer, .registry_index = undefined };
+    registryAdd(PzTilemapRenderer, &eng.tilemap_renderers, eng.alloc, wrapper) catch |err| {
+        eng.alloc.destroy(wrapper);
+        setLastErrorErr(err);
+        map.release();
+        return null;
+    };
+    return wrapper;
+}
+
+export fn pz_tilemap_renderer_destroy(tr: *PzTilemapRenderer) callconv(.c) void {
+    tr.renderer.deinit();
+    tr.map.release();
+    registryRemove(PzTilemapRenderer, &tr.eng.tilemap_renderers, tr);
+    tr.eng.alloc.destroy(tr);
+}
+
+export fn pz_tilemap_pixel_size(tr: *PzTilemapRenderer, layer_index: i32, out_w: *f32, out_h: *f32) callconv(.c) void {
+    if (layer_index < 0 or @as(usize, @intCast(layer_index)) >= tr.map.val.layers.items.len) {
+        setLastErrorMsg("invalid layer index");
+        out_w.* = 0;
+        out_h.* = 0;
+        return;
+    }
+    const layer = &tr.map.val.layers.items[@intCast(layer_index)];
+    out_w.* = @floatFromInt(layer.size.x * layer.tileSize.x);
+    out_h.* = @floatFromInt(layer.size.y * layer.tileSize.y);
+}
+
+export fn pz_tilemap_render(tr: *PzTilemapRenderer, cam: *PzCamera) callconv(.c) void {
+    tr.renderer.render(&tr.map.val, &cam.camera, &tr.eng.engine.viewport);
+}
+
+export fn pz_tilemap_render_below(tr: *PzTilemapRenderer, cam: *PzCamera, z: f32) callconv(.c) void {
+    tr.renderer.renderLayersBelow(z, &tr.map.val, &cam.camera, &tr.eng.engine.viewport);
+}
+
+export fn pz_tilemap_render_above(tr: *PzTilemapRenderer, cam: *PzCamera, z: f32) callconv(.c) void {
+    tr.renderer.renderLayersAbove(z, &tr.map.val, &cam.camera, &tr.eng.engine.viewport);
+}
+
+export fn pz_tilemap_check_reload(tr: *PzTilemapRenderer) callconv(.c) bool {
+    if (!tr.map.dirty) return false;
+    tr.map = tr.map.reacquire();
+    tr.renderer.reload(&tr.map.val) catch |err| {
+        setLastErrorErr(err);
+        return false;
+    };
+    return true;
 }
 
 // ---------------------------------------------------------------------------

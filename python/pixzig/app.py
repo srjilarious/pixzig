@@ -7,10 +7,12 @@ timestep loop below mirrors pixzig's own `PixzigAppRunner.gameLoopCore`
 import time
 
 from . import _native as _n
+from .camera import Camera
 from .input import Gamepad, Keyboard, Mouse
 from .shapes import Shapes
 from .sprite import Sprite
 from .text import Text
+from .tilemap import TileMapRenderer
 
 
 class PixzigApp:
@@ -50,6 +52,49 @@ class PixzigApp:
         if not handle:
             raise _n.PixzigError(_n.last_error())
         return Sprite(handle)
+
+    def load_tilemap(self, name: str, path: str) -> None:
+        _n.check(_n.pz_load_tilemap(self._eng, name.encode("utf-8"), path.encode("utf-8")) == 0)
+
+    def create_tilemap_renderer(self, map_name: str, texture_name: str) -> TileMapRenderer:
+        handle = _n.pz_tilemap_renderer_create(self._eng, map_name.encode("utf-8"), texture_name.encode("utf-8"))
+        if not handle:
+            raise _n.PixzigError(_n.last_error())
+        return TileMapRenderer(handle)
+
+    # --- Camera ----------------------------------------------------------
+
+    def create_camera(self) -> Camera:
+        handle = _n.pz_camera_create(self._eng)
+        if not handle:
+            raise _n.PixzigError(_n.last_error())
+        return Camera(handle)
+
+    # --- World-space rendering --------------------------------------------
+    # `render()` is wrapped in a screen-space (UI) render pass by default (see
+    # `run()` below). To draw sprites/shapes in world space -- e.g. interleaved
+    # with `TileMapRenderer.render_below`/`render_above` -- end that pass, run
+    # a world-space pass, then re-begin a UI pass if more screen-space drawing
+    # follows:
+    #
+    #   def render(self):
+    #       self.render_end()
+    #       self.render_begin_world(self.camera)
+    #       self.tilemap_renderer.render_below(self.camera, 1.0)
+    #       self.player_sprite.draw()
+    #       self.tilemap_renderer.render_above(self.camera, 1.0)
+    #       self.render_end()
+    #       self.render_begin()
+    #       self.text.draw("HUD text", 10, 10)
+
+    def render_begin(self) -> None:
+        _n.pz_render_begin(self._eng)
+
+    def render_begin_world(self, camera: Camera) -> None:
+        _n.pz_render_begin_world(self._eng, camera._handle)
+
+    def render_end(self) -> None:
+        _n.pz_render_end(self._eng)
 
     # --- Overridable hooks -----------------------------------------------
 
