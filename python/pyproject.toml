@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pixzig"
+version = "0.1.0"
+description = "Python bindings for the pixzig game engine"
+requires-python = ">=3.9"
+license = "MIT"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pixzig*"]
+
+[tool.setuptools.package-data]
+pixzig = ["*.so", "*.dll"]

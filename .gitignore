@@ -7,3 +7,8 @@ docs-out/
 imgui.ini
 __pycache__/
 *.pyc
+python/pixzig/*.so
+python/pixzig/*.dll
+python/dist/
+python/build/
+python/*.egg-info/
