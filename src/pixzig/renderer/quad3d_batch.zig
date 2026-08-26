@@ -134,9 +134,12 @@ pub const Quad3DBatchQueue = struct {
     }
 
     /// Begins a new 3d render pass, setting the view*projection matrix to
-    /// use and enabling depth testing (clearing the depth buffer) so
-    /// quads submitted in any order occlude correctly.
-    pub fn begin(self: *Quad3DBatchQueue, viewProj: zmath.Mat) void {
+    /// use and enabling depth testing so quads submitted in any order
+    /// occlude correctly. Pass `clearDepth = false` to keep whatever depth
+    /// values are already in the buffer -- e.g. when drawing on top of a
+    /// Quad3DBatch that was rendered earlier in the same frame and should
+    /// still occlude these quads.
+    pub fn begin(self: *Quad3DBatchQueue, viewProj: zmath.Mat, clearDepth: bool) void {
         if (self.begun) {
             self.end();
         }
@@ -146,7 +149,9 @@ pub const Quad3DBatchQueue = struct {
 
         gl.enable(gl.DEPTH_TEST);
         gl.depthFunc(gl.LESS);
-        gl.clear(gl.DEPTH_BUFFER_BIT);
+        if (clearDepth) {
+            gl.clear(gl.DEPTH_BUFFER_BIT);
+        }
     }
 
     /// Enqueues drawing a textured quad given its 4 world-space corners, in
