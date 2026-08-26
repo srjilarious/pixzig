@@ -353,6 +353,16 @@ pub fn build(b: *std.Build) void {
             .path = "examples/grid_render_ex.zig",
         },
         .{
+            .name = "quad3d_ex",
+            .path = "examples/quad3d_ex.zig",
+            .manifest_def = .{
+                .groups = &.{.{ .name = "boot", .assets = &.{"tiles"} }},
+                .assets = &.{
+                    .{ .id = "tiles", .kind = "texture", .path = "mario_grassish2.png" },
+                },
+            },
+        },
+        .{
             .name = "console2_ex",
             .path = "examples/console2_ex.zig",
             .manifest_def = .{
