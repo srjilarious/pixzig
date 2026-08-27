@@ -51,6 +51,7 @@ class HelloApp(PixzigApp):
         return True
 
     def render(self) -> None:
+        self.render_begin()
         self.shapes.filled_rect(20, 20, 260, 60, (40, 40, 80))
         self.shapes.rect(20, 20, 260, 60, (255, 255, 255), line_width=2)
         self.text.draw("Hello from Python!", 30, 35)
@@ -59,6 +60,7 @@ class HelloApp(PixzigApp):
         self.orbiter.draw()
 
         self.text.draw("Arrows/WASD to move, Esc to quit", 20, 440)
+        self.render_end()
 
 
 if __name__ == "__main__":

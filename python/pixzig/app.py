@@ -70,28 +70,28 @@ class PixzigApp:
             raise _n.PixzigError(_n.last_error())
         return Camera(handle)
 
-    # --- World-space rendering --------------------------------------------
-    # `render()` is wrapped in a screen-space (UI) render pass by default (see
-    # `run()` below). To draw sprites/shapes in world space -- e.g. interleaved
-    # with `TileMapRenderer.render_below`/`render_above` -- end that pass, run
-    # a world-space pass, then re-begin a UI pass if more screen-space drawing
-    # follows:
+    # --- Rendering ---------------------------------------------------------
+    # `render()` must bracket its own drawing with `render_begin()`/`render_end()`
+    # -- there's no implicit pass around it. Call `render_begin()` with no
+    # arguments for screen-space (UI) drawing, or `render_begin(camera)` for
+    # world-space drawing -- e.g. interleaved with
+    # `TileMapRenderer.render_below`/`render_above`:
     #
     #   def render(self):
-    #       self.render_end()
-    #       self.render_begin_world(self.camera)
+    #       self.render_begin(self.camera)
     #       self.tilemap_renderer.render_below(self.camera, 1.0)
     #       self.player_sprite.draw()
     #       self.tilemap_renderer.render_above(self.camera, 1.0)
     #       self.render_end()
     #       self.render_begin()
     #       self.text.draw("HUD text", 10, 10)
+    #       self.render_end()
 
-    def render_begin(self) -> None:
-        _n.pz_render_begin(self._eng)
-
-    def render_begin_world(self, camera: Camera) -> None:
-        _n.pz_render_begin_world(self._eng, camera._handle)
+    def render_begin(self, camera: Camera = None) -> None:
+        if camera is None:
+            _n.pz_render_begin(self._eng)
+        else:
+            _n.pz_render_begin_world(self._eng, camera._handle)
 
     def render_end(self) -> None:
         _n.pz_render_end(self._eng)
@@ -126,10 +126,8 @@ class PixzigApp:
                     if not self.update(self._update_step_ms):
                         return
 
-                _n.pz_render_begin(self._eng)
                 _n.pz_render_clear(self._eng, 0.0, 0.0, 0.0, 1.0)
                 self.render()
-                _n.pz_render_end(self._eng)
                 _n.pz_swap_buffers(self._eng)
         finally:
             _n.pz_deinit(self._eng)

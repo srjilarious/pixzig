@@ -52,12 +52,11 @@ class TilemapApp(PixzigApp):
         return True
 
     def render(self) -> None:
-        self.render_end()
-        self.render_begin_world(self.camera)
+        self.render_begin(self.camera)
         self.map_renderer.render_below(self.camera, 1.0)
+        self.shapes.filled_rect(self.guy_pos[0], self.guy_pos[1], 32, 32, (255, 0, 0))
         self.map_renderer.render_above(self.camera, 1.0)
         self.render_end()
-        self.render_begin()
 
 
 if __name__ == "__main__":
