@@ -49,6 +49,15 @@ pub const RendererOptions = struct {
     numSpriteTextures: u8 = 1,
     shapeRendering: bool = true,
     textRendering: bool = false,
+
+    /// Quad capacity of every batch queue (sprite, overlay, shape, and the
+    /// two text batches). A batch auto-flushes once this many quads are
+    /// queued, so a scene that draws more than this in one `begin`/`end`
+    /// simply costs extra draw calls -- correctness is unaffected. Raise it
+    /// for scenes that legitimately draw tens of thousands of quads per
+    /// frame (e.g. a full character grid) to keep them in one draw call.
+    /// The element indices are `u32`, so values well past 1M are safe.
+    maxSprites: u32 = constants.MaxSprites,
 };
 
 /// Specifies the default font for the renderer — either a TTF file path to
@@ -105,16 +114,16 @@ pub fn Renderer(opts: RendererOptions) type {
 
             std.log.info("Setting up {} sprite batch queues.", .{opts.numSpriteTextures});
             for (0..opts.numSpriteTextures) |idx| {
-                rend.batches[idx] = try SpriteBatchQueue.init(alloc, texShader);
+                rend.batches[idx] = try SpriteBatchQueue.initCapacity(alloc, texShader, opts.maxSprites);
                 batchesInit += 1;
             }
-            rend.overlays = try SpriteBatchQueue.init(alloc, texShader);
+            rend.overlays = try SpriteBatchQueue.initCapacity(alloc, texShader, opts.maxSprites);
             overlaysInit = true;
 
             if (opts.shapeRendering) {
                 std.log.info("Setting up shaders for shape renderering.", .{});
                 const colorShader = try resMgr.loadShader(shaders.ColorShader, &shaders.ColorVertexShader, &shaders.ColorPixelShader);
-                rend.shapes = try ShapeBatchQueue.init(alloc, colorShader);
+                rend.shapes = try ShapeBatchQueue.initCapacity(alloc, colorShader, opts.maxSprites);
                 shapesInit = true;
             }
 
@@ -129,7 +138,7 @@ pub fn Renderer(opts: RendererOptions) type {
                     _ = try resMgr.loadShader(shaders.TextColorShader, &shaders.TextColorVertexShader, &shaders.TextColorPixelShader_Desktop);
                 }
 
-                rend.text = try TextRenderer.init(alloc, resMgr);
+                rend.text = try TextRenderer.initCapacity(alloc, resMgr, opts.maxSprites);
                 textInit = true;
 
                 if (initOpts.font) |src| {

@@ -19,14 +19,21 @@ const Inner = quad_batch.QuadBatch(.{ .posDim = 2, .colorDim = 4 });
 /// positions/colors the generic batch expects, plus the multi-rect
 /// composition used by `drawRect`/`drawEnclosingRect` for line-drawn
 /// outlines. The batch is drawn via `flush`, which happens on render or
-/// drawing more than C.MaxSprites.
+/// queueing more than the batch's quad capacity (`C.MaxSprites` by
+/// default, or whatever `initCapacity` was given).
 pub const ShapeBatchQueue = struct {
     inner: Inner,
 
-    /// Creates buffers to contain the draw primitives and OpenGL VBOs to execute the draw
-    /// commands with in a batch.
+    /// Creates the batch with the default `C.MaxSprites` quad capacity.
+    /// Use `initCapacity` to size it explicitly.
     pub fn init(alloc: std.mem.Allocator, shader: *ManagedShader) !ShapeBatchQueue {
-        return .{ .inner = try Inner.init(alloc, shader, C.MaxSprites) };
+        return initCapacity(alloc, shader, C.MaxSprites);
+    }
+
+    /// Like `init`, but caps the batch at `maxQuads` queued quads before it
+    /// auto-flushes. Sizes the CPU scratch buffers and GPU VBOs up front.
+    pub fn initCapacity(alloc: std.mem.Allocator, shader: *ManagedShader, maxQuads: usize) !ShapeBatchQueue {
+        return .{ .inner = try Inner.init(alloc, shader, maxQuads) };
     }
 
     /// Frees our OpenGL VBO resources and the internal buffers we use to queue up shapes.

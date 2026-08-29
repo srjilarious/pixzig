@@ -20,14 +20,22 @@ const Inner = quad_batch.QuadBatch(.{ .posDim = 2, .texDim = 2 });
 /// This is a thin wrapper over `QuadBatch`, translating a destination rect
 /// plus optional 90deg rotation/flip into the 4 corner positions/texcoords
 /// the generic batch expects. The batch is drawn via `flush`, which happens
-/// on render, switching the current texture, or drawing more than
-/// C.MaxSprites.
+/// on render, switching the current texture, or queueing more than the
+/// batch's quad capacity (`C.MaxSprites` by default, or whatever
+/// `initCapacity` was given).
 pub const SpriteBatchQueue = struct {
     inner: Inner,
 
-    /// Initializes the SpriteBatchQueue, creating the buffers and OpenGL objects needed.
+    /// Initializes the SpriteBatchQueue with the default `C.MaxSprites`
+    /// quad capacity. Use `initCapacity` to size it explicitly.
     pub fn init(alloc: std.mem.Allocator, shader: *ManagedShader) !SpriteBatchQueue {
-        return .{ .inner = try Inner.init(alloc, shader, C.MaxSprites) };
+        return initCapacity(alloc, shader, C.MaxSprites);
+    }
+
+    /// Like `init`, but caps the batch at `maxQuads` queued quads before it
+    /// auto-flushes. Sizes the CPU scratch buffers and GPU VBOs up front.
+    pub fn initCapacity(alloc: std.mem.Allocator, shader: *ManagedShader, maxQuads: usize) !SpriteBatchQueue {
+        return .{ .inner = try Inner.init(alloc, shader, maxQuads) };
     }
 
     /// Cleans up the OpenGL objects associated with the SpriteBatchQueue and frees the buffer memory.

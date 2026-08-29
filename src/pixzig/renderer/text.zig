@@ -48,13 +48,21 @@ pub const TextRenderer = struct {
     /// used to reacquire after a hot-reload without re-doing the name lookup.
     font: ?*resources.FontAtlasHandle,
 
+    /// Initializes the text renderer with the default `C.MaxSprites` glyph
+    /// capacity per batch. Use `initCapacity` to size it explicitly.
     pub fn init(alloc: std.mem.Allocator, resMgr: *ResourceManager) !TextRenderer {
+        return initCapacity(alloc, resMgr, C.MaxSprites);
+    }
+
+    /// Like `init`, but each of the two glyph batches (plain and tinted)
+    /// holds up to `maxQuads` glyphs before it auto-flushes.
+    pub fn initCapacity(alloc: std.mem.Allocator, resMgr: *ResourceManager, maxQuads: usize) !TextRenderer {
         const texShader = try resMgr.getShader(shaders.TextureShader);
         const alphaShader = try resMgr.getShader(shaders.FontShader);
         const colorShader = try resMgr.getShader(shaders.TextColorShader);
-        var spriteBatch = try SpriteBatchQueue.init(alloc, texShader);
+        var spriteBatch = try SpriteBatchQueue.initCapacity(alloc, texShader, maxQuads);
         errdefer spriteBatch.deinit();
-        var colorBatch = try ColorBatch.init(alloc, colorShader, C.MaxSprites);
+        var colorBatch = try ColorBatch.init(alloc, colorShader, maxQuads);
         errdefer colorBatch.deinit();
 
         return TextRenderer{

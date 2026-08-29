@@ -53,7 +53,12 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
         vertices: []f32 = &.{},
         texCoords: []f32 = &.{}, // stays empty when !hasTex
         colorCoords: []f32 = &.{}, // stays empty when !hasColor
-        indices: []u16 = &.{},
+        // u32 (not u16) element indices: a batch of `maxQuads` quads has
+        // `4 * maxQuads` vertices, and the largest vertex index must fit
+        // the type. u16 caps a batch at ~16k quads before the index
+        // `@intCast` below overflows; u32 lifts that to well past any
+        // sane `maxQuads`. Drawn with `gl.UNSIGNED_INT` to match.
+        indices: []u32 = &.{},
 
         allocator: std.mem.Allocator,
         maxQuads: usize,
@@ -98,7 +103,7 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
             }
             errdefer if (comptime hasColor) alloc.free(batch.colorCoords);
 
-            batch.indices = try alloc.alloc(u16, 6 * maxQuads);
+            batch.indices = try alloc.alloc(u32, 6 * maxQuads);
             errdefer alloc.free(batch.indices);
 
             gl.genVertexArrays(1, &batch.vao);
@@ -127,7 +132,7 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
             gl.genBuffers(1, &batch.vboIndices);
             errdefer gl.deleteBuffers(1, &batch.vboIndices);
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, batch.vboIndices);
-            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(batch.indices.len * @sizeOf(u16)), null, gl.DYNAMIC_DRAW);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(batch.indices.len * @sizeOf(u32)), null, gl.DYNAMIC_DRAW);
 
             gl.enable(gl.BLEND);
             gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -246,7 +251,7 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
                 self.currColor += 4 * layout.colorDim;
             }
 
-            const baseVertIdx: u16 = @intCast(vBase / layout.posDim);
+            const baseVertIdx: u32 = @intCast(vBase / layout.posDim);
             const idx = self.indices[self.currIdx .. self.currIdx + 6];
             idx[0] = baseVertIdx + 0;
             idx[1] = baseVertIdx + 1;
@@ -302,9 +307,9 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
             }
 
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.vboIndices);
-            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * @sizeOf(u16) * self.currNumQuads), &self.indices[0], gl.STATIC_DRAW);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * @sizeOf(u32) * self.currNumQuads), &self.indices[0], gl.STATIC_DRAW);
 
-            gl.drawElements(gl.TRIANGLES, @intCast(6 * self.currNumQuads), gl.UNSIGNED_SHORT, null);
+            gl.drawElements(gl.TRIANGLES, @intCast(6 * self.currNumQuads), gl.UNSIGNED_INT, null);
 
             gl.disableVertexAttribArray(self.attrCoord);
             if (comptime hasTex) gl.disableVertexAttribArray(self.attrTexCoord);
@@ -360,7 +365,9 @@ pub fn StaticQuadBatch(comptime layout: BatchLayout) type {
         vertices: std.ArrayList(f32) = .empty,
         texCoords: std.ArrayList(f32) = .empty, // unused when !hasTex
         colorCoords: std.ArrayList(f32) = .empty, // unused when !hasColor
-        indices: std.ArrayList(u16) = .empty,
+        // u32 element indices, matching `QuadBatch` -- drawn with
+        // `gl.UNSIGNED_INT` so a static mesh can hold more than ~16k quads.
+        indices: std.ArrayList(u32) = .empty,
 
         numIndices: usize = 0,
         texture: if (hasTex) ?*const Texture else void = if (hasTex) null else {},
@@ -484,7 +491,7 @@ pub fn StaticQuadBatch(comptime layout: BatchLayout) type {
         ) !void {
             std.debug.assert(self.building);
 
-            const baseVert: u16 = @intCast(self.vertices.items.len / layout.posDim);
+            const baseVert: u32 = @intCast(self.vertices.items.len / layout.posDim);
 
             var vbuf: [4 * layout.posDim]f32 = undefined;
             inline for (0..4) |i| {
@@ -552,7 +559,7 @@ pub fn StaticQuadBatch(comptime layout: BatchLayout) type {
             }
 
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.vboIndices);
-            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(self.indices.items.len * @sizeOf(u16)), &self.indices.items[0], gl.STATIC_DRAW);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(self.indices.items.len * @sizeOf(u32)), &self.indices.items[0], gl.STATIC_DRAW);
 
             gl.bindVertexArray(0);
             gl.bindBuffer(gl.ARRAY_BUFFER, 0);
@@ -584,7 +591,7 @@ pub fn StaticQuadBatch(comptime layout: BatchLayout) type {
             }
 
             gl.bindVertexArray(self.vao);
-            gl.drawElements(gl.TRIANGLES, @intCast(self.numIndices), gl.UNSIGNED_SHORT, null);
+            gl.drawElements(gl.TRIANGLES, @intCast(self.numIndices), gl.UNSIGNED_INT, null);
             gl.bindVertexArray(0);
         }
     };
