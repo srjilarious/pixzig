@@ -272,7 +272,7 @@ const ReloadInfo = union(enum) {
     atlas: struct { base_name: []const u8 },
     /// Atlas where the resource name differs from the file base name.
     atlas_named: struct { name: []const u8, base_path: []const u8 },
-    font_ttf: struct { name: []const u8, path: []const u8, font_size: f32 },
+    font_ttf: struct { name: []const u8, path: []const u8, face_index: i32 = 0, font_size: f32 },
     tilemap: struct { name: []const u8, path: []const u8 },
 
     /// Deep-copy all owned strings into `alloc`. The original slices are
@@ -293,6 +293,7 @@ const ReloadInfo = union(enum) {
             .font_ttf => |f| .{ .font_ttf = .{
                 .name = try alloc.dupe(u8, f.name),
                 .path = try alloc.dupe(u8, f.path),
+                .face_index = f.face_index,
                 .font_size = f.font_size,
             } },
             .tilemap => |t| .{ .tilemap = .{
@@ -499,7 +500,7 @@ pub const ResourceManager = struct {
             .atlas => |a| _ = try self.loadAtlasImpl(a.base_name),
             .atlas_named => |a| _ = try self.loadAtlasNamedImpl(a.name, a.base_path),
             .font_ttf => |f| {
-                const fa = try FontAtlas.initFromTtfFile(f.path, f.font_size, self.alloc);
+                const fa = try FontAtlas.initFromTtfFileIndexed(f.path, f.face_index, f.font_size, self.alloc);
                 const managed = try self.getOrCreateFont(f.name);
                 try managed.add(fa);
             },
@@ -1036,7 +1037,19 @@ pub const ResourceManager = struct {
         fontPath: []const u8,
         fontSize: f32,
     ) !void {
-        const fa = try FontAtlas.initFromTtfFile(fontPath, fontSize, self.alloc);
+        return self.loadFontFromTtfFileIndexed(name, fontPath, 0, fontSize);
+    }
+
+    /// Like `loadFontFromTtfFile`, but `faceIndex` selects a face inside a
+    /// TrueType/OpenType collection (`.ttc`). Use 0 for a plain font file.
+    pub fn loadFontFromTtfFileIndexed(
+        self: *Self,
+        name: []const u8,
+        fontPath: []const u8,
+        faceIndex: i32,
+        fontSize: f32,
+    ) !void {
+        const fa = try FontAtlas.initFromTtfFileIndexed(fontPath, faceIndex, fontSize, self.alloc);
         const managed = try self.getOrCreateFont(name);
         try managed.add(fa);
 
@@ -1044,7 +1057,7 @@ pub const ResourceManager = struct {
             self.ensureHotReload();
             if (self.hot_reload) |*hr| {
                 hr.registerWatch(fontPath, .{
-                    .font_ttf = .{ .name = name, .path = fontPath, .font_size = fontSize },
+                    .font_ttf = .{ .name = name, .path = fontPath, .face_index = faceIndex, .font_size = fontSize },
                 }) catch |err| {
                     std.log.warn("Could not register font watch for '{s}': {}", .{ fontPath, err });
                 };
@@ -1084,6 +1097,20 @@ pub const ResourceManager = struct {
     pub fn acquireFontAtlas(self: *Self, name: []const u8) !*FontAtlasHandle {
         const managed = self.fonts.get(name) orelse return error.NoFontWithThatName;
         return managed.acquire() orelse return error.NoFontWithThatName;
+    }
+
+    /// Appends a fallback face to an already-loaded TTF font. Codepoints the
+    /// primary face (and any earlier fallback) lacks are then filled from
+    /// this face. `faceIndex` selects a face inside a `.ttc` collection; use
+    /// 0 for a plain font file.
+    ///
+    /// Note: a hot-reload of the primary font file rebuilds the atlas from
+    /// that file alone and drops fallbacks; re-add them after a reload if it
+    /// matters for the build.
+    pub fn addFontFallback(self: *Self, name: []const u8, fontPath: []const u8, faceIndex: i32) !void {
+        const managed = self.fonts.get(name) orelse return error.NoFontWithThatName;
+        const handle = managed.get() orelse return error.NoFontWithThatName;
+        try handle.val.addFallbackFaceFromFile(fontPath, faceIndex, self.alloc);
     }
 
     // -----------------------------------------------------------------------

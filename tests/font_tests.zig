@@ -2,6 +2,13 @@ const std = @import("std");
 const testz = @import("testz");
 const pixzig = @import("pixzig");
 
+const FontAtlas = pixzig.renderer.FontAtlas;
+
+fn sameGlyph(a: pixzig.renderer.Character, b: pixzig.renderer.Character) bool {
+    return a.atlas_pos.x == b.atlas_pos.x and a.atlas_pos.y == b.atlas_pos.y and
+        a.size.x == b.size.x and a.size.y == b.size.y and a.advance == b.advance;
+}
+
 pub fn loadFontTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = alloc;
     const font_data = try std.Io.Dir.cwd().readFileAlloc(
@@ -47,4 +54,123 @@ pub fn loadFontTest(io: std.Io, alloc: std.mem.Allocator) !void {
             packed_chars[idx].xadvance,
         });
     }
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic-codepoint FontAtlas (growing texture, on-demand block loading,
+// fallback faces, notdef). These need a GL context, which tests/main.zig
+// sets up globally before any test runs.
+// ---------------------------------------------------------------------------
+
+pub fn atlasPacksAsciiBlockAtInitTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var atlas = try FontAtlas.initFromTtfFile("assets/Roboto-Medium.ttf", 20.0, alloc);
+    defer atlas.deinit();
+
+    // 'A' is a visible glyph with a real advance.
+    const a = atlas.getChar('A').?;
+    try testz.expectTrue(a.size.x > 0);
+    try testz.expectTrue(a.size.y > 0);
+    try testz.expectTrue(a.advance > 0);
+
+    // Space has an advance but no bitmap.
+    const space = atlas.getChar(' ').?;
+    try testz.expectEqual(space.size.x, 0);
+    try testz.expectTrue(space.advance > 0);
+}
+
+pub fn atlasLoadsNonAsciiBlockOnDemandTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var atlas = try FontAtlas.initFromTtfFile("assets/Roboto-Medium.ttf", 20.0, alloc);
+    defer atlas.deinit();
+
+    // Cyrillic capital Zhe (U+0416) lives in block 0x04; Roboto has it.
+    try testz.expectFalse(atlas.loaded_blocks.contains(0x04));
+    const zhe = atlas.getChar(0x0416).?;
+    try testz.expectTrue(zhe.size.x > 0);
+    try testz.expectTrue(zhe.advance > 0);
+    try testz.expectTrue(atlas.loaded_blocks.contains(0x04));
+
+    // Greek capital Gamma (U+0393), block 0x03.
+    const gamma = atlas.getChar(0x0393).?;
+    try testz.expectTrue(gamma.size.x > 0);
+}
+
+pub fn atlasReturnsNotdefForUncoveredCodepointTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var atlas = try FontAtlas.initFromTtfFile("assets/Roboto-Medium.ttf", 20.0, alloc);
+    defer atlas.deinit();
+
+    // CJT ideograph U+4E2D: Roboto has no glyph, so it must resolve to the
+    // atlas's notdef box rather than null or an empty glyph.
+    const got = atlas.getChar(0x4E2D).?;
+    try testz.expectTrue(sameGlyph(got, atlas.notdef));
+    try testz.expectTrue(atlas.notdef.size.x > 0);
+    try testz.expectTrue(atlas.notdef.size.y > 0);
+}
+
+pub fn atlasFallbackFaceFillsGapsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    // Primary face only has the digits and '.'; it lacks 'A'.
+    var atlas = try FontAtlas.initFromTtfFile("assets/RobotoDigits-subset.ttf", 20.0, alloc);
+    defer atlas.deinit();
+
+    const five_before = atlas.getChar('5').?;
+    try testz.expectTrue(five_before.size.x > 0);
+
+    // 'A' is missing from the primary -> notdef.
+    try testz.expectTrue(sameGlyph(atlas.getChar('A').?, atlas.notdef));
+
+    // Add the full Roboto as a fallback; 'A' now resolves from it.
+    try atlas.addFallbackFaceFromFile("assets/Roboto-Medium.ttf", 0, alloc);
+    const a_after = atlas.getChar('A').?;
+    try testz.expectFalse(sameGlyph(a_after, atlas.notdef));
+    try testz.expectTrue(a_after.size.x > 0);
+    try testz.expectTrue(a_after.advance > 0);
+
+    // The primary's own digits still resolve from the primary.
+    try testz.expectTrue(sameGlyph(atlas.getChar('5').?, five_before));
+}
+
+pub fn atlasGrowPreservesGlyphPixelPositionTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var atlas = try FontAtlas.initFromTtfFile("assets/Roboto-Medium.ttf", 20.0, alloc);
+    defer atlas.deinit();
+
+    const before = atlas.getChar('A').?;
+    const dim_before = atlas.dim;
+    // A packed glyph's normalized UV is its pixel rect over the atlas edge.
+    try testz.expectTrue(@abs(before.coords.l - @as(f32, @floatFromInt(before.atlas_pos.x)) / @as(f32, @floatFromInt(dim_before))) < 0.0001);
+
+    try testz.expectTrue(atlas.grow());
+    try testz.expectTrue(atlas.grow());
+    atlas.commitTexture();
+
+    const after = atlas.getChar('A').?;
+    // Pixel position is unchanged; only the normalization changed.
+    try testz.expectEqual(after.atlas_pos.x, before.atlas_pos.x);
+    try testz.expectEqual(after.atlas_pos.y, before.atlas_pos.y);
+    try testz.expectEqual(atlas.dim, dim_before * 4);
+    try testz.expectTrue(@abs(after.coords.l - @as(f32, @floatFromInt(after.atlas_pos.x)) / @as(f32, @floatFromInt(atlas.dim))) < 0.0001);
+
+    // The glyph bitmap itself survived the row-by-row copy into the wider buffer.
+    var any_ink = false;
+    var yy: i32 = 0;
+    while (yy < after.size.y) : (yy += 1) {
+        var xx: i32 = 0;
+        while (xx < after.size.x) : (xx += 1) {
+            const idx: usize = @intCast((after.atlas_pos.y + yy) * atlas.dim + (after.atlas_pos.x + xx));
+            if (atlas.pixels[idx] != 0) any_ink = true;
+        }
+    }
+    try testz.expectTrue(any_ink);
+}
+
+pub fn atlasFindsFaceIndexByNameTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    const data = try std.Io.Dir.cwd().readFileAlloc(io, "assets/Roboto-Medium.ttf", alloc, .unlimited);
+    defer alloc.free(data);
+
+    // A plain (non-collection) TTF: face 0 matches its own family name.
+    try testz.expectEqual(pixzig.renderer.findFaceIndexByName(data, "Roboto").?, @as(i32, 0));
+    try testz.expectTrue(pixzig.renderer.findFaceIndexByName(data, "NoSuchFamilyXYZ") == null);
 }

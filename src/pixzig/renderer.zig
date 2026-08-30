@@ -27,8 +27,12 @@ const Texture = textures.Texture;
 const ResourceManager = resources.ResourceManager;
 const Shader = shaders.Shader;
 pub const FontAtlas = textMod.FontAtlas;
+pub const FontFace = textMod.FontFace;
+pub const Character = textMod.Character;
 pub const FontMetrics = textMod.FontMetrics;
 pub const measureFontFile = textMod.measureFontFile;
+pub const measureFontFileIndexed = textMod.measureFontFileIndexed;
+pub const findFaceIndexByName = textMod.findFaceIndexByName;
 
 pub const QuadBatch = quad_batch.QuadBatch;
 pub const BatchLayout = quad_batch.BatchLayout;
@@ -63,7 +67,9 @@ pub const RendererOptions = struct {
 /// Specifies the default font for the renderer — either a TTF file path to
 /// load at init time, or the id of a font already in the ResourceManager.
 pub const FontSource = union(enum) {
-    path: struct { face: [:0]const u8, size: f32 = 20.0 },
+    /// `face` is the font file path; `face_index` selects a face inside a
+    /// `.ttc` collection (0 for a plain font file).
+    path: struct { face: [:0]const u8, size: f32 = 20.0, face_index: i32 = 0 },
     id: []const u8,
 };
 
@@ -144,7 +150,7 @@ pub fn Renderer(opts: RendererOptions) type {
                 if (initOpts.font) |src| {
                     switch (src) {
                         .path => |p| {
-                            try resMgr.loadFontFromTtfFile(DefaultFontName, p.face, p.size);
+                            try resMgr.loadFontFromTtfFileIndexed(DefaultFontName, p.face, p.face_index, p.size);
                             const font = resMgr.fonts.get(DefaultFontName).?;
                             try rend.text.setFont(font);
                         },
@@ -193,6 +199,17 @@ pub fn Renderer(opts: RendererOptions) type {
             std.debug.assert(opts.textRendering);
             const font = resMgr.fonts.get(id) orelse return error.NoFontWithThatName;
             try self.impl.text.setFont(font);
+        }
+
+        /// Appends a fallback face to the renderer's default font (the one
+        /// loaded from `RendererInitOpts.font`). Codepoints the primary face
+        /// lacks are then drawn from this face; anything no face provides
+        /// falls back to the atlas's `.notdef` box. `faceIndex` selects a
+        /// face inside a `.ttc`; use 0 for a plain font file.
+        pub fn addDefaultFontFallback(self: *Self, resMgr: *ResourceManager, fontPath: []const u8, faceIndex: i32) !void {
+            _ = self;
+            std.debug.assert(opts.textRendering);
+            try resMgr.addFontFallback(DefaultFontName, fontPath, faceIndex);
         }
 
         /// Starts a frame: opens all sprite batches (plus shape/text batches

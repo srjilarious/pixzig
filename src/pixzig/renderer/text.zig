@@ -23,14 +23,43 @@ const SpriteBatchQueue = @import("./sprite_batch.zig").SpriteBatchQueue;
 const ColorBatch = quad_batch.QuadBatch(.{ .posDim = 2, .texDim = 2, .colorDim = 4 });
 
 pub const FontAtlas = font_atlas.FontAtlas;
+pub const FontFace = font_atlas.FontFace;
 pub const Character = font_atlas.Character;
 pub const stb_tt = font_atlas.stb_tt;
 pub const FontMetrics = font_atlas.FontMetrics;
 pub const measureFontFile = font_atlas.measureFontFile;
+pub const measureFontFileIndexed = font_atlas.measureFontFileIndexed;
+pub const findFaceIndexByName = font_atlas.findFaceIndexByName;
 
 fn scaleInt(value: i32, scale: f32) i32 {
     return @as(i32, @intFromFloat(@as(f32, @floatFromInt(value)) * scale));
 }
+
+/// Iterates the UTF-8 codepoints of a byte slice, yielding U+FFFD for any
+/// malformed sequence so a bad byte still advances the pen by one glyph
+/// rather than derailing the whole string.
+const CodepointIter = struct {
+    text: []const u8,
+    i: usize = 0,
+
+    fn next(self: *CodepointIter) ?u21 {
+        if (self.i >= self.text.len) return null;
+        const seq_len = std.unicode.utf8ByteSequenceLength(self.text[self.i]) catch {
+            self.i += 1;
+            return 0xFFFD;
+        };
+        if (self.i + seq_len > self.text.len) {
+            self.i = self.text.len;
+            return 0xFFFD;
+        }
+        const cp = std.unicode.utf8Decode(self.text[self.i .. self.i + seq_len]) catch {
+            self.i += seq_len;
+            return 0xFFFD;
+        };
+        self.i += seq_len;
+        return cp;
+    }
+};
 
 pub const TextRenderer = struct {
     spriteBatch: SpriteBatchQueue,
@@ -103,6 +132,21 @@ pub const TextRenderer = struct {
         self.colorBatch.flush();
     }
 
+    /// Makes sure every glyph `text` needs is packed into the active font
+    /// atlas and uploaded before the caller queues quads for it. If packing
+    /// grew the atlas texture, every glyph's UVs changed, so any quads
+    /// already queued this frame are flushed against the still-current
+    /// texture before the grown one is uploaded.
+    fn syncAtlasForText(self: *TextRenderer, text: []const u8) void {
+        const fa = &self.font.?.val;
+        fa.loadBlocksForText(text);
+        if (fa.grew_since_upload) {
+            self.spriteBatch.flush();
+            self.colorBatch.flush();
+        }
+        fa.commitTexture();
+    }
+
     /// Adopt a new font for rendering. Releases any previously held handle,
     /// acquires ownership of a new handle, and swaps the underlying batch's
     /// shader to the alpha-channel program when the atlas was packed as
@@ -128,12 +172,12 @@ pub const TextRenderer = struct {
             return drawSize;
         }
 
-        const posY = pos.y + self.font.?.val.maxY;
-        for (text) |c| {
-            const charDataPtr = self.font.?.val.chars.get(@intCast(c));
-            if (charDataPtr == null) continue;
+        self.syncAtlasForText(text);
 
-            const charData = charDataPtr.?;
+        const posY = pos.y + self.font.?.val.maxY;
+        var it = CodepointIter{ .text = text };
+        while (it.next()) |cp| {
+            const charData = self.font.?.val.getChar(cp) orelse continue;
 
             // Only draw if character has visual representation
             if (charData.size.x > 0 and charData.size.y > 0) {
@@ -169,12 +213,12 @@ pub const TextRenderer = struct {
             .{ color.r, color.g, color.b, color.a },
         };
 
-        const posY = pos.y + self.font.?.val.maxY;
-        for (text) |c| {
-            const charDataPtr = self.font.?.val.chars.get(@intCast(c));
-            if (charDataPtr == null) continue;
+        self.syncAtlasForText(text);
 
-            const charData = charDataPtr.?;
+        const posY = pos.y + self.font.?.val.maxY;
+        var it = CodepointIter{ .text = text };
+        while (it.next()) |cp| {
+            const charData = self.font.?.val.getChar(cp) orelse continue;
 
             if (charData.size.x > 0 and charData.size.y > 0) {
                 const dest = RectF.fromPosSize(currX + charData.bearing.x, posY - charData.bearing.y, charData.size.x, charData.size.y);
@@ -214,12 +258,12 @@ pub const TextRenderer = struct {
             return drawSize;
         }
 
-        const posY = pos.y + scaleInt(self.font.?.val.maxY, scale);
-        for (text) |c| {
-            const charDataPtr = self.font.?.val.chars.get(@intCast(c));
-            if (charDataPtr == null) continue;
+        self.syncAtlasForText(text);
 
-            const charData = charDataPtr.?;
+        const posY = pos.y + scaleInt(self.font.?.val.maxY, scale);
+        var it = CodepointIter{ .text = text };
+        while (it.next()) |cp| {
+            const charData = self.font.?.val.getChar(cp) orelse continue;
 
             // Only draw if character has visual representation
             if (charData.size.x > 0 and charData.size.y > 0) {
@@ -257,12 +301,12 @@ pub const TextRenderer = struct {
             return drawSize;
         }
 
-        const posY = pos.y + self.font.?.val.maxY;
-        for (text) |c| {
-            const charDataPtr = self.font.?.val.chars.get(@intCast(c));
-            if (charDataPtr == null) continue;
+        self.syncAtlasForText(text);
 
-            const charData = charDataPtr.?;
+        const posY = pos.y + self.font.?.val.maxY;
+        var it = CodepointIter{ .text = text };
+        while (it.next()) |cp| {
+            const charData = self.font.?.val.getChar(cp) orelse continue;
 
             if (charData.size.x > 0 and charData.size.y > 0) {
                 var dest = RectF.fromPosSize(
@@ -309,11 +353,13 @@ pub const TextRenderer = struct {
         var width: i32 = 0;
         var height: i32 = 0;
 
-        for (text) |c| {
-            const charDataPtr = self.font.?.val.chars.get(@intCast(c));
-            if (charDataPtr == null) continue;
+        // Pack any not-yet-loaded blocks so their advances are known. No
+        // quads are queued here, so a grow needs no batch flush.
+        _ = self.font.?.val.ensureBlocksForText(text);
 
-            const charData = charDataPtr.?;
+        var it = CodepointIter{ .text = text };
+        while (it.next()) |cp| {
+            const charData = self.font.?.val.getChar(cp) orelse continue;
             width += @intCast(charData.advance);
             height = @max(height, charData.size.y);
         }
