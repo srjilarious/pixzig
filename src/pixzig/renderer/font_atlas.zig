@@ -208,7 +208,17 @@ pub const FontAtlas = struct {
     grew_since_upload: bool,
 
     texture: Texture,
+    /// Running max glyph height over everything packed so far. Used by the
+    /// imgui/console layers as a line-height estimate; it grows as taller
+    /// blocks load, so do NOT use it for baseline placement -- see `ascent`.
     maxY: i32,
+    /// Distance in pixels from a line's top (the `pos.y` the text renderer
+    /// is handed) down to the baseline: the primary face's scaled vmetrics
+    /// ascent. A fixed font metric, not a running max over packed glyphs,
+    /// so loading a tall on-demand block (CJK, Nerd Font) never shifts
+    /// where already-drawn ASCII text sits. Equals `maxY` for a bitmap
+    /// font atlas, which has no scalable face to measure.
+    ascent: i32,
     isAlpha: bool,
 
     font_size: f32,
@@ -442,7 +452,7 @@ pub const FontAtlas = struct {
         var descent: c_int = 0;
         var line_gap: c_int = 0;
         stb_tt.c.stbtt_GetFontVMetrics(&faces.items[0].info, &ascent, &descent, &line_gap);
-        const scaled_ascent: i32 = @intFromFloat(faces.items[0].scale * @as(f32, @floatFromInt(ascent)));
+        const scaled_ascent: i32 = @intFromFloat(@round(faces.items[0].scale * @as(f32, @floatFromInt(ascent))));
 
         const pixels = try alloc.alloc(u8, @intCast(initial_dim * initial_dim));
         errdefer alloc.free(pixels);
@@ -480,6 +490,7 @@ pub const FontAtlas = struct {
                 .src = .{ .l = 0, .t = 0, .r = 1, .b = 1 },
             },
             .maxY = 0,
+            .ascent = scaled_ascent,
             .isAlpha = true,
             .font_size = fontSize,
             .alloc = alloc,
@@ -569,6 +580,16 @@ pub const FontAtlas = struct {
         }
         self.font_size = size_px;
 
+        // Re-measure the baseline for the new pixel size before any glyph
+        // is packed -- it comes from the face's vmetrics, not from glyphs.
+        {
+            var asc: c_int = 0;
+            var desc: c_int = 0;
+            var lgap: c_int = 0;
+            stb_tt.c.stbtt_GetFontVMetrics(&self.faces.items[0].info, &asc, &desc, &lgap);
+            self.ascent = @intFromFloat(@round(self.faces.items[0].scale * @as(f32, @floatFromInt(asc))));
+        }
+
         // Drop every packed glyph and rewind the shelf packer.
         self.chars.clearRetainingCapacity();
         self.loaded_blocks.clearRetainingCapacity();
@@ -596,13 +617,7 @@ pub const FontAtlas = struct {
         self.buildNotdef();
         try self.ensureBlock(0); // ASCII + Latin-1 supplement, the common path
 
-        if (self.maxY == 0) {
-            var ascent: c_int = 0;
-            var descent: c_int = 0;
-            var line_gap: c_int = 0;
-            stb_tt.c.stbtt_GetFontVMetrics(&self.faces.items[0].info, &ascent, &descent, &line_gap);
-            self.maxY = @intFromFloat(self.faces.items[0].scale * @as(f32, @floatFromInt(ascent)));
-        }
+        if (self.maxY == 0) self.maxY = self.ascent;
 
         self.uploadTexture();
         self.dirty = false;
@@ -799,6 +814,9 @@ pub const FontAtlas = struct {
                 .src = RectF{ .l = 0, .t = 0, .r = 1, .b = 1 },
             },
             .maxY = maxY,
+            // No scalable face to measure; the bitmap path top-aligns the
+            // tallest cell exactly as before, so the baseline is `maxY`.
+            .ascent = maxY,
             .isAlpha = false,
             .font_size = 0,
             .alloc = alloc,

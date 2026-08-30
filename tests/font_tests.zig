@@ -207,6 +207,45 @@ pub fn atlasSetFontSizeKeepsFallbackFacesTest(io: std.Io, alloc: std.mem.Allocat
     try testz.expectTrue(atlas.getChar('5').?.size.x > 0);
 }
 
+pub fn atlasBaselineStaysStableAcrossOnDemandBlocksTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var atlas = try FontAtlas.initFromTtfFile("assets/Roboto-Medium.ttf", 20.0, alloc);
+    defer atlas.deinit();
+
+    // The baseline is the face's scaled vmetrics ascent -- exactly what the
+    // GL-free `measureFontFile` reports for the same file and pixel size.
+    const metrics = try pixzig.renderer.measureFontFile("assets/Roboto-Medium.ttf", 20.0, alloc);
+    try testz.expectEqual(atlas.ascent, metrics.ascent);
+
+    const baseline_before = atlas.ascent;
+
+    // Pull in several non-ASCII blocks on demand and force a texture grow.
+    _ = atlas.getChar(0x0416); // Cyrillic Zhe, block 0x04
+    _ = atlas.getChar(0x0393); // Greek Gamma, block 0x03
+    _ = atlas.getChar(0x2018); // curly quote,  block 0x20
+    try testz.expectTrue(atlas.grow());
+    atlas.commitTexture();
+
+    // `maxY` is a running max and may have moved; `ascent` must not, so
+    // ASCII text drawn before and after those loads shares one baseline.
+    try testz.expectEqual(atlas.ascent, baseline_before);
+}
+
+pub fn atlasSetFontSizeUpdatesBaselineTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var atlas = try FontAtlas.initFromTtfFile("assets/Roboto-Medium.ttf", 16.0, alloc);
+    defer atlas.deinit();
+
+    const small = try pixzig.renderer.measureFontFile("assets/Roboto-Medium.ttf", 16.0, alloc);
+    try testz.expectEqual(atlas.ascent, small.ascent);
+
+    try atlas.setFontSize(40.0);
+
+    const big = try pixzig.renderer.measureFontFile("assets/Roboto-Medium.ttf", 40.0, alloc);
+    try testz.expectEqual(atlas.ascent, big.ascent);
+    try testz.expectTrue(atlas.ascent > small.ascent);
+}
+
 pub fn atlasSetFontSizeRejectsBitmapFontTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     // A bitmap font goes through zstbi to decode its PNG; outside the

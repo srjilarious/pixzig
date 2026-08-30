@@ -174,7 +174,7 @@ pub const TextRenderer = struct {
 
         self.syncAtlasForText(text);
 
-        const posY = pos.y + self.font.?.val.maxY;
+        const posY = pos.y + self.font.?.val.ascent;
         var it = CodepointIter{ .text = text };
         while (it.next()) |cp| {
             const charData = self.font.?.val.getChar(cp) orelse continue;
@@ -215,7 +215,7 @@ pub const TextRenderer = struct {
 
         self.syncAtlasForText(text);
 
-        const posY = pos.y + self.font.?.val.maxY;
+        const posY = pos.y + self.font.?.val.ascent;
         var it = CodepointIter{ .text = text };
         while (it.next()) |cp| {
             const charData = self.font.?.val.getChar(cp) orelse continue;
@@ -260,7 +260,7 @@ pub const TextRenderer = struct {
 
         self.syncAtlasForText(text);
 
-        const posY = pos.y + scaleInt(self.font.?.val.maxY, scale);
+        const posY = pos.y + scaleInt(self.font.?.val.ascent, scale);
         var it = CodepointIter{ .text = text };
         while (it.next()) |cp| {
             const charData = self.font.?.val.getChar(cp) orelse continue;
@@ -303,7 +303,7 @@ pub const TextRenderer = struct {
 
         self.syncAtlasForText(text);
 
-        const posY = pos.y + self.font.?.val.maxY;
+        const posY = pos.y + self.font.?.val.ascent;
         var it = CodepointIter{ .text = text };
         while (it.next()) |cp| {
             const charData = self.font.?.val.getChar(cp) orelse continue;
