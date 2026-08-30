@@ -425,6 +425,14 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             eng.window.setUserPointer(@ptrCast(&eng.window_state));
             _ = eng.window.setFramebufferSizeCallback(framebufferSizeCallback);
 
+            // Keyboard is always present. The char callback is the only
+            // layout-correct source of typed text; the key callback is used
+            // only for GLFW's OS-derived modifier bits (see
+            // KeyboardState.mods_override).
+            input.keyboard.setKeyboardTarget(&eng.inputs.keyboard);
+            _ = eng.window.setKeyCallback(input.keyboard.keyCallback);
+            _ = eng.window.setCharCallback(input.keyboard.charCallback);
+
             if (eng.inputs.mouse_enabled) {
                 input.mouse.setScrollTarget(&eng.inputs.mouse);
                 _ = eng.window.setScrollCallback(input.mouse.scrollCallback);

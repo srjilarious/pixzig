@@ -106,11 +106,19 @@ pub fn charFromKey(key: glfw.Key, shift: bool) ?u8 {
 /// are currently down and which modifier keys are active.
 pub const KeyboardState = struct {
     keys: std.StaticBitSet(NumKeys),
+    /// Modifier state as reported by GLFW's key callback `mods` bitfield,
+    /// or null before any key event has been seen. GLFW derives these bits
+    /// from OS keymap state, so they reflect OS-level remaps (for example
+    /// CapsLock remapped to Control) that the physical `keys` bitset can't:
+    /// the remapped CapsLock key still polls as `.caps_lock`, never
+    /// `.left_control`. When present, `modifiers()` ORs this with the
+    /// physical-key reading so either source can satisfy a modifier query.
+    mods_override: ?KeyModifier,
 
     /// Initializes a new KeyboardState with all keys up.
     pub fn init() KeyboardState {
         const keys = std.StaticBitSet(NumKeys).initEmpty();
-        return .{ .keys = keys };
+        return .{ .keys = keys, .mods_override = null };
     }
 
     /// Returns true if the provided key is currently up in this state.
@@ -151,6 +159,7 @@ pub const KeyboardState = struct {
     /// Clears the keyboard state by setting all keys to up.
     pub fn clear(self: *KeyboardState) void {
         self.keys.setRangeValue(.{ .start = 0, .end = NumKeys }, false);
+        self.mods_override = null;
     }
 
     /// Returns a KeyModifier struct representing the state of the modifier
@@ -158,35 +167,87 @@ pub const KeyboardState = struct {
     /// It checks if either the left or right version of each modifier key
     /// is down and sets the corresponding field in the KeyModifier struct
     /// accordingly.
+    ///
+    /// When `mods_override` is set (GLFW key callback has run at least
+    /// once), its bits are OR-ed in so a modifier the OS produces from a
+    /// remapped physical key (e.g. CapsLock acting as Control) is also
+    /// reported, even though that physical key polls as something else.
     pub fn modifiers(self: *const KeyboardState) KeyModifier {
-        return .{
+        var m: KeyModifier = .{
             .alt = self.down(.left_alt) or self.down(.right_alt),
             .ctrl = self.down(.left_control) or self.down(.right_control),
             .shift = self.down(.left_shift) or self.down(.right_shift),
             .super = self.down(.left_super) or self.down(.right_super),
         };
+        if (self.mods_override) |o| {
+            m.alt = m.alt or o.alt;
+            m.ctrl = m.ctrl or o.ctrl;
+            m.shift = m.shift or o.shift;
+            m.super = m.super or o.super;
+        }
+        return m;
     }
 
     /// Returns true if either shift key is currently down in this state.
     pub fn shift(self: *const KeyboardState) bool {
-        return self.down(.left_shift) or self.down(.right_shift);
+        return self.modifiers().shift;
     }
 
     /// Returns true if either control key is currently down in this state.
     pub fn ctrl(self: *const KeyboardState) bool {
-        return self.down(.left_control) or self.down(.right_control);
+        return self.modifiers().ctrl;
     }
 
     /// Returns true if either alt key is currently down in this state.
     pub fn alt(self: *const KeyboardState) bool {
-        return self.down(.left_alt) or self.down(.right_alt);
+        return self.modifiers().alt;
     }
 
     /// Returns true if either super/win key is currently down in this state.
     pub fn super(self: *const KeyboardState) bool {
-        return self.down(.left_super) or self.down(.right_super);
+        return self.modifiers().super;
     }
 };
+
+/// Maximum number of text codepoints buffered between two `Keyboard.update`
+/// calls. Anything typed past this in a single frame is dropped.
+pub const TextBufLen = 32;
+
+/// Module-level pointer used by the C key/char callbacks to reach the
+/// Keyboard instance. Only one Keyboard receives callback events at a time,
+/// the same single-target model as the mouse scroll callback.
+var g_kb_target: ?*Keyboard = null;
+
+/// Registers `kb` as the recipient of GLFW key/char callback events. Call
+/// once after the Keyboard's address is final, before `glfw.pollEvents()`.
+pub fn setKeyboardTarget(kb: *Keyboard) void {
+    g_kb_target = kb;
+}
+
+/// GLFW char callback: delivers a fully layout/dead-key/IME-processed
+/// Unicode codepoint. This is the only correct source of typed text; the
+/// polled key bitset can't produce it for non-US layouts.
+pub fn charCallback(window: *glfw.Window, codepoint: u32) callconv(.c) void {
+    _ = window;
+    if (g_kb_target) |kb| kb.pushChar(std.math.cast(u21, codepoint) orelse return);
+}
+
+/// GLFW key callback: used only to capture the `mods` bitfield GLFW derives
+/// from OS keymap state (see `KeyboardState.mods_override`). Physical key
+/// up/down is still read by polling in `update`.
+pub fn keyCallback(
+    window: *glfw.Window,
+    key: glfw.Key,
+    scancode: c_int,
+    action: glfw.Action,
+    mods: glfw.Mods,
+) callconv(.c) void {
+    _ = window;
+    _ = key;
+    _ = scancode;
+    _ = action;
+    if (g_kb_target) |kb| kb.setModsFromCallback(mods);
+}
 
 /// Manages the state of the keyboard across frames, allowing for querying of key
 /// presses, releases, and holds. It maintains two buffers of KeyboardState to
@@ -196,6 +257,16 @@ pub const Keyboard = struct {
     currIdx: usize,
     prevIdx: usize,
     keyBuffers: [2]KeyboardState,
+    /// Codepoints accumulated by `charCallback` since the last `update`.
+    pendingChars: [TextBufLen]u21,
+    pendingCharCount: usize,
+    /// The current frame's typed text, latched from `pendingChars` by
+    /// `update` (or `latchText`). Read by `text()`.
+    frameChars: [TextBufLen]u21,
+    frameCharCount: usize,
+    /// Latest modifier bits seen from `keyCallback`, or null before any key
+    /// event. Copied into the current KeyboardState buffer each `update`.
+    cbMods: ?KeyModifier,
 
     /// Initializes a new Keyboard instance with two empty KeyboardState buffers.
     pub fn init() Keyboard {
@@ -206,9 +277,45 @@ pub const Keyboard = struct {
                 KeyboardState.init(),
                 KeyboardState.init(),
             },
+            .pendingChars = undefined,
+            .pendingCharCount = 0,
+            .frameChars = undefined,
+            .frameCharCount = 0,
+            .cbMods = null,
         };
 
         return res;
+    }
+
+    /// Appends a typed codepoint to the pending buffer. Called by
+    /// `charCallback`; also usable directly by tests that drive the
+    /// keyboard without a GLFW window.
+    pub fn pushChar(self: *Keyboard, cp: u21) void {
+        if (self.pendingCharCount >= self.pendingChars.len) return;
+        self.pendingChars[self.pendingCharCount] = cp;
+        self.pendingCharCount += 1;
+    }
+
+    /// Stores modifier state from a GLFW key callback `mods` bitfield.
+    pub fn setModsFromCallback(self: *Keyboard, mods: glfw.Mods) void {
+        self.cbMods = .{
+            .ctrl = mods.control,
+            .alt = mods.alt,
+            .shift = mods.shift,
+            .super = mods.super,
+        };
+    }
+
+    /// Moves codepoints accumulated since the last call into the current
+    /// frame's text buffer and clears the pending buffer. Called by
+    /// `update`; exposed for tests that don't have a GLFW window.
+    pub fn latchText(self: *Keyboard) void {
+        @memcpy(
+            self.frameChars[0..self.pendingCharCount],
+            self.pendingChars[0..self.pendingCharCount],
+        );
+        self.frameCharCount = self.pendingCharCount;
+        self.pendingCharCount = 0;
     }
 
     /// Returns a pointer to the current KeyboardState buffer, which
@@ -229,7 +336,9 @@ pub const Keyboard = struct {
 
     /// Updates the keyboard state by swapping the current and previous
     /// buffers and then polling the current state of the keyboard from
-    /// the given GLFW window.
+    /// the given GLFW window. Also latches any text codepoints and
+    /// modifier bits collected by the key/char callbacks since the last
+    /// call. Call after `glfw.pollEvents()`.
     pub fn update(self: *Keyboard, window: *glfw.Window) bool {
         const temp = self.currIdx;
         self.currIdx = self.prevIdx;
@@ -247,6 +356,9 @@ pub const Keyboard = struct {
             anyPressed |= currPressed;
             keyIdx += 1;
         }
+
+        curr.mods_override = self.cbMods;
+        self.latchText();
 
         return anyPressed;
     }
@@ -295,28 +407,23 @@ pub const Keyboard = struct {
         return (!self.currKeys().downIdx(keyIdx) and self.prevKeys().downIdx(keyIdx));
     }
 
-    /// Fills the provided buffer with ASCII characters corresponding to the
-    /// keys that were pressed in the current frame. It checks each key to
-    /// see if it was pressed, and if so, it converts it to a character using
-    /// the charFromKey function (taking into account the shift state) and
-    /// appends it to the buffer. It returns the number of characters written
-    /// to the buffer. This can be used to capture text input from the keyboard.
+    /// UTF-8 encodes the text typed during the current frame into `buf` and
+    /// returns the number of bytes written. The codepoints come from GLFW's
+    /// char callback, so they are already resolved through the active OS
+    /// keyboard layout, dead keys and IME -- a QWERTZ, AZERTY or Dvorak
+    /// layout produces the character on the keycap, not the US-QWERTY one.
+    ///
+    /// Non-destructive: repeated calls in the same frame return the same
+    /// text. The buffer is refilled on the next `update`. A codepoint whose
+    /// UTF-8 encoding would not fit in the remaining space is dropped along
+    /// with everything after it.
     pub fn text(self: *Keyboard, buf: []u8) usize {
-        const shiftDown = self.shift();
         var bufIdx: usize = 0;
-
-        const enumTypeInfo = @typeInfo(glfw.Key).@"enum";
-        inline for (enumTypeInfo.fields) |field| {
-            const enumValue = @field(glfw.Key, field.name);
-            if (self.pressed(enumValue)) {
-                if (charFromKey(enumValue, shiftDown)) |c| {
-                    buf[bufIdx] = c;
-                    bufIdx += 1;
-                    if (bufIdx >= buf.len) break;
-                }
-            }
+        for (self.frameChars[0..self.frameCharCount]) |cp| {
+            const cpLen = std.unicode.utf8CodepointSequenceLength(cp) catch continue;
+            if (bufIdx + cpLen > buf.len) break;
+            bufIdx += std.unicode.utf8Encode(cp, buf[bufIdx..]) catch break;
         }
-
         return bufIdx;
     }
 };

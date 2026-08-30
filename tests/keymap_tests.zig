@@ -234,12 +234,18 @@ pub fn charFromKeyTest(io: std.Io, alloc: std.mem.Allocator) !void {
 // Text input tests.
 // ----------------------------------------------------------------------------
 
+// `text()` now returns the codepoints GLFW's char callback delivered
+// (already resolved through the OS layout / dead keys / IME), latched into
+// the frame by `latchText` -- which `Keyboard.update` calls each tick.
+// These tests drive `pushChar` + `latchText` directly since there's no
+// GLFW window.
+
 pub fn textInputTest_1(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     _ = alloc;
     var kb = input.Keyboard.init();
-    kb.currKeys_mut().set(.a, true);
-    kb.currKeys_mut().set(.left_shift, true);
+    kb.pushChar('A');
+    kb.latchText();
     var buff: [5]u8 = undefined;
     const len = kb.text(buff[0..]);
     try testz.expectEqual(len, 1);
@@ -250,9 +256,9 @@ pub fn textInputTest_2(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     _ = alloc;
     var kb = input.Keyboard.init();
-    kb.currKeys_mut().set(.t, true);
-    kb.currKeys_mut().set(.g, true);
-    kb.currKeys_mut().set(.right_shift, true);
+    kb.pushChar('G');
+    kb.pushChar('T');
+    kb.latchText();
     var buff: [5]u8 = undefined;
     const len = kb.text(buff[0..]);
     try testz.expectEqual(len, 2);
@@ -263,9 +269,9 @@ pub fn textInputTest_3(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     _ = alloc;
     var kb = input.Keyboard.init();
-    kb.currKeys_mut().set(.t, true);
-    kb.currKeys_mut().set(.g, true);
-    kb.currKeys_mut().set(.right_shift, true);
+    kb.pushChar('G');
+    kb.pushChar('T');
+    kb.latchText();
     var buff: [1]u8 = undefined;
     const len = kb.text(buff[0..]);
     try testz.expectEqual(len, 1);
@@ -276,11 +282,27 @@ pub fn textInputTest_4(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     _ = alloc;
     var kb = input.Keyboard.init();
-    kb.currKeys_mut().set(.space, true);
+    kb.pushChar(' ');
+    kb.latchText();
     var buff: [1]u8 = undefined;
     const len = kb.text(buff[0..]);
     try testz.expectEqual(len, 1);
     try testz.expectEqualStr(buff[0..len], " ");
+}
+
+// A non-US layout: the char callback delivers a multi-byte codepoint
+// (e.g. an AZERTY 'é'). `text()` must UTF-8 encode it rather than assume
+// one byte per character.
+pub fn textInputUtf8Test(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    var kb = input.Keyboard.init();
+    kb.pushChar('e');
+    kb.pushChar(0x00E9); // 'é'
+    kb.latchText();
+    var buff: [8]u8 = undefined;
+    const len = kb.text(buff[0..]);
+    try testz.expectEqualStr(buff[0..len], "e\u{00E9}");
 }
 
 // ----------------------------------------------------------------------------
