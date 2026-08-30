@@ -12,3 +12,4 @@ python/pixzig/*.dll
 python/dist/
 python/build/
 python/*.egg-info/
+python/VERSION

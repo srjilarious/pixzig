@@ -17,6 +17,7 @@ cleanly from Linux via Zig's bundled mingw toolchain.
 Usage (from anywhere):
     python3 python/build_wheels.py
 """
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -33,6 +34,21 @@ TARGETS = [
     (None, "libpixzig_ffi.so", "linux_x86_64", "libpixzig_ffi.so"),
     ("x86_64-windows-gnu", "pixzig_ffi.dll", "win_amd64", "pixzig_ffi.dll"),
 ]
+
+
+def write_version_file() -> str:
+    """Writes python/VERSION from build.zig.zon's .version field -- the
+    engine's own version is the single source of truth for the wheel
+    version too (python/pyproject.toml reads VERSION via `dynamic =
+    ["version"]`). Same extraction the CI workflow does in shell.
+    """
+    zon_text = (REPO_ROOT / "build.zig.zon").read_text()
+    match = re.search(r'\.version\s*=\s*"([^"]+)"', zon_text)
+    if not match:
+        raise SystemExit("could not find .version in build.zig.zon")
+    version = match.group(1)
+    (PYTHON_DIR / "VERSION").write_text(version)
+    return version
 
 
 def run(cmd: list[str]) -> None:
@@ -71,6 +87,8 @@ def build_wheel_for(zig_target: str | None, built_name: str, plat_tag: str, pack
 
 def main() -> None:
     DIST_DIR.mkdir(exist_ok=True)
+    version = write_version_file()
+    print(f"Building pixzig {version}")
     for zig_target, built_name, plat_tag, package_name in TARGETS:
         build_wheel_for(zig_target, built_name, plat_tag, package_name)
 

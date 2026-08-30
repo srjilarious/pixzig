@@ -1,0 +1,143 @@
+name: Python Wheels
+
+on:
+  push:
+    branches: [main, dev]
+    tags: ["v[0-9]*.[0-9]*.[0-9]*"]
+  pull_request:
+
+jobs:
+  # Reads the release version straight out of build.zig.zon (the engine's
+  # own version is the single source of truth for the wheel version too).
+  # On a tag push, also asserts the tag matches that version so a forgotten
+  # build.zig.zon bump or a mistyped tag fails fast instead of quietly
+  # publishing the wrong version.
+  compute-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.compute.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: compute
+        run: |
+          engine_version=$(grep -oP '(?<=\.version = ")[^"]+' build.zig.zon)
+          if [ -z "$engine_version" ]; then
+            echo "::error::could not find .version in build.zig.zon"
+            exit 1
+          fi
+
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            tag="${{ github.ref_name }}"
+            expected="v${engine_version}"
+            if [ "$tag" != "$expected" ]; then
+              echo "::error::tag '$tag' does not match build.zig.zon version '$expected'"
+              exit 1
+            fi
+            version="$engine_version"
+          else
+            version="${engine_version}.dev${{ github.run_number }}"
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  # Builds the Linux wheel inside manylinux_2_28 so it's tied to that
+  # image's (old, broadly compatible) glibc rather than the runner's own,
+  # then auditwheel repair re-tags it manylinux_2_28_x86_64 -- the tag PyPI
+  # actually accepts (it rejects a bare linux_x86_64 upload). uv and
+  # auditwheel are preinstalled in this image.
+  build-linux:
+    needs: compute-version
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux_2_28_x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install zig 0.16.0
+        run: |
+          curl -sL https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz -o /tmp/zig.tar.xz
+          mkdir -p /tmp/zig
+          tar -xf /tmp/zig.tar.xz -C /tmp/zig --strip-components=1
+          echo "/tmp/zig" >> "$GITHUB_PATH"
+
+      - name: Build libpixzig_ffi
+        run: zig build python-ffi -Doptimize=ReleaseFast
+
+      - name: Build wheel
+        run: |
+          echo -n "${{ needs.compute-version.outputs.version }}" > python/VERSION
+          cp zig-out/python/libpixzig_ffi.so python/pixzig/libpixzig_ffi.so
+          uv build --wheel \
+            --out-dir python/dist \
+            --config-setting="--build-option=--plat-name" \
+            --config-setting="--build-option=linux_x86_64" \
+            python
+
+      - name: Repair wheel (auditwheel)
+        run: auditwheel repair --wheel-dir python/dist_repaired python/dist/*.whl
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-linux
+          path: python/dist_repaired/*.whl
+
+  # Cross-compiles from an ordinary Linux runner via Zig's bundled mingw
+  # toolchain -- no Windows runner needed. The resulting DLL only imports
+  # core Windows DLLs plus the Universal CRT, nothing extra to bundle.
+  build-windows:
+    needs: compute-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Build libpixzig_ffi
+        run: zig build python-ffi -Dtarget=x86_64-windows-gnu -Doptimize=ReleaseFast
+
+      - name: Build wheel
+        run: |
+          echo -n "${{ needs.compute-version.outputs.version }}" > python/VERSION
+          cp zig-out/python/pixzig_ffi.dll python/pixzig/pixzig_ffi.dll
+          uv build --wheel \
+            --out-dir python/dist \
+            --config-setting="--build-option=--plat-name" \
+            --config-setting="--build-option=win_amd64" \
+            python
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-windows
+          path: python/dist/*.whl
+
+  # Only reached by a tag push matching vX.Y.Z (compute-version already
+  # verified the tag matches build.zig.zon). Uses PyPI Trusted Publishing
+  # (OIDC) -- no stored API token. The `pypi` environment can optionally be
+  # set up in the repo's Settings > Environments with required reviewers
+  # for a manual approval gate before this runs.
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [compute-version, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/pixzig/${{ needs.compute-version.outputs.version }}/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          path: dist
+          merge-multiple: true
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist

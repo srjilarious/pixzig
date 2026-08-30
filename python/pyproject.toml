@@ -9,6 +9,15 @@ description = "Python bindings for the pixzig game engine"
 requires-python = ">=3.9"
 license = "MIT"
 
+[tool.setuptools.dynamic]
+# Populated at build time from build.zig.zon's own .version field (the
+# engine's version is the single source of truth) -- see VERSION.md note in
+# build_wheels.py and .github/workflows/python-wheels.yml. Not read via
+# {attr = "pixzig.__version__"}: that would make setuptools import pixzig
+# during the build, which loads the native library via ctypes at import
+# time -- fatal when cross-building the Windows wheel on a Linux runner.
+version = { file = "VERSION" }
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["pixzig*"]
