@@ -43,6 +43,41 @@ pub fn glContextInitTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = glCtx();
 }
 
+pub fn rendererDefaultFontAtlasResizeTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = glCtx();
+
+    const Rndr = pixzig.renderer.Renderer(.{ .textRendering = true });
+    var rm = pixzig.resources.ResourceManager.init(alloc);
+    defer rm.deinit();
+
+    var r = try Rndr.init(alloc, &rm, .{
+        .font = .{ .path = .{ .face = "assets/Roboto-Medium.ttf", .size = 18.0 } },
+    });
+    defer r.deinit();
+
+    const fa = r.defaultFontAtlas() orelse return error.NoDefaultFont;
+    try testz.expectEqual(fa.font_size, @as(f32, 18.0));
+
+    try fa.setFontSize(36.0);
+    // Same atlas object the renderer draws from picks up the new size.
+    try testz.expectEqual(r.defaultFontAtlas().?.font_size, @as(f32, 36.0));
+}
+
+pub fn rendererDefaultFontAtlasNullWithoutFontTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = glCtx();
+
+    const Rndr = pixzig.renderer.Renderer(.{ .textRendering = true });
+    var rm = pixzig.resources.ResourceManager.init(alloc);
+    defer rm.deinit();
+
+    var r = try Rndr.init(alloc, &rm, .{});
+    defer r.deinit();
+
+    try testz.expectTrue(r.defaultFontAtlas() == null);
+}
+
 pub fn spriteBatchSmokeTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     const ctx = glCtx();

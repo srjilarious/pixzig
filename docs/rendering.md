@@ -96,6 +96,48 @@ pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
 
 `reacquire` atomically upgrades to the latest generation and releases the old handle. In release builds, `dirty` is always false and `reacquire` is a no-op.
 
+## Text and Fonts
+
+Text rendering must be enabled at compile time (`rendererOpts.textRendering = true`). The renderer keeps one default font, set through `renderInitOpts.font`:
+
+```zig
+const appRunner = try AppRunner.init("My Game", alloc, .{
+    .renderInitOpts = .{ .font = .{ .path = .{
+        .face = "assets/AmigaTopaz.ttf",
+        .size = 18.0,
+        .face_index = 0, // face inside a .ttc collection; 0 for a plain file
+    } } },
+});
+```
+
+`font` is a `FontSource`: either `.path` (a file, as above) or `.id` for a font already loaded elsewhere (e.g. a manifest boot group). An app that reads its font from a Lua config just fills the `.path` struct from those values.
+
+Draw with `drawString`, `drawStringColored`, or `drawScaledString` between `begin` and `end`. Add extra coverage for codepoints the primary face lacks with `eng.renderer.addDefaultFontFallback(&eng.resources, path, face_index)`.
+
+### Changing font size at runtime
+
+`eng.defaultFontAtlas()` returns a `?*FontAtlas` -- the live atlas the renderer draws from. `FontAtlas.setFontSize(px)` repacks it in place at a new pixel size: every face (primary and fallbacks) is rescaled and the glyphs are re-rasterized on the same GL texture, so the next `drawString` uses the new size with no other bookkeeping.
+
+```zig
+pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
+    const kb = &eng.inputs.keyboard;
+    if (kb.ctrl()) {
+        if (eng.defaultFontAtlas()) |fa| {
+            if (kb.pressed(.minus)) fa.setFontSize(@max(8, fa.font_size - 2)) catch {};
+            if (kb.pressed(.equal)) fa.setFontSize(@min(72, fa.font_size + 2)) catch {}; // Shift+= is '+'
+            if (kb.pressed(.zero))  fa.setFontSize(20) catch {};
+        }
+    }
+    return true;
+}
+```
+
+- The engine applies the size verbatim -- any min/max clamp or step is the app's to impose.
+- `setFontSize` reloads and repacks glyphs, so call it on a key press, not every frame, and outside a `begin`/`end` pair.
+- It returns `error.NotAScalableFont` for a bitmap font (`loadFontFromBitmap`).
+- Metrics that were read once at startup (`measureFontFileIndexed`, e.g. a terminal's cell size) are not recomputed -- do that yourself after a resize if you depend on them.
+- In debug builds a later hot-reload of the font file rebuilds the atlas at its originally configured size.
+
 ## Shape Rendering
 
 Shape rendering must be enabled at compile time:

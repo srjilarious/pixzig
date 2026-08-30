@@ -549,6 +549,66 @@ pub const FontAtlas = struct {
         try self.addFallbackFaceFromData(data, faceIndex);
     }
 
+    /// Repacks the atlas at a new pixel size, in place. Every face (the
+    /// primary and any fallbacks) is rescaled, all packed glyphs are
+    /// dropped, the CPU bitmap is reset to the initial square (undoing any
+    /// earlier `grow`), and the base glyph set is re-rasterized at the new
+    /// size. The GL texture object is kept, so a batch already holding
+    /// `&atlas.texture` stays valid -- but call this outside a renderer
+    /// `begin`/`end` pair so no quads are queued against the old contents.
+    ///
+    /// Returns `error.NotAScalableFont` for a bitmap-font atlas (it has no
+    /// TrueType faces to rescale). On an allocation failure partway through
+    /// the repack, `font_size` is already updated and the base set may be
+    /// only partly packed; `getChar` finishes it lazily on next use.
+    pub fn setFontSize(self: *FontAtlas, size_px: f32) !void {
+        if (self.faces.items.len == 0) return error.NotAScalableFont;
+
+        for (self.faces.items) |*f| {
+            f.scale = stb_tt.c.stbtt_ScaleForPixelHeight(&f.info, size_px);
+        }
+        self.font_size = size_px;
+
+        // Drop every packed glyph and rewind the shelf packer.
+        self.chars.clearRetainingCapacity();
+        self.loaded_blocks.clearRetainingCapacity();
+
+        // Undo any earlier grow so the repack starts from the base square.
+        if (self.dim != initial_dim) {
+            const fresh = try self.alloc.alloc(u8, @intCast(initial_dim * initial_dim));
+            self.alloc.free(self.pixels);
+            self.pixels = fresh;
+            self.dim = initial_dim;
+        }
+        @memset(self.pixels, 0);
+
+        self.pack_x = 0;
+        self.pack_y = 0;
+        self.shelf_h = 0;
+        self.maxY = 0;
+        self.notdef = .{
+            .coords = .{ .l = 0, .t = 0, .r = 0, .b = 0 },
+            .size = .{ .x = 0, .y = 0 },
+            .bearing = .{ .x = 0, .y = 0 },
+            .advance = 0,
+        };
+
+        self.buildNotdef();
+        try self.ensureBlock(0); // ASCII + Latin-1 supplement, the common path
+
+        if (self.maxY == 0) {
+            var ascent: c_int = 0;
+            var descent: c_int = 0;
+            var line_gap: c_int = 0;
+            stb_tt.c.stbtt_GetFontVMetrics(&self.faces.items[0].info, &ascent, &descent, &line_gap);
+            self.maxY = @intFromFloat(self.faces.items[0].scale * @as(f32, @floatFromInt(ascent)));
+        }
+
+        self.uploadTexture();
+        self.dirty = false;
+        self.grew_since_upload = false;
+    }
+
     /// Rasterizes the primary face's `.notdef` (glyph index 0) into the
     /// atlas as `self.notdef`. Falls back to a synthesized hollow box if
     /// the font's own `.notdef` has no outline.

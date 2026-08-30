@@ -212,6 +212,22 @@ pub fn Renderer(opts: RendererOptions) type {
             try resMgr.addFontFallback(DefaultFontName, fontPath, faceIndex);
         }
 
+        /// The renderer's live default font atlas -- the one from
+        /// `RendererInitOpts.font`, plus any faces added via
+        /// `addDefaultFontFallback`. Null when text rendering is compiled
+        /// out or no default font has been set.
+        ///
+        /// Returned by pointer so callers can drive the atlas directly, e.g.
+        /// `atlas.setFontSize(pt)` to repack it at a new pixel size. Such a
+        /// change is picked up by the next `drawString` with no re-`setFont`;
+        /// make it outside a `begin`/`end` pair. Any size clamping/stepping
+        /// is the caller's to apply.
+        pub fn defaultFontAtlas(self: *Self) ?*FontAtlas {
+            if (comptime !opts.textRendering) return null;
+            const handle = self.impl.text.font orelse return null;
+            return &handle.val;
+        }
+
         /// Starts a frame: opens all sprite batches (plus shape/text batches
         /// if enabled) with the given model-view-projection matrix. Pair
         /// with `end()`; draw calls between them are buffered, not submitted

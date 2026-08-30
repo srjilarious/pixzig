@@ -518,6 +518,15 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             glfw.setInputMode(self.window, .cursor, mode) catch {};
         }
 
+        /// The engine's live default font atlas, or null when text rendering
+        /// is compiled out or no default font is set. See
+        /// `Renderer.defaultFontAtlas`. Repack it at a new size at runtime
+        /// with, e.g.:
+        /// `if (eng.defaultFontAtlas()) |fa| try fa.setFontSize(24.0);`
+        pub fn defaultFontAtlas(self: *Self) ?*renderer.FontAtlas {
+            return self.renderer.defaultFontAtlas();
+        }
+
         /// Called each frame (after glfw.pollEvents) to pick up resize events
         /// recorded by the framebuffer-size callback. Rebuilds the viewport and
         /// updates projMat when the framebuffer has changed.
