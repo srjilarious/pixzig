@@ -13,13 +13,13 @@
 //! unused engine *code paths* (e.g. the audio update loop, gamepad polling)
 //! can be stripped out by the compiler and the engine can be tailored to the
 //! needs of the application. This does not change which native dependencies
-//! get linked: `build.zig` always links GLFW, OpenGL, flecs, zaudio/miniaudio,
+//! get linked: `build.zig` always links SDL3, OpenGL, flecs, zaudio/miniaudio,
 //! Lua, XML, and STB TrueType into every engine build regardless of
 //! `PixzigEngineOptions`.
 const std = @import("std");
 const builtin = @import("builtin");
-pub const glfw = @import("zglfw");
 pub const stbi = @import("zstbi");
+const sdl = @import("sdl3");
 
 pub const zopengl = @import("zopengl");
 pub const gl = zopengl.bindings;
@@ -37,6 +37,7 @@ pub const utils = @import("./utils.zig");
 pub const shaders = @import("./renderer/shaders.zig");
 pub const textures = @import("./renderer/textures.zig");
 pub const input = @import("./input.zig");
+pub const platform = @import("./platform.zig");
 pub const events = @import("./events.zig");
 pub const resources = @import("./resources.zig");
 pub const renderer = @import("./renderer.zig");
@@ -68,6 +69,11 @@ pub const Viewport = windowing.Viewport;
 pub const ScalePolicy = windowing.ScalePolicy;
 
 pub const InputOptions = input.InputOptions;
+pub const Key = input.Key;
+pub const MouseButton = input.MouseButton;
+pub const GamepadButton = input.GamepadButton;
+pub const GamepadAxis = input.GamepadAxis;
+pub const Window = platform.Window;
 
 pub const camera = @import("./camera.zig");
 pub const Camera2D = camera.Camera2D;
@@ -101,7 +107,7 @@ pub const Color8 = common.Color8;
 /// example, if audio is not needed, setting `audioOpts.enabled` to false will
 /// prevent the audio engine handling code blocks in the engine from being
 /// included in the final binary. This only strips *engine* code; the native
-/// dependencies themselves (GLFW, OpenGL, flecs, zaudio/miniaudio, Lua, XML,
+/// dependencies themselves (SDL3, OpenGL, flecs, zaudio/miniaudio, Lua, XML,
 /// STB TrueType) are always linked in by `build.zig`, so disabling a feature
 /// here does not shrink the set of linked libraries.
 pub const PixzigEngineOptions = struct {
@@ -190,7 +196,7 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
             var appRunner = try alloc.create(Self);
             appRunner.engine = try Engine.init(title, alloc, engInitOpts);
             appRunner.alloc = alloc;
-            appRunner.currTime = glfw.getTime() * 1000.0;
+            appRunner.currTime = platform.timeMs();
             return appRunner;
         }
 
@@ -200,26 +206,28 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
         }
 
         pub fn gameLoopCore(self: *Self, app: *AppData) bool {
-            const newCurrTime = glfw.getTime() * 1000.0;
+            const newCurrTime = platform.timeMs();
             const delta = newCurrTime - self.currTime;
             self.lag += delta;
             self.currTime = newCurrTime;
 
-            glfw.pollEvents();
+            self.engine.pollEvents();
             self.engine.refreshWindowState();
 
             while (self.lag > UpdateStepMs) {
                 self.lag -= UpdateStepMs;
 
                 self.engine.inputs.update(
-                    self.engine.window,
                     self.engine.window_state.scale_factor,
                     &self.engine.viewport,
                 );
                 self.engine.resources.checkHotReload();
-                if (!app.update(self.engine, UpdateStepMs)) {
-                    return false;
-                }
+                const keepRunning = app.update(self.engine, UpdateStepMs);
+                // Roll this tick's input into the previous-tick buffers only
+                // after the app has read it, so a press that lands between
+                // two ticks is still an edge for exactly one of them.
+                self.engine.inputs.finishTick();
+                if (!keepRunning) return false;
             }
 
             app.render(self.engine);
@@ -257,22 +265,13 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
     return AppStruct;
 }
 
-/// GLFW framebuffer-size callback. Sets a dirty flag on the WindowState so
-/// refreshWindowState() can rebuild the viewport on the main thread.
-fn framebufferSizeCallback(window: *glfw.Window, width: c_int, height: c_int) callconv(.c) void {
-    if (window.getUserPointer(windowing.WindowState)) |ws| {
-        ws.framebuffer_size = .{ .x = @intCast(width), .y = @intCast(height) };
-        ws.resized = true;
-    }
-}
-
 /// The core Pixzig Engine structure.  It provides rendering, audio, input and resource management
 /// components.  The `engOpts` allow configuring the engine at comptime so that unused features can
 /// be stripped out by the compiler. For example, if audio is not needed, setting `audioOpts.enabled`
 /// to false will prevent the audio engine and related code from being included in the final binary.
 pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
     return struct {
-        window: *glfw.Window,
+        window: *platform.Window,
         options: PixzigEngineInitOptions,
         scaleFactor: f32,
         allocator: std.mem.Allocator,
@@ -294,49 +293,28 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         /// projection matrix. The engine will be configured based on the provided `engInitOpts`
         /// and `engOpts` parameters.
         pub fn init(title: [:0]const u8, allocator: std.mem.Allocator, options: PixzigEngineInitOptions) !*Self {
-            try glfw.init();
-            errdefer glfw.terminate();
+            const gl_major, const gl_minor = try platform.initVideo();
+            errdefer platform.quit();
 
-            std.log.debug("GLFW initialized.\n", .{});
+            std.log.debug("SDL3 initialized.", .{});
 
-            const gl_major, const gl_minor = blk: {
-                if (builtin.target.os.tag == .emscripten) {
-                    break :blk .{ 2, 0 };
-                } else {
-                    break :blk .{ 4, 5 };
-                }
-            };
-
-            glfw.windowHint(.context_version_major, gl_major);
-            glfw.windowHint(.context_version_minor, gl_minor);
-
-            glfw.windowHint(.opengl_profile, .opengl_core_profile);
-            glfw.windowHint(.opengl_forward_compat, true);
-            glfw.windowHint(.client_api, .opengl_api);
-            glfw.windowHint(.doublebuffer, true);
-            glfw.windowHint(.resizable, options.resizable);
-
-            const monitor = blk: {
-                if (options.fullscreen) {
-                    break :blk glfw.Monitor.getPrimary();
-                } else {
-                    break :blk null;
-                }
-            };
-            const window = try glfw.createWindow(options.windowSize.x, options.windowSize.y, title, monitor, null);
+            const window = try platform.Window.create(allocator, title, .{
+                .size = options.windowSize,
+                .resizable = options.resizable,
+                .fullscreen = options.fullscreen,
+                .text_input = engOpts.inputOpts.textInput,
+            });
             errdefer window.destroy();
-            window.setSizeLimits(400, 400, -1, -1);
 
-            glfw.makeContextCurrent(window);
-            glfw.swapInterval(1);
+            platform.setSwapInterval(1);
 
             // ----------------------------------------------------------------
             std.log.info("Loading OpenGL profile.", .{});
             if (builtin.target.os.tag == .emscripten) {
-                try zopengl.loadEsProfile(glfw.getProcAddress, gl_major, gl_minor);
-                try zopengl.loadEsExtension(glfw.getProcAddress, .OES_vertex_array_object);
+                try zopengl.loadEsProfile(platform.glProcAddress, @intCast(gl_major), @intCast(gl_minor));
+                try zopengl.loadEsExtension(platform.glProcAddress, .OES_vertex_array_object);
             } else {
-                try zopengl.loadCoreProfile(glfw.getProcAddress, gl_major, gl_minor);
+                try zopengl.loadCoreProfile(platform.glProcAddress, @intCast(gl_major), @intCast(gl_minor));
             }
 
             const glVersion = gl.getString(gl.VERSION);
@@ -419,25 +397,6 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 allocator.destroy(eng);
             }
 
-            // Store a pointer to window_state in the GLFW user pointer so the
-            // framebuffer-size callback can record resize events without
-            // rebuilding GL state from within the callback.
-            eng.window.setUserPointer(@ptrCast(&eng.window_state));
-            _ = eng.window.setFramebufferSizeCallback(framebufferSizeCallback);
-
-            // Keyboard is always present. The char callback is the only
-            // layout-correct source of typed text; the key callback is used
-            // only for GLFW's OS-derived modifier bits (see
-            // KeyboardState.mods_override).
-            input.keyboard.setKeyboardTarget(&eng.inputs.keyboard);
-            _ = eng.window.setKeyCallback(input.keyboard.keyCallback);
-            _ = eng.window.setCharCallback(input.keyboard.charCallback);
-
-            if (eng.inputs.mouse_enabled) {
-                input.mouse.setScrollTarget(&eng.inputs.mouse);
-                _ = eng.window.setScrollCallback(input.mouse.scrollCallback);
-            }
-
             // ----------------------------------------------------------------
             if (engOpts.manifestOpts) |ManifestMod| {
                 std.log.info("Loading asset manifest.", .{});
@@ -482,8 +441,9 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             self.resources.deinit();
             stbi.deinit();
 
+            self.inputs.deinit();
             self.window.destroy();
-            glfw.terminate();
+            platform.quit();
 
             self.allocator.destroy(self);
         }
@@ -500,30 +460,47 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 var icon_image = try stbi.Image.loadFromMemory(data_buffer, 4);
                 defer icon_image.deinit();
 
-                const icon = glfw.Image{
-                    .width = @intCast(icon_image.width),
-                    .height = @intCast(icon_image.height),
-                    .pixels = icon_image.data.ptr,
-                };
-
-                self.window.setIcon(&.{icon});
+                self.window.setIcon(&icon_image);
             }
         }
 
         /// Sets whether vsync is enabled or not on the graphics context.
         pub fn enableVSync(self: *Self, enabled: bool) void {
             _ = self;
-            if (enabled) {
-                glfw.swapInterval(1);
-            } else {
-                glfw.swapInterval(0);
-            }
+            platform.setSwapInterval(if (enabled) 1 else 0);
         }
 
-        /// Shows or hides the system mouse cursor over the window.
+        /// Shows or hides the system mouse cursor.  Unlike the GLFW backend
+        /// this is global rather than per-window, which is all SDL3 offers;
+        /// no engine code depended on the difference.
         pub fn showCursor(self: *Self, visible: bool) void {
-            const mode: glfw.Cursor.Mode = if (visible) .normal else .hidden;
-            glfw.setInputMode(self.window, .cursor, mode) catch {};
+            _ = self;
+            platform.showCursor(visible);
+        }
+
+        /// Drains the OS event queue, handling window-level events here and
+        /// routing everything else to the input manager.  This replaces
+        /// GLFW's callback registration wholesale: SDL is polled, so the
+        /// module-level "which Keyboard receives events" pointers, and the
+        /// one-listener-at-a-time limit they imposed, are gone.
+        pub fn pollEvents(self: *Self) void {
+            var event: sdl.SDL_Event = undefined;
+            while (sdl.SDL_PollEvent(&event)) {
+                switch (event.type) {
+                    sdl.SDL_EVENT_QUIT,
+                    sdl.SDL_EVENT_WINDOW_CLOSE_REQUESTED,
+                    => self.window.close_requested = true,
+                    sdl.SDL_EVENT_WINDOW_RESIZED,
+                    sdl.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED,
+                    sdl.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED,
+                    => self.window_state.resized = true,
+                    // An event-driven key bitset latches where GLFW's
+                    // per-frame polling self-healed, so anything held when
+                    // the window loses focus would otherwise stay down.
+                    sdl.SDL_EVENT_WINDOW_FOCUS_LOST => self.inputs.clear(),
+                    else => self.inputs.handleEvent(event),
+                }
+            }
         }
 
         /// The engine's live default font atlas, or null when text rendering
@@ -535,9 +512,9 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             return self.renderer.defaultFontAtlas();
         }
 
-        /// Called each frame (after glfw.pollEvents) to pick up resize events
-        /// recorded by the framebuffer-size callback. Rebuilds the viewport and
-        /// updates projMat when the framebuffer has changed.
+        /// Called each frame (after `pollEvents`) to pick up resize events
+        /// recorded by the event pump. Rebuilds the viewport and updates
+        /// projMat when the framebuffer has changed.
         pub fn refreshWindowState(self: *Self) void {
             if (!self.window_state.resized) return;
             self.window_state.resized = false;
@@ -594,7 +571,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             return self.projection();
         }
 
-        /// Converts a GLFW window-coordinate position to framebuffer pixels,
+        /// Converts a window-coordinate position to framebuffer pixels,
         /// accounting for DPI scale.
         pub fn windowToFramebuffer(self: *const Self, pos: Vec2F) Vec2F {
             return .{
@@ -603,7 +580,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             };
         }
 
-        /// Converts a GLFW window-coordinate position to logical game coordinates.
+        /// Converts a window-coordinate position to logical game coordinates.
         /// Returns null when the pointer is over a letterbox or pillarbox area.
         pub fn windowToLogical(self: *const Self, pos: Vec2F) ?Vec2F {
             return self.viewport.framebufferToLogical(self.windowToFramebuffer(pos));

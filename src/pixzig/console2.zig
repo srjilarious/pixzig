@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const ziglua = @import("ziglua");
-const glfw = @import("zglfw");
+const platform = @import("./platform.zig");
 const Lua = ziglua.Lua;
 
 const utils = @import("./utils.zig");
@@ -232,7 +232,7 @@ pub const Console = struct {
         self.inputMax = 0;
     }
 
-    pub fn update(self: *Console, win: *glfw.Window, kb: *Keyboard) void {
+    pub fn update(self: *Console, win: *platform.Window, kb: *Keyboard) void {
         var buf: [4]u8 = undefined;
 
         if (!self.enabled) return;
@@ -248,7 +248,7 @@ pub const Console = struct {
             // Ctrl+V to paste input.
             else if (kb.pressed(.v)) {
                 if (win.getClipboardString()) |clipStr| {
-                    const clipSlice = utils.cStrToSlice(clipStr);
+                    const clipSlice = clipStr;
                     const clipLen = clipSlice.len;
 
                     // Move the end of the buffer forward by the number of new chars.

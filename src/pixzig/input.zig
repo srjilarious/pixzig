@@ -1,5 +1,13 @@
 const std = @import("std");
 
+pub const keys = @import("./input/keys.zig");
+/// Physical key positions. See `keys.Key` for why this is a position and
+/// not a keycap, and what to use instead for typed text.
+pub const Key = keys.Key;
+pub const MouseButton = keys.MouseButton;
+pub const GamepadButton = keys.GamepadButton;
+pub const GamepadAxis = keys.GamepadAxis;
+
 pub const keyboard = @import("./input/keyboard.zig");
 pub const charFromKey = keyboard.charFromKey;
 pub const KeyModifier = keyboard.KeyModifier;

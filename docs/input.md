@@ -51,6 +51,9 @@ The input manager exposes raw device state:
 | `eng.inputs.keyboard` | Always enabled |
 | `eng.inputs.mouse` | Enabled when `inputOpts.mouse` is `true` (the default) |
 | `eng.inputs.gamepad(index)` | Enable slots with `inputOpts.numGamepads` |
+| `keyboard.text()` / `keyboard.preedit()` | Need `inputOpts.textInput = true` |
+
+`inputOpts.textInput` arms the OS text-input machinery on the window. It is off by default, because a game that only reads key bindings does not want an IME candidate bar armed over it (and on some platforms it changes on-screen-keyboard behaviour). Turn it on for anything with a text field, a console, or chat -- without it `keyboard.text()` returns nothing at all.
 
 ### Keyboard
 
@@ -63,9 +66,15 @@ if (keyboard.released(.space)) self.stopJump();
 if (keyboard.pressed(.escape)) return false;
 ```
 
-Keys are `glfw.Key` values such as `.a`, `.space`, `.escape`, `.left`, and `.left_shift`.
+Keys are `pixzig.Key` values such as `.a`, `.space`, `.escape`, `.left`, and `.left_shift`.
 
-For ASCII text input, supply a buffer. `text` returns the number of bytes written for this tick:
+A `Key` names a **physical position**, not the letter printed on the keycap: `.w` is the key where W sits on a US QWERTY board whatever layout the OS has active, so WASD bindings stay under the same fingers on AZERTY or Dvorak. When you want the keycap instead -- a "press Y to confirm" prompt, say -- use the layout-resolved queries, which take the same `Key` values:
+
+```zig
+if (keyboard.layoutPressed(.y)) self.confirm();
+```
+
+For text input, supply a buffer. `text` returns the number of UTF-8 bytes written for this tick, already resolved through the active layout, dead keys and IME, so it is the correct source for anything the player types:
 
 ```zig
 var chars: [16]u8 = undefined;

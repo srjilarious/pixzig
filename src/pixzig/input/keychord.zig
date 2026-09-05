@@ -1,12 +1,11 @@
 const std = @import("std");
-const glfw = @import("zglfw");
+const keys = @import("./keys.zig");
 const comp = @import("../comp.zig");
 const common = @import("../common.zig");
 const Vec2I = common.Vec2I;
 const Vec2F = common.Vec2F;
 
 const keyboard = @import("./keyboard.zig");
-const getIndexForKey = keyboard.getIndexForKey;
 const KeyModifier = keyboard.KeyModifier;
 const KeyboardState = keyboard.KeyboardState;
 
@@ -19,10 +18,10 @@ pub const DownRepeatRate: f64 = 2e4;
 
 /// One key + modifier combination within a chord sequence.
 pub const KeyChordPiece = struct {
-    key: glfw.Key,
+    key: keys.Key,
     mod: KeyModifier,
 
-    pub fn from(mod: KeyModifier, k: glfw.Key) KeyChordPiece {
+    pub fn from(mod: KeyModifier, k: keys.Key) KeyChordPiece {
         return .{
             .key = k,
             .mod = mod,
@@ -48,36 +47,8 @@ pub const KeyChordPiece = struct {
             len += sl.len;
         }
 
-        const keyNames: [111][]const u8 = .{
-            "space",    "'",            ",",          "-",         ".",           "/",
-            "0",        "1",            "2",          "3",         "4",           "5",
-            "6",        "7",            "8",          "9",         ";",           "=",
-            "A",        "B",            "C",          "D",         "E",           "F",
-            "G",        "H",            "I",          "J",         "K",           "L",
-            "M",        "N",            "O",          "P",         "Q",           "R",
-            "S",        "T",            "U",          "V",         "W",           "X",
-            "Y",        "Z",            "[",          "\\",        "]",           "`",
-            "world_1",  "world_2",      "escape",     "enter",     "tab",         "backspace",
-            "insert",   "delete",       "right",      "left",      "down",        "up",
-            "page_up",  "page_down",    "home",       "end",       "caps_lock",   "scroll_lock",
-            "num_lock", "print_screen", "pause",      "F1",        "F2",          "F3",
-            "F4",       "F5",           "F6",         "F7",        "F8",          "F9",
-            "F10",      "F11",          "F12",        "F13",       "F14",         "F15",
-            "F16",      "F17",          "F18",        "F19",       "F20",         "F21",
-            "F22",      "F23",          "F24",        "F25",       "kp_0",        "kp_1",
-            "kp_2",     "kp_3",         "kp_4",       "kp_5",      "kp_6",        "kp_7",
-            "kp_8",     "kp_9",         "kp_decimal", "kp_divide", "kp_multiply", "kp_subtract",
-            "kp_add",   "kp_enter",     "kp_equal",
-        };
-
-        const kIdx = getIndexForKey(self.key) - 1;
-        if (kIdx < keyNames.len) {
-            const sl = try std.fmt.bufPrint(buf[len..], "{s}", .{keyNames[kIdx]});
-            len += sl.len;
-        } else {
-            const sl = try std.fmt.bufPrint(buf[len..], "Unknown ({any})", .{self.key});
-            len += sl.len;
-        }
+        const sl = try std.fmt.bufPrint(buf[len..], "{s}", .{keys.displayName(self.key)});
+        len += sl.len;
 
         return len;
     }
@@ -151,7 +122,7 @@ pub fn ChordTree(comptime T: type) type {
     return struct {
         alloc: std.mem.Allocator,
         context: ?[]const u8,
-        downKey: glfw.Key,
+        downKey: keys.Key,
         currChord: ?*KeyChord(T),
         rootChord: *KeyChord(T),
         elapsedUsCounter: f64,
@@ -261,7 +232,7 @@ pub fn KeyMap(comptime T: type) type {
         }
 
         /// Registers a single-piece chord. Returns `false` if the chord already exists.
-        pub fn addKeyChord(self: *Self, mods: KeyModifier, key: glfw.Key, func: T, context: ?[]const u8) !bool {
+        pub fn addKeyChord(self: *Self, mods: KeyModifier, key: keys.Key, func: T, context: ?[]const u8) !bool {
             _ = context;
             const kcp = KeyChordPiece.from(mods, key);
             if (self.chords.rootChord.children.contains(kcp)) return false;
@@ -275,7 +246,7 @@ pub fn KeyMap(comptime T: type) type {
         }
 
         /// Registers a two-piece chord (press key1, then key2). Returns `false` if that exact sequence already exists.
-        pub fn addTwoKeyChord(self: *Self, mods: KeyModifier, key1: glfw.Key, key2: glfw.Key, func: T, context: ?[]const u8) !bool {
+        pub fn addTwoKeyChord(self: *Self, mods: KeyModifier, key1: keys.Key, key2: keys.Key, func: T, context: ?[]const u8) !bool {
             _ = context;
             const kcp1 = KeyChordPiece.from(mods, key1);
 

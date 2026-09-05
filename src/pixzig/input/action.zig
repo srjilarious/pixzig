@@ -1,5 +1,5 @@
 const std = @import("std");
-const glfw = @import("zglfw");
+const keys = @import("./keys.zig");
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
 const comp = @import("../comp.zig");
@@ -14,18 +14,18 @@ pub const KeyChordPiece = keychord.KeyChordPiece;
 
 /// A single digital (on/off) input source for an action binding.
 pub const Source = union(enum) {
-    key: glfw.Key,
+    key: keys.Key,
     // key_with_mods: struct {
-    //     key: glfw.Key,
+    //     key: keys.Key,
     //     mods: KeyModifier,
     // },
     // chord: []const KeyChordPiece,
-    mouse_button: glfw.MouseButton,
+    mouse_button: keys.MouseButton,
     // mouse_axis: MouseAxis,
-    gamepad_button: glfw.Gamepad.Button,
+    gamepad_button: keys.GamepadButton,
     // gamepad_axis: struct {
     //     // id: GamepadId = .any,
-    //     axis: glfw.Gamepad.Axis,
+    //     axis: keys.GamepadAxis,
     //     deadzone: f32 = 0.18,
     //     scale: f32 = 1.0,
     //     invert: bool = false,
@@ -50,7 +50,7 @@ pub const AxisSource = union(enum) {
         positive: Source,
     },
     gamepad_axis: struct {
-        axis: glfw.Gamepad.Axis,
+        axis: keys.GamepadAxis,
         deadzone: f32 = 0.18,
     },
     mouse_axis: struct {
@@ -72,19 +72,19 @@ fn parseSource(lua: *Lua, entry_abs: i32) !Source {
         _ = lua.getField(entry_abs, "key");
         defer lua.pop(1);
         const key_str = try lua.toString(-1);
-        const key = std.meta.stringToEnum(glfw.Key, key_str) orelse return error.UnknownKey;
+        const key = std.meta.stringToEnum(keys.Key, key_str) orelse return error.UnknownKey;
         return .{ .key = key };
     } else if (is_mouse) {
         _ = lua.getField(entry_abs, "button");
         defer lua.pop(1);
         const btn_str = try lua.toString(-1);
-        const btn = std.meta.stringToEnum(glfw.MouseButton, btn_str) orelse return error.UnknownMouseButton;
+        const btn = std.meta.stringToEnum(keys.MouseButton, btn_str) orelse return error.UnknownMouseButton;
         return .{ .mouse_button = btn };
     } else if (is_gpad) {
         _ = lua.getField(entry_abs, "button");
         defer lua.pop(1);
         const btn_str = try lua.toString(-1);
-        const btn = std.meta.stringToEnum(glfw.Gamepad.Button, btn_str) orelse return error.UnknownGamepadButton;
+        const btn = std.meta.stringToEnum(keys.GamepadButton, btn_str) orelse return error.UnknownGamepadButton;
         return .{ .gamepad_button = btn };
     } else {
         return error.UnknownSourceType;
@@ -93,10 +93,10 @@ fn parseSource(lua: *Lua, entry_abs: i32) !Source {
 
 // Parses a single chord piece from a string like "ctrl+a", "ctrl+shift+f1", "space".
 // Modifier tokens (ctrl, alt, shift, super) are case-insensitive. The key token
-// must match a glfw.Key field name (e.g. "a", "space", "f1", "enter").
+// must match a keys.Key field name (e.g. "a", "space", "f1", "enter").
 fn parseChordPieceFromString(piece_str: []const u8) !KeyChordPiece {
     var mod = KeyModifier{};
-    var key: ?glfw.Key = null;
+    var key: ?keys.Key = null;
 
     var it = std.mem.splitScalar(u8, piece_str, '+');
     while (it.next()) |raw_token| {
@@ -113,7 +113,7 @@ fn parseChordPieceFromString(piece_str: []const u8) !KeyChordPiece {
         } else {
             var lower_buf: [32]u8 = undefined;
             const lower = std.ascii.lowerString(lower_buf[0..@min(token.len, lower_buf.len)], token);
-            key = std.meta.stringToEnum(glfw.Key, lower) orelse return error.UnknownKey;
+            key = std.meta.stringToEnum(keys.Key, lower) orelse return error.UnknownKey;
         }
     }
 
@@ -131,7 +131,7 @@ fn parseAxisSource(lua: *Lua, entry_abs: i32) !AxisSource {
     if (is_buttons) {
         _ = lua.getField(entry_abs, "neg");
         const neg_str = try lua.toString(-1);
-        const neg_key = std.meta.stringToEnum(glfw.Key, neg_str) orelse {
+        const neg_key = std.meta.stringToEnum(keys.Key, neg_str) orelse {
             lua.pop(1);
             return error.UnknownKey;
         };
@@ -139,7 +139,7 @@ fn parseAxisSource(lua: *Lua, entry_abs: i32) !AxisSource {
 
         _ = lua.getField(entry_abs, "pos");
         const pos_str = try lua.toString(-1);
-        const pos_key = std.meta.stringToEnum(glfw.Key, pos_str) orelse {
+        const pos_key = std.meta.stringToEnum(keys.Key, pos_str) orelse {
             lua.pop(1);
             return error.UnknownKey;
         };
@@ -156,7 +156,7 @@ fn parseAxisSource(lua: *Lua, entry_abs: i32) !AxisSource {
         // value in the Lua table literal (last write to a duplicate key wins).
         _ = lua.getField(entry_abs, "stick");
         const axis_str = try lua.toString(-1);
-        const ax = std.meta.stringToEnum(glfw.Gamepad.Axis, axis_str) orelse {
+        const ax = std.meta.stringToEnum(keys.GamepadAxis, axis_str) orelse {
             lua.pop(1);
             return error.UnknownGamepadAxis;
         };

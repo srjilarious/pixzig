@@ -28,7 +28,9 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{
     .rendererOpts = .{
         .textRendering = true,
     },
-    .inputOpts = .{ .mouse = true },
+    // textInput arms the OS text-input machinery, which is what makes
+    // Keyboard.text() -- and so the UI's text fields -- produce anything.
+    .inputOpts = .{ .mouse = true, .textInput = true },
     .manifestOpts = manifest_options,
 });
 

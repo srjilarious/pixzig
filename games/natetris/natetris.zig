@@ -6,7 +6,6 @@ const builtin = @import("builtin");
 
 const pixzig = @import("pixzig");
 const gl = pixzig.gl;
-const glfw = pixzig.glfw;
 const zmath = pixzig.zmath;
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
@@ -489,6 +488,6 @@ pub fn main() !void {
     std.log.info("Initializing app.\n", .{});
     const app = try Natetris.init(alloc, appRunner.engine);
 
-    glfw.swapInterval(0);
+    appRunner.engine.enableVSync(false);
     appRunner.run(app);
 }

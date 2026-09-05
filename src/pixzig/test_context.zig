@@ -1,5 +1,5 @@
 const std = @import("std");
-const glfw = @import("zglfw");
+const sdl = @import("sdl3");
 const zopengl = @import("zopengl");
 const gl = zopengl.bindings;
 
@@ -22,15 +22,25 @@ fn freeShaderImpl(s: Shader) void {
 
 fn freeTextureNoop(_: Texture) void {}
 
+fn sdlError(err: anyerror) anyerror {
+    std.log.err("SDL3: {s}", .{sdl.SDL_GetError()});
+    return err;
+}
+
+fn glProcAddress(proc_name: [*:0]const u8) callconv(.c) ?*const anyopaque {
+    return @ptrCast(sdl.SDL_GL_GetProcAddress(proc_name));
+}
+
 var g_instance: ?GlTestContext = null;
 
-/// A minimal hidden GLFW/OpenGL 4.5 context for unit tests that need real GL.
+/// A minimal hidden SDL3/OpenGL 4.5 context for unit tests that need real GL.
 /// The window is never shown.
 ///
 /// Use initGlobal/deinitGlobal from the test binary's main(), then call get()
 /// from any test module that needs GL access.
 pub const GlTestContext = struct {
-    window: *glfw.Window,
+    window: *sdl.SDL_Window,
+    gl_context: sdl.SDL_GLContext,
 
     const Self = @This();
 
@@ -51,28 +61,32 @@ pub const GlTestContext = struct {
     }
 
     pub fn init() !Self {
-        try glfw.init();
-        errdefer glfw.terminate();
+        if (!sdl.SDL_Init(sdl.SDL_INIT_VIDEO)) return sdlError(error.SdlInitFailed);
+        errdefer sdl.SDL_Quit();
 
-        glfw.windowHint(.visible, false);
-        glfw.windowHint(.context_version_major, 4);
-        glfw.windowHint(.context_version_minor, 5);
-        glfw.windowHint(.opengl_profile, .opengl_core_profile);
-        glfw.windowHint(.opengl_forward_compat, true);
-        glfw.windowHint(.client_api, .opengl_api);
+        if (!sdl.SDL_GL_SetAttribute(sdl.SDL_GL_CONTEXT_MAJOR_VERSION, 4)) return sdlError(error.SdlGlAttributeFailed);
+        if (!sdl.SDL_GL_SetAttribute(sdl.SDL_GL_CONTEXT_MINOR_VERSION, 5)) return sdlError(error.SdlGlAttributeFailed);
+        if (!sdl.SDL_GL_SetAttribute(sdl.SDL_GL_CONTEXT_PROFILE_MASK, sdl.SDL_GL_CONTEXT_PROFILE_CORE)) return sdlError(error.SdlGlAttributeFailed);
+        if (!sdl.SDL_GL_SetAttribute(sdl.SDL_GL_CONTEXT_FLAGS, sdl.SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG)) return sdlError(error.SdlGlAttributeFailed);
 
-        const window = try glfw.createWindow(64, 64, "pixzig-test", null, null);
-        errdefer glfw.destroyWindow(window);
+        const window = sdl.SDL_CreateWindow("pixzig-test", 64, 64, sdl.SDL_WINDOW_OPENGL | sdl.SDL_WINDOW_HIDDEN) orelse
+            return sdlError(error.SdlCreateWindowFailed);
+        errdefer sdl.SDL_DestroyWindow(window);
 
-        glfw.makeContextCurrent(window);
-        try zopengl.loadCoreProfile(glfw.getProcAddress, 4, 5);
+        const gl_context = sdl.SDL_GL_CreateContext(window) orelse return sdlError(error.SdlCreateContextFailed);
+        errdefer _ = sdl.SDL_GL_DestroyContext(gl_context);
 
-        return .{ .window = window };
+        if (!sdl.SDL_GL_MakeCurrent(window, gl_context)) return sdlError(error.SdlMakeCurrentFailed);
+        try zopengl.loadCoreProfile(glProcAddress, 4, 5);
+
+        return .{ .window = window, .gl_context = gl_context };
     }
 
     pub fn deinit(self: *Self) void {
-        glfw.destroyWindow(self.window);
-        glfw.terminate();
+        _ = sdl.SDL_GL_MakeCurrent(self.window, null);
+        _ = sdl.SDL_GL_DestroyContext(self.gl_context);
+        sdl.SDL_DestroyWindow(self.window);
+        sdl.SDL_Quit();
     }
 
     /// Compiles the standard texture shader and wraps it in a ManagedShader.

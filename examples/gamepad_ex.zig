@@ -1,6 +1,5 @@
 const std = @import("std");
 const pixzig = @import("pixzig");
-const glfw = pixzig.glfw;
 const Delay = pixzig.utils.Delay;
 
 const math = @import("zmath");
@@ -18,7 +17,7 @@ const Colors = struct {
     b: f32,
 };
 
-const ButtonColors = [_]struct { btn: glfw.Gamepad.Button, color: Colors }{
+const ButtonColors = [_]struct { btn: pixzig.GamepadButton, color: Colors }{
     .{ .btn = .a, .color = .{ .r = 0.8, .g = 0.1, .b = 0.1 } }, // A  -> red
     .{ .btn = .b, .color = .{ .r = 0.1, .g = 0.8, .b = 0.1 } }, // B  -> green
     .{ .btn = .x, .color = .{ .r = 0.1, .g = 0.1, .b = 0.8 } }, // X  -> blue

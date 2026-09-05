@@ -199,13 +199,20 @@ export fn pz_should_close(eng: *PzEngine) callconv(.c) bool {
 }
 
 export fn pz_poll_events(eng: *PzEngine) callconv(.c) void {
-    pixzig.glfw.pollEvents();
+    eng.engine.pollEvents();
     eng.engine.refreshWindowState();
 }
 
 export fn pz_update_input(eng: *PzEngine) callconv(.c) void {
-    eng.engine.inputs.update(eng.engine.window, eng.engine.window_state.scale_factor, &eng.engine.viewport);
+    eng.engine.inputs.update(eng.engine.window_state.scale_factor, &eng.engine.viewport);
     eng.engine.resources.checkHotReload();
+}
+
+/// Closes an input tick, rolling the current key/button state into the
+/// previous one. Must be called after the caller's update ran, or
+/// `pz_key_pressed` would keep reporting the same press forever.
+export fn pz_finish_tick(eng: *PzEngine) callconv(.c) void {
+    eng.engine.inputs.finishTick();
 }
 
 export fn pz_swap_buffers(eng: *PzEngine) callconv(.c) void {

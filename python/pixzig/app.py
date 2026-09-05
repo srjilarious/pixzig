@@ -147,7 +147,11 @@ class PixzigApp:
                 while self._lag > self._update_step_ms:
                     self._lag -= self._update_step_ms
                     _n.pz_update_input(self._eng)
-                    if not self.update(self._update_step_ms):
+                    keep_running = self.update(self._update_step_ms)
+                    # Closes the input tick: without it, key_pressed() would
+                    # keep reporting the same press on every later tick.
+                    _n.pz_finish_tick(self._eng)
+                    if not keep_running:
                         return
 
                 _n.pz_render_clear(self._eng, 0.0, 0.0, 0.0, 1.0)

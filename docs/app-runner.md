@@ -17,7 +17,7 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{
 
 [](sym:PixzigEngineOptions) is evaluated at compile time. Use it to enable rendering, audio, and input features required by the application.
 
-Note that these options strip unused engine *code paths* only, not native dependencies: `build.zig` always links GLFW, OpenGL, flecs, zaudio/miniaudio, Lua, XML, and STB TrueType into every build regardless of which options are set.
+Note that these options strip unused engine *code paths* only, not native dependencies: `build.zig` always links SDL3, OpenGL, flecs, zaudio/miniaudio, Lua, XML, and STB TrueType into every build regardless of which options are set.
 
 ## Initialising
 
@@ -31,12 +31,12 @@ pub fn main() !void {
         .fullscreen = false,
     });
     const app = try App.init(alloc, appRunner.engine);
-    glfw.swapInterval(0);
+    appRunner.engine.enableVSync(false);
     appRunner.run(app);
 }
 ```
 
-[](sym:AppRunner.init) creates the GLFW window, loads OpenGL, and initializes engine systems. If audio is enabled it also initializes [](sym:AudioEngine). `appRunner.run(app)` calls `app.deinit()` and releases engine resources when the loop exits.
+[](sym:AppRunner.init) creates the window, loads OpenGL, and initializes engine systems. If audio is enabled it also initializes [](sym:AudioEngine). `appRunner.run(app)` calls `app.deinit()` and releases engine resources when the loop exits.
 
 ## The App Interface
 
@@ -63,7 +63,7 @@ The engine reference `eng` gives you access to:
 | `eng.resources` | `ResourceManager` | Texture and atlas loading |
 | `eng.viewport` | `Viewport` | Logical size, scaling, and projection |
 | `eng.audio` | `AudioEngine` | Sound playback (if enabled) |
-| `eng.window` | `*glfw.Window` | Raw GLFW window handle |
+| `eng.window` | `*platform.Window` | The engine's window handle (SDL3 underneath, but callers see only pixzig's wrapper) |
 | `eng.allocator` | `std.mem.Allocator` | Engine-owned allocator |
 | `eng.projection()` | `zmath.Mat` | Orthographic matrix for the logical coordinate space; use this as the MVP base for all game rendering |
 | `eng.screenProjection()` | `zmath.Mat` | Orthographic matrix for the full framebuffer in actual pixels; use for UI overlays that should be in screen-pixel coordinates |

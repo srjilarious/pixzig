@@ -26,7 +26,7 @@
 //!   self.ui.end();
 
 const std = @import("std");
-const glfw = @import("zglfw");
+const platform = @import("./platform.zig");
 const gl = @import("zopengl").bindings;
 const TextRenderer = @import("./renderer/text.zig").TextRenderer;
 const ShapeBatchQueue = @import("./renderer/shape.zig").ShapeBatchQueue;
@@ -178,7 +178,7 @@ pub const UiContext = struct {
     images: *SpriteBatchQueue,
     shapes: *ShapeBatchQueue,
     text: *TextRenderer,
-    clipboard_window: ?*glfw.Window,
+    clipboard_window: ?*platform.Window,
     style: Style,
 
     win_stack: [8]WindowCtx,
@@ -322,7 +322,7 @@ pub const UiContext = struct {
 
     /// Enables clipboard shortcuts for text inputs. Without this, Ctrl+C and
     /// Ctrl+V are reported but cannot touch the OS clipboard.
-    pub fn setClipboardWindow(self: *UiContext, window: *glfw.Window) void {
+    pub fn setClipboardWindow(self: *UiContext, window: *platform.Window) void {
         self.clipboard_window = window;
     }
 

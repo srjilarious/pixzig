@@ -234,11 +234,10 @@ pub fn charFromKeyTest(io: std.Io, alloc: std.mem.Allocator) !void {
 // Text input tests.
 // ----------------------------------------------------------------------------
 
-// `text()` now returns the codepoints GLFW's char callback delivered
-// (already resolved through the OS layout / dead keys / IME), latched into
-// the frame by `latchText` -- which `Keyboard.update` calls each tick.
-// These tests drive `pushChar` + `latchText` directly since there's no
-// GLFW window.
+// `text()` returns the UTF-8 the OS text-input events delivered (already
+// resolved through the OS layout / dead keys / IME), latched into the tick
+// by `latchText` -- which `Keyboard.update` calls each tick. These tests
+// drive `pushChar` + `latchText` directly since there's no window.
 
 pub fn textInputTest_1(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;

@@ -36,6 +36,54 @@ pub const EngineData = struct {
     pixeng_mod: *std.Build.Module,
 };
 
+/// Returns the `sdl3` module the engine imports.
+///
+/// On desktop this is the `allyourcodebase/SDL` package's own module, which
+/// carries the static libSDL3 with it, so importing it is all any consumer
+/// needs -- no separate `linkLibrary`.
+///
+/// Emscripten is different. That package's `build.zig` has no target config
+/// for wasm and panics outright, and even with the config disabled its
+/// module drags the unbuildable library in behind it. Emscripten ships its
+/// own SDL3 port, so there the link side comes from `--use-port=sdl3` in
+/// `emcc` (see the emcc args in `buildExample`) and all we need from Zig is
+/// the type and constant declarations. So we translate the upstream SDL
+/// headers ourselves, reaching them through the package's own dependency on
+/// them, and produce a module that links nothing.
+fn sdlModule(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+) *std.Build.Module {
+    if (target.result.os.tag != .emscripten) {
+        const sdl_dep = b.dependency("sdl", .{ .target = target, .optimize = optimize });
+        return sdl_dep.module("sdl3");
+    }
+
+    if (b.sysroot == null) @panic("Pass '--sysroot' for emscripten builds");
+
+    // `default_target_config = false` keeps the package's build() from
+    // panicking on an unrecognised target; we only want at its `sdl`
+    // dependency, which is the upstream source tree with the headers.
+    const sdl_pkg = b.dependency("sdl", .{
+        .target = target,
+        .optimize = optimize,
+        .default_target_config = false,
+    });
+    const upstream = sdl_pkg.builder.dependency("sdl", .{});
+
+    const translate = b.addTranslateC(.{
+        .root_source_file = sdl_pkg.path("src/sdl.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    translate.defineCMacro("USING_GENERATED_CONFIG_H", "1");
+    translate.addIncludePath(upstream.path("include"));
+    translate.addIncludePath(upstream.path("src/video/khronos"));
+    translate.addIncludePath(.{ .cwd_relative = getSysRootInclude(b) });
+    return translate.createModule();
+}
+
 // ---------------------------------------------------------------------------
 // Asset manifest build support
 // ---------------------------------------------------------------------------
@@ -487,6 +535,13 @@ pub fn build(b: *std.Build) void {
                 const extraMod = b.dependency(em, .{});
                 exe_mod.addImport(em, extraMod.module(em));
             }
+
+            // The unit tests reach past the engine's own input enums to
+            // check they map SDL's codes correctly. Examples deliberately
+            // get no such import: game code should never name SDL.
+            if (std.mem.eql(u8, example_info.name, "tests")) {
+                exe_mod.addImport("sdl3", sdlModule(b, target, optimize));
+            }
             const install_exe = b.addInstallArtifact(exe, .{
                 .dest_dir = .{
                     .override = .{ .custom = b.pathJoin(&.{ "bin", example_info.name }) },
@@ -508,6 +563,26 @@ pub fn build(b: *std.Build) void {
 
             const zstbi = b.dependency("zstbi", .{ .target = target });
             spack.root_module.addImport("zstbi", zstbi.module("root"));
+
+            // Python constants generator. Keeps python/pixzig/constants.py
+            // in step with the engine's input enums; run it after editing
+            // src/pixzig/input/keys.zig and commit the result.
+            const gen_consts_mod = b.createModule(.{
+                .root_source_file = b.path("tools/gen_py_constants/gen_py_constants.zig"),
+                .target = target,
+                .optimize = optimize,
+            });
+            gen_consts_mod.addImport("pixzig", engDat.pixeng_mod);
+            const gen_consts = b.addExecutable(.{
+                .name = "gen_py_constants",
+                .root_module = gen_consts_mod,
+            });
+            gen_consts.root_module.linkLibrary(engDat.engine_lib);
+            const run_gen_consts = b.addRunArtifact(gen_consts);
+            run_gen_consts.setCwd(b.path("."));
+            run_gen_consts.addArg("python/pixzig/constants.py");
+            b.step("py-constants", "Regenerate python/pixzig/constants.py from the input enums")
+                .dependOn(&run_gen_consts.step);
 
             // Pixzig docs step
             const zkdocs = @import("zkdocs");
@@ -560,14 +635,9 @@ fn buildEngine(
     addArchIncludes(b, target, optimize, engine_lib) catch unreachable;
     engine_lib.root_module.link_libc = true;
 
-    // GLFW
-    const zglfw = b.dependency("zglfw", .{ .target = target });
-    const zglfw_mod = zglfw.module("root");
-    pixeng.addImport("zglfw", zglfw_mod);
-    if (target.result.os.tag != .emscripten) {
-        const glfw_dep = zglfw.artifact("glfw");
-        engine_lib.root_module.linkLibrary(glfw_dep);
-    }
+    // SDL3 (windowing, input, clipboard). The `sdl3` module carries the
+    // static libSDL3 with it, so importing it is all a consumer needs.
+    pixeng.addImport("sdl3", sdlModule(b, target, optimize));
 
     // OpenGL bindings
     const zopengl = b.dependency("zopengl", .{ .target = target });
@@ -691,10 +761,9 @@ fn buildPythonFfi(
 
     // Same native libraries linked into the static engine lib in
     // buildEngine, re-linked here since a dynamic library is a separate
-    // Compile step with its own link inputs.
-    const zglfw = b.dependency("zglfw", .{ .target = target });
-    ffi_lib.root_module.linkLibrary(zglfw.artifact("glfw"));
-
+    // Compile step with its own link inputs. SDL3 is absent from this list
+    // because the `sdl3` module links libSDL3 itself, so it comes along
+    // with the engine module import above.
     const zflecs = b.dependency("zflecs", .{ .target = target });
     ffi_lib.root_module.linkLibrary(zflecs.artifact("flecs"));
 
@@ -781,7 +850,9 @@ pub fn buildExample(
                 "-o",
                 index_path,
                 "-sFULL-ES3=1",
-                "-sUSE_GLFW=3",
+                // Emscripten's own SDL3 port supplies the implementation the
+                // engine's `sdl3` module only declares (see `sdlModule`).
+                "--use-port=sdl3",
                 "-O3",
                 "-g",
                 "-sASYNCIFY=1",

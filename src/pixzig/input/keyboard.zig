@@ -1,27 +1,9 @@
 const std = @import("std");
-const glfw = @import("zglfw");
-const comp = @import("../comp.zig");
-const common = @import("../common.zig");
-const Vec2I = common.Vec2I;
-const Vec2F = common.Vec2F;
+const keys = @import("./keys.zig");
 
-const NumKeys = comp.numEnumFields(glfw.Key);
-
-/// Returns the index of the given key in the keyboard state bitset. This is
-/// necessary because the glfw.Key enum values are not guaranteed to be
-/// contiguous or start at 0, so we need to map them to a dense range of
-/// indices for our bitset.
-pub fn getIndexForKey(key: glfw.Key) usize {
-    const enumTypeInfo = @typeInfo(glfw.Key).@"enum";
-    comptime var keyIdx: usize = 0;
-    inline for (enumTypeInfo.fields) |field| {
-        const fieldKey = @field(glfw.Key, field.name);
-        if (key == fieldKey) return keyIdx;
-        keyIdx += 1;
-    }
-
-    return 0;
-}
+pub const Key = keys.Key;
+pub const NumKeys = keys.NumKeys;
+pub const charFromKey = keys.charFromKey;
 
 /// Represents the state of modifier keys (ctrl, alt, shift, super) at a
 /// given time.
@@ -32,122 +14,68 @@ pub const KeyModifier = struct {
     super: bool = false,
 };
 
-/// Converts a glfw.Key and shift state to the corresponding ASCII character.
-pub fn charFromKey(key: glfw.Key, shift: bool) ?u8 {
-    const keyInt = @intFromEnum(key);
-    if (keyInt >= @intFromEnum(glfw.Key.space) and keyInt <= @intFromEnum(glfw.Key.grave_accent)) {
-        if (!shift) {
-            if (keyInt >= 'A' and keyInt <= 'Z') {
-                // Convert to lower case.
-                return @intCast(keyInt + 32);
-            } else {
-                return @intCast(keyInt);
-            }
-        } else {
-            return switch (key) {
-                .a => 'A',
-                .b => 'B',
-                .c => 'C',
-                .d => 'D',
-                .e => 'E',
-                .f => 'F',
-                .g => 'G',
-                .h => 'H',
-                .i => 'I',
-                .j => 'J',
-                .k => 'K',
-                .l => 'L',
-                .m => 'M',
-                .n => 'N',
-                .o => 'O',
-                .p => 'P',
-                .q => 'Q',
-                .r => 'R',
-                .s => 'S',
-                .t => 'T',
-                .u => 'U',
-                .v => 'V',
-                .w => 'W',
-                .x => 'X',
-                .y => 'Y',
-                .z => 'Z',
-                .one => '!',
-                .two => '@',
-                .three => '#',
-                .four => '$',
-                .five => '%',
-                .six => '^',
-                .seven => '&',
-                .eight => '*',
-                .nine => '(',
-                .zero => ')',
-
-                .space => ' ',
-                .apostrophe => '"',
-                .comma => '<',
-                .minus => '-',
-                .period => '>',
-                .slash => '?',
-                .semicolon => ':',
-                .equal => '+',
-                .left_bracket => '{',
-                .backslash => '|',
-                .right_bracket => '}',
-                .grave_accent => '~',
-                else => null,
-            };
-        }
-    }
-
-    return null;
-}
-
 /// Represents the state of the keyboard at a given time, including which keys
 /// are currently down and which modifier keys are active.
 pub const KeyboardState = struct {
+    /// Physical key positions that are down, indexed by `Key` (see
+    /// `keys.Key`: these come from SDL scancodes).
     keys: std.StaticBitSet(NumKeys),
-    /// Modifier state as reported by GLFW's key callback `mods` bitfield,
-    /// or null before any key event has been seen. GLFW derives these bits
-    /// from OS keymap state, so they reflect OS-level remaps (for example
-    /// CapsLock remapped to Control) that the physical `keys` bitset can't:
-    /// the remapped CapsLock key still polls as `.caps_lock`, never
+    /// The same keys resolved through the active OS layout, so on AZERTY
+    /// the key that reports `.q` in `keys` reports `.a` here. Read through
+    /// `Keyboard.layoutDown` / `layoutPressed` when the keycap matters.
+    layout_keys: std.StaticBitSet(NumKeys),
+    /// Modifier state as reported by SDL's key events, or null before any
+    /// key event has been seen. SDL derives these bits from OS keymap
+    /// state, so they reflect OS-level remaps (for example CapsLock
+    /// remapped to Control) that the physical `keys` bitset can't: the
+    /// remapped CapsLock key still reports as `.caps_lock`, never
     /// `.left_control`. When present, `modifiers()` ORs this with the
     /// physical-key reading so either source can satisfy a modifier query.
     mods_override: ?KeyModifier,
 
     /// Initializes a new KeyboardState with all keys up.
     pub fn init() KeyboardState {
-        const keys = std.StaticBitSet(NumKeys).initEmpty();
-        return .{ .keys = keys, .mods_override = null };
+        return .{
+            .keys = std.StaticBitSet(NumKeys).initEmpty(),
+            .layout_keys = std.StaticBitSet(NumKeys).initEmpty(),
+            .mods_override = null,
+        };
     }
 
     /// Returns true if the provided key is currently up in this state.
-    pub fn up(self: *const KeyboardState, key: glfw.Key) bool {
-        const keyIdx = getIndexForKey(key);
-        return !self.keys.isSet(keyIdx);
+    pub fn up(self: *const KeyboardState, key: Key) bool {
+        return !self.keys.isSet(keys.keyIndex(key));
     }
 
     /// Returns true if the provided key is currently down in this state.
-    pub fn down(self: *const KeyboardState, key: glfw.Key) bool {
-        const keyIdx = getIndexForKey(key);
-        return self.keys.isSet(keyIdx);
+    pub fn down(self: *const KeyboardState, key: Key) bool {
+        return self.keys.isSet(keys.keyIndex(key));
     }
 
     /// Returns true if the provided key index is currently down in this state.
     pub fn downIdx(self: *const KeyboardState, keyIdx: usize) bool {
-        const res = self.keys.isSet(keyIdx);
-        return res;
+        return self.keys.isSet(keyIdx);
+    }
+
+    /// Returns true if the key carrying this identity on the active
+    /// layout's keycaps is currently down.
+    pub fn layoutDown(self: *const KeyboardState, key: Key) bool {
+        return self.layout_keys.isSet(keys.keyIndex(key));
+    }
+
+    /// Returns true if the provided layout-key index is currently down.
+    pub fn layoutDownIdx(self: *const KeyboardState, keyIdx: usize) bool {
+        return self.layout_keys.isSet(keyIdx);
     }
 
     /// Sets the provided key to the given value (true for down, false for
-    /// up) in this state.  This is used for testing.
-    pub fn set(self: *KeyboardState, key: glfw.Key, val: bool) void {
-        const keyIdx = getIndexForKey(key);
-        self.setIdx(keyIdx, val);
+    /// up) in this state.  This is used by the event pump and by tests.
+    pub fn set(self: *KeyboardState, key: Key, val: bool) void {
+        self.setIdx(keys.keyIndex(key), val);
     }
 
     /// Sets the provided key index to the given value (true for down, false
-    /// for up) in this state.  This is used for testing.
+    /// for up) in this state.
     pub fn setIdx(self: *KeyboardState, keyIdx: usize, val: bool) void {
         if (val) {
             self.keys.set(keyIdx);
@@ -156,9 +84,19 @@ pub const KeyboardState = struct {
         }
     }
 
+    /// Sets the layout-resolved identity of a key that went down or up.
+    pub fn setLayout(self: *KeyboardState, key: Key, val: bool) void {
+        if (val) {
+            self.layout_keys.set(keys.keyIndex(key));
+        } else {
+            self.layout_keys.unset(keys.keyIndex(key));
+        }
+    }
+
     /// Clears the keyboard state by setting all keys to up.
     pub fn clear(self: *KeyboardState) void {
         self.keys.setRangeValue(.{ .start = 0, .end = NumKeys }, false);
+        self.layout_keys.setRangeValue(.{ .start = 0, .end = NumKeys }, false);
         self.mods_override = null;
     }
 
@@ -168,10 +106,10 @@ pub const KeyboardState = struct {
     /// is down and sets the corresponding field in the KeyModifier struct
     /// accordingly.
     ///
-    /// When `mods_override` is set (GLFW key callback has run at least
-    /// once), its bits are OR-ed in so a modifier the OS produces from a
-    /// remapped physical key (e.g. CapsLock acting as Control) is also
-    /// reported, even though that physical key polls as something else.
+    /// When `mods_override` is set (an SDL key event has been seen), its
+    /// bits are OR-ed in so a modifier the OS produces from a remapped
+    /// physical key (e.g. CapsLock acting as Control) is also reported,
+    /// even though that physical key reports as something else.
     pub fn modifiers(self: *const KeyboardState) KeyModifier {
         var m: KeyModifier = .{
             .alt = self.down(.left_alt) or self.down(.right_alt),
@@ -209,117 +147,182 @@ pub const KeyboardState = struct {
     }
 };
 
-/// Maximum number of text codepoints buffered between two `Keyboard.update`
-/// calls. Anything typed past this in a single frame is dropped.
-pub const TextBufLen = 32;
+/// Maximum number of UTF-8 *bytes* of typed text buffered between two
+/// ticks. Anything typed past this in a single tick is dropped. It used to
+/// be a count of codepoints, because GLFW delivered one codepoint per
+/// callback; SDL delivers ready-made UTF-8, so bytes is the natural unit.
+pub const TextBufLen = 128;
 
-/// Module-level pointer used by the C key/char callbacks to reach the
-/// Keyboard instance. Only one Keyboard receives callback events at a time,
-/// the same single-target model as the mouse scroll callback.
-var g_kb_target: ?*Keyboard = null;
+/// Maximum number of UTF-8 bytes of IME composition text retained.
+pub const PreeditBufLen = 256;
 
-/// Registers `kb` as the recipient of GLFW key/char callback events. Call
-/// once after the Keyboard's address is final, before `glfw.pollEvents()`.
-pub fn setKeyboardTarget(kb: *Keyboard) void {
-    g_kb_target = kb;
+/// Number of bytes of `bytes[0..n]` that end on a UTF-8 sequence boundary:
+/// `n` itself unless it lands mid-sequence, in which case the partial
+/// trailing sequence is dropped. Cutting typed text on a raw byte count
+/// would hand callers half an encoded codepoint, which for CJK input
+/// (3 bytes per character) is not hypothetical.
+fn utf8Boundary(bytes: []const u8, n: usize) usize {
+    var end = @min(n, bytes.len);
+    if (end == bytes.len) return end; // nothing dropped, nothing to split
+    // `bytes[end]` is the first byte that would be dropped. A continuation
+    // byte there (0b10xxxxxx) means the cut landed inside a sequence: back
+    // up over the continuations and off the lead byte that started it.
+    while (end > 0 and bytes[end] & 0xC0 == 0x80) end -= 1;
+    return end;
 }
 
-/// GLFW char callback: delivers a fully layout/dead-key/IME-processed
-/// Unicode codepoint. This is the only correct source of typed text; the
-/// polled key bitset can't produce it for non-US layouts.
-pub fn charCallback(window: *glfw.Window, codepoint: u32) callconv(.c) void {
-    _ = window;
-    if (g_kb_target) |kb| kb.pushChar(std.math.cast(u21, codepoint) orelse return);
+/// A small fixed-capacity byte buffer that only ever cuts on UTF-8
+/// boundaries.
+fn FixedBuffer(comptime capacity: usize) type {
+    return struct {
+        bytes: [capacity]u8 = undefined,
+        len: usize = 0,
+
+        const Self = @This();
+
+        pub fn appendSlice(self: *Self, bytes: []const u8) void {
+            const room = capacity - self.len;
+            const n = if (bytes.len <= room) bytes.len else utf8Boundary(bytes, room);
+            @memcpy(self.bytes[self.len..][0..n], bytes[0..n]);
+            self.len += n;
+        }
+
+        pub fn clear(self: *Self) void {
+            self.len = 0;
+        }
+
+        pub fn slice(self: *const Self) []const u8 {
+            return self.bytes[0..self.len];
+        }
+    };
 }
 
-/// GLFW key callback: used only to capture the `mods` bitfield GLFW derives
-/// from OS keymap state (see `KeyboardState.mods_override`). Physical key
-/// up/down is still read by polling in `update`.
-pub fn keyCallback(
-    window: *glfw.Window,
-    key: glfw.Key,
-    scancode: c_int,
-    action: glfw.Action,
-    mods: glfw.Mods,
-) callconv(.c) void {
-    _ = window;
-    _ = key;
-    _ = scancode;
-    _ = action;
-    if (g_kb_target) |kb| kb.setModsFromCallback(mods);
-}
-
-/// Manages the state of the keyboard across frames, allowing for querying of key
-/// presses, releases, and holds. It maintains two buffers of KeyboardState to
-/// track the current and previous state of the keyboard, and provides methods to
-/// query key values and text input.
+/// Manages the state of the keyboard across ticks, allowing for querying of
+/// key presses, releases, and holds. It maintains two buffers of
+/// KeyboardState to track the current and previous state of the keyboard,
+/// and provides methods to query key values and text input.
+///
+/// The state is driven by SDL events (`Engine.pollEvents` forwards them
+/// through `InputManager.handleEvent`), not polled each tick as the GLFW
+/// backend did. One consequence worth knowing: polling self-heals, events
+/// latch. A key-up that never arrives leaves a key stuck down, so the
+/// engine clears the whole state on window focus loss.
 pub const Keyboard = struct {
     currIdx: usize,
     prevIdx: usize,
     keyBuffers: [2]KeyboardState,
-    /// Codepoints accumulated by `charCallback` since the last `update`.
-    pendingChars: [TextBufLen]u21,
-    pendingCharCount: usize,
-    /// The current frame's typed text, latched from `pendingChars` by
+    /// Typed text accumulated since the last `update`.
+    pendingText: FixedBuffer(TextBufLen),
+    /// The current tick's typed text, latched from `pendingText` by
     /// `update` (or `latchText`). Read by `text()`.
-    frameChars: [TextBufLen]u21,
-    frameCharCount: usize,
-    /// Latest modifier bits seen from `keyCallback`, or null before any key
-    /// event. Copied into the current KeyboardState buffer each `update`.
+    frameText: FixedBuffer(TextBufLen),
+    /// Latest modifier bits seen from an SDL key event, or null before any
+    /// key event. Copied into the current KeyboardState buffer each `update`.
     cbMods: ?KeyModifier,
+
+    /// The IME's in-progress composition ("preedit"), from
+    /// `SDL_EVENT_TEXT_EDITING`. Unlike `frameText` this is *not* per-tick
+    /// state: it persists across ticks for as long as the user is
+    /// composing, is replaced wholesale by each editing event, and is
+    /// cleared when the IME commits (a `SDL_EVENT_TEXT_INPUT`, which
+    /// carries the committed text through `pendingText`) or cancels. An
+    /// app that wants to accept Japanese/Chinese/Korean input has to draw
+    /// this at the caret; until it does, composing shows nothing at all
+    /// until the commit lands.
+    preeditText: FixedBuffer(PreeditBufLen),
+    /// Caret position within the composition as a *codepoint* index, or -1
+    /// when the IME didn't report one. `preeditCursorByte` converts.
+    preeditCursor: i32,
 
     /// Initializes a new Keyboard instance with two empty KeyboardState buffers.
     pub fn init() Keyboard {
-        const res: Keyboard = .{
+        return .{
             .currIdx = 0,
             .prevIdx = 1,
             .keyBuffers = .{
                 KeyboardState.init(),
                 KeyboardState.init(),
             },
-            .pendingChars = undefined,
-            .pendingCharCount = 0,
-            .frameChars = undefined,
-            .frameCharCount = 0,
+            .pendingText = .{},
+            .frameText = .{},
             .cbMods = null,
+            .preeditText = .{},
+            .preeditCursor = -1,
         };
-
-        return res;
     }
 
-    /// Appends a typed codepoint to the pending buffer. Called by
-    /// `charCallback`; also usable directly by tests that drive the
-    /// keyboard without a GLFW window.
+    /// Records a key going down or up. `physical` is the scancode-derived
+    /// identity used by all the normal query methods; `layout` is the same
+    /// key resolved through the OS layout.
+    pub fn setKey(self: *Keyboard, physical: Key, layout: Key, isDown: bool) void {
+        var curr = self.currKeys_mut();
+        if (physical != .unknown) curr.set(physical, isDown);
+        if (layout != .unknown) curr.setLayout(layout, isDown);
+    }
+
+    /// Appends typed UTF-8 text to the pending buffer. Called from the
+    /// event pump on `SDL_EVENT_TEXT_INPUT`.
+    pub fn pushText(self: *Keyboard, utf8: []const u8) void {
+        self.pendingText.appendSlice(utf8);
+    }
+
+    /// Appends a single typed codepoint. A convenience over `pushText` for
+    /// tests and for callers that already have a codepoint in hand.
     pub fn pushChar(self: *Keyboard, cp: u21) void {
-        if (self.pendingCharCount >= self.pendingChars.len) return;
-        self.pendingChars[self.pendingCharCount] = cp;
-        self.pendingCharCount += 1;
+        var buf: [4]u8 = undefined;
+        const n = std.unicode.utf8Encode(cp, buf[0..]) catch return;
+        self.pushText(buf[0..n]);
     }
 
-    /// Stores modifier state from a GLFW key callback `mods` bitfield.
-    pub fn setModsFromCallback(self: *Keyboard, mods: glfw.Mods) void {
-        self.cbMods = .{
-            .ctrl = mods.control,
-            .alt = mods.alt,
-            .shift = mods.shift,
-            .super = mods.super,
-        };
+    /// Stores modifier state from an SDL key event's `mod` bitfield.
+    pub fn setModsFromEvent(self: *Keyboard, mods: KeyModifier) void {
+        self.cbMods = mods;
     }
 
-    /// Moves codepoints accumulated since the last call into the current
-    /// frame's text buffer and clears the pending buffer. Called by
-    /// `update`; exposed for tests that don't have a GLFW window.
+    /// Replaces the IME composition text and caret.
+    pub fn setPreedit(self: *Keyboard, composing: []const u8, cursor: i32) void {
+        self.preeditText.clear();
+        self.preeditText.appendSlice(composing);
+        self.preeditCursor = cursor;
+    }
+
+    /// Ends any IME composition.
+    pub fn clearPreedit(self: *Keyboard) void {
+        self.preeditText.clear();
+        self.preeditCursor = -1;
+    }
+
+    /// The IME's in-progress composition, or an empty slice when nothing is
+    /// being composed. Valid until the next event is handled.
+    pub fn preedit(self: *const Keyboard) []const u8 {
+        return self.preeditText.slice();
+    }
+
+    /// Caret offset within `preedit()` in *bytes*, clamped into range. SDL
+    /// reports it in codepoints; this walks the composition to convert so
+    /// callers can slice the text directly. Null when the IME didn't
+    /// report a position.
+    pub fn preeditCursorByte(self: *const Keyboard) ?usize {
+        if (self.preeditCursor < 0) return null;
+        const composing = self.preeditText.slice();
+        var remaining: usize = @intCast(self.preeditCursor);
+        var i: usize = 0;
+        while (remaining > 0 and i < composing.len) : (remaining -= 1) {
+            i += std.unicode.utf8ByteSequenceLength(composing[i]) catch return i;
+        }
+        return @min(i, composing.len);
+    }
+
+    /// Moves text accumulated since the last call into the current tick's
+    /// text buffer and clears the pending buffer. Called by `update`.
     pub fn latchText(self: *Keyboard) void {
-        @memcpy(
-            self.frameChars[0..self.pendingCharCount],
-            self.pendingChars[0..self.pendingCharCount],
-        );
-        self.frameCharCount = self.pendingCharCount;
-        self.pendingCharCount = 0;
+        self.frameText.clear();
+        self.frameText.appendSlice(self.pendingText.slice());
+        self.pendingText.clear();
     }
 
     /// Returns a pointer to the current KeyboardState buffer, which
-    /// represents the state of the keyboard in the current frame.
+    /// represents the state of the keyboard in the current tick.
     pub fn currKeys(self: *const Keyboard) *const KeyboardState {
         return &self.keyBuffers[self.currIdx];
     }
@@ -329,47 +332,48 @@ pub const Keyboard = struct {
     }
 
     /// Returns a pointer to the previous KeyboardState buffer, which
-    /// represents the state of the keyboard in the previous frame.
+    /// represents the state of the keyboard in the previous tick.
     pub fn prevKeys(self: *const Keyboard) *const KeyboardState {
         return &self.keyBuffers[self.prevIdx];
     }
 
-    /// Updates the keyboard state by swapping the current and previous
-    /// buffers and then polling the current state of the keyboard from
-    /// the given GLFW window. Also latches any text codepoints and
-    /// modifier bits collected by the key/char callbacks since the last
-    /// call. Call after `glfw.pollEvents()`.
-    pub fn update(self: *Keyboard, window: *glfw.Window) bool {
-        const temp = self.currIdx;
-        self.currIdx = self.prevIdx;
-        self.prevIdx = temp;
-
-        // Update the current keys
+    /// Begins a tick: latches typed text and the modifier bits collected
+    /// from events since the last call. Returns whether any key is down.
+    pub fn update(self: *Keyboard) bool {
         var curr = self.currKeys_mut();
-        const enumTypeInfo = @typeInfo(glfw.Key).@"enum";
-        comptime var keyIdx = 0;
-        var anyPressed: bool = false;
-        inline for (enumTypeInfo.fields) |field| {
-            const enumValue = @field(glfw.Key, field.name);
-            const currPressed = window.getKey(enumValue) == .press;
-            curr.setIdx(keyIdx, currPressed);
-            anyPressed |= currPressed;
-            keyIdx += 1;
-        }
-
         curr.mods_override = self.cbMods;
         self.latchText();
+        return curr.keys.count() > 0;
+    }
 
-        return anyPressed;
+    /// Ends a tick: the current key state becomes the previous state so the
+    /// next tick's `pressed`/`released` edges are measured against it, and
+    /// this tick's typed text is dropped. The IME composition deliberately
+    /// survives; it belongs to the composition, not to one tick.
+    pub fn finishTick(self: *Keyboard) void {
+        self.keyBuffers[self.prevIdx] = self.keyBuffers[self.currIdx];
+        self.frameText.clear();
+    }
+
+    /// Drops all key state. Called when the window loses focus, where the
+    /// key-up events for anything held would otherwise never arrive and
+    /// leave keys stuck down.
+    pub fn clear(self: *Keyboard) void {
+        self.keyBuffers[0].clear();
+        self.keyBuffers[1].clear();
+        self.pendingText.clear();
+        self.frameText.clear();
+        self.cbMods = null;
+        self.clearPreedit();
     }
 
     /// Returns true if the provided key is currently up in the current state.
-    pub fn up(self: *const Keyboard, key: glfw.Key) bool {
-        return self.currKeys().up(key) == false;
+    pub fn up(self: *const Keyboard, key: Key) bool {
+        return !self.currKeys().down(key);
     }
 
     /// Returns true if the provided key is currently down in the current state.
-    pub fn down(self: *const Keyboard, key: glfw.Key) bool {
+    pub fn down(self: *const Keyboard, key: Key) bool {
         return self.currKeys().down(key);
     }
 
@@ -393,37 +397,53 @@ pub const Keyboard = struct {
         return self.currKeys().super();
     }
 
-    /// Returns true if the provided key was pressed in the current frame
+    /// Returns true if the provided key was pressed in the current tick
     /// (i.e., it is down in the current state but was up in the previous state).
-    pub fn pressed(self: *const Keyboard, key: glfw.Key) bool {
-        const keyIdx = getIndexForKey(key);
+    pub fn pressed(self: *const Keyboard, key: Key) bool {
+        const keyIdx = keys.keyIndex(key);
         return (self.currKeys().downIdx(keyIdx) and !self.prevKeys().downIdx(keyIdx));
     }
 
-    /// Returns true if the provided key was released in the current frame
+    /// Returns true if the provided key was released in the current tick
     /// (i.e., it is up in the current state but was down in the previous state).
-    pub fn released(self: *const Keyboard, key: glfw.Key) bool {
-        const keyIdx = getIndexForKey(key);
+    pub fn released(self: *const Keyboard, key: Key) bool {
+        const keyIdx = keys.keyIndex(key);
         return (!self.currKeys().downIdx(keyIdx) and self.prevKeys().downIdx(keyIdx));
     }
 
-    /// UTF-8 encodes the text typed during the current frame into `buf` and
-    /// returns the number of bytes written. The codepoints come from GLFW's
-    /// char callback, so they are already resolved through the active OS
-    /// keyboard layout, dead keys and IME -- a QWERTZ, AZERTY or Dvorak
-    /// layout produces the character on the keycap, not the US-QWERTY one.
+    /// Like `down`, but matches the identity printed on the keycap under
+    /// the active OS layout rather than the physical position. Use this for
+    /// prompts and menus ("press Y to confirm"); use `down` for gameplay
+    /// bindings, so WASD stays where the fingers are.
+    pub fn layoutDown(self: *const Keyboard, key: Key) bool {
+        return self.currKeys().layoutDown(key);
+    }
+
+    /// `pressed`, on the layout-resolved identity. See `layoutDown`.
+    pub fn layoutPressed(self: *const Keyboard, key: Key) bool {
+        const keyIdx = keys.keyIndex(key);
+        return (self.currKeys().layoutDownIdx(keyIdx) and !self.prevKeys().layoutDownIdx(keyIdx));
+    }
+
+    /// `released`, on the layout-resolved identity. See `layoutDown`.
+    pub fn layoutReleased(self: *const Keyboard, key: Key) bool {
+        const keyIdx = keys.keyIndex(key);
+        return (!self.currKeys().layoutDownIdx(keyIdx) and self.prevKeys().layoutDownIdx(keyIdx));
+    }
+
+    /// Copies the text typed during the current tick into `buf` as UTF-8
+    /// and returns the number of bytes written. SDL resolves it through the
+    /// active OS keyboard layout, dead keys and IME, so a QWERTZ, AZERTY or
+    /// Dvorak layout produces the character on the keycap, not the
+    /// US-QWERTY one.
     ///
-    /// Non-destructive: repeated calls in the same frame return the same
-    /// text. The buffer is refilled on the next `update`. A codepoint whose
-    /// UTF-8 encoding would not fit in the remaining space is dropped along
-    /// with everything after it.
+    /// Non-destructive: repeated calls in the same tick return the same
+    /// text. The buffer is refilled on the next `update`. If `buf` is too
+    /// small the text is cut on a UTF-8 boundary, never mid-sequence.
     pub fn text(self: *Keyboard, buf: []u8) usize {
-        var bufIdx: usize = 0;
-        for (self.frameChars[0..self.frameCharCount]) |cp| {
-            const cpLen = std.unicode.utf8CodepointSequenceLength(cp) catch continue;
-            if (bufIdx + cpLen > buf.len) break;
-            bufIdx += std.unicode.utf8Encode(cp, buf[bufIdx..]) catch break;
-        }
-        return bufIdx;
+        const typed = self.frameText.slice();
+        const n = if (typed.len <= buf.len) typed.len else utf8Boundary(typed, buf.len);
+        @memcpy(buf[0..n], typed[0..n]);
+        return n;
     }
 };

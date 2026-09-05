@@ -1,6 +1,6 @@
 const std = @import("std");
 const zmath = @import("zmath");
-const glfw = @import("zglfw");
+const platform = @import("./platform.zig");
 const gl = @import("zopengl").bindings;
 const common = @import("./common.zig");
 
@@ -25,8 +25,8 @@ pub const ScalePolicy = union(enum) {
     fixed: f32,
 };
 
-/// Tracks GLFW window and framebuffer dimensions. `resized` is set by the
-/// framebuffer-size callback and cleared by `refreshWindowState`.
+/// Tracks window and framebuffer dimensions. `resized` is set by the
+/// engine's event pump on a resize and cleared by `refreshWindowState`.
 pub const WindowState = struct {
     /// OS window size in screen coordinates. On non-HiDPI displays this equals
     /// `framebuffer_size`. On HiDPI it is smaller because the OS uses logical
@@ -35,23 +35,23 @@ pub const WindowState = struct {
     /// Actual framebuffer dimensions in pixels. This is what OpenGL sees and
     /// what you should use for GL viewport calls and projection matrices.
     framebuffer_size: Vec2I,
-    /// Scale factor reported by `glfwGetWindowContentScale`. This is the OS's
+    /// Display scale reported by `SDL_GetWindowDisplayScale`. This is the OS's
     /// hint for how much to scale UI content to look correct at the display's
     /// DPI. It is 2.0 on a typical 2x HiDPI display. Note: on Wayland with
     /// fractional scaling, this value can disagree with the actual
     /// framebuffer/window ratio, so prefer `scale_factor` for coordinate math.
     content_scale: Vec2F,
     /// Ratio of framebuffer pixels to OS window screen coordinates
-    /// (`framebuffer_size / window_size`). Use this to convert GLFW cursor
+    /// (`framebuffer_size / window_size`). Use this to convert cursor
     /// positions (which are in window screen coordinates) to framebuffer
     /// pixels for correct mouse-to-game coordinate mapping on HiDPI displays.
     scale_factor: Vec2F,
-    /// Set to true by the framebuffer-size GLFW callback when the window is
-    /// resized. Cleared by `refreshWindowState` after it rebuilds the viewport.
+    /// Set to true by the engine's event pump when the window is resized.
+    /// Cleared by `refreshWindowState` after it rebuilds the viewport.
     resized: bool = false,
 
     /// Initialises state from the current window metrics.
-    pub fn init(window: *glfw.Window) WindowState {
+    pub fn init(window: *const platform.Window) WindowState {
         var state = WindowState{
             .window_size = .{ .x = 0, .y = 0 },
             .framebuffer_size = .{ .x = 0, .y = 0 },
@@ -62,16 +62,17 @@ pub const WindowState = struct {
         return state;
     }
 
-    /// Re-queries window, framebuffer, and content-scale from GLFW and recomputes `scale_factor`.
-    pub fn refresh(self: *WindowState, win: *glfw.Window) void {
-        const win_size = win.getSize();
-        self.window_size = .{ .x = win_size[0], .y = win_size[1] };
+    /// Re-queries window size, pixel size and display scale from the
+    /// platform layer and recomputes `scale_factor`.
+    pub fn refresh(self: *WindowState, win: *const platform.Window) void {
+        self.window_size = win.getSize();
+        self.framebuffer_size = win.getFramebufferSize();
 
-        const fb_size = win.getFramebufferSize();
-        self.framebuffer_size = .{ .x = fb_size[0], .y = fb_size[1] };
-
-        const cs = win.getContentScale();
-        self.content_scale = .{ .x = cs[0], .y = cs[1] };
+        // SDL reports one display scale for both axes, where GLFW gave a
+        // per-axis content scale; store it twice so the field shape is
+        // unchanged for callers.
+        const cs = win.getDisplayScale();
+        self.content_scale = .{ .x = cs, .y = cs };
 
         const fb_w: f32 = @floatFromInt(self.framebuffer_size.x);
         const fb_h: f32 = @floatFromInt(self.framebuffer_size.y);
@@ -112,7 +113,7 @@ pub const Viewport = struct {
     }
 
     /// Updates the framebuffer size and recomputes the viewport rectangle.
-    /// Call this from the framebuffer-size GLFW callback on window resize.
+    /// Call this when the event pump reports a window resize.
     pub fn updateFramebufferSize(self: *Viewport, new_fb_size: Vec2I) void {
         self.framebuffer_size = new_fb_size;
         self.compute();
@@ -184,7 +185,7 @@ pub const Viewport = struct {
         };
     }
 
-    /// Converts a GLFW window-coordinate mouse position to logical game coordinates.
+    /// Converts a window-coordinate mouse position to logical game coordinates.
     /// `window_scale` is the framebuffer-to-window ratio (WindowState.scale_factor).
     /// Returns null when pos_window maps to a letterbox or pillarbox region.
     pub fn windowToLogical(self: *const Viewport, pos_window: Vec2F, window_scale: Vec2F) ?Vec2F {

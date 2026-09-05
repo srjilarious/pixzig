@@ -1,104 +1,142 @@
-"""Key, mouse, and gamepad codes. Values match GLFW's own codes exactly, so
-they're plain ints under the hood -- but code should always use these names
-rather than the raw numbers.
+"""Key, mouse, and gamepad codes.
+
+GENERATED FILE -- do not edit by hand. Regenerate with `zig build
+py-constants`, which reads the enums in `src/pixzig/input/keys.zig`.
+
+The values are pixzig's own, not the backend's: they are dense indices
+into the engine's Key/MouseButton/Gamepad enums, so a change of
+windowing backend cannot shift them. They are plain ints under the
+hood, but code should always use these names rather than the numbers.
 """
 
 
 class Key:
-    SPACE = 32
-    APOSTROPHE = 39
-    COMMA = 44
-    MINUS = 45
-    PERIOD = 46
-    SLASH = 47
-    ZERO = 48
-    ONE = 49
-    TWO = 50
-    THREE = 51
-    FOUR = 52
-    FIVE = 53
-    SIX = 54
-    SEVEN = 55
-    EIGHT = 56
-    NINE = 57
-    SEMICOLON = 59
-    EQUAL = 61
-    A = 65
-    B = 66
-    C = 67
-    D = 68
-    E = 69
-    F = 70
-    G = 71
-    H = 72
-    I = 73
-    J = 74
-    K = 75
-    L = 76
-    M = 77
-    N = 78
-    O = 79
-    P = 80
-    Q = 81
-    R = 82
-    S = 83
-    T = 84
-    U = 85
-    V = 86
-    W = 87
-    X = 88
-    Y = 89
-    Z = 90
-    LEFT_BRACKET = 91
-    BACKSLASH = 92
-    RIGHT_BRACKET = 93
-    GRAVE_ACCENT = 96
-
-    ESCAPE = 256
-    ENTER = 257
-    TAB = 258
-    BACKSPACE = 259
-    INSERT = 260
-    DELETE = 261
-    RIGHT = 262
-    LEFT = 263
-    DOWN = 264
-    UP = 265
-    PAGE_UP = 266
-    PAGE_DOWN = 267
-    HOME = 268
-    END = 269
-    CAPS_LOCK = 280
-    SCROLL_LOCK = 281
-    NUM_LOCK = 282
-    PRINT_SCREEN = 283
-    PAUSE = 284
-    F1 = 290
-    F2 = 291
-    F3 = 292
-    F4 = 293
-    F5 = 294
-    F6 = 295
-    F7 = 296
-    F8 = 297
-    F9 = 298
-    F10 = 299
-    F11 = 300
-    F12 = 301
-    LEFT_SHIFT = 340
-    LEFT_CONTROL = 341
-    LEFT_ALT = 342
-    LEFT_SUPER = 343
-    RIGHT_SHIFT = 344
-    RIGHT_CONTROL = 345
-    RIGHT_ALT = 346
-    RIGHT_SUPER = 347
+    UNKNOWN = 0
+    SPACE = 1
+    APOSTROPHE = 2
+    COMMA = 3
+    MINUS = 4
+    PERIOD = 5
+    SLASH = 6
+    ZERO = 7
+    ONE = 8
+    TWO = 9
+    THREE = 10
+    FOUR = 11
+    FIVE = 12
+    SIX = 13
+    SEVEN = 14
+    EIGHT = 15
+    NINE = 16
+    SEMICOLON = 17
+    EQUAL = 18
+    A = 19
+    B = 20
+    C = 21
+    D = 22
+    E = 23
+    F = 24
+    G = 25
+    H = 26
+    I = 27
+    J = 28
+    K = 29
+    L = 30
+    M = 31
+    N = 32
+    O = 33
+    P = 34
+    Q = 35
+    R = 36
+    S = 37
+    T = 38
+    U = 39
+    V = 40
+    W = 41
+    X = 42
+    Y = 43
+    Z = 44
+    LEFT_BRACKET = 45
+    BACKSLASH = 46
+    RIGHT_BRACKET = 47
+    GRAVE_ACCENT = 48
+    ESCAPE = 49
+    ENTER = 50
+    TAB = 51
+    BACKSPACE = 52
+    INSERT = 53
+    DELETE = 54
+    RIGHT = 55
+    LEFT = 56
+    DOWN = 57
+    UP = 58
+    PAGE_UP = 59
+    PAGE_DOWN = 60
+    HOME = 61
+    END = 62
+    CAPS_LOCK = 63
+    SCROLL_LOCK = 64
+    NUM_LOCK = 65
+    PRINT_SCREEN = 66
+    PAUSE = 67
+    F1 = 68
+    F2 = 69
+    F3 = 70
+    F4 = 71
+    F5 = 72
+    F6 = 73
+    F7 = 74
+    F8 = 75
+    F9 = 76
+    F10 = 77
+    F11 = 78
+    F12 = 79
+    F13 = 80
+    F14 = 81
+    F15 = 82
+    F16 = 83
+    F17 = 84
+    F18 = 85
+    F19 = 86
+    F20 = 87
+    F21 = 88
+    F22 = 89
+    F23 = 90
+    F24 = 91
+    KP_0 = 92
+    KP_1 = 93
+    KP_2 = 94
+    KP_3 = 95
+    KP_4 = 96
+    KP_5 = 97
+    KP_6 = 98
+    KP_7 = 99
+    KP_8 = 100
+    KP_9 = 101
+    KP_DECIMAL = 102
+    KP_DIVIDE = 103
+    KP_MULTIPLY = 104
+    KP_SUBTRACT = 105
+    KP_ADD = 106
+    KP_ENTER = 107
+    KP_EQUAL = 108
+    LEFT_SHIFT = 109
+    LEFT_CONTROL = 110
+    LEFT_ALT = 111
+    LEFT_SUPER = 112
+    RIGHT_SHIFT = 113
+    RIGHT_CONTROL = 114
+    RIGHT_ALT = 115
+    RIGHT_SUPER = 116
+    MENU = 117
 
 
 class MouseButton:
     LEFT = 0
     RIGHT = 1
     MIDDLE = 2
+    X1 = 3
+    X2 = 4
 
 
 class GamepadButton:

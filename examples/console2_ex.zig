@@ -22,6 +22,9 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{
     .rendererOpts = .{
         .textRendering = true,
     },
+    // The console reads typed characters through Keyboard.text(), which
+    // needs the OS text-input machinery armed.
+    .inputOpts = .{ .textInput = true },
     .manifestOpts = manifest_options,
 });
 

@@ -59,7 +59,6 @@ This application opens a window and exits when Escape is pressed:
 ```zig
 const std = @import("std");
 const pixzig = @import("pixzig");
-const glfw = pixzig.glfw;
 
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
@@ -93,7 +92,6 @@ pub fn main() !void {
     const alloc = std.heap.c_allocator;
     const appRunner = try AppRunner.init("My Game", alloc, .{});
     const app = try App.init(alloc, appRunner.engine);
-    glfw.swapInterval(1);
 
     appRunner.run(app);
 }

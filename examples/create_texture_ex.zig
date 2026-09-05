@@ -3,7 +3,6 @@
 const std = @import("std");
 
 const pixzig = @import("pixzig");
-const glfw = pixzig.glfw;
 const RectF = pixzig.RectF;
 const Color8 = pixzig.Color8;
 const EngOptions = pixzig.PixzigEngineOptions;
@@ -47,8 +46,8 @@ pub fn main() !void {
 
     var spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(gpa, &texShader);
 
-    while (!eng.window.shouldClose() and eng.window.getKey(.escape) != .press) {
-        glfw.pollEvents();
+    while (!eng.window.shouldClose() and !eng.inputs.keyboard.down(.escape)) {
+        eng.pollEvents();
 
         gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0, 0, 0.1, 1.0 });
 
