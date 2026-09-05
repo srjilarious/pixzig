@@ -35,6 +35,7 @@ pub const measureFontFileIndexed = textMod.measureFontFileIndexed;
 pub const findFaceIndexByName = textMod.findFaceIndexByName;
 
 pub const QuadBatch = quad_batch.QuadBatch;
+pub const StaticQuadBatch = quad_batch.StaticQuadBatch;
 pub const BatchLayout = quad_batch.BatchLayout;
 pub const SpriteBatchQueue = sprite_batch.SpriteBatchQueue;
 pub const ShapeBatchQueue = shape.ShapeBatchQueue;
