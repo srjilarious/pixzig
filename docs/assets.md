@@ -30,12 +30,17 @@ The `boot` group is loaded automatically when the manifest is opened. All other 
 Use `manifestFromFile` if the manifest lives as a JSON file in the repo:
 
 ```zig
-const buildExample = @import("pixzig").buildExample;
+const buildGame = @import("pixzig").buildGame;
 const manifestFromFile = @import("pixzig").manifestFromFile;
 
 const manifest = manifestFromFile(b, "assets/manifest.json");
-const game = buildExample(b, target, optimize, pixzig_dep,
-    pixzig_dep.module("pixzig"), "my_game", exe_mod, manifest, is_package);
+const game = buildGame(b, target, optimize,
+    pixzig_dep,
+    pixzig_dep.module("pixzig"),
+    "my_game",
+    exe_mod,
+    manifest,
+);
 ```
 
 Use `manifestFromDef` to define assets inline in `build.zig` with no separate JSON file:

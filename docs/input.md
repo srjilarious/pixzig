@@ -25,8 +25,8 @@ try self.actions.bindAxis(.move_x, .{ .buttons = .{
 Update actions once per game tick, then query them:
 
 ```zig
-pub fn update(self: *App, eng: *AppRunner.Engine, _: f64) bool {
-    _ = self.actions.update(&eng.inputs);
+pub fn update(self: *App, eng: *AppRunner.Engine, deltaTimeMs: f64) bool {
+    _ = self.actions.update(&eng.inputs, deltaTimeMs * 1000.0);
 
     if (self.actions.pressed(.quit)) return false;
     if (self.actions.pressed(.jump)) self.jump();

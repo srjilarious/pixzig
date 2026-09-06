@@ -194,6 +194,8 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
             engInitOpts: PixzigEngineInitOptions,
         ) !*Self {
             var appRunner = try alloc.create(Self);
+            errdefer alloc.destroy(appRunner);
+
             appRunner.engine = try Engine.init(title, alloc, engInitOpts);
             appRunner.alloc = alloc;
             appRunner.currTime = platform.timeMs();

@@ -76,7 +76,7 @@ pub fn update(self: *App, ...) bool {
 Assuming `.move_right` is bound in an `ActionMap`, queue a move only when the player has no running sequence:
 
 ```zig
-_ = self.actions.update(&eng.inputs);
+_ = self.actions.update(&eng.inputs, deltaTimeMs * 1000.0);
 if (self.seqPlayer.sequences.items.len == 0 and self.actions.pressed(.move_right)) {
     self.queueMove("right", 16, 0) catch return false;
 }

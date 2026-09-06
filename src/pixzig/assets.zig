@@ -113,10 +113,19 @@ pub const AssetManifest = struct {
     groups: std.StringHashMap([]const []const u8),
     /// asset id -> definition (path slice into `parsed`).
     defs: std.StringHashMap(AssetDef),
-    /// group name -> acquired handles (keys borrowed from `groups`).
+    /// group name -> acquired handles (keys owned by `loaded`).
     loaded: std.StringHashMap([]AnyHandle),
 
     const Self = @This();
+
+    fn appendAcquiredHandle(
+        self: *Self,
+        handles: *std.ArrayListUnmanaged(AnyHandle),
+        handle: AnyHandle,
+    ) !void {
+        errdefer handle.release();
+        try handles.append(self.alloc, handle);
+    }
 
     /// Parse a manifest JSON file and return an `AssetManifest`. No assets are
     /// loaded yet; call `loadGroup` to load a group of assets.
@@ -277,33 +286,42 @@ pub const AssetManifest = struct {
                         logAssetIoError(err, "texture", full_path);
                         return err;
                     };
-                    try handles.append(self.alloc, .{ .texture = try self.res.acquireTexture(id) });
+                    try self.appendAcquiredHandle(&handles, .{ .texture = try self.res.acquireTexture(id) });
                 },
                 .atlas => {
                     _ = self.res.loadAtlasNamed(id, full_path) catch |err| {
                         logAssetIoError(err, "atlas", full_path);
                         return err;
                     };
-                    try handles.append(self.alloc, .{ .texture = try self.res.acquireTexture(id) });
+                    try self.appendAcquiredHandle(&handles, .{ .texture = try self.res.acquireTexture(id) });
                 },
                 .font => {
                     self.res.loadFontFromTtfFile(id, full_path, def.font_size) catch |err| {
                         logAssetIoError(err, "font", full_path);
                         return err;
                     };
-                    try handles.append(self.alloc, .{ .font = try self.res.acquireFontAtlas(id) });
+                    try self.appendAcquiredHandle(&handles, .{ .font = try self.res.acquireFontAtlas(id) });
                 },
                 .tilemap => {
                     self.res.loadTileMap(id, full_path) catch |err| {
                         logAssetIoError(err, "tilemap", full_path);
                         return err;
                     };
-                    try handles.append(self.alloc, .{ .tilemap = try self.res.acquireTileMap(id) });
+                    try self.appendAcquiredHandle(&handles, .{ .tilemap = try self.res.acquireTileMap(id) });
                 },
             }
         }
 
-        try self.loaded.put(group_name, try handles.toOwnedSlice(self.alloc));
+        const owned_group_name = try self.alloc.dupe(u8, group_name);
+        errdefer self.alloc.free(owned_group_name);
+
+        const owned_handles = try handles.toOwnedSlice(self.alloc);
+        errdefer {
+            for (owned_handles) |h| h.release();
+            self.alloc.free(owned_handles);
+        }
+
+        try self.loaded.put(owned_group_name, owned_handles);
     }
 
     /// Release the manifest's ref-counted handles for all assets in `group_name`.
@@ -313,6 +331,7 @@ pub const AssetManifest = struct {
         const entry = self.loaded.fetchRemove(group_name) orelse return;
         for (entry.value) |h| h.release();
         self.alloc.free(entry.value);
+        self.alloc.free(entry.key);
     }
 
     /// Unload all loaded groups and free all manifest resources.
@@ -321,6 +340,7 @@ pub const AssetManifest = struct {
         while (it.next()) |e| {
             for (e.value_ptr.*) |h| h.release();
             self.alloc.free(e.value_ptr.*);
+            self.alloc.free(e.key_ptr.*);
         }
         self.loaded.deinit();
         self.defs.deinit();

@@ -347,11 +347,8 @@ export fn pz_set_default_font(eng: *PzEngine, name: [*:0]const u8) callconv(.c) 
 // until pz_sprite_destroy.
 // ---------------------------------------------------------------------------
 
-export fn pz_sprite_create(eng: *PzEngine, texture_name: [*:0]const u8) callconv(.c) ?*PzSprite {
-    const handle = eng.engine.resources.acquireTexture(std.mem.span(texture_name)) catch |err| {
-        setLastErrorErr(err);
-        return null;
-    };
+fn pzSpriteCreateImpl(eng: *PzEngine, texture_name: []const u8) !*PzSprite {
+    const handle = try eng.engine.resources.acquireTexture(texture_name);
     const size = pixzig.Vec2F{
         .x = @floatFromInt(handle.val.size.x),
         .y = @floatFromInt(handle.val.size.y),
@@ -359,17 +356,19 @@ export fn pz_sprite_create(eng: *PzEngine, texture_name: [*:0]const u8) callconv
     var sprite = pixzig.sprites.Sprite.create(handle, size);
     errdefer sprite.deinit();
 
-    const wrapper = eng.alloc.create(PzSprite) catch |err| {
-        setLastErrorErr(err);
-        return null;
-    };
+    const wrapper = try eng.alloc.create(PzSprite);
+    errdefer eng.alloc.destroy(wrapper);
+
     wrapper.* = .{ .eng = eng, .sprite = sprite, .registry_index = undefined };
-    registryAdd(PzSprite, &eng.sprites, eng.alloc, wrapper) catch |err| {
-        eng.alloc.destroy(wrapper);
+    try registryAdd(PzSprite, &eng.sprites, eng.alloc, wrapper);
+    return wrapper;
+}
+
+export fn pz_sprite_create(eng: *PzEngine, texture_name: [*:0]const u8) callconv(.c) ?*PzSprite {
+    return pzSpriteCreateImpl(eng, std.mem.span(texture_name)) catch |err| {
         setLastErrorErr(err);
         return null;
     };
-    return wrapper;
 }
 
 export fn pz_sprite_set_pos(spr: *PzSprite, x: i32, y: i32) callconv(.c) void {
@@ -461,41 +460,29 @@ export fn pz_load_tilemap(eng: *PzEngine, name: [*:0]const u8, path: [*:0]const 
     return 0;
 }
 
-export fn pz_tilemap_renderer_create(eng: *PzEngine, map_name: [*:0]const u8, texture_name: [*:0]const u8) callconv(.c) ?*PzTilemapRenderer {
-    const map = eng.engine.resources.acquireTileMap(std.mem.span(map_name)) catch |err| {
-        setLastErrorErr(err);
-        return null;
-    };
-    const shader = eng.engine.resources.getShader(pixzig.shaders.TextureShader) catch |err| {
-        setLastErrorErr(err);
-        map.release();
-        return null;
-    };
-    const texture = eng.engine.resources.getTexture(std.mem.span(texture_name)) catch |err| {
-        setLastErrorErr(err);
-        map.release();
-        return null;
-    };
-    var renderer = pixzig.tile.ChunkedTiledRenderer.init(eng.alloc, &map.val, shader, texture) catch |err| {
-        setLastErrorErr(err);
-        map.release();
-        return null;
-    };
+fn pzTilemapRendererCreateImpl(eng: *PzEngine, map_name: []const u8, texture_name: []const u8) !*PzTilemapRenderer {
+    const map = try eng.engine.resources.acquireTileMap(map_name);
+    errdefer map.release();
+
+    const shader = try eng.engine.resources.getShader(pixzig.shaders.TextureShader);
+    const texture = try eng.engine.resources.getTexture(texture_name);
+
+    var renderer = try pixzig.tile.ChunkedTiledRenderer.init(eng.alloc, &map.val, shader, texture);
     errdefer renderer.deinit();
 
-    const wrapper = eng.alloc.create(PzTilemapRenderer) catch |err| {
-        setLastErrorErr(err);
-        map.release();
-        return null;
-    };
+    const wrapper = try eng.alloc.create(PzTilemapRenderer);
+    errdefer eng.alloc.destroy(wrapper);
+
     wrapper.* = .{ .eng = eng, .map = map, .renderer = renderer, .registry_index = undefined };
-    registryAdd(PzTilemapRenderer, &eng.tilemap_renderers, eng.alloc, wrapper) catch |err| {
-        eng.alloc.destroy(wrapper);
+    try registryAdd(PzTilemapRenderer, &eng.tilemap_renderers, eng.alloc, wrapper);
+    return wrapper;
+}
+
+export fn pz_tilemap_renderer_create(eng: *PzEngine, map_name: [*:0]const u8, texture_name: [*:0]const u8) callconv(.c) ?*PzTilemapRenderer {
+    return pzTilemapRendererCreateImpl(eng, std.mem.span(map_name), std.mem.span(texture_name)) catch |err| {
         setLastErrorErr(err);
-        map.release();
         return null;
     };
-    return wrapper;
 }
 
 export fn pz_tilemap_renderer_destroy(tr: *PzTilemapRenderer) callconv(.c) void {
@@ -539,6 +526,18 @@ export fn pz_tilemap_check_reload(tr: *PzTilemapRenderer) callconv(.c) bool {
     return true;
 }
 
+fn pzManifestLoadImpl(eng: *PzEngine, path: []const u8) !*PzAssetManifest {
+    var manifest = try pixzig.AssetManifest.loadFromFile(eng.alloc, &eng.engine.resources, path);
+    errdefer manifest.deinit();
+
+    const wrapper = try eng.alloc.create(PzAssetManifest);
+    errdefer eng.alloc.destroy(wrapper);
+
+    wrapper.* = .{ .eng = eng, .manifest = manifest, .registry_index = undefined };
+    try registryAdd(PzAssetManifest, &eng.manifests, eng.alloc, wrapper);
+    return wrapper;
+}
+
 // ---------------------------------------------------------------------------
 // Asset manifests. Manifests are opaque handles (*PzAssetManifest); valid
 // from pz_manifest_load until pz_manifest_destroy. Assets loaded via
@@ -549,22 +548,10 @@ export fn pz_tilemap_check_reload(tr: *PzTilemapRenderer) callconv(.c) bool {
 // ---------------------------------------------------------------------------
 
 export fn pz_manifest_load(eng: *PzEngine, path: [*:0]const u8) callconv(.c) ?*PzAssetManifest {
-    const manifest = pixzig.AssetManifest.loadFromFile(eng.alloc, &eng.engine.resources, std.mem.span(path)) catch |err| {
+    return pzManifestLoadImpl(eng, std.mem.span(path)) catch |err| {
         setLastErrorErr(err);
         return null;
     };
-
-    const wrapper = eng.alloc.create(PzAssetManifest) catch |err| {
-        setLastErrorErr(err);
-        return null;
-    };
-    wrapper.* = .{ .eng = eng, .manifest = manifest, .registry_index = undefined };
-    registryAdd(PzAssetManifest, &eng.manifests, eng.alloc, wrapper) catch |err| {
-        eng.alloc.destroy(wrapper);
-        setLastErrorErr(err);
-        return null;
-    };
-    return wrapper;
 }
 
 export fn pz_manifest_load_group(m: *PzAssetManifest, group_name: [*:0]const u8) callconv(.c) i32 {
@@ -593,24 +580,23 @@ export fn pz_manifest_destroy(m: *PzAssetManifest) callconv(.c) void {
 // sees integers.
 // ---------------------------------------------------------------------------
 
-export fn pz_action_map_create(eng: *PzEngine) callconv(.c) ?*PzActionMap {
-    const map = FfiActionMap.init(eng.alloc) catch |err| {
-        setLastErrorErr(err);
-        return null;
-    };
+fn pzActionMapCreateImpl(eng: *PzEngine) !*PzActionMap {
+    const map = try FfiActionMap.init(eng.alloc);
     errdefer map.deinit();
 
-    const wrapper = eng.alloc.create(PzActionMap) catch |err| {
-        setLastErrorErr(err);
-        return null;
-    };
+    const wrapper = try eng.alloc.create(PzActionMap);
+    errdefer eng.alloc.destroy(wrapper);
+
     wrapper.* = .{ .eng = eng, .map = map, .registry_index = undefined };
-    registryAdd(PzActionMap, &eng.action_maps, eng.alloc, wrapper) catch |err| {
-        eng.alloc.destroy(wrapper);
+    try registryAdd(PzActionMap, &eng.action_maps, eng.alloc, wrapper);
+    return wrapper;
+}
+
+export fn pz_action_map_create(eng: *PzEngine) callconv(.c) ?*PzActionMap {
+    return pzActionMapCreateImpl(eng) catch |err| {
         setLastErrorErr(err);
         return null;
     };
-    return wrapper;
 }
 
 export fn pz_action_map_destroy(am: *PzActionMap) callconv(.c) void {

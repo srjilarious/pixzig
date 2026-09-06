@@ -149,6 +149,24 @@ pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type
             }
         }
 
+        /// Undo a just-added generation that has not been acquired by callers.
+        /// Used by multi-resource loaders to roll back partial commits.
+        pub fn rollbackAdd(self: *Self, generation: u32) bool {
+            for (self.res.items, 0..) |hOpt, i| {
+                if (hOpt) |h| {
+                    if (h.generation == generation) {
+                        if (h.refCount != 0) return false;
+                        self.freeFunc(h.val);
+                        self.alloc.destroy(h);
+                        self.res.items[i] = null;
+                        self.recomputeDirtyFlags();
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
         /// Increment the refCount on the latest live handle for the resource.
         /// Returns null if nothing is registered under `id`.
         pub fn acquire(self: *Self) ?*Handle {
@@ -185,6 +203,18 @@ pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type
                 }
             }
             return latestHandle;
+        }
+
+        fn recomputeDirtyFlags(self: *Self) void {
+            const latestHandle = self.latest();
+            for (self.res.items) |hOpt| {
+                if (hOpt) |h| {
+                    h.dirty = if (latestHandle) |latest_handle|
+                        h.generation < latest_handle.generation
+                    else
+                        false;
+                }
+            }
         }
 
         fn insertHandle(self: *Self, handle: *Handle) !void {
@@ -409,6 +439,18 @@ pub const ResourceManager = struct {
 
     const Self = @This();
 
+    const TextureLoad = struct {
+        managed: *ManagedTexture,
+        image_managed: *ManagedTextureImage,
+        atlas_generation: u32,
+        image_generation: u32,
+    };
+
+    const AtlasFrameLoad = struct {
+        managed: *ManagedTexture,
+        generation: u32,
+    };
+
     /// Initializes the resource manager.
     pub fn init(alloc: std.mem.Allocator) Self {
         return .{
@@ -513,7 +555,9 @@ pub const ResourceManager = struct {
                     t.name,
                     blk: {
                         var n: usize = 0;
-                        for (managed.res.items) |h| if (h != null and h.?.dirty) { n += 1; };
+                        for (managed.res.items) |h| if (h != null and h.?.dirty) {
+                            n += 1;
+                        };
                         break :blk n;
                     },
                 });
@@ -721,19 +765,21 @@ pub const ResourceManager = struct {
         return try self.loadTextureFromBuffer(name, width, height, buffer);
     }
 
-    /// Loads an RGBA texture from a raw buffer. The buffer should be in RGBA
-    /// format, with 4 bytes per pixel. The name is the name that the texture
-    /// will be stored with in the resource manager, and is used to access the
-    /// texture later with `getTexture`. The width and height are the dimensions
-    /// of the texture and must match the buffer size.
-    pub fn loadTextureFromBuffer(
+    fn rollbackTextureLoad(_: *Self, load: TextureLoad) void {
+        _ = load.managed.rollbackAdd(load.atlas_generation);
+        _ = load.image_managed.rollbackAdd(load.image_generation);
+    }
+
+    fn loadTextureFromBufferTracked(
         self: *Self,
         name: []const u8,
         width: usize,
         height: usize,
         buffer: []u8,
-    ) !*ManagedTexture {
+    ) !TextureLoad {
         const baseName = utils.baseNameFromPath(name);
+        const imageManaged = try self.getOrCreateTextureImage(baseName);
+        const managed = try self.getOrCreateAtlasTexture(baseName);
 
         var texture: c_uint = undefined;
         gl.genTextures(1, &texture);
@@ -748,31 +794,52 @@ pub const ResourceManager = struct {
         const format = gl.RGBA;
         gl.texImage2D(gl.TEXTURE_2D, 0, format, @intCast(width), @intCast(height), 0, format, gl.UNSIGNED_BYTE, @ptrCast(buffer));
 
-        const imageManaged = try self.getOrCreateTextureImage(baseName);
+        const image_generation = imageManaged.gen + 1;
         try imageManaged.add(.{
             .texture = texture,
             .size = .{ .x = @intCast(width), .y = @intCast(height) },
         });
         gl_texture_owned = true;
+        errdefer _ = imageManaged.rollbackAdd(image_generation);
 
-        const managed = try self.getOrCreateAtlasTexture(baseName);
+        const atlas_generation = managed.gen + 1;
         try managed.add(.{
             .texture = texture,
             .size = .{ .x = @intCast(width), .y = @intCast(height) },
             .src = .{ .t = 0, .l = 0, .b = 1, .r = 1 },
         });
 
-        return managed;
+        return .{
+            .managed = managed,
+            .image_managed = imageManaged,
+            .atlas_generation = atlas_generation,
+            .image_generation = image_generation,
+        };
+    }
+
+    /// Loads an RGBA texture from a raw buffer. The buffer should be in RGBA
+    /// format, with 4 bytes per pixel. The name is the name that the texture
+    /// will be stored with in the resource manager, and is used to access the
+    /// texture later with `getTexture`. The width and height are the dimensions
+    /// of the texture and must match the buffer size.
+    pub fn loadTextureFromBuffer(
+        self: *Self,
+        name: []const u8,
+        width: usize,
+        height: usize,
+        buffer: []u8,
+    ) !*ManagedTexture {
+        return (try self.loadTextureFromBufferTracked(name, width, height, buffer)).managed;
     }
 
     /// Internal: loads a texture from a file without registering a hot-reload
     /// watch. Called from `loadTexture` (which adds the watch) and from
     /// `loadAtlasImpl` (which registers atlas-level watches instead).
-    fn loadTextureImpl(
+    fn loadTextureImplTracked(
         self: *Self,
         name: []const u8,
         file_path: []const u8,
-    ) !*ManagedTexture {
+    ) !TextureLoad {
         std.log.info("Loading image '{s}' from '{s}'\n", .{ name, file_path });
         const nt_file_path = try self.alloc.dupeZ(u8, file_path);
         defer self.alloc.free(nt_file_path);
@@ -782,7 +849,15 @@ pub const ResourceManager = struct {
 
         std.log.info("Loaded image '{s}', width={}, height={}\n", .{ name, image.width, image.height });
 
-        return try self.loadTextureFromBuffer(name, image.width, image.height, image.data);
+        return try self.loadTextureFromBufferTracked(name, image.width, image.height, image.data);
+    }
+
+    fn loadTextureImpl(
+        self: *Self,
+        name: []const u8,
+        file_path: []const u8,
+    ) !*ManagedTexture {
+        return (try self.loadTextureImplTracked(name, file_path)).managed;
     }
 
     /// Loads a texture from a file path. The name is the base name of the
@@ -852,7 +927,8 @@ pub const ResourceManager = struct {
 
         const imageName = try utils.addExtension(self.alloc, base_path, ".png");
         defer self.alloc.free(imageName);
-        _ = try self.loadTextureImpl(name, imageName);
+        const base_load = try self.loadTextureImplTracked(name, imageName);
+        errdefer self.rollbackTextureLoad(base_load);
 
         const texImageManaged = self.textures.get(utils.baseNameFromPath(name)) orelse return error.NoTextureWithThatName;
         const texImage = texImageManaged.get() orelse return error.NoTextureWithThatName;
@@ -864,9 +940,19 @@ pub const ResourceManager = struct {
             new_manifest.deinit(self.alloc);
         }
 
+        var added_frames: std.ArrayListUnmanaged(AtlasFrameLoad) = .empty;
+        defer added_frames.deinit(self.alloc);
+        errdefer {
+            for (added_frames.items) |frame_load| {
+                _ = frame_load.managed.rollbackAdd(frame_load.generation);
+            }
+        }
+
         var num: usize = 0;
         for (spack.frames) |frame| {
             const managed = try self.getOrCreateAtlasTexture(frame.name);
+            const generation = managed.gen + 1;
+            try added_frames.append(self.alloc, .{ .managed = managed, .generation = generation });
             try managed.add(.{
                 .texture = texImage.val.texture,
                 .size = frame.sizePx,
@@ -1049,7 +1135,9 @@ pub const ResourceManager = struct {
         faceIndex: i32,
         fontSize: f32,
     ) !void {
-        const fa = try FontAtlas.initFromTtfFileIndexed(fontPath, faceIndex, fontSize, self.alloc);
+        var fa = try FontAtlas.initFromTtfFileIndexed(fontPath, faceIndex, fontSize, self.alloc);
+        errdefer fa.deinit();
+
         const managed = try self.getOrCreateFont(name);
         try managed.add(fa);
 
@@ -1073,7 +1161,9 @@ pub const ResourceManager = struct {
         comptime fontPath: []const u8,
         fontSize: f32,
     ) !void {
-        const fa = try FontAtlas.initFromTtfEmbedded(fontPath, fontSize, self.alloc);
+        var fa = try FontAtlas.initFromTtfEmbedded(fontPath, fontSize, self.alloc);
+        errdefer fa.deinit();
+
         const managed = try self.getOrCreateFont(name);
         try managed.add(fa);
     }
@@ -1088,7 +1178,9 @@ pub const ResourceManager = struct {
         charsPerRow: i32,
         chars: []const u8,
     ) !void {
-        const fa = try FontAtlas.initFromBitmap(fontImagePath, charWidth, charHeight, charsPerRow, chars, self.alloc);
+        var fa = try FontAtlas.initFromBitmap(fontImagePath, charWidth, charHeight, charsPerRow, chars, self.alloc);
+        errdefer fa.deinit();
+
         const managed = try self.getOrCreateFont(name);
         try managed.add(fa);
     }
@@ -1125,7 +1217,9 @@ pub const ResourceManager = struct {
     /// In debug builds, the .tmx file is watched and the map is reloaded
     /// (with live handles marked dirty) when the file changes.
     pub fn loadTileMap(self: *Self, name: []const u8, path: []const u8) !void {
-        const map = try TiledMapXmlLoader.initFromFile(path, self.alloc);
+        var map = try TiledMapXmlLoader.initFromFile(path, self.alloc);
+        errdefer map.deinit();
+
         const managed = try self.getOrCreateTileMap(name);
         try managed.add(map);
 
@@ -1171,8 +1265,11 @@ pub const ResourceManager = struct {
         vs: shaders.ShaderCodePtr,
         fs: shaders.ShaderCodePtr,
     ) !*ManagedShader {
+        var shader = try Shader.init(vs, fs);
+        errdefer shader.deinit();
+
         const managed = try self.getOrCreateShader(name);
-        try managed.add(try Shader.init(vs, fs));
+        try managed.add(shader);
         return managed;
     }
 };

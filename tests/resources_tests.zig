@@ -158,6 +158,40 @@ pub fn addReclaimsUnreferencedOldVersionTest(io: std.Io, alloc: std.mem.Allocato
     try testz.expectEqual(res.get().?.val, 2);
 }
 
+pub fn rollbackAddRestoresPreviousGenerationTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    resetFreed();
+    var res = ManagedInt.init(alloc, 8, intFree);
+    defer res.deinit();
+
+    try res.add(1);
+    const old = res.acquire().?;
+    try res.add(2);
+    try testz.expectEqual(old.dirty, true);
+
+    try testz.expectEqual(res.rollbackAdd(2), true);
+    try testz.expectEqual(wasFreed(2), true);
+    try testz.expectEqual(old.dirty, false);
+    try testz.expectEqual(res.get().?.val, 1);
+
+    res.release(old);
+}
+
+pub fn rollbackAddRefusesAcquiredGenerationTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    resetFreed();
+    var res = ManagedInt.init(alloc, 8, intFree);
+    defer res.deinit();
+
+    try res.add(1);
+    const held = res.acquire().?;
+    defer res.release(held);
+
+    try testz.expectEqual(res.rollbackAdd(1), false);
+    try testz.expectEqual(wasFreed(1), false);
+    try testz.expectEqual(res.get().?.val, 1);
+}
+
 // --- dirty propagation ---
 
 pub fn updateMarksOldHandleDirtyTest(io: std.Io, alloc: std.mem.Allocator) !void {
@@ -384,4 +418,32 @@ pub fn rmReloadVisibleAsDirtyThroughHelperTest(io: std.Io, alloc: std.mem.Alloca
 
     holder.release();
     fresh.release();
+}
+
+pub fn manifestLoadGroupOwnsLoadedKeyTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var rm = ResourceManager.init(alloc);
+    defer rm.deinit();
+
+    const json =
+        \\{
+        \\  "groups": { "game": ["script"] },
+        \\  "assets": [
+        \\    { "id": "script", "kind": "raw", "path": "script.lua" }
+        \\  ]
+        \\}
+    ;
+
+    var manifest = try pixzig.AssetManifest.loadFromJson(alloc, &rm, json, ".");
+    defer manifest.deinit();
+
+    const group_name = try alloc.dupe(u8, "game");
+    defer alloc.free(group_name);
+
+    try manifest.loadGroup(group_name);
+    @memset(group_name, 'x');
+
+    try testz.expectEqual(manifest.loaded.contains("game"), true);
+    manifest.unloadGroup("game");
+    try testz.expectEqual(manifest.loaded.count(), 0);
 }
