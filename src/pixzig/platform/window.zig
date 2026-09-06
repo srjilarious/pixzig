@@ -1,11 +1,9 @@
 //! The SDL3 window and OpenGL context, wrapped so nothing above this file
 //! needs to know which windowing library is underneath.
 //!
-//! `PixzigEngine` owns one of these as `eng.window`. Everything that used
-//! to be a `*glfw.Window` in engine and game code is a `*platform.Window`
-//! now, and the methods keep the names the GLFW path used
-//! (`swapBuffers`, `shouldClose`, `getSize`, ...) so callers did not have
-//! to change shape.
+//! `PixzigEngine` owns one of these as `eng.window`. Callers use the
+//! `*platform.Window` API (`swapBuffers`, `shouldClose`, `getSize`, ...)
+//! instead of naming SDL directly.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -45,9 +43,8 @@ pub const Window = struct {
     /// this instead, and `shouldClose()` reads it.
     close_requested: bool = false,
     /// Backing store for `getClipboardString`. SDL hands back a buffer the
-    /// caller must free, where GLFW returned a borrowed pointer; copying
-    /// into a window-owned buffer keeps the borrowed-slice signature
-    /// callers expect.
+    /// caller must free; copying into a window-owned buffer keeps the
+    /// borrowed-slice signature callers expect.
     clipboard_buf: std.ArrayList(u8) = .empty,
     /// Whether `SDL_StartTextInput` succeeded, so `deinit` knows whether
     /// there is anything to stop.
@@ -147,8 +144,8 @@ pub const Window = struct {
         return .{ .x = @intCast(w), .y = @intCast(h) };
     }
 
-    /// The display's content scale. SDL reports one value where GLFW gave
-    /// one per axis, so `WindowState` stores it twice.
+    /// The display's content scale. SDL reports one value, and
+    /// `WindowState` stores it for both axes.
     pub fn getDisplayScale(self: *const Window) f32 {
         const scale = sdl.SDL_GetWindowDisplayScale(self.handle);
         return if (scale > 0) scale else 1.0;
@@ -206,15 +203,12 @@ pub const Window = struct {
     }
 };
 
-/// Shows or hides the system cursor. Global in SDL3, not per-window: the
-/// GLFW backend scoped this to one window and nothing in the engine
-/// depended on the difference.
+/// Shows or hides the system cursor. SDL3 applies this process-wide.
 pub fn showCursor(visible: bool) void {
     _ = if (visible) sdl.SDL_ShowCursor() else sdl.SDL_HideCursor();
 }
 
-/// Milliseconds since SDL was initialised, as a float. Replaces
-/// `glfw.getTime() * 1000`.
+/// Milliseconds since SDL was initialised, as a float.
 pub fn timeMs() f64 {
     return @as(f64, @floatFromInt(sdl.SDL_GetTicksNS())) / 1_000_000.0;
 }

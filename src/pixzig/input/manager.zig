@@ -71,10 +71,8 @@ pub const InputManager = struct {
     /// `PixzigEngine.pollEvents` for every event that isn't a window-level
     /// one the engine handles itself.
     ///
-    /// This replaces the GLFW backend's per-callback module-level target
-    /// pointers (`setKeyboardTarget` / `setScrollTarget`) and the
-    /// one-Keyboard-at-a-time limitation they imposed: SDL is polled, so
-    /// the engine can hand events straight to whichever manager it owns.
+    /// SDL is polled, so the engine can hand events straight to whichever
+    /// input manager it owns.
     pub fn handleEvent(self: *Self, event: sdl.SDL_Event) void {
         switch (event.type) {
             sdl.SDL_EVENT_KEY_DOWN, sdl.SDL_EVENT_KEY_UP => {
@@ -164,9 +162,8 @@ pub const InputManager = struct {
     }
 
     /// Drops all key and button state. The engine calls this on window
-    /// focus loss: an event-driven bitset latches where the GLFW backend's
-    /// per-tick polling self-healed, so without this a key held while the
-    /// window loses focus stays down forever.
+    /// focus loss because event-driven state latches; without this, a key
+    /// held while the window loses focus stays down forever.
     pub fn clear(self: *Self) void {
         self.keyboard.clear();
         self.mouse.clear();

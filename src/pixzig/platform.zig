@@ -1,6 +1,6 @@
 //! The windowing / OS backend. Everything that talks to SDL3 directly
-//! lives under here (plus `input/keys.zig`, which owns the code mapping),
-//! so a future backend swap is confined to these files.
+//! lives under here, plus `input/keys.zig`, which owns the input-code
+//! mapping.
 
 const window = @import("./platform/window.zig");
 

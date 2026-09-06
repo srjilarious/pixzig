@@ -2,10 +2,9 @@
 //! enums.
 //!
 //! The Python bindings pass key and button codes across the C ABI as plain
-//! ints, so the two sides have to agree on the numbering. Before the SDL3
-//! port those numbers were GLFW's, hand-copied into a Python file; now they
-//! are pixzig's own dense enum values, and this generator is what keeps the
-//! copy honest. Run it after adding, removing or reordering anything in
+//! ints, so the two sides have to agree on the numbering. These are pixzig's
+//! own dense enum values, and this generator is what keeps the copy honest.
+//! Run it after adding, removing or reordering anything in
 //! `src/pixzig/input/keys.zig`:
 //!
 //!     zig build py-constants
@@ -24,10 +23,9 @@ const header =
     \\GENERATED FILE -- do not edit by hand. Regenerate with `zig build
     \\py-constants`, which reads the enums in `src/pixzig/input/keys.zig`.
     \\
-    \\The values are pixzig's own, not the backend's: they are dense indices
-    \\into the engine's Key/MouseButton/Gamepad enums, so a change of
-    \\windowing backend cannot shift them. They are plain ints under the
-    \\hood, but code should always use these names rather than the numbers.
+    \\The values are pixzig's own dense indices into the engine's
+    \\Key/MouseButton/Gamepad enums. They are plain ints under the hood, but
+    \\code should always use these names rather than the numbers.
     \\"""
     \\
 ;

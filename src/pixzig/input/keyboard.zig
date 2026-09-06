@@ -148,9 +148,8 @@ pub const KeyboardState = struct {
 };
 
 /// Maximum number of UTF-8 *bytes* of typed text buffered between two
-/// ticks. Anything typed past this in a single tick is dropped. It used to
-/// be a count of codepoints, because GLFW delivered one codepoint per
-/// callback; SDL delivers ready-made UTF-8, so bytes is the natural unit.
+/// ticks. Anything typed past this in a single tick is dropped. SDL delivers
+/// ready-made UTF-8, so bytes are the natural unit.
 pub const TextBufLen = 128;
 
 /// Maximum number of UTF-8 bytes of IME composition text retained.
@@ -203,10 +202,9 @@ fn FixedBuffer(comptime capacity: usize) type {
 /// and provides methods to query key values and text input.
 ///
 /// The state is driven by SDL events (`Engine.pollEvents` forwards them
-/// through `InputManager.handleEvent`), not polled each tick as the GLFW
-/// backend did. One consequence worth knowing: polling self-heals, events
-/// latch. A key-up that never arrives leaves a key stuck down, so the
-/// engine clears the whole state on window focus loss.
+/// through `InputManager.handleEvent`). Events latch: a key-up that never
+/// arrives leaves a key stuck down, so the engine clears the whole state on
+/// window focus loss.
 pub const Keyboard = struct {
     currIdx: usize,
     prevIdx: usize,

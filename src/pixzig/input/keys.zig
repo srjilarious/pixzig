@@ -4,14 +4,14 @@
 //! These enums are the engine's public vocabulary for keys, mouse buttons
 //! and gamepad controls. They deliberately do not expose the backend's
 //! values: nothing outside this file mentions `SDL_Scancode`, `SDL_Keycode`
-//! or `SDL_GamepadButton`, so swapping the windowing backend again stays
-//! invisible to games, to the Lua bindings and to the Python bindings.
+//! or `SDL_GamepadButton`; games, Lua bindings and Python bindings use the
+//! pixzig names and values.
 //!
 //! The values are dense (0..N-1, `unknown` first for `Key`), which is what
 //! lets `Keyboard`/`Mouse`/`Gamepad` index their bitsets with a plain
-//! `@intFromEnum` instead of the linear scan the sparse GLFW values needed.
-//! `tools/gen_py_constants.zig` regenerates `python/pixzig/constants.py`
-//! from these declarations, so the Python side can never drift from them.
+//! `@intFromEnum`. `tools/gen_py_constants.zig` regenerates
+//! `python/pixzig/constants.py` from these declarations, so the Python side
+//! can never drift from them.
 
 const std = @import("std");
 const sdl = @import("sdl3");
@@ -28,9 +28,8 @@ const sdl = @import("sdl3");
 /// layout-resolved identity of the same key is available from
 /// `Keyboard.layoutDown()` and friends.
 ///
-/// Field names mirror the ones the GLFW backend used, so existing games,
-/// `ActionMap` binding strings and saved keybind configs keep working.
-/// GLFW's `world_1`/`world_2` and `F25` are gone: SDL has no equivalent.
+/// Field names are stable API for games, `ActionMap` binding strings and
+/// saved keybind configs.
 pub const Key = enum {
     unknown,
     space,
@@ -152,9 +151,7 @@ pub const Key = enum {
     menu,
 };
 
-/// Mouse buttons. `x1`/`x2` are the side buttons; the GLFW backend called
-/// these `four`/`five` and also declared `six`..`eight`, which no platform
-/// this engine targets ever reported.
+/// Mouse buttons. `x1`/`x2` are the side buttons.
 pub const MouseButton = enum {
     left,
     right,
@@ -163,10 +160,9 @@ pub const MouseButton = enum {
     x2,
 };
 
-/// Gamepad face/shoulder/dpad buttons, in the standard-layout naming the
-/// GLFW backend used. `a`/`b`/`x`/`y` are positional (SDL3 calls them
-/// south/east/west/north), so on a Nintendo-style pad `.a` is still the
-/// bottom face button.
+/// Gamepad face/shoulder/dpad buttons, in standard-layout names.
+/// `a`/`b`/`x`/`y` are positional (SDL3 calls them south/east/west/north),
+/// so on a Nintendo-style pad `.a` is still the bottom face button.
 pub const GamepadButton = enum {
     a,
     b,
@@ -186,8 +182,7 @@ pub const GamepadButton = enum {
 };
 
 /// Gamepad analog axes. Sticks report -1..1; triggers report 0..32767 from
-/// SDL and are rescaled to the -1..1 range the GLFW backend reported, so
-/// existing trigger handling keeps its meaning.
+/// SDL and are rescaled to the engine's -1..1 range.
 pub const GamepadAxis = enum {
     left_x,
     left_y,
@@ -202,8 +197,7 @@ pub const NumMouseButtons = @typeInfo(MouseButton).@"enum".fields.len;
 pub const NumGamepadButtons = @typeInfo(GamepadButton).@"enum".fields.len;
 pub const NumGamepadAxes = @typeInfo(GamepadAxis).@"enum".fields.len;
 
-/// Dense bitset index for a key. Free, unlike the GLFW backend's linear
-/// scan over a sparse enum.
+/// Dense bitset index for a key.
 pub fn keyIndex(key: Key) usize {
     return @intFromEnum(key);
 }
@@ -508,9 +502,8 @@ pub fn toSdlGamepadAxis(axis: GamepadAxis) sdl.SDL_GamepadAxis {
 }
 
 /// Converts SDL's raw i16 axis reading to a float. Sticks map onto -1..1;
-/// triggers, which SDL reports as 0..32767, are rescaled onto the same
-/// -1..1 range the GLFW backend reported so trigger thresholds in existing
-/// games keep their meaning.
+/// triggers, which SDL reports as 0..32767, are rescaled onto the engine's
+/// -1..1 range.
 pub fn axisValue(axis: GamepadAxis, raw: i16) f32 {
     const v = @as(f32, @floatFromInt(raw)) / 32767.0;
     return switch (axis) {

@@ -472,19 +472,15 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             platform.setSwapInterval(if (enabled) 1 else 0);
         }
 
-        /// Shows or hides the system mouse cursor.  Unlike the GLFW backend
-        /// this is global rather than per-window, which is all SDL3 offers;
-        /// no engine code depended on the difference.
+        /// Shows or hides the system mouse cursor. SDL3 applies this
+        /// process-wide.
         pub fn showCursor(self: *Self, visible: bool) void {
             _ = self;
             platform.showCursor(visible);
         }
 
         /// Drains the OS event queue, handling window-level events here and
-        /// routing everything else to the input manager.  This replaces
-        /// GLFW's callback registration wholesale: SDL is polled, so the
-        /// module-level "which Keyboard receives events" pointers, and the
-        /// one-listener-at-a-time limit they imposed, are gone.
+        /// routing everything else to the input manager.
         pub fn pollEvents(self: *Self) void {
             var event: sdl.SDL_Event = undefined;
             while (sdl.SDL_PollEvent(&event)) {
@@ -496,8 +492,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                     sdl.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED,
                     sdl.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED,
                     => self.window_state.resized = true,
-                    // An event-driven key bitset latches where GLFW's
-                    // per-frame polling self-healed, so anything held when
+                    // Event-driven key state latches, so anything held when
                     // the window loses focus would otherwise stay down.
                     sdl.SDL_EVENT_WINDOW_FOCUS_LOST => self.inputs.clear(),
                     else => self.inputs.handleEvent(event),

@@ -65,16 +65,15 @@ pub const GamepadState = struct {
 ///
 /// Gamepads stay polled rather than event-driven: SDL keeps each opened
 /// gamepad's state current as part of the event pump, and reading it once
-/// per tick keeps the double-buffered edge detection the keyboard and
-/// mouse used to get from polling.
+/// per tick keeps the double-buffered edge detection consistent with the
+/// rest of input.
 pub const Gamepad = struct {
     currIdx: usize,
     prevIdx: usize,
     stateBuffers: [2]GamepadState,
     connected: bool,
     /// Which connected gamepad this instance tracks: index 0 is the first
-    /// one SDL lists, matching the joystick-slot model the GLFW backend
-    /// exposed.
+    /// one SDL lists.
     slot: usize,
     handle: ?*sdl.SDL_Gamepad,
 

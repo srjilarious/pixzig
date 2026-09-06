@@ -122,7 +122,7 @@ pub fn keyboardClearTest(io: std.Io, alloc: std.mem.Allocator) !void {
 }
 
 /// Typed text survives repeated reads within a tick and is dropped by
-/// `finishTick`, matching what the GLFW char-callback path did.
+/// `finishTick`.
 pub fn keyboardTextTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     _ = alloc;
@@ -217,7 +217,7 @@ pub fn mouseScrollTest(io: std.Io, alloc: std.mem.Allocator) !void {
 }
 
 /// Sticks pass through as -1..1; triggers, which SDL reports as 0..32767,
-/// are rescaled onto the same range the GLFW backend reported.
+/// are rescaled onto the engine's -1..1 range.
 pub fn gamepadAxisScalingTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     _ = alloc;

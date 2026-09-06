@@ -68,9 +68,8 @@ pub const WindowState = struct {
         self.window_size = win.getSize();
         self.framebuffer_size = win.getFramebufferSize();
 
-        // SDL reports one display scale for both axes, where GLFW gave a
-        // per-axis content scale; store it twice so the field shape is
-        // unchanged for callers.
+        // SDL reports one display scale for both axes; store it twice to
+        // match the shape of `content_scale`.
         const cs = win.getDisplayScale();
         self.content_scale = .{ .x = cs, .y = cs };
 
