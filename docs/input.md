@@ -110,7 +110,7 @@ defer eng.setCursorCapture(false) catch {};
 const turn = eng.inputs.mouse.delta().x * sensitivity;
 ```
 
-`setCursorCapture(true)` uses SDL3 relative mouse mode, so the system cursor is hidden and movement is not clamped at the window edge. `mouse.delta()` is the movement accumulated during the current tick in window coordinates, and action-map `mouse_axis` bindings read the same delta.
+`setCursorCapture(true)` enables captured relative mouse movement, so the system cursor is hidden and movement is not clamped at the window edge. `mouse.delta()` is the movement accumulated during the current tick in window coordinates, and action-map `mouse_axis` bindings read the same delta.
 
 ### Gamepad
 

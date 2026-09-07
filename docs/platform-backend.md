@@ -1,27 +1,31 @@
 # Platform Backend
 
-Pixzig's windowing, input and clipboard all run on **SDL3**. This page
-records what that means for engine users.
+Pixzig owns the public platform abstraction: windows, input, clipboard,
+timing, cursor state, and text input are exposed through engine APIs. The
+current implementation uses SDL3 underneath, but game code should treat that
+as a backend detail rather than a dependency to program against.
 
-## The seam
+## Engine Boundary
 
-Everything that talks to SDL directly lives in two places:
+Games, examples, scripting bindings, and Python bindings should stay on the
+Pixzig side of the boundary:
 
-- `src/pixzig/platform/window.zig` -- the `SDL_Window` plus GL context, the
-  clipboard, the window icon, the cursor, the swap interval and the clock.
-- `src/pixzig/input/keys.zig` -- the engine's own `Key`, `MouseButton`,
-  `GamepadButton` and `GamepadAxis` enums, and the mapping from SDL's codes
-  onto them.
+- `eng.window` is a `*platform.Window`, with methods for sizing, clipboard,
+  cursor capture, text-input area, and buffer swapping.
+- `eng.inputs` is the engine-owned `InputManager`.
+- `pixzig.Key`, `MouseButton`, `GamepadButton`, and `GamepadAxis` are the
+  stable device identities for game code, bindings, and serialized action
+  maps.
 
-Nothing else in `src/`, in `examples/`, in `games/` or in the Python
-bindings names SDL. Games see `pixzig.Key`, `eng.window` (a
-`*platform.Window`) and `eng.inputs`; SDL stays behind those engine-level
-APIs.
+The backend is responsible for translating OS events into those types. That
+keeps application code portable across desktop and web builds, and leaves
+room for the backend to change without forcing games to rename their inputs
+or include backend modules.
 
-## Input identities are pixzig's own
+## Input Identities
 
-The `Key` enum is dense and 0-based, and its values are pixzig's, not the
-backend's. That matters twice over:
+The `Key` enum is dense and 0-based, and its values are Pixzig's own. That
+matters twice over:
 
 - The keyboard and mouse bitsets index straight off `@intFromEnum`, so key
   and button queries are constant-time enum lookups.
@@ -30,79 +34,81 @@ backend's. That matters twice over:
   `zig build py-constants`; after editing `keys.zig`, re-run it and commit
   the result.
 
-Field names are the stable names used by games, `ActionMap` binding strings
-and saved keybind configs. SDL does not provide `world_1`, `world_2` or
-`F25`; mouse side buttons are spelled `x1` and `x2`.
+Field names are the stable names used by games, `ActionMap` binding strings,
+and saved keybind configs. They are intentionally engine-owned names; for
+example, Pixzig can expose reserved keyboard slots such as `world_1`,
+`world_2`, or `F25`, and mouse side buttons are spelled `x1` and `x2`.
 
-### Position, not keycap
+### Position, Not Keycap
 
-`Key` comes from SDL's *scancode*, so it names a physical position: `.w` is
-the key where W sits on a US QWERTY board whatever layout is active, and
-WASD bindings stay under the same fingers on AZERTY or Dvorak. This is the
-right default for a game and the opposite of what a terminal wants.
+`Key` names a physical keyboard position: `.w` is the key where W sits on a
+US QWERTY board whatever layout is active, and WASD bindings stay under the
+same fingers on AZERTY or Dvorak. This is the right default for a game and
+the opposite of what a terminal wants.
 
 The layout-resolved identity of the same key is available alongside it, via
 `keyboard.layoutDown` / `layoutPressed` / `layoutReleased`, for UI that
 cares about the keycap. Typed text should come from `keyboard.text()`,
 which is correct for every layout without either of these.
 
-## Events, not polling
+## Event Flow
 
-`PixzigEngine.pollEvents` drains SDL's event queue, handles window-level
-events itself, and hands the rest to `InputManager.handleEvent`.
+`PixzigEngine.pollEvents` drains the platform event queue, handles
+window-level events itself, and hands device events to
+`InputManager.handleEvent`.
 
 Two consequences:
 
 - Input events are routed directly through the engine-owned `InputManager`,
-  so each engine instance owns its keyboard, mouse and gamepad state.
+  so each engine instance owns its keyboard, mouse, and gamepad state.
 - Polling self-heals and events latch. A key-up that never arrives leaves a
-  key stuck down forever, so the engine clears all input state on
-  `SDL_EVENT_WINDOW_FOCUS_LOST`.
+  key stuck down forever, so the engine clears all input state when the
+  window loses focus.
 
-The tick now has two halves. `inputs.update()` opens it (latching typed
-text and mapping the cursor into logical coordinates) and
-`inputs.finishTick()` closes it, rolling the current state into the
-previous one so `pressed` / `released` are edges against exactly one tick.
-`PixzigAppRunner` does both around `app.update()`. A caller driving the
-loop by hand -- the Python bindings, for instance -- must call both;
-`pz_finish_tick` is the C entry point.
+The tick has two halves. `inputs.update()` opens it, latching typed text and
+mapping the cursor into logical coordinates. `inputs.finishTick()` closes
+it, rolling the current state into the previous one so `pressed` /
+`released` are edges against exactly one tick. `PixzigAppRunner` does both
+around `app.update()`. A caller driving the loop by hand -- the Python
+bindings, for instance -- must call both; `pz_finish_tick` is the C entry
+point.
 
-## Text input and IME
+## Text Input and IME
 
-`InputOptions.textInput` arms SDL's text-input machinery on the window. It
-is **off by default**: a game that only reads key bindings does not want an
-IME candidate bar armed over it, and on some platforms an armed text input
-changes on-screen-keyboard behaviour. With it off, `keyboard.text()`
-returns nothing.
+`InputOptions.textInput` enables OS text input for the window. It is **off
+by default**: a game that only reads key bindings does not want an IME
+candidate bar armed over it, and on some platforms active text input changes
+on-screen-keyboard behaviour. With it off, `keyboard.text()` returns
+nothing.
 
 With it on, the engine also tracks the IME's in-progress composition
-through `keyboard.preedit()` and `keyboard.preeditCursorByte()`. An app
-that wants to accept Japanese, Chinese or Korean input has to draw that
+through `keyboard.preedit()` and `keyboard.preeditCursorByte()`. An app that
+wants to accept Japanese, Chinese, or Korean input has to draw that
 composition at the caret and call `window.setTextInputArea` to tell the OS
-where the caret is -- otherwise the candidate window sits at the window
-origin and the user types into an apparently dead window until the commit
-lands. Note that `setTextInputArea` takes **window** coordinates, so a
-caret rect measured in framebuffer pixels must be divided by
+where the caret is. Otherwise the candidate window sits at the window origin
+and the user types into an apparently dead window until the commit lands.
+Note that `setTextInputArea` takes **window** coordinates, so a caret rect
+measured in framebuffer pixels must be divided by
 `window_state.scale_factor` first.
 
 ## HiDPI
 
-Windows are created with `SDL_WINDOW_HIGH_PIXEL_DENSITY`, so on a 2x
-display `framebuffer_size` genuinely differs from `window_size` and
+Windows request high pixel density framebuffers, so on a 2x display
+`framebuffer_size` genuinely differs from `window_size` and
 `window_state.scale_factor` is the ratio between them. Prefer
-`scale_factor` for coordinate math: `content_scale` (SDL's display scale)
-can disagree with it under Wayland fractional scaling. Anything handed back
-*to* the platform in window units -- `window.setSize`,
+`scale_factor` for coordinate math: the display content scale can disagree
+with the actual framebuffer ratio under Wayland fractional scaling.
+Anything handed back *to* the platform in window units -- `window.setSize`,
 `window.setTextInputArea` -- has to be divided down by it.
 
 ## Targets
 
-| Target | How SDL3 gets there |
+| Target | Platform behavior |
 |---|---|
-| Linux, Windows | The `allyourcodebase/SDL` package builds a static libSDL3 and the `sdl3` module carries it, so importing the module is all that is needed. |
-| Emscripten | The build translates the upstream SDL headers itself and the implementation comes from emcc's own SDL3 port (`--use-port=sdl3`). |
+| Linux, Windows | Pixzig links the platform backend through its build package, so games import the engine module rather than adding platform libraries themselves. |
+| Emscripten | The web build uses Emscripten's platform support and the engine's translated backend declarations, keeping the public Pixzig API the same as desktop. |
 
-The emscripten port tracks a slightly different SDL point release than the
-desktop build; SDL3 is ABI-stable across those, but it is worth knowing
-when chasing a web-only difference. emcc also still labels its SDL3 port
-experimental.
+Desktop and web builds may sit on slightly different backend point releases,
+so a platform-specific bug can still exist. Treat that as an engine/backend
+diagnostic detail; application code should continue to use the Pixzig
+abstractions.
