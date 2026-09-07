@@ -197,6 +197,26 @@ pub fn buttonsAxisIndependentAxes(io: std.Io, alloc: std.mem.Allocator) !void {
     try testz.expectEqual(actions.axis(.move_y), 1.0);
 }
 
+pub fn mouseAxisUsesMotionDelta(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var inputs = InputManager.init(.{ .mouse = true });
+    var actions = try input.ActionMap(TestActions, TestAxes).init(alloc);
+    defer actions.deinit();
+
+    try actions.bindAxis(.move_x, .{
+        .mouse_axis = .{ .axis = .x, .sensitivity = 0.25, .clamp = 2.0 },
+    });
+
+    inputs.mouse.curr_mut().addRawMotion(50.0, 20.0, 4.0, 0.0);
+    _ = actions.update(&inputs, 0);
+    try testz.expectEqual(actions.axis(.move_x), 1.0);
+
+    inputs.finishTick();
+    inputs.mouse.curr_mut().addRawMotion(52.0, 20.0, 20.0, 0.0);
+    _ = actions.update(&inputs, 0);
+    try testz.expectEqual(actions.axis(.move_x), 2.0);
+}
+
 // --- loadFromLua ---
 
 const luaKeyBinding =

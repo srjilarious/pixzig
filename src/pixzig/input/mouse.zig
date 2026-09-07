@@ -17,6 +17,9 @@ pub const MouseState = struct {
     /// Logical game coordinates after viewport mapping.  Set to (-1, -1) when
     /// the cursor is outside the viewport (letterbox / pillarbox region).
     logical_pos: Vec2F,
+    /// Mouse movement accumulated during the current tick, in SDL window
+    /// coordinates. In captured/relative mode this is the unbounded motion.
+    raw_delta: Vec2F,
     /// Scroll wheel delta accumulated during the current tick (x = horizontal, y = vertical).
     scroll_delta: Vec2F,
 
@@ -27,6 +30,7 @@ pub const MouseState = struct {
             .raw_pos = .{ .x = 0, .y = 0 },
             .fb_pos = .{ .x = 0, .y = 0 },
             .logical_pos = .{ .x = -1, .y = -1 },
+            .raw_delta = .{ .x = 0, .y = 0 },
             .scroll_delta = .{ .x = 0, .y = 0 },
         };
     }
@@ -51,11 +55,18 @@ pub const MouseState = struct {
         self.raw_pos = .{ .x = x, .y = y };
     }
 
+    pub fn addRawMotion(self: *MouseState, x: f32, y: f32, dx: f32, dy: f32) void {
+        self.raw_pos = .{ .x = x, .y = y };
+        self.raw_delta.x += dx;
+        self.raw_delta.y += dy;
+    }
+
     pub fn clear(self: *MouseState) void {
         self.buttons.setRangeValue(.{ .start = 0, .end = NumMouseButtons }, false);
         self.raw_pos = .{ .x = 0, .y = 0 };
         self.fb_pos = .{ .x = 0, .y = 0 };
         self.logical_pos = .{ .x = -1, .y = -1 };
+        self.raw_delta = .{ .x = 0, .y = 0 };
         self.scroll_delta = .{ .x = 0, .y = 0 };
     }
 };
@@ -84,6 +95,7 @@ pub const Mouse = struct {
     /// consumed.
     pub fn finishTick(self: *Mouse) void {
         self.mouseBuffers[self.prevIdx] = self.mouseBuffers[self.currIdx];
+        self.curr_mut().raw_delta = .{ .x = 0, .y = 0 };
         self.curr_mut().scroll_delta = .{ .x = 0, .y = 0 };
     }
 
@@ -154,6 +166,12 @@ pub const Mouse = struct {
     /// Cursor position in framebuffer pixels for the previous tick.
     pub fn lastFbPos(self: *const Mouse) Vec2F {
         return self.prev().fb_pos;
+    }
+
+    /// Mouse movement accumulated during the current tick, in SDL window
+    /// coordinates. This is valid in both normal and captured cursor modes.
+    pub fn delta(self: *const Mouse) Vec2F {
+        return self.curr().raw_delta;
     }
 
     /// Scroll wheel delta for the current tick (x = horizontal, y = vertical).

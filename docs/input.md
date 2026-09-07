@@ -37,7 +37,7 @@ pub fn update(self: *App, eng: *AppRunner.Engine, deltaTimeMs: f64) bool {
 }
 ```
 
-`bind` may be called more than once for the same action. Digital bindings accept keys, mouse buttons, and gamepad buttons. Axis bindings accept a keyboard button pair or a gamepad axis.
+`bind` may be called more than once for the same action. Digital bindings accept keys, mouse buttons, and gamepad buttons. Axis bindings accept a keyboard button pair, a gamepad axis, or a mouse movement axis.
 Call `self.actions.deinit()` from `App.deinit`.
 
 `update`'s return value is currently unused (it always returns `false`); ignore it as the example above does. Gamepad button and axis bindings always read gamepad slot 0, regardless of `inputOpts.numGamepads`.
@@ -100,6 +100,17 @@ const pos = mouse.pos();
 const last = mouse.lastPos();
 const dx = pos.x - last.x;
 ```
+
+For first-person mouse-look, capture the cursor while the mode is active:
+
+```zig
+try eng.setCursorCapture(true);
+defer eng.setCursorCapture(false) catch {};
+
+const turn = eng.inputs.mouse.delta().x * sensitivity;
+```
+
+`setCursorCapture(true)` uses SDL3 relative mouse mode, so the system cursor is hidden and movement is not clamped at the window edge. `mouse.delta()` is the movement accumulated during the current tick in window coordinates, and action-map `mouse_axis` bindings read the same delta.
 
 ### Gamepad
 

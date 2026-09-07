@@ -544,11 +544,10 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
                     },
                     .mouse_axis => |ma| {
                         if (inputs.mouse_enabled) {
-                            const currPos = inputs.mouse.rawPos();
-                            const prevPos = inputs.mouse.lastRawPos();
+                            const motion = inputs.mouse.delta();
                             const delta: f32 = switch (ma.axis) {
-                                .x => currPos.x - prevPos.x,
-                                .y => currPos.y - prevPos.y,
+                                .x => motion.x,
+                                .y => motion.y,
                             };
                             val = std.math.clamp(delta * ma.sensitivity, -ma.clamp, ma.clamp);
                         }

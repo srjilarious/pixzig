@@ -100,7 +100,14 @@ pub const InputManager = struct {
                 }
             },
             sdl.SDL_EVENT_MOUSE_MOTION => {
-                if (self.mouse_enabled) self.mouse.curr_mut().setRawPos(event.motion.x, event.motion.y);
+                if (self.mouse_enabled) {
+                    self.mouse.curr_mut().addRawMotion(
+                        event.motion.x,
+                        event.motion.y,
+                        event.motion.xrel,
+                        event.motion.yrel,
+                    );
+                }
             },
             sdl.SDL_EVENT_MOUSE_BUTTON_DOWN, sdl.SDL_EVENT_MOUSE_BUTTON_UP => {
                 if (!self.mouse_enabled) return;

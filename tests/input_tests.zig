@@ -216,6 +216,26 @@ pub fn mouseScrollTest(io: std.Io, alloc: std.mem.Allocator) !void {
     try testz.expectEqual(mouse.scroll().y, 0.0);
 }
 
+/// Motion accumulates across events in a tick and is consumed by
+/// `finishTick`.
+pub fn mouseDeltaTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+
+    var mouse = Mouse.init();
+    mouse.curr_mut().addRawMotion(10.0, 11.0, 3.0, 4.0);
+    mouse.curr_mut().addRawMotion(12.0, 10.0, 2.0, -1.0);
+
+    try testz.expectEqual(mouse.delta().x, 5.0);
+    try testz.expectEqual(mouse.delta().y, 3.0);
+    try testz.expectEqual(mouse.rawPos().x, 12.0);
+    try testz.expectEqual(mouse.rawPos().y, 10.0);
+
+    mouse.finishTick();
+    try testz.expectEqual(mouse.delta().x, 0.0);
+    try testz.expectEqual(mouse.delta().y, 0.0);
+}
+
 /// Sticks pass through as -1..1; triggers, which SDL reports as 0..32767,
 /// are rescaled onto the engine's -1..1 range.
 pub fn gamepadAxisScalingTest(io: std.Io, alloc: std.mem.Allocator) !void {

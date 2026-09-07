@@ -201,6 +201,19 @@ pub const Window = struct {
             std.log.warn("SDL_SetTextInputArea failed: {s}", .{sdl.SDL_GetError()});
         }
     }
+
+    /// Enables or disables relative mouse mode for this window. When
+    /// enabled, SDL hides the cursor and reports unbounded relative mouse
+    /// motion, which is the mode games usually want for mouse-look.
+    pub fn setCursorCapture(self: *Window, enabled: bool) !void {
+        if (!sdl.SDL_SetWindowRelativeMouseMode(self.handle, enabled)) {
+            return sdlError(error.SdlSetRelativeMouseModeFailed);
+        }
+    }
+
+    pub fn cursorCaptured(self: *const Window) bool {
+        return sdl.SDL_GetWindowRelativeMouseMode(self.handle);
+    }
 };
 
 /// Shows or hides the system cursor. SDL3 applies this process-wide.

@@ -479,6 +479,18 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             platform.showCursor(visible);
         }
 
+        /// Captures or releases the system mouse cursor for mouse-look.
+        /// Capture uses SDL's window-relative mouse mode: the cursor is
+        /// hidden and motion stays unbounded instead of clamping at the
+        /// window edge.
+        pub fn setCursorCapture(self: *Self, enabled: bool) !void {
+            try self.window.setCursorCapture(enabled);
+        }
+
+        pub fn cursorCaptured(self: *const Self) bool {
+            return self.window.cursorCaptured();
+        }
+
         /// Drains the OS event queue, handling window-level events here and
         /// routing everything else to the input manager.
         pub fn pollEvents(self: *Self) void {
