@@ -25,7 +25,13 @@ jobs:
           version: 0.16.0
 
       - name: Build docs
-        run: zig build docs
+        run: |
+          # See python-wheels.yml: Zig 0.16's .zip unpack path (SDL pulls
+          # libusb as a .zip on Linux) fails on a pristine cache because it
+          # doesn't create tmp/ first. mlugg/setup-zig exports
+          # ZIG_GLOBAL_CACHE_DIR; make its tmp/ before the build.
+          mkdir -p "${ZIG_GLOBAL_CACHE_DIR:-$HOME/.cache/zig}/tmp"
+          zig build docs
 
       - uses: actions/configure-pages@v5
 

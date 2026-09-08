@@ -61,7 +61,18 @@ jobs:
           echo "/tmp/zig" >> "$GITHUB_PATH"
 
       - name: Build libpixzig_ffi
-        run: zig build python-ffi -Doptimize=ReleaseFast
+        env:
+          # Pin the Zig global cache to a known path and pre-create its
+          # tmp/ subdir. SDL's Linux build pulls libusb as a .zip, and Zig
+          # 0.16's zip unpack path writes tmp/<hex>.zip in the cache root
+          # without first creating tmp/ (the tarball path does). On a
+          # pristine cache that fails with "failed to create temporary zip
+          # file: FileNotFound"; locally the dir already exists from prior
+          # builds. Remove once the container's Zig has the upstream fix.
+          ZIG_GLOBAL_CACHE_DIR: ${{ github.workspace }}/.zig-global-cache
+        run: |
+          mkdir -p "$ZIG_GLOBAL_CACHE_DIR/tmp"
+          zig build python-ffi -Doptimize=ReleaseFast
 
       - name: Build wheel
         run: |
