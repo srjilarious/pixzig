@@ -67,6 +67,14 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
         attrTexCoord: c_uint = 0,
         attrColor: c_uint = 0,
         uniformMVP: c_int = 0,
+        /// Location of an optional `vec4 tint` uniform, or -1 when the bound
+        /// shader has none (the common case). When present, `flush` uploads
+        /// `tint` before drawing.
+        uniformTint: c_int = -1,
+        /// Colour multiplier uploaded to `uniformTint`. Defaults to white
+        /// (a no-op). Change it through `setTint`, which flushes first so a
+        /// tint change never retroactively recolours already-queued quads.
+        tint: [4]f32 = .{ 1, 1, 1, 1 },
 
         currVert: usize = 0,
         currTex: usize = 0,
@@ -163,6 +171,17 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
             if (comptime hasTex) self.attrTexCoord = @intCast(gl.getAttribLocation(self.shader.val.program, "texcoord"));
             if (comptime hasColor) self.attrColor = @intCast(gl.getAttribLocation(self.shader.val.program, "color"));
             self.uniformMVP = @intCast(gl.getUniformLocation(self.shader.val.program, "projectionMatrix"));
+            self.uniformTint = @intCast(gl.getUniformLocation(self.shader.val.program, "tint"));
+        }
+
+        /// Sets the colour every subsequently queued quad is multiplied by
+        /// (only has an effect when the bound shader declares a `vec4 tint`
+        /// uniform). Flushes any already-queued quads first so they keep the
+        /// previous tint.
+        pub fn setTint(self: *Self, r: f32, g: f32, b: f32, a: f32) void {
+            if (self.tint[0] == r and self.tint[1] == g and self.tint[2] == b and self.tint[3] == a) return;
+            if (self.begun and self.currNumQuads > 0) self.flush();
+            self.tint = .{ r, g, b, a };
         }
 
         fn refreshShader(self: *Self) void {
@@ -279,6 +298,9 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
 
             gl.useProgram(self.shader.val.program);
             gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&self.mvpArr[0]));
+            if (self.uniformTint >= 0) {
+                gl.uniform4f(self.uniformTint, self.tint[0], self.tint[1], self.tint[2], self.tint[3]);
+            }
 
             if (comptime hasTex) {
                 gl.activeTexture(gl.TEXTURE0);

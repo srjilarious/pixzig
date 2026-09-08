@@ -334,6 +334,10 @@ pub const TiledMapXmlLoader = struct {
             .y = try intFromFloatAttr(node, "height"),
         };
 
+        if (node.getAttribute("name")) |nameStr| {
+            obj.name = try alloc.dupe(u8, nameStr);
+        }
+
         const classOpt = node.getAttribute("class");
         if (classOpt != null) {
             obj.class = try alloc.dupe(u8, classOpt.?);

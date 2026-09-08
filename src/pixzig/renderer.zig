@@ -91,6 +91,10 @@ pub fn Renderer(opts: RendererOptions) type {
         const Impl = struct {
             batches: [opts.numSpriteTextures]SpriteBatchQueue,
             overlays: SpriteBatchQueue,
+            /// Dedicated sprite batch bound to `TintTextureShader`, used by
+            /// `drawSpriteColored` so the plain sprite path stays on the
+            /// untinted `TextureShader` program.
+            tinted: SpriteBatchQueue,
 
             shapes: ShapeBatchQueue = undefined,
             text: TextRenderer = undefined,
@@ -107,17 +111,20 @@ pub fn Renderer(opts: RendererOptions) type {
             // reverse construction order.
             var batchesInit: usize = 0;
             var overlaysInit = false;
+            var tintedInit = false;
             var shapesInit = false;
             var textInit = false;
             errdefer {
                 if (textInit) rend.text.deinit();
                 if (shapesInit) rend.shapes.deinit();
+                if (tintedInit) rend.tinted.deinit();
                 if (overlaysInit) rend.overlays.deinit();
                 for (0..batchesInit) |idx| rend.batches[idx].deinit();
             }
 
             std.log.info("Initializing shaders.", .{});
             const texShader = try resMgr.loadShader(shaders.TextureShader, &shaders.TexVertexShader, &shaders.TexPixelShader);
+            const tintShader = try resMgr.loadShader(shaders.TintTextureShader, &shaders.TexVertexShader, &shaders.TexTintPixelShader);
 
             std.log.info("Setting up {} sprite batch queues.", .{opts.numSpriteTextures});
             for (0..opts.numSpriteTextures) |idx| {
@@ -126,6 +133,8 @@ pub fn Renderer(opts: RendererOptions) type {
             }
             rend.overlays = try SpriteBatchQueue.initCapacity(alloc, texShader, opts.maxSprites);
             overlaysInit = true;
+            rend.tinted = try SpriteBatchQueue.initCapacity(alloc, tintShader, opts.maxSprites);
+            tintedInit = true;
 
             if (opts.shapeRendering) {
                 std.log.info("Setting up shaders for shape renderering.", .{});
@@ -183,6 +192,7 @@ pub fn Renderer(opts: RendererOptions) type {
                 self.impl.batches[idx].deinit();
             }
             self.impl.overlays.deinit();
+            self.impl.tinted.deinit();
             if (opts.shapeRendering) {
                 self.impl.shapes.deinit();
             }
@@ -238,6 +248,7 @@ pub fn Renderer(opts: RendererOptions) type {
                 self.impl.batches[idx].begin(mvp);
             }
             self.impl.overlays.begin(mvp);
+            self.impl.tinted.begin(mvp);
 
             if (opts.shapeRendering) {
                 self.impl.shapes.begin(mvp);
@@ -254,6 +265,7 @@ pub fn Renderer(opts: RendererOptions) type {
             for (0..self.impl.batches.len) |idx| {
                 self.impl.batches[idx].end();
             }
+            self.impl.tinted.end();
 
             if (opts.shapeRendering) {
                 self.impl.shapes.end();
@@ -283,6 +295,15 @@ pub fn Renderer(opts: RendererOptions) type {
         pub fn drawSprite(self: *Self, sprite: *const Sprite) void {
             // TODO: Handle batches
             self.impl.batches[0].drawSprite(sprite);
+        }
+
+        /// Draws a `Sprite` multiplied by `color` (a straight per-channel
+        /// multiply, so alpha < 1 fades it and rgb < 1 darkens/tints it).
+        /// Submits to a separate batch bound to `TintTextureShader`; runs of
+        /// same-colour draws still coalesce into one GL call.
+        pub fn drawSpriteColored(self: *Self, sprite: *const Sprite, color: Color) void {
+            self.impl.tinted.setTint(color.r, color.g, color.b, color.a);
+            self.impl.tinted.drawSprite(sprite);
         }
 
         /// Equivalent to `draw()`. Always submits to `batches[0]`.

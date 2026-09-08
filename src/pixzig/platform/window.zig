@@ -136,6 +136,23 @@ pub const Window = struct {
         _ = sdl.SDL_SetWindowMinimumSize(self.handle, min_w, min_h);
     }
 
+    /// Replaces the window's title bar text.
+    pub fn setTitle(self: *Window, title: [:0]const u8) void {
+        _ = sdl.SDL_SetWindowTitle(self.handle, title.ptr);
+    }
+
+    /// Switches the window between borderless-fullscreen and windowed.
+    pub fn setFullscreen(self: *Window, enabled: bool) !void {
+        if (!sdl.SDL_SetWindowFullscreen(self.handle, enabled)) {
+            return sdlError(error.SdlSetFullscreenFailed);
+        }
+    }
+
+    /// Whether the window is currently fullscreen.
+    pub fn isFullscreen(self: *const Window) bool {
+        return (sdl.SDL_GetWindowFlags(self.handle) & sdl.SDL_WINDOW_FULLSCREEN) != 0;
+    }
+
     /// Framebuffer size in actual pixels: what OpenGL draws into.
     pub fn getFramebufferSize(self: *const Window) Vec2I {
         var w: c_int = 0;

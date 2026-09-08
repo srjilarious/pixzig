@@ -4,18 +4,22 @@ Subclass it, override `update` and `render`, and call `run()`. The fixed-
 timestep loop below mirrors pixzig's own `PixzigAppRunner.gameLoopCore`
 (src/pixzig/pixzig.zig), just owned by Python instead of Zig.
 """
+import ctypes
 import os
 import time
 
 from . import _native as _n
 from .action import ActionMap
+from .anim import Actor
+from .audio import Audio
 from .camera import Camera
 from .input import Gamepad, Keyboard, Mouse
 from .manifest import AssetManifest
 from .shapes import Shapes
-from .sprite import Sprite
+from .sprite import Flip, Sprite
 from .text import Text
 from .tilemap import TileMapRenderer
+from .window import Window
 
 
 class PixzigApp:
@@ -33,6 +37,8 @@ class PixzigApp:
         self.mouse = Mouse(eng)
         self.shapes = Shapes(eng)
         self.text = Text(eng)
+        self.audio = Audio(eng)
+        self.window = Window(eng)
 
     def gamepad(self, index: int) -> Gamepad:
         return Gamepad(self._eng, index)
@@ -78,6 +84,44 @@ class PixzigApp:
             raise _n.PixzigError(_n.last_error())
         return AssetManifest(handle)
 
+    # --- Sprite animation -----------------------------------------------
+    # Frame sequences and actor states live in one shared library owned by
+    # the app. Build it here (from a file or frame by frame), then attach
+    # states to actors created with `create_actor()`. See `pixzig.anim`.
+
+    def load_anim_file(self, path: str) -> None:
+        """Loads a JSON frame-sequence + actor-state file into the shared
+        animation library. Frame textures must already be loaded."""
+        _n.check(_n.pz_anim_load_file(self._eng, os.path.abspath(path).encode("utf-8")) == 0)
+
+    def create_sequence(self, name: str, loop: bool = True) -> None:
+        """Registers an empty frame sequence; add frames with `add_frame`."""
+        _n.check(_n.pz_anim_new_sequence(self._eng, name.encode("utf-8"), bool(loop)) == 0)
+
+    def add_frame(self, sequence: str, texture_name: str, frame_ms: float, flip: Flip = Flip.NONE) -> None:
+        """Appends a frame (a loaded texture shown for `frame_ms`) to a
+        sequence made with `create_sequence`."""
+        _n.check(
+            _n.pz_anim_seq_add_frame(
+                self._eng, sequence.encode("utf-8"), texture_name.encode("utf-8"), float(frame_ms), int(flip)
+            )
+            == 0
+        )
+
+    def add_anim_state(self, name: str, sequence: str, next_state: str = None, flip: Flip = Flip.NONE) -> None:
+        """Registers a named actor state that plays `sequence`. `flip` is
+        applied on top of each frame's own flip."""
+        ns = next_state.encode("utf-8") if next_state is not None else None
+        _n.check(
+            _n.pz_anim_add_state(self._eng, name.encode("utf-8"), sequence.encode("utf-8"), ns, int(flip)) == 0
+        )
+
+    def create_actor(self) -> Actor:
+        handle = _n.pz_actor_create(self._eng)
+        if not handle:
+            raise _n.PixzigError(_n.last_error())
+        return Actor(handle)
+
     # --- Action mapping ---------------------------------------------------
 
     def create_action_map(self) -> ActionMap:
@@ -93,6 +137,36 @@ class PixzigApp:
         if not handle:
             raise _n.PixzigError(_n.last_error())
         return Camera(handle)
+
+    # --- Coordinate transforms -----------------------------------------
+    # "screen" = window coordinates (what `mouse.raw_pos` reports), "logical"
+    # = the game-resolution space passes draw in, "world" additionally
+    # accounts for a camera. The screen_to_* calls return None for a point in
+    # a letterbox / pillarbox band.
+
+    def screen_to_logical(self, x: float, y: float):
+        lx, ly = ctypes.c_float(), ctypes.c_float()
+        ok = _n.pz_screen_to_logical(self._eng, float(x), float(y), ctypes.byref(lx), ctypes.byref(ly))
+        return (lx.value, ly.value) if ok else None
+
+    def logical_to_screen(self, x: float, y: float):
+        sx, sy = ctypes.c_float(), ctypes.c_float()
+        _n.pz_logical_to_screen(self._eng, float(x), float(y), ctypes.byref(sx), ctypes.byref(sy))
+        return (sx.value, sy.value)
+
+    def screen_to_world(self, camera: Camera, x: float, y: float):
+        wx, wy = ctypes.c_float(), ctypes.c_float()
+        ok = _n.pz_screen_to_world(
+            self._eng, camera._handle, float(x), float(y), ctypes.byref(wx), ctypes.byref(wy)
+        )
+        return (wx.value, wy.value) if ok else None
+
+    def world_to_screen(self, camera: Camera, x: float, y: float):
+        sx, sy = ctypes.c_float(), ctypes.c_float()
+        _n.pz_world_to_screen(
+            self._eng, camera._handle, float(x), float(y), ctypes.byref(sx), ctypes.byref(sy)
+        )
+        return (sx.value, sy.value)
 
     # --- Rendering ---------------------------------------------------------
     # `render()` must bracket its own drawing with `render_begin()`/`render_end()`

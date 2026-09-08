@@ -60,6 +60,14 @@ pub const SpriteBatchQueue = struct {
         self.draw(&sprite.texture.val, sprite.dest, sprite.src_coords, sprite.rotate);
     }
 
+    /// Sets the colour that subsequently queued sprites are multiplied by.
+    /// Only visible when the batch's shader declares a `vec4 tint` uniform
+    /// (see `TintTextureShader`); a no-op on the plain sprite batch. Flushes
+    /// queued sprites first so a tint change is not retroactive.
+    pub fn setTint(self: *SpriteBatchQueue, r: f32, g: f32, b: f32, a: f32) void {
+        self.inner.setTint(r, g, b, a);
+    }
+
     /// Enqueues drawing a portion of a texture to the screen, with optional 90deg rotation or flips.
     pub fn draw(self: *SpriteBatchQueue, texture: *const Texture, dest: RectF, srcCoords: RectF, rot: Rotate) void {
         const positions: [4][2]f32 = .{

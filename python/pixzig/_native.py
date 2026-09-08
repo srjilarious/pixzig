@@ -82,6 +82,13 @@ class _PzActionMap(ctypes.Structure):
 PzActionMapPtr = ctypes.POINTER(_PzActionMap)
 
 
+class _PzActor(ctypes.Structure):
+    """Opaque animated-actor handle; never inspected from Python."""
+
+
+PzActorPtr = ctypes.POINTER(_PzActor)
+
+
 def _sig(name, argtypes, restype):
     fn = getattr(_lib, name)
     fn.argtypes = argtypes
@@ -106,6 +113,8 @@ c_int32 = ctypes.c_int32
 c_uint8 = ctypes.c_uint8
 c_bool = ctypes.c_bool
 c_char_p = ctypes.c_char_p
+_ip = ctypes.POINTER(c_int32)
+_fp = ctypes.POINTER(c_float)
 
 # --- Lifecycle ---------------------------------------------------------
 pz_last_error = _sig("pz_last_error", [], c_char_p)
@@ -153,6 +162,35 @@ pz_sprite_get_rect = _sig(
 )
 pz_sprite_draw = _sig("pz_sprite_draw", [PzSpritePtr], None)
 pz_sprite_destroy = _sig("pz_sprite_destroy", [PzSpritePtr], None)
+pz_sprite_set_size = _sig("pz_sprite_set_size", [PzSpritePtr, c_float, c_float], None)
+pz_sprite_set_scale = _sig("pz_sprite_set_scale", [PzSpritePtr, c_float, c_float], None)
+pz_sprite_set_rotate = _sig("pz_sprite_set_rotate", [PzSpritePtr, c_int], None)
+pz_sprite_set_src_rect = _sig(
+    "pz_sprite_set_src_rect", [PzSpritePtr, c_int32, c_int32, c_int32, c_int32], None
+)
+pz_sprite_set_tint = _sig("pz_sprite_set_tint", [PzSpritePtr, c_float, c_float, c_float, c_float], None)
+pz_sprite_get_size = _sig(
+    "pz_sprite_get_size", [PzSpritePtr, ctypes.POINTER(c_float), ctypes.POINTER(c_float)], None
+)
+
+# --- Audio -----------------------------------------------------------------
+pz_audio_load = _sig("pz_audio_load", [PzEnginePtr, c_char_p, c_char_p], c_int32)
+pz_audio_play = _sig("pz_audio_play", [PzEnginePtr, c_char_p], c_int32)
+
+# --- Sprite animation ----------------------------------------------------
+pz_anim_load_file = _sig("pz_anim_load_file", [PzEnginePtr, c_char_p], c_int32)
+pz_anim_new_sequence = _sig("pz_anim_new_sequence", [PzEnginePtr, c_char_p, c_bool], c_int32)
+pz_anim_seq_add_frame = _sig(
+    "pz_anim_seq_add_frame", [PzEnginePtr, c_char_p, c_char_p, ctypes.c_double, c_int], c_int32
+)
+pz_anim_add_state = _sig(
+    "pz_anim_add_state", [PzEnginePtr, c_char_p, c_char_p, c_char_p, c_int], c_int32
+)
+pz_actor_create = _sig("pz_actor_create", [PzEnginePtr], PzActorPtr)
+pz_actor_destroy = _sig("pz_actor_destroy", [PzActorPtr], None)
+pz_actor_add_state = _sig("pz_actor_add_state", [PzActorPtr, c_char_p], c_int32)
+pz_actor_set_state = _sig("pz_actor_set_state", [PzActorPtr, c_char_p, PzSpritePtr], None)
+pz_actor_update = _sig("pz_actor_update", [PzActorPtr, ctypes.c_double, PzSpritePtr], None)
 
 # --- Camera ----------------------------------------------------------------
 pz_camera_create = _sig("pz_camera_create", [PzEnginePtr], PzCameraPtr)
@@ -179,6 +217,66 @@ pz_tilemap_render = _sig("pz_tilemap_render", [PzTilemapRendererPtr, PzCameraPtr
 pz_tilemap_render_below = _sig("pz_tilemap_render_below", [PzTilemapRendererPtr, PzCameraPtr, c_float], None)
 pz_tilemap_render_above = _sig("pz_tilemap_render_above", [PzTilemapRendererPtr, PzCameraPtr, c_float], None)
 pz_tilemap_check_reload = _sig("pz_tilemap_check_reload", [PzTilemapRendererPtr], c_bool)
+
+
+class _PzTileObject(ctypes.Structure):
+    _fields_ = [
+        ("id", c_int32),
+        ("gid", c_int32),
+        ("x", c_int32),
+        ("y", c_int32),
+        ("w", c_int32),
+        ("h", c_int32),
+    ]
+
+
+# --- Tilemap runtime access -------------------------------------------------
+pz_tilemap_layer_count = _sig("pz_tilemap_layer_count", [PzTilemapRendererPtr], c_int32)
+pz_tilemap_layer_index = _sig("pz_tilemap_layer_index", [PzTilemapRendererPtr, c_char_p], c_int32)
+pz_tilemap_layer_size = _sig("pz_tilemap_layer_size", [PzTilemapRendererPtr, c_int32, _ip, _ip], None)
+pz_tilemap_tile_size = _sig("pz_tilemap_tile_size", [PzTilemapRendererPtr, c_int32, _ip, _ip], None)
+pz_tilemap_get_tile = _sig("pz_tilemap_get_tile", [PzTilemapRendererPtr, c_int32, c_int32, c_int32], c_int32)
+pz_tilemap_set_tile = _sig(
+    "pz_tilemap_set_tile", [PzTilemapRendererPtr, c_int32, c_int32, c_int32, c_int32], None
+)
+pz_tilemap_refresh = _sig("pz_tilemap_refresh", [PzTilemapRendererPtr], None)
+pz_tilemap_tile_flags = _sig(
+    "pz_tilemap_tile_flags", [PzTilemapRendererPtr, c_int32, c_int32, c_int32], c_int32
+)
+pz_tilemap_tile_blocked = _sig(
+    "pz_tilemap_tile_blocked", [PzTilemapRendererPtr, c_int32, c_int32, c_int32], c_bool
+)
+pz_tilemap_tile_prop = _sig(
+    "pz_tilemap_tile_prop", [PzTilemapRendererPtr, c_int32, c_int32, c_int32, c_char_p], c_char_p
+)
+pz_tilemap_world_to_tile = _sig(
+    "pz_tilemap_world_to_tile", [PzTilemapRendererPtr, c_int32, c_float, c_float, _ip, _ip], None
+)
+pz_tilemap_tile_to_world = _sig(
+    "pz_tilemap_tile_to_world", [PzTilemapRendererPtr, c_int32, c_int32, c_int32, _fp, _fp], None
+)
+pz_tilemap_object_group_count = _sig("pz_tilemap_object_group_count", [PzTilemapRendererPtr], c_int32)
+pz_tilemap_object_group_index = _sig(
+    "pz_tilemap_object_group_index", [PzTilemapRendererPtr, c_char_p], c_int32
+)
+pz_tilemap_object_count = _sig("pz_tilemap_object_count", [PzTilemapRendererPtr, c_int32], c_int32)
+pz_tilemap_object_index = _sig(
+    "pz_tilemap_object_index", [PzTilemapRendererPtr, c_int32, c_char_p], c_int32
+)
+pz_tilemap_object_get = _sig(
+    "pz_tilemap_object_get",
+    [PzTilemapRendererPtr, c_int32, c_int32, ctypes.POINTER(_PzTileObject)],
+    c_bool,
+)
+pz_tilemap_object_name = _sig(
+    "pz_tilemap_object_name", [PzTilemapRendererPtr, c_int32, c_int32], c_char_p
+)
+pz_tilemap_object_class = _sig(
+    "pz_tilemap_object_class", [PzTilemapRendererPtr, c_int32, c_int32], c_char_p
+)
+pz_tilemap_object_prop = _sig(
+    "pz_tilemap_object_prop", [PzTilemapRendererPtr, c_int32, c_int32, c_char_p], c_char_p
+)
 
 # --- Asset manifests ---------------------------------------------------
 pz_manifest_load = _sig("pz_manifest_load", [PzEnginePtr, c_char_p], PzAssetManifestPtr)
@@ -220,3 +318,38 @@ pz_draw_rect = _sig(
     None,
 )
 pz_draw_string = _sig("pz_draw_string", [PzEnginePtr, c_char_p, c_int32, c_int32], None)
+
+# --- Window / viewport -------------------------------------------------
+pz_window_size = _sig("pz_window_size", [PzEnginePtr, _ip, _ip], None)
+pz_framebuffer_size = _sig("pz_framebuffer_size", [PzEnginePtr, _ip, _ip], None)
+pz_logical_size = _sig("pz_logical_size", [PzEnginePtr, _ip, _ip], None)
+pz_window_scale_factor = _sig("pz_window_scale_factor", [PzEnginePtr], c_float)
+pz_window_set_title = _sig("pz_window_set_title", [PzEnginePtr, c_char_p], None)
+pz_window_set_size = _sig("pz_window_set_size", [PzEnginePtr, c_int32, c_int32], None)
+pz_window_set_fullscreen = _sig("pz_window_set_fullscreen", [PzEnginePtr, c_bool], c_int32)
+pz_window_is_fullscreen = _sig("pz_window_is_fullscreen", [PzEnginePtr], c_bool)
+
+# --- Coordinate transforms -------------------------------------------------
+pz_screen_to_logical = _sig("pz_screen_to_logical", [PzEnginePtr, c_float, c_float, _fp, _fp], c_bool)
+pz_logical_to_screen = _sig("pz_logical_to_screen", [PzEnginePtr, c_float, c_float, _fp, _fp], None)
+pz_screen_to_world = _sig(
+    "pz_screen_to_world", [PzEnginePtr, PzCameraPtr, c_float, c_float, _fp, _fp], c_bool
+)
+pz_world_to_screen = _sig(
+    "pz_world_to_screen", [PzEnginePtr, PzCameraPtr, c_float, c_float, _fp, _fp], None
+)
+
+# --- Mouse extras --------------------------------------------------------
+pz_mouse_scroll = _sig("pz_mouse_scroll", [PzEnginePtr, _fp, _fp], None)
+pz_mouse_delta = _sig("pz_mouse_delta", [PzEnginePtr, _fp, _fp], None)
+pz_mouse_raw_pos = _sig("pz_mouse_raw_pos", [PzEnginePtr, _fp, _fp], None)
+pz_mouse_set_relative = _sig("pz_mouse_set_relative", [PzEnginePtr, c_bool], c_int32)
+pz_mouse_relative = _sig("pz_mouse_relative", [PzEnginePtr], c_bool)
+pz_cursor_show = _sig("pz_cursor_show", [PzEnginePtr, c_bool], None)
+
+# --- Keyboard text + modifiers -----------------------------------------
+pz_key_text = _sig("pz_key_text", [PzEnginePtr], c_char_p)
+pz_key_shift = _sig("pz_key_shift", [PzEnginePtr], c_bool)
+pz_key_ctrl = _sig("pz_key_ctrl", [PzEnginePtr], c_bool)
+pz_key_alt = _sig("pz_key_alt", [PzEnginePtr], c_bool)
+pz_key_super = _sig("pz_key_super", [PzEnginePtr], c_bool)

@@ -41,6 +41,25 @@ pub const TexPixelShader: ShaderCode =
     \\}
 ;
 
+/// Like `TexPixelShader`, but multiplies the sampled texel by a uniform
+/// `tint` colour so a single draw can be recoloured / faded. Used by the
+/// renderer's dedicated tinted sprite batch (see `Renderer.drawSpriteColored`).
+/// Kept as a separate program from `TextureShader` so the plain sprite,
+/// tilemap and pixel-buffer paths that share `TexPixelShader` are unaffected.
+pub const TexTintPixelShader: ShaderCode =
+    \\#version 300 es
+    \\precision mediump float;
+    \\
+    \\in vec2 Texcoord;
+    \\uniform sampler2D tex;
+    \\uniform vec4 tint;
+    \\out vec4 fragColor;
+    \\
+    \\void main() {
+    \\    fragColor = texture(tex, Texcoord) * tint;
+    \\}
+;
+
 /// A 3d vertex shader for arbitrary world-space quads (walls, floors,
 /// ceilings), used by Quad3DBatchQueue. Multiplies a true 3d position by
 /// the projectionMatrix (expected to be a full view*projection matrix)
@@ -177,6 +196,10 @@ pub const ColorShader = "color_shader";
 
 /// The name for our normal texture shader used for sprites.
 pub const TextureShader = "texture_shader";
+
+/// The name for the tinted texture shader (texel * uniform `tint`), used by
+/// the renderer's dedicated tinted sprite batch.
+pub const TintTextureShader = "tint_texture_shader";
 
 /// Our text/font shader.
 pub const FontShader = "font_shader";
