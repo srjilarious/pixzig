@@ -226,8 +226,8 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
         fn getIndexForAction(action: Action) usize {
             const enumTypeInfo = @typeInfo(Action).@"enum";
             comptime var keyIdx: usize = 0;
-            inline for (enumTypeInfo.fields) |field| {
-                const fieldKey = @field(Action, field.name);
+            inline for (enumTypeInfo.field_names) |field_name| {
+                const fieldKey = @field(Action, field_name);
                 if (action == fieldKey) return keyIdx;
                 keyIdx += 1;
             }
@@ -238,8 +238,8 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
         fn getIndexForAxis(ax: Axes) usize {
             const enumTypeInfo = @typeInfo(Axes).@"enum";
             comptime var keyIdx: usize = 0;
-            inline for (enumTypeInfo.fields) |field| {
-                const fieldKey = @field(Axes, field.name);
+            inline for (enumTypeInfo.field_names) |field_name| {
+                const fieldKey = @field(Axes, field_name);
                 if (ax == fieldKey) return keyIdx;
                 keyIdx += 1;
             }
@@ -254,7 +254,7 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
         const InnerSelf = @This();
 
         pub fn init() InnerSelf {
-            const actions = std.StaticBitSet(NumActions).initEmpty();
+            const actions = std.StaticBitSet(NumActions).empty;
             return .{ .actions = actions };
         }
 

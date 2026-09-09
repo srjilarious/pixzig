@@ -10,7 +10,7 @@ const RectF = pixzig.RectF;
 
 // Track which integer values have been freed so tests can assert the
 // underlying resource lifecycle.
-var g_freed_buf = [_]i32{0} ** 64;
+var g_freed_buf: [64]i32 = @splat(0);
 var g_freed_len: usize = 0;
 
 fn intFree(v: i32) void {

@@ -588,7 +588,7 @@ pub fn build(b: *std.Build) void {
                 .debug => "-DFLECS_DEBUG",
                 .sanitize => "-DFLECS_SANITIZE",
                 .none => "",
-                .depends_on_build => if (builtin.mode == .Debug) "-DFLECS_SANITIZE" else "",
+                .depends_on_build => if (builtin.mode == .debug) "-DFLECS_SANITIZE" else "",
             },
             "-DFLECS_CUSTOM_BUILD",
             if (addons.includeAddon(.alerts)) "-DFLECS_ALERTS" else "",

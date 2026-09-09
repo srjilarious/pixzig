@@ -68,11 +68,10 @@ pub fn build(b: *std.Build) void {
     // Need to figure out how to access TranslateC step from top-level build.zig.
     switch (target.result.os.tag) {
         .emscripten => {
-            if (b.sysroot == null) {
-                @panic("Pass '--sysroot \"~/.cache/emscripten/sysroot\"'");
-            }
-
-            const cache_include = std.fs.path.join(b.allocator, &.{ b.sysroot.?, "include" }) catch @panic("Out of memory");
+            // Zig 0.17: sysroot comes from the EMSCRIPTEN_SYSROOT env var.
+            const sysroot = b.graph.environ_map.get("EMSCRIPTEN_SYSROOT") orelse
+                @panic("Set EMSCRIPTEN_SYSROOT for emscripten builds");
+            const cache_include = std.fs.path.join(b.allocator, &.{ sysroot, "include" }) catch @panic("Out of memory");
             defer b.allocator.free(cache_include);
 
             // TODO: Add this check back in.

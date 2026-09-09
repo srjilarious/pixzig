@@ -25,8 +25,8 @@ pub const GamepadState = struct {
     /// centered.
     pub fn init() GamepadState {
         return .{
-            .buttons = std.StaticBitSet(NumGamepadButtons).initEmpty(),
-            .axes = .{0.0} ** NumGamepadAxes,
+            .buttons = std.StaticBitSet(NumGamepadButtons).empty,
+            .axes = @splat(0.0),
         };
     }
 
@@ -54,7 +54,7 @@ pub const GamepadState = struct {
     /// axes to centered (0.0).
     pub fn clear(self: *GamepadState) void {
         self.buttons.setRangeValue(.{ .start = 0, .end = NumGamepadButtons }, false);
-        self.axes = .{0.0} ** NumGamepadAxes;
+        self.axes = @splat(0.0);
     }
 };
 
@@ -137,16 +137,16 @@ pub const Gamepad = struct {
 
         var curr = self.currState_mut();
         var anyPressed: bool = false;
-        inline for (@typeInfo(GamepadButton).@"enum".fields) |field| {
-            const btn: GamepadButton = @enumFromInt(field.value);
+        inline for (@typeInfo(GamepadButton).@"enum".field_values) |field_value| {
+            const btn: GamepadButton = @enumFromInt(field_value);
             const isDown = sdl.SDL_GetGamepadButton(gp, keys.toSdlGamepadButton(btn));
             curr.setButton(btn, isDown);
             anyPressed = anyPressed or isDown;
         }
-        inline for (@typeInfo(GamepadAxis).@"enum".fields) |field| {
-            const ax: GamepadAxis = @enumFromInt(field.value);
+        inline for (@typeInfo(GamepadAxis).@"enum".field_values) |field_value| {
+            const ax: GamepadAxis = @enumFromInt(field_value);
             const raw = sdl.SDL_GetGamepadAxis(gp, keys.toSdlGamepadAxis(ax));
-            curr.axes[field.value] = keys.axisValue(ax, raw);
+            curr.axes[field_value] = keys.axisValue(ax, raw);
         }
 
         return anyPressed;

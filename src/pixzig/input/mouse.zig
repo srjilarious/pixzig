@@ -24,7 +24,7 @@ pub const MouseState = struct {
     scroll_delta: Vec2F,
 
     pub fn init() MouseState {
-        const buttons = std.StaticBitSet(NumMouseButtons).initEmpty();
+        const buttons = std.StaticBitSet(NumMouseButtons).empty;
         return .{
             .buttons = buttons,
             .raw_pos = .{ .x = 0, .y = 0 },

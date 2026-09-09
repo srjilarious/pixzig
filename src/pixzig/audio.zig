@@ -68,7 +68,7 @@ pub const AudioEngine = struct {
             return error.SoundAlreadyExists;
         }
 
-        const pathZ = try self.allocator.dupeZ(u8, path);
+        const pathZ = try std.mem.concatWithSentinel(self.allocator, u8, &.{path}, 0);
         defer self.allocator.free(pathZ);
 
         const sound = try self.engine.createSoundFromFile(pathZ, .{});

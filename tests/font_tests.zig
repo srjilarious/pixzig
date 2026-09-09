@@ -37,7 +37,7 @@ pub fn loadFontTest(io: std.Io, alloc: std.mem.Allocator) !void {
     // Try packing a range into a bitmap
     var pack_context = pixzig.stb_tt.c.stbtt_pack_context{};
     var bitmap_data: [512 * 512]u8 = undefined;
-    var packed_chars = [_]pixzig.stb_tt.c.stbtt_packedchar{undefined} ** 95;
+    var packed_chars: [95]pixzig.stb_tt.c.stbtt_packedchar = undefined;
     _ = pixzig.stb_tt.c.stbtt_PackBegin(&pack_context, &bitmap_data, 512, 512, 0, 1, null);
     _ = pixzig.stb_tt.c.stbtt_PackFontRange(&pack_context, font_data.ptr, 0, 32.0, 32, 126 - 32, &packed_chars);
     pixzig.stb_tt.c.stbtt_PackEnd(&pack_context);
@@ -247,10 +247,9 @@ pub fn atlasSetFontSizeUpdatesBaselineTest(io: std.Io, alloc: std.mem.Allocator)
 }
 
 pub fn atlasSetFontSizeRejectsBitmapFontTest(io: std.Io, alloc: std.mem.Allocator) !void {
-    _ = io;
     // A bitmap font goes through zstbi to decode its PNG; outside the
     // engine that has to be initialised by hand.
-    pixzig.stbi.init(alloc);
+    pixzig.stbi.init(io, alloc);
     defer pixzig.stbi.deinit();
 
     var atlas = try FontAtlas.initFromBitmap(

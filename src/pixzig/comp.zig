@@ -8,7 +8,7 @@ pub fn numEnumFields(comptime T: type) usize {
     if (info != .@"enum") {
         @compileError("Only works for enums!");
     }
-    return info.@"enum".fields.len;
+    return info.@"enum".field_names.len;
 }
 
 // Taken from zimpl for testing

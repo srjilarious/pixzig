@@ -89,14 +89,13 @@ pub const ScriptEngine = struct {
 
         var myStruct: T = .{};
         // Iterate over fields of the struct at comptime
-        inline for (@typeInfo(T).@"struct".fields) |field| {
-            const field_name = field.name;
+        inline for (@typeInfo(T).@"struct".field_names, @typeInfo(T).@"struct".field_types) |field_name, field_type| {
 
             // Get the value from Lua
             _ = self.lua.getField(-1, field_name); // Pushes `config.<field_name>` onto the stack
 
             // Match the field type and retrieve the value
-            switch (@typeInfo(field.type)) {
+            switch (@typeInfo(field_type)) {
                 // Handle booleans
                 .bool => {
                     if (!self.lua.isBoolean(-1)) {

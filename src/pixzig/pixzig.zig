@@ -377,7 +377,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
 
             // ----------------------------------------------------------------
             std.log.debug("Initializing STBI.", .{});
-            stbi.init(allocator);
+            stbi.init(std.Io.Threaded.global_single_threaded.io(), allocator);
             errdefer stbi.deinit();
 
             // ----------------------------------------------------------------
@@ -644,7 +644,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 m.deinit();
             };
 
-            const path_z = try alloc.dupeZ(u8, path);
+            const path_z = try std.mem.concatWithSentinel(alloc, u8, &.{path}, 0);
             defer alloc.free(path_z);
 
             try stbi.Image.writeToFile(out_img, path_z, .png);

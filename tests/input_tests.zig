@@ -14,20 +14,20 @@ pub fn keyEnumIsDenseTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     _ = alloc;
 
-    inline for (@typeInfo(Key).@"enum".fields, 0..) |field, i| {
-        try testz.expectEqual(field.value, i);
+    inline for (@typeInfo(Key).@"enum".field_values, 0..) |field_value, i| {
+        try testz.expectEqual(field_value, i);
     }
     try testz.expectEqual(@intFromEnum(Key.unknown), 0);
-    try testz.expectEqual(keys.NumKeys, @typeInfo(Key).@"enum".fields.len);
+    try testz.expectEqual(keys.NumKeys, @typeInfo(Key).@"enum".field_names.len);
 
-    inline for (@typeInfo(keys.MouseButton).@"enum".fields, 0..) |field, i| {
-        try testz.expectEqual(field.value, i);
+    inline for (@typeInfo(keys.MouseButton).@"enum".field_values, 0..) |field_value, i| {
+        try testz.expectEqual(field_value, i);
     }
-    inline for (@typeInfo(keys.GamepadButton).@"enum".fields, 0..) |field, i| {
-        try testz.expectEqual(field.value, i);
+    inline for (@typeInfo(keys.GamepadButton).@"enum".field_values, 0..) |field_value, i| {
+        try testz.expectEqual(field_value, i);
     }
-    inline for (@typeInfo(keys.GamepadAxis).@"enum".fields, 0..) |field, i| {
-        try testz.expectEqual(field.value, i);
+    inline for (@typeInfo(keys.GamepadAxis).@"enum".field_values, 0..) |field_value, i| {
+        try testz.expectEqual(field_value, i);
     }
 }
 

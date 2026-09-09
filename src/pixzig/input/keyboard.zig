@@ -36,8 +36,8 @@ pub const KeyboardState = struct {
     /// Initializes a new KeyboardState with all keys up.
     pub fn init() KeyboardState {
         return .{
-            .keys = std.StaticBitSet(NumKeys).initEmpty(),
-            .layout_keys = std.StaticBitSet(NumKeys).initEmpty(),
+            .keys = std.StaticBitSet(NumKeys).empty,
+            .layout_keys = std.StaticBitSet(NumKeys).empty,
             .mods_override = null,
         };
     }

@@ -1,18 +1,25 @@
 const std = @import("std");
 const builtin = std.builtin;
 
+// Zig 0.17 dropped --sysroot access from build.zig; the emscripten
+// sysroot comes from the EMSCRIPTEN_SYSROOT env var now.
+fn emSysroot(b: *std.Build) []const u8 {
+    return b.graph.environ_map.get("EMSCRIPTEN_SYSROOT") orelse
+        @panic("Set EMSCRIPTEN_SYSROOT for emscripten builds, e.g. ~/.cache/emscripten/sysroot");
+}
+
+// Replacement for the removed b.pathFromRoot.
+fn fromRoot(b: *std.Build, sub: []const u8) []const u8 {
+    return b.root.joinString(b.allocator, sub) catch @panic("OOM");
+}
+
 const assets_dir = "assets";
 
 fn addArchIncludes(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, dep: *std.Build.Step.Compile) !void {
     _ = optimize;
     switch (target.result.os.tag) {
         .emscripten => {
-            if (b.sysroot == null) {
-                @panic("Pass '--sysroot \"~/.cache/emscripten/sysroot\"'");
-            }
-
-            // const cache_include = std.fs.path.join(b.allocator, &.{ "/home/jeffdw/.cache/emscripten/sysroot", "include" }) catch @panic("Out of memory");
-            const cache_include = std.fs.path.join(b.allocator, &.{ b.sysroot.?, "include" }) catch @panic("Out of memory");
+            const cache_include = std.fs.path.join(b.allocator, &.{ emSysroot(b), "include" }) catch @panic("Out of memory");
             defer b.allocator.free(cache_include);
 
             // TODO: Add this check back in.
@@ -28,7 +35,7 @@ fn addArchIncludes(b: *std.Build, target: std.Build.ResolvedTarget, optimize: st
 }
 
 fn getSysRootInclude(b: *std.Build) []const u8 {
-    return b.fmt("{s}/include", .{b.sysroot.?});
+    return b.fmt("{s}/include", .{emSysroot(b)});
 }
 
 pub const EngineData = struct {
@@ -60,7 +67,7 @@ fn sdlModule(
         return sdl_dep.module("sdl3");
     }
 
-    if (b.sysroot == null) @panic("Pass '--sysroot' for emscripten builds");
+    _ = emSysroot(b); // fail early if EMSCRIPTEN_SYSROOT is unset
 
     // `default_target_config = false` keeps the package's build() from
     // panicking on an unrecognised target; we only want at its `sdl`
@@ -203,9 +210,9 @@ pub const ManifestHandle = struct {
 pub fn manifestFromFile(b: *std.Build, path: []const u8) ManifestHandle {
     return .{
         .b = b,
-        .file_abs_path = b.pathFromRoot(path),
+        .file_abs_path = fromRoot(b, path),
         .inline_json = null,
-        .inline_base_dir = b.pathFromRoot("."),
+        .inline_base_dir = fromRoot(b, "."),
     };
 }
 
@@ -231,7 +238,7 @@ pub fn manifestFromDef(b: *std.Build, def: ManifestDef) ManifestHandle {
         .b = b,
         .file_abs_path = null,
         .inline_json = json,
-        .inline_base_dir = b.pathFromRoot("."),
+        .inline_base_dir = fromRoot(b, "."),
         .emcc_files = files.toOwnedSlice(b.allocator) catch @panic("OOM"),
     };
 }
@@ -584,12 +591,15 @@ pub fn build(b: *std.Build) void {
             b.step("py-constants", "Regenerate python/pixzig/constants.py from the input enums")
                 .dependOn(&run_gen_consts.step);
 
-            // Pixzig docs step
-            const zkdocs = @import("zkdocs");
-            b.step("docs", "Docs").dependOn(zkdocs.addDocsStep(b, .{
-                .conf = "docs/zkdocs.conf",
-                .out = "docs-out",
-            }));
+            // Pixzig docs step -- disabled during the Zig 0.17 port. zkdocs
+            // and its dependency tree (old testz / zargunaught / tree-sitter)
+            // do not build on 0.17 yet, and `@import`ing its build.zig forces
+            // that tree to configure. Re-enable once zkdocs is ported.
+            // const zkdocs = @import("zkdocs");
+            // b.step("docs", "Docs").dependOn(zkdocs.addDocsStep(b, .{
+            //     .conf = "docs/zkdocs.conf",
+            //     .out = "docs-out",
+            // }));
         }
     }
 
@@ -697,8 +707,7 @@ fn buildEngine(
     });
     stbtt_translate.addIncludePath(b.path("libs/stb_truetype"));
     if (target.result.os.tag == .emscripten) {
-        if (b.sysroot == null) @panic("Pass '--sysroot' for emscripten builds");
-        const em_inc = std.fs.path.join(b.allocator, &.{ b.sysroot.?, "include" }) catch @panic("OOM");
+        const em_inc = std.fs.path.join(b.allocator, &.{ emSysroot(b), "include" }) catch @panic("OOM");
         stbtt_translate.addIncludePath(.{ .cwd_relative = em_inc });
     }
 
@@ -718,8 +727,7 @@ fn buildEngine(
         .optimize = optimize,
     });
     if (target.result.os.tag == .emscripten) {
-        if (b.sysroot == null) @panic("Pass '--sysroot' for emscripten builds");
-        const em_inc = std.fs.path.join(b.allocator, &.{ b.sysroot.?, "include" }) catch @panic("OOM");
+        const em_inc = std.fs.path.join(b.allocator, &.{ emSysroot(b), "include" }) catch @panic("OOM");
         time_c_translate.addIncludePath(.{ .cwd_relative = em_inc });
     }
     pixeng.addImport("c_time", time_c_translate.createModule());
@@ -836,7 +844,7 @@ pub fn buildExample(
     // Handle platform-specific linking
     switch (target.result.os.tag) {
         .emscripten => {
-            const path = b.pathJoin(&.{ b.install_prefix, "web", name });
+            const path = b.pathJoin(&.{ "zig-out", "web", name });
             const index_path = b.pathJoin(&.{ path, "index.html" });
 
             const mkdir_command = b.addSystemCommand(&[_][]const u8{"mkdir"});
@@ -869,9 +877,11 @@ pub fn buildExample(
                 "-sEXPORT_ALL=1",
                 // "-sAUDIO_WORKLET=1",
                 // "-sWASM_WORKERS=1",
-                "--shell-file",
-                b.path("src/shell.html").getPath(b),
             });
+            // Zig 0.17 removed LazyPath.getPath; addFileArg resolves the
+            // path at make time and passes it as its own argument.
+            emcc_command.addArg("--shell-file");
+            emcc_command.addFileArg(b.path("src/shell.html"));
 
             // Preload assets: use explicit file list when available, else whole dir.
             if (manifest.emcc_files.len > 0) {
@@ -886,10 +896,7 @@ pub fn buildExample(
             if (engine_lib) |lib| {
                 emcc_command.addFileArg(lib.getEmittedBin());
             } else {
-                const obj_path = pixeng_mod.owner.getInstallPath(
-                    .prefix,
-                    "web/pixzig.o",
-                );
+                const obj_path = b.pathJoin(&.{ "zig-out", "web/pixzig.o" });
                 emcc_command.addArg(obj_path);
             }
 
@@ -922,16 +929,14 @@ pub fn buildExample(
             const run_cmd = b.addRunArtifact(exe);
             if (is_package) {
                 // Package mode: exe runs from install dir where assets were copied.
-                run_cmd.setCwd(.{ .cwd_relative = b.pathJoin(&.{ b.install_prefix, out_path }) });
+                run_cmd.setCwd(.{ .cwd_relative = b.pathJoin(&.{ "zig-out", out_path }) });
             } else {
                 // Dev mode: exe runs from repo root so it can read assets in-place.
                 run_cmd.setCwd(b.path("."));
             }
             run_cmd.step.dependOn(&install_ex.step);
 
-            if (b.args) |args| {
-                run_cmd.addArgs(args);
-            }
+            run_cmd.addPassthruArgs();
 
             const run_step = b.step(name, "Run example");
             run_step.dependOn(&run_cmd.step);

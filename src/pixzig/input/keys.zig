@@ -192,10 +192,10 @@ pub const GamepadAxis = enum {
     right_trigger,
 };
 
-pub const NumKeys = @typeInfo(Key).@"enum".fields.len;
-pub const NumMouseButtons = @typeInfo(MouseButton).@"enum".fields.len;
-pub const NumGamepadButtons = @typeInfo(GamepadButton).@"enum".fields.len;
-pub const NumGamepadAxes = @typeInfo(GamepadAxis).@"enum".fields.len;
+pub const NumKeys = @typeInfo(Key).@"enum".field_names.len;
+pub const NumMouseButtons = @typeInfo(MouseButton).@"enum".field_names.len;
+pub const NumGamepadButtons = @typeInfo(GamepadButton).@"enum".field_names.len;
+pub const NumGamepadAxes = @typeInfo(GamepadAxis).@"enum".field_names.len;
 
 /// Dense bitset index for a key.
 pub fn keyIndex(key: Key) usize {

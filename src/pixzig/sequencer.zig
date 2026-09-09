@@ -374,7 +374,7 @@ pub const SeqScriptingContext = struct {
             .alloc = alloc,
             .world = world,
             .player = player,
-            .pending = [_]?Sequence{null} ** MAX_PENDING_SEQS,
+            .pending = @splat(null),
         };
     }
 

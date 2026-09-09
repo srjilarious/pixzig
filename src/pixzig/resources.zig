@@ -528,7 +528,7 @@ pub const ResourceManager = struct {
     /// builds. Logs an error and leaves `hot_reload` null if initialisation
     /// fails (watcher remains disabled for the session).
     fn ensureHotReload(self: *Self) void {
-        if (comptime builtin.mode != .Debug) return;
+        if (comptime builtin.mode != .debug) return;
         if (self.hot_reload != null) return;
         self.hot_reload = HotReload.init(self.alloc) catch |err| {
             std.log.err("Failed to init file watcher for hot reload: {}", .{err});
@@ -569,7 +569,7 @@ pub const ResourceManager = struct {
     /// changed since the last call. This is a no-op in release builds.
     /// Called automatically by `PixzigAppRunner` each frame.
     pub fn checkHotReload(self: *Self) void {
-        if (comptime builtin.mode != .Debug) return;
+        if (comptime builtin.mode != .debug) return;
         const hr = if (self.hot_reload) |*h| h else return;
 
         var changed: std.ArrayList(WatchId) = .empty;
@@ -841,7 +841,7 @@ pub const ResourceManager = struct {
         file_path: []const u8,
     ) !TextureLoad {
         std.log.info("Loading image '{s}' from '{s}'\n", .{ name, file_path });
-        const nt_file_path = try self.alloc.dupeZ(u8, file_path);
+        const nt_file_path = try std.mem.concatWithSentinel(self.alloc, u8, &.{file_path}, 0);
         defer self.alloc.free(nt_file_path);
 
         var image = try stbi.Image.loadFromFile(nt_file_path, 4);
@@ -876,7 +876,7 @@ pub const ResourceManager = struct {
     ) !*ManagedTexture {
         const result = try self.loadTextureImpl(name, file_path);
 
-        if (comptime builtin.mode == .Debug) {
+        if (comptime builtin.mode == .debug) {
             self.ensureHotReload();
             if (self.hot_reload) |*hr| {
                 hr.registerWatch(file_path, .{
@@ -1023,7 +1023,7 @@ pub const ResourceManager = struct {
     pub fn loadAtlas(self: *Self, baseName: []const u8) !usize {
         const num = try self.loadAtlasImpl(baseName);
 
-        if (comptime builtin.mode == .Debug) {
+        if (comptime builtin.mode == .debug) {
             self.ensureHotReload();
             if (self.hot_reload) |*hr| {
                 const imageName = try utils.addExtension(self.alloc, baseName, ".png");
@@ -1051,7 +1051,7 @@ pub const ResourceManager = struct {
     pub fn loadAtlasNamed(self: *Self, name: []const u8, base_path: []const u8) !usize {
         const num = try self.loadAtlasNamedImpl(name, base_path);
 
-        if (comptime builtin.mode == .Debug) {
+        if (comptime builtin.mode == .debug) {
             self.ensureHotReload();
             if (self.hot_reload) |*hr| {
                 const imageName = try utils.addExtension(self.alloc, base_path, ".png");
@@ -1141,7 +1141,7 @@ pub const ResourceManager = struct {
         const managed = try self.getOrCreateFont(name);
         try managed.add(fa);
 
-        if (comptime builtin.mode == .Debug) {
+        if (comptime builtin.mode == .debug) {
             self.ensureHotReload();
             if (self.hot_reload) |*hr| {
                 hr.registerWatch(fontPath, .{
@@ -1223,7 +1223,7 @@ pub const ResourceManager = struct {
         const managed = try self.getOrCreateTileMap(name);
         try managed.add(map);
 
-        if (comptime builtin.mode == .Debug) {
+        if (comptime builtin.mode == .debug) {
             self.ensureHotReload();
             if (self.hot_reload) |*hr| {
                 hr.registerWatch(path, .{
