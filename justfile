@@ -4,6 +4,7 @@ alias bwin := build_win
 alias bweb := build_web
 alias rweb := run_web
 alias d := docs
+alias boot := bootstrap
 
 EMSCRIPTEN_SYSROOT := env_var_or_default("EMSCRIPTEN_SYSROOT", "")
 
@@ -17,6 +18,10 @@ test *OPTS:
 
 build EX *OPTS:
 	zig build {{EX}} {{OPTS}}
+
+# Repeatable Linux build: verify the pinned Zig, prime the cache, then `zig build {{ARGS}}`
+bootstrap *ARGS:
+	./scripts/bootstrap-linux.sh {{ARGS}}
 
 build_win EX *OPTS:
 	zig build -Dtarget=x86_64-windows {{EX}} {{OPTS}}

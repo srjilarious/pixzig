@@ -53,22 +53,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install zig 0.16.0
+      - name: Install Zig
         run: |
-          curl -sL https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz -o /tmp/zig.tar.xz
+          # Pinned dev build (matches build.zig.zon's minimum_zig_version).
+          # Pruned from ziglang.org; the mach project keeps it on a mirror.
+          curl -sL https://pkg.hexops.org/zig/zig-x86_64-linux-0.17.0-dev.1857+3c46da14d.tar.xz -o /tmp/zig.tar.xz
           mkdir -p /tmp/zig
           tar -xf /tmp/zig.tar.xz -C /tmp/zig --strip-components=1
           echo "/tmp/zig" >> "$GITHUB_PATH"
 
       - name: Build libpixzig_ffi
         env:
-          # Pin the Zig global cache to a known path and pre-create its
-          # tmp/ subdir. SDL's Linux build pulls libusb as a .zip, and Zig
-          # 0.16's zip unpack path writes tmp/<hex>.zip in the cache root
-          # without first creating tmp/ (the tarball path does). On a
-          # pristine cache that fails with "failed to create temporary zip
-          # file: FileNotFound"; locally the dir already exists from prior
-          # builds. Remove once the container's Zig has the upstream fix.
+          # Pre-create the global cache's tmp/ dir. Zig 0.16 could not
+          # unpack a .zip dependency (SDL pulls libusb as one) into a
+          # pristine cache; 0.17 fixes it, but this stays correct on a
+          # cache-restore run and costs nothing.
           ZIG_GLOBAL_CACHE_DIR: ${{ github.workspace }}/.zig-global-cache
         run: |
           mkdir -p "$ZIG_GLOBAL_CACHE_DIR/tmp"
@@ -103,7 +102,7 @@ jobs:
 
       - uses: mlugg/setup-zig@v2
         with:
-          version: 0.16.0
+          version: 0.17.0-dev.1857+3c46da14d
 
       - name: Install uv
         run: |
