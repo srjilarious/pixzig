@@ -13,6 +13,10 @@
             .url = "https://github.com/srjilarious/zargunaught/archive/refs/tags/v1.3.0.tar.gz",
             .hash = "zargunaught-1.3.0-aoeNI6LpAABBxLqvvp6G4e9Mx-xDG3QfJ9aJ4WEkA54g",
         },
+        .zkdocs = .{
+            .url = "https://github.com/srjilarious/zkdocs/archive/refs/tags/v0.9.4.tar.gz",
+            .hash = "zkdocs-0.9.4-4A6vTeOlEgBXgSVWkfxZ9xc5SexXLAd0dYJSuf4llC5f",
+        },
         .ziglua = .{
             .path = "libs/ziglua",
             // .url = "https://github.com/natecraddock/ziglua/archive/2233e8f0408e4683ffd2cb2ed4b9727b84ac88f7.tar.gz",

@@ -1,9 +1,8 @@
 name: Deploy Docs
 
-# The `zig build docs` step is disabled during the Zig 0.17 port: zkdocs
-# and its dependency tree do not build on 0.17 yet (see build.zig). Manual
-# trigger only until zkdocs is ported and the step re-enabled.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:

@@ -591,15 +591,11 @@ pub fn build(b: *std.Build) void {
             b.step("py-constants", "Regenerate python/pixzig/constants.py from the input enums")
                 .dependOn(&run_gen_consts.step);
 
-            // Pixzig docs step -- disabled during the Zig 0.17 port. zkdocs
-            // and its dependency tree (old testz / zargunaught / tree-sitter)
-            // do not build on 0.17 yet, and `@import`ing its build.zig forces
-            // that tree to configure. Re-enable once zkdocs is ported.
-            // const zkdocs = @import("zkdocs");
-            // b.step("docs", "Docs").dependOn(zkdocs.addDocsStep(b, .{
-            //     .conf = "docs/zkdocs.conf",
-            //     .out = "docs-out",
-            // }));
+            const zkdocs = @import("zkdocs");
+            b.step("docs", "Docs").dependOn(zkdocs.addDocsStep(b, .{
+                .conf = "docs/zkdocs.conf",
+                .out = "docs-out",
+            }));
         }
     }
 
