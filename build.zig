@@ -43,14 +43,37 @@ pub const EngineData = struct {
     pixeng_mod: *std.Build.Module,
 };
 
+/// Memo for the Windows `sdl3` module. `sdlModule` is called once per consumer
+/// (the engine module, and again for the `tests` exe), and every `addTranslateC`
+/// call on the same header yields a *separate* module whose root is the one
+/// generated `sdl.zig` file. Importing two of those into one compile is the
+/// "file exists in modules 'sdl3' and 'sdl30'" error, so hand back the same
+/// module object every time. A `std.Build` graph only ever builds one target,
+/// so a single slot is enough.
+var windows_sdl_module: ?*std.Build.Module = null;
+
 /// Returns the `sdl3` module the engine imports.
 ///
 /// On desktop this is the `allyourcodebase/SDL` package's own module, which
 /// carries the static libSDL3 with it, so importing it is all any consumer
 /// needs -- no separate `linkLibrary`.
 ///
-/// Emscripten is different. That package's `build.zig` has no target config
-/// for wasm and panics outright, and even with the config disabled its
+/// Windows (cross-compiled, normally the gnu ABI, which is what CI uses) is a
+/// special case. The package's `sdl3` module is produced by `zig translate-c`,
+/// and Zig 0.17's translate-c uses the Aro C frontend. Aro cannot parse the
+/// bundled clang `<avx512*intrin.h>` headers: they call
+/// `__builtin_elementwise_fshr`, `__builtin_elementwise_fshl` and
+/// `__builtin_elementwise_clzg`, builtins Aro does not implement. On Windows the
+/// mingw-w64 `<winnt.h>` / `<intrin.h>` chain pulls `<immintrin.h>` in
+/// unconditionally, so the translation blows up with ~44 errors before it ever
+/// reaches an SDL declaration. We run our own translate-c of the same header
+/// there with those three builtins neutralised to a passthrough of their first
+/// argument, then link the package's real static libSDL3 artifact. Nothing in
+/// pixzig uses the AVX-512 intrinsic wrappers this produces; they are incidental
+/// noise from the header pull.
+///
+/// Emscripten is different again. That package's `build.zig` has no target
+/// config for wasm and panics outright, and even with the config disabled its
 /// module drags the unbuildable library in behind it. Emscripten ships its
 /// own SDL3 port, so there the link side comes from `--use-port=sdl3` in
 /// `emcc` (see the emcc args in `buildExample`) and all we need from Zig is
@@ -62,6 +85,32 @@ fn sdlModule(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
 ) *std.Build.Module {
+    if (target.result.os.tag == .windows) {
+        if (windows_sdl_module) |mod| return mod;
+
+        const sdl_dep = b.dependency("sdl", .{ .target = target, .optimize = optimize });
+        const upstream = sdl_dep.builder.dependency("sdl", .{});
+
+        const translate = b.addTranslateC(.{
+            .root_source_file = sdl_dep.path("src/sdl.h"),
+            .target = target,
+            .optimize = optimize,
+        });
+        translate.defineCMacro("USING_GENERATED_CONFIG_H", "1");
+        // See the doc comment: work around Aro choking on the bundled clang
+        // AVX-512 intrinsic headers that mingw's headers drag in.
+        translate.defineCMacroRaw("__builtin_elementwise_fshr(a,b,c)=(a)");
+        translate.defineCMacroRaw("__builtin_elementwise_fshl(a,b,c)=(a)");
+        translate.defineCMacroRaw("__builtin_elementwise_clzg(a,...)=(a)");
+        translate.addIncludePath(upstream.path("include"));
+        translate.addIncludePath(upstream.path("src/video/khronos"));
+
+        const mod = translate.createModule();
+        mod.linkLibrary(sdl_dep.artifact("SDL3"));
+        windows_sdl_module = mod;
+        return mod;
+    }
+
     if (target.result.os.tag != .emscripten) {
         const sdl_dep = b.dependency("sdl", .{ .target = target, .optimize = optimize });
         return sdl_dep.module("sdl3");
@@ -539,7 +588,11 @@ pub fn build(b: *std.Build) void {
             );
 
             for (example_info.extraMods) |em| {
-                const extraMod = b.dependency(em, .{});
+                // Forward the target/optimize through: testz builds tree-sitter
+                // C sources behind its `highlight_ansi` module, and without
+                // this they compile for the host and the cross-linker rejects
+                // the host object files ("lld-link: unknown file type").
+                const extraMod = b.dependency(em, .{ .target = target, .optimize = optimize });
                 exe_mod.addImport(em, extraMod.module(em));
             }
 
