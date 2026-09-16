@@ -34,11 +34,11 @@ pub const App = struct {
         _ = try eng.resources.loadAtlas("assets/pac-tiles");
 
         var app = try alloc.create(App);
-        const sprTex = try eng.resources.acquireTexture("player_right_1");
+
         app.* = .{
             .alloc = alloc,
             .eng = eng,
-            .spr = Sprite.create(sprTex, .{ .x = 16, .y = 16 }),
+            .spr = try Sprite.create(try eng.resources.getTexture("player_right_1")),
             .actor = try pixzig.sprites.Actor.init(alloc),
             .seqMgr = try FrameSequenceManager.init(alloc),
             .fps = FpsCounter.init(),

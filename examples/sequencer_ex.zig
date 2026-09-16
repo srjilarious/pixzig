@@ -120,8 +120,7 @@ pub const App = struct {
 
         app.entity = flecs.new_entity(app.world, "player");
 
-        const sprTex = try eng.resources.acquireTexture("player_right_1");
-        const spr = Sprite.create(sprTex, .{ .x = 16, .y = 16 });
+        const spr = try Sprite.create(try eng.resources.getTexture("player_right_1"));
         flecs.set(app.world, app.entity, Sprite, spr);
 
         var actor = try Actor.init(alloc);

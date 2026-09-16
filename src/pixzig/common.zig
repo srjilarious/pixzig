@@ -34,6 +34,14 @@ pub const Vec2U = struct {
             .y = @intCast(self.y),
         };
     }
+
+    /// Convert to a Vec2F
+    pub fn asVec2F(self: *const Vec2U) Vec2F {
+        return .{
+            .x = @floatFromInt(self.x),
+            .y = @floatFromInt(self.y),
+        };
+    }
 };
 
 /// A float 2d vector

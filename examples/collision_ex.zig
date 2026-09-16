@@ -126,11 +126,8 @@ pub const App = struct {
     {
         const ent = flecs.new_id(self.world);
         _ = which;
-        // const srcX: i32 = @intCast(32*@rem(which, 16));
-        // const srcY: i32 = @intCast(32*@divTrunc(which, 16));
-        const tex = try self.eng.resources.acquireTexture("guy");
-        var spr = Sprite.create(tex,
-                .{ .x = 32, .y = 32});
+
+        var spr = try Sprite.create(try self.eng.resources.getTexture("guy"));
 
         spr.setPos(x, y);
         _ = flecs.set(self.world, ent, Sprite, spr);

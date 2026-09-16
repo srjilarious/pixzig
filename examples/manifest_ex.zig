@@ -24,7 +24,7 @@ pub const App = struct {
     eng: *AppRunner.Engine,
     manifest: AssetManifest,
     group_loaded: bool,
-    sprite_tex: ?*pixzig.resources.TextureHandle,
+    sprite_tex: ?*pixzig.resources.ManagedTexture,
     spr: Sprite,
     /// World position tracked separately from sprite.dest (which is pixels).
     pos: Vec2F,
@@ -40,10 +40,10 @@ pub const App = struct {
 
         try manifest.loadGroup("game");
 
-        const sprite_tex = try eng.resources.acquireTexture("player_right_1");
+        const sprite_tex = eng.resources.getTexture("player_right_1") catch null;
 
         const init_pos = Vec2F{ .x = 100, .y = 100 };
-        var spr = Sprite.create(sprite_tex, .{ .x = 16, .y = 16 });
+        var spr = try Sprite.create(sprite_tex.?);
         spr.setPos(@intFromFloat(init_pos.x), @intFromFloat(init_pos.y));
 
         const app = try alloc.create(App);
@@ -90,10 +90,14 @@ pub const App = struct {
                     return true;
                 };
                 self.group_loaded = true;
-                self.sprite_tex = eng.resources.acquireTexture("player_right_1") catch null;
-                if (self.sprite_tex) |t| {
-                    self.spr = Sprite.create(t, .{ .x = 16, .y = 16 });
-                    self.spr.setPos(@intFromFloat(self.pos.x), @intFromFloat(self.pos.y));
+                self.sprite_tex = eng.resources.getTexture("player_right_1") catch null;
+
+                if (self.sprite_tex) |_| {
+                    const spr = Sprite.create(self.sprite_tex.?) catch null;
+                    if (spr) |_| {
+                        self.spr = spr.?;
+                        self.spr.setPos(@intFromFloat(self.pos.x), @intFromFloat(self.pos.y));
+                    }
                 }
             }
         }
@@ -107,10 +111,22 @@ pub const App = struct {
         const fb_w: f32 = @floatFromInt(eng.window_state.framebuffer_size.x);
         const fb_h: f32 = @floatFromInt(eng.window_state.framebuffer_size.y);
 
-        if (self.pos.x < 0) { self.pos.x = 0; self.vel.x = @abs(self.vel.x); }
-        if (self.pos.y < 0) { self.pos.y = 0; self.vel.y = @abs(self.vel.y); }
-        if (self.pos.x + self.spr.size.x > fb_w) { self.pos.x = fb_w - self.spr.size.x; self.vel.x = -@abs(self.vel.x); }
-        if (self.pos.y + self.spr.size.y > fb_h) { self.pos.y = fb_h - self.spr.size.y; self.vel.y = -@abs(self.vel.y); }
+        if (self.pos.x < 0) {
+            self.pos.x = 0;
+            self.vel.x = @abs(self.vel.x);
+        }
+        if (self.pos.y < 0) {
+            self.pos.y = 0;
+            self.vel.y = @abs(self.vel.y);
+        }
+        if (self.pos.x + self.spr.size.x > fb_w) {
+            self.pos.x = fb_w - self.spr.size.x;
+            self.vel.x = -@abs(self.vel.x);
+        }
+        if (self.pos.y + self.spr.size.y > fb_h) {
+            self.pos.y = fb_h - self.spr.size.y;
+            self.vel.y = -@abs(self.vel.y);
+        }
 
         self.spr.setPos(@intFromFloat(self.pos.x), @intFromFloat(self.pos.y));
         return true;

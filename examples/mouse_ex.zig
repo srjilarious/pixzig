@@ -27,15 +27,13 @@ pub const App = struct {
         const bigtex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
         _ = try eng.resources.addSubTexture(bigtex, "guy", RectF.fromCoords(32, 32, 32, 32, 512, 512));
 
-        const tex = try eng.resources.acquireTexture("guy");
-
         eng.showCursor(false);
 
         return .{
             .fps = FpsCounter.init(),
             .alloc = alloc,
             .eng = eng,
-            .pointer = pixzig.sprites.Sprite.create(tex, .{ .x = 32, .y = 32 }),
+            .pointer = try pixzig.sprites.Sprite.create(try eng.resources.getTexture("guy")),
         };
     }
 

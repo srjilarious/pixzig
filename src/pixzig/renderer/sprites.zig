@@ -25,7 +25,17 @@ pub const Sprite = struct {
 
     /// Takes ownership of `tex` (an already-acquired handle). The sprite
     /// releases it in `deinit()`; the caller must not release it separately.
-    pub fn create(tex: *TextureHandle, size: Vec2F) Sprite {
+    pub fn create(tex: *ManagedTexture) !Sprite {
+        const handle = tex.acquire();
+        if (handle == null) {
+            return error.CouldntAcquireTexture;
+        }
+
+        return createFromHandle(handle.?);
+    }
+
+    pub fn createFromHandle(tex: *TextureHandle) Sprite {
+        const size = tex.val.size.asVec2F();
         return Sprite{
             .texture = tex,
             .src_coords = tex.val.src,
