@@ -24,12 +24,22 @@ from .window import Window
 
 
 class PixzigApp:
-    def __init__(self, title: str, width: int = 800, height: int = 480, update_hz: float = 120.0):
+    def __init__(
+        self,
+        title: str,
+        width: int = 800,
+        height: int = 480,
+        update_hz: float = 120.0,
+        max_lag_ms: float = 250.0,
+    ):
         eng = _n.pz_init(title.encode("utf-8"), int(width), int(height))
         if not eng:
             raise _n.PixzigError(_n.last_error())
         self._eng = eng
         self._update_step_ms = 1000.0 / update_hz
+        # Cap on how much time one frame catches up on; the rest is dropped
+        # so a hitch or debugger pause slows the game instead of stalling it.
+        self._max_lag_ms = max_lag_ms
         self._lag = 0.0
         self._curr_time = time.perf_counter() * 1000.0
         self._running = True
@@ -223,10 +233,14 @@ class PixzigApp:
     def run(self) -> None:
         if self._eng is None:
             raise _n.PixzigError("run() called after the app has already shut down")
+        # Time spent before run() (a subclass __init__ loading assets) is not
+        # game time, so start the clock fresh.
+        self._curr_time = time.perf_counter() * 1000.0
+        self._lag = 0.0
         try:
             while self._running and not _n.pz_should_close(self._eng):
                 now = time.perf_counter() * 1000.0
-                self._lag += now - self._curr_time
+                self._lag = min(self._lag + now - self._curr_time, self._max_lag_ms)
                 self._curr_time = now
 
                 _n.pz_poll_events(self._eng)

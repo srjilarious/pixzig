@@ -74,8 +74,11 @@ Those two plus `Camera2D.matrix(&eng.viewport)` for a scrolling world view are t
 
 The default update rate is 120 Hz. Set `updateStepHz` in `PixzigEngineOptions` to change it. Rendering is uncapped unless vsync limits it.
 
+A single frame catches up on at most `maxLagMs` (default 250 ms) of updates. Any backlog past that, from a debugger pause or a long hitch, is dropped, so the game briefly slows down instead of running hundreds of updates at once. `run()` also restarts the clock before the first frame, so time spent loading assets in `App.init` isn't counted. Call `appRunner.resetClock()` yourself after any other long pause that shouldn't be caught up.
+
 ```zig
 // Inside AppRunner.gameLoopCore, simplified:
+lag = @min(lag + delta, maxLagMs);
 while (lag > UpdateStepMs) {
     lag -= UpdateStepMs;
     eng.inputs.update(eng.window, eng.window_state.scale_factor, &eng.viewport);

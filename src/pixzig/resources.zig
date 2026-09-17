@@ -84,6 +84,13 @@ pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type
             pub fn release(self: *Handle) void {
                 self.parent.release(self);
             }
+
+            /// Adds a reference to this exact generation (unlike `acquire`,
+            /// which takes the latest). Pair with `release`.
+            pub fn retain(self: *Handle) *Handle {
+                self.refCount += 1;
+                return self;
+            }
         };
 
         pub fn init(alloc: std.mem.Allocator, id: u32, freeFunc: Handle.FreeFunc) Self {
@@ -245,7 +252,9 @@ pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type
 }
 
 /// The atlas stores named, refcounted views over GL textures. A Texture
-/// value itself owns no GL state, so reclaiming a stale view is free.
+/// value owns no GL state itself, but a view added by the ResourceManager
+/// holds a reference on its `TextureImage` generation, released when the
+/// view is reclaimed.
 pub const ManagedTexture = ManagedResource("Texture", Texture);
 
 /// A TextureImage owns the GL texture handle. Reclaiming a stale
@@ -271,7 +280,9 @@ pub const ShaderHandle = ManagedShader.Handle;
 pub const FontAtlasHandle = ManagedFont.Handle;
 pub const TileMapHandle = ManagedTileMap.Handle;
 
-fn freeTextureNoop(_: Texture) void {}
+fn freeTextureView(t: Texture) void {
+    if (t.image) |image| image.release();
+}
 
 fn freeTextureImage(t: TextureImage) void {
     gl.deleteTextures(1, &t.texture);
@@ -470,14 +481,7 @@ pub const ResourceManager = struct {
     /// Frees all managed resources and their backing OpenGL objects.
     /// All handles must be released before calling this.
     pub fn deinit(self: *Self) void {
-        var tit = self.textures.iterator();
-        while (tit.next()) |entry| {
-            entry.value_ptr.*.deinit();
-            self.alloc.destroy(entry.value_ptr.*);
-            self.alloc.free(entry.key_ptr.*);
-        }
-        self.textures.deinit();
-
+        // Views hold references on their images, so free them first.
         var it = self.atlas.iterator();
         while (it.next()) |entry| {
             entry.value_ptr.*.deinit();
@@ -485,6 +489,14 @@ pub const ResourceManager = struct {
             self.alloc.free(entry.key_ptr.*);
         }
         self.atlas.deinit();
+
+        var tit = self.textures.iterator();
+        while (tit.next()) |entry| {
+            entry.value_ptr.*.deinit();
+            self.alloc.destroy(entry.value_ptr.*);
+            self.alloc.free(entry.key_ptr.*);
+        }
+        self.textures.deinit();
 
         var amit = self.atlas_manifests.iterator();
         while (amit.next()) |entry| {
@@ -616,7 +628,7 @@ pub const ResourceManager = struct {
         const managed = try self.alloc.create(ManagedTexture);
         errdefer self.alloc.destroy(managed);
 
-        managed.* = ManagedTexture.init(self.alloc, self.gid, freeTextureNoop);
+        managed.* = ManagedTexture.init(self.alloc, self.gid, freeTextureView);
         self.gid += 1;
 
         try self.atlas.put(keyOwned, managed);
@@ -766,6 +778,14 @@ pub const ResourceManager = struct {
         return try self.loadTextureFromBuffer(name, width, height, buffer);
     }
 
+    /// Adds `view` as the newest generation of `managed`, taking a reference
+    /// on `view.image` for as long as that generation lives.
+    fn addTextureView(_: *Self, managed: *ManagedTexture, view: Texture) !void {
+        if (view.image) |image| _ = image.retain();
+        errdefer if (view.image) |image| image.release();
+        try managed.add(view);
+    }
+
     fn rollbackTextureLoad(_: *Self, load: TextureLoad) void {
         _ = load.managed.rollbackAdd(load.atlas_generation);
         _ = load.image_managed.rollbackAdd(load.image_generation);
@@ -804,10 +824,11 @@ pub const ResourceManager = struct {
         errdefer _ = imageManaged.rollbackAdd(image_generation);
 
         const atlas_generation = managed.gen + 1;
-        try managed.add(.{
+        try self.addTextureView(managed, .{
             .texture = texture,
             .size = .{ .x = @intCast(width), .y = @intCast(height) },
             .src = .{ .t = 0, .l = 0, .b = 1, .r = 1 },
+            .image = imageManaged.get().?,
         });
 
         return .{
@@ -954,7 +975,8 @@ pub const ResourceManager = struct {
             const managed = try self.getOrCreateAtlasTexture(frame.name);
             const generation = managed.gen + 1;
             try added_frames.append(self.alloc, .{ .managed = managed, .generation = generation });
-            try managed.add(.{
+            try self.addTextureView(managed, .{
+                .image = texImage,
                 .texture = texImage.val.texture,
                 .size = frame.sizePx,
                 .src = RectF.fromCoords(
@@ -1083,10 +1105,11 @@ pub const ResourceManager = struct {
     ) !*ManagedTexture {
         const current = tex.get() orelse return error.NoTextureInPool;
         const managed = try self.getOrCreateAtlasTexture(name);
-        try managed.add(.{
+        try self.addTextureView(managed, .{
             .texture = current.val.texture,
             .size = .{ .x = @intCast(px.width()), .y = @intCast(px.height()) },
             .src = sprites.pixelsToUv(&current.val, px),
+            .image = current.val.image,
         });
         return managed;
     }
@@ -1101,7 +1124,7 @@ pub const ResourceManager = struct {
     ) !*ManagedTexture {
         const current = tex.get() orelse return error.NoTextureInPool;
         const managed = try self.getOrCreateAtlasTexture(name);
-        try managed.add(current.val.sub(coords));
+        try self.addTextureView(managed, current.val.sub(coords));
         return managed;
     }
 

@@ -448,3 +448,75 @@ pub fn manifestLoadGroupOwnsLoadedKeyTest(io: std.Io, alloc: std.mem.Allocator) 
     manifest.unloadGroup("game");
     try testz.expectEqual(manifest.loaded.count(), 0);
 }
+
+// --- texture views keep their image generation alive ---
+
+var g_freed_images_buf: [16]c_uint = @splat(0);
+var g_freed_images_len: usize = 0;
+
+fn recordFreedImage(img: pixzig.textures.TextureImage) void {
+    g_freed_images_buf[g_freed_images_len] = img.texture;
+    g_freed_images_len += 1;
+}
+
+fn imageWasFreed(texture: c_uint) bool {
+    for (g_freed_images_buf[0..g_freed_images_len]) |t| {
+        if (t == texture) return true;
+    }
+    return false;
+}
+
+pub fn rmViewHoldsImageAcrossReloadTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    g_freed_images_len = 0;
+
+    // Stand-in for a loaded atlas image; the free func records the GL name
+    // instead of calling into GL.
+    var images = pixzig.resources.ManagedTextureImage.init(alloc, 500, recordFreedImage);
+    defer images.deinit();
+    try images.add(.{ .texture = 1, .size = .{ .x = 128, .y = 128 } });
+    const image1 = images.get().?;
+
+    var parent = ManagedTexture.init(alloc, 999, noopFreeTexture);
+    defer parent.deinit();
+    try parent.add(.{
+        .texture = 1,
+        .size = .{ .x = 128, .y = 128 },
+        .src = RectF.fromCoords(0, 0, 128, 128, 128, 128),
+        .image = image1,
+    });
+
+    // Declared last so its views release their image refs before the
+    // image pool is torn down.
+    var rm = ResourceManager.init(alloc);
+    defer rm.deinit();
+
+    _ = try rm.addSubTexture(&parent, "frame", RectI.init(0, 0, 8, 8));
+    try testz.expectEqual(image1.refCount, 1);
+
+    // A sprite holds the v1 frame.
+    const sprite_handle = try rm.acquireTexture("frame");
+
+    // Reload the image. The v1 frame still references image1, so it must
+    // survive (previously it was freed here, deleting the GL texture).
+    try images.add(.{ .texture = 2, .size = .{ .x = 128, .y = 128 } });
+    try testz.expectFalse(imageWasFreed(1));
+    try testz.expectTrue(image1.dirty);
+
+    const image2 = images.get().?;
+    try parent.add(.{
+        .texture = 2,
+        .size = .{ .x = 128, .y = 128 },
+        .src = RectF.fromCoords(0, 0, 128, 128, 128, 128),
+        .image = image2,
+    });
+    _ = try rm.addSubTexture(&parent, "frame", RectI.init(0, 0, 8, 8));
+    try testz.expectFalse(imageWasFreed(1));
+    try testz.expectEqual(image2.refCount, 1);
+    try testz.expectEqual(sprite_handle.val.texture, 1);
+
+    // Releasing the last stale frame finally frees the old image.
+    sprite_handle.release();
+    try testz.expectTrue(imageWasFreed(1));
+    try testz.expectFalse(imageWasFreed(2));
+}

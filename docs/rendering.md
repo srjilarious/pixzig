@@ -110,7 +110,7 @@ pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
 }
 ```
 
-`reacquire` atomically upgrades to the latest generation and releases the old handle. In release builds, `dirty` is always false and `reacquire` is a no-op.
+`reacquire` atomically upgrades to the latest generation and releases the old handle. In release builds, `dirty` is always false and `reacquire` is a no-op. Until you reacquire, a stale handle keeps drawing the old image: atlas frames and subtextures hold a reference to their image, so a reload doesn't delete the GL texture out from under them.
 
 ## Text and Fonts
 

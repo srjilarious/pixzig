@@ -122,6 +122,12 @@ pub const PixzigEngineOptions = struct {
     /// The update time frequency, defaults to 120 Hz.
     updateStepHz: f64 = 120.0,
 
+    /// The most time the fixed-step loop will try to catch up on in a single
+    /// frame, in milliseconds. Any backlog beyond this (a long hitch, a
+    /// debugger pause, a slow asset load) is dropped, so the game briefly
+    /// slows down instead of running hundreds of updates back to back.
+    maxLagMs: f64 = 250.0,
+
     /// Render options
     rendererOpts: renderer.RendererOptions = .{},
 
@@ -205,10 +211,17 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
             self.alloc.destroy(self);
         }
 
+        /// Restarts the fixed-step clock and drops any accumulated lag. Call
+        /// this after a long pause outside the loop that shouldn't be caught up.
+        pub fn resetClock(self: *Self) void {
+            self.currTime = platform.timeMs();
+            self.lag = 0;
+        }
+
         pub fn gameLoopCore(self: *Self, app: *AppData) bool {
             const newCurrTime = platform.timeMs();
             const delta = newCurrTime - self.currTime;
-            self.lag += delta;
+            self.lag = @min(self.lag + delta, engOpts.maxLagMs);
             self.currTime = newCurrTime;
 
             self.engine.pollEvents();
@@ -250,6 +263,9 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
 
         pub fn run(self: *Self, app: *AppData) void {
             std.log.info("Starting main loop...\n", .{});
+            // Time spent between `init` and here (typically `App.init`
+            // loading assets) is not game time, so start the clock fresh.
+            self.resetClock();
             if (builtin.target.os.tag == .emscripten) {
                 g_EmscriptenRunnerRef = @constCast(self);
                 g_EmscriptenAppRef = @constCast(app);
