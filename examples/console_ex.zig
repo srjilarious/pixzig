@@ -87,7 +87,7 @@ pub const App = struct {
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
         eng.renderer.clear(0.5, 0.4, 0.8, 1);
 
-        eng.renderer.begin(eng.projMat);
+        eng.renderer.begin(eng.projection());
         self.ui.begin();
         self.cons.draw(&self.ui);
         self.ui.end();

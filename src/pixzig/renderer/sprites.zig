@@ -6,6 +6,8 @@ const resources = @import("../resources.zig");
 const Vec2I = common.Vec2I;
 const Vec2F = common.Vec2F;
 const RectF = common.RectF;
+const RectI = common.RectI;
+const Color = common.Color;
 const Rotate = common.Rotate;
 
 const Texture = textures.Texture;
@@ -14,17 +16,28 @@ const ManagedTexture = resources.ManagedTexture;
 const TextureHandle = resources.TextureHandle;
 
 pub const Sprite = struct {
-    /// Owning handle to a managed texture, transferred in by `create`. Call
-    /// `deinit()` when the sprite is no longer needed to release it.
+    /// Owning handle to a managed texture, acquired by `create` (or passed
+    /// in to `createFromHandle`). Call `deinit()` when the sprite is no
+    /// longer needed to release it.
     texture: *TextureHandle,
     src_coords: RectF,
+    /// On-screen rectangle. Kept in sync by `setPos`/`setPosF`/`setSize`/
+    /// `setScale`; if you write it directly, `size` will no longer match.
     dest: RectF,
+    /// Current on-screen size (the width/height of `dest`).
     size: Vec2F,
+    /// Size of the texture frame at creation. `setScale` scales from this.
+    base_size: Vec2F,
     flip: Flip,
     rotate: Rotate,
+    /// Colour multiplier. `Renderer.drawSprite` routes to the tinted batch
+    /// when this is set, and to the plain (faster) batch when null.
+    tint: ?Color = null,
 
-    /// Takes ownership of `tex` (an already-acquired handle). The sprite
-    /// releases it in `deinit()`; the caller must not release it separately.
+    /// Acquires a new handle from `tex` and builds a sprite the size of its
+    /// texture frame. The sprite owns that handle and releases it in
+    /// `deinit()`; `tex` itself is not consumed. To create a sprite straight
+    /// from a texture name, use `ResourceManager.createSprite`.
     pub fn create(tex: *ManagedTexture) !Sprite {
         const handle = tex.acquire();
         if (handle == null) {
@@ -34,13 +47,17 @@ pub const Sprite = struct {
         return createFromHandle(handle.?);
     }
 
+    /// Builds a sprite from an already-acquired handle. Takes ownership of
+    /// `tex`: the sprite releases it in `deinit()`, so the caller must not
+    /// release it separately.
     pub fn createFromHandle(tex: *TextureHandle) Sprite {
         const size = tex.val.size.asVec2F();
         return Sprite{
             .texture = tex,
             .src_coords = tex.val.src,
-            .dest = RectF.fromPosSize(0, 0, @as(i32, @intFromFloat(size.x)), @as(i32, @intFromFloat(size.y))),
+            .dest = .{ .l = 0, .t = 0, .r = size.x, .b = size.y },
             .size = size,
+            .base_size = size,
             .flip = .none,
             .rotate = .none,
         };
@@ -52,10 +69,61 @@ pub const Sprite = struct {
         self.texture.release();
     }
 
+    /// Moves the sprite's top-left corner to integer coordinates.
     pub fn setPos(self: *Sprite, x: i32, y: i32) void {
-        self.dest = RectF.fromPosSize(x, y, @as(i32, @intFromFloat(self.size.x)), @as(i32, @intFromFloat(self.size.y)));
+        self.setPosF(@floatFromInt(x), @floatFromInt(y));
+    }
+
+    /// Moves the sprite's top-left corner, keeping its size.
+    pub fn setPosF(self: *Sprite, x: f32, y: f32) void {
+        self.dest = .{ .l = x, .t = y, .r = x + self.size.x, .b = y + self.size.y };
+    }
+
+    /// The sprite's top-left corner.
+    pub fn pos(self: *const Sprite) Vec2F {
+        return .{ .x = self.dest.l, .y = self.dest.t };
+    }
+
+    /// Resizes the on-screen rectangle, keeping its top-left corner.
+    pub fn setSize(self: *Sprite, w: f32, h: f32) void {
+        self.size = .{ .x = w, .y = h };
+        self.dest.r = self.dest.l + w;
+        self.dest.b = self.dest.t + h;
+    }
+
+    /// Scales relative to `base_size` (the texture frame at creation),
+    /// keeping the top-left corner. `setScale(1, 1)` restores the original size.
+    pub fn setScale(self: *Sprite, sx: f32, sy: f32) void {
+        self.setSize(self.base_size.x * sx, self.base_size.y * sy);
+    }
+
+    /// The current scale relative to `base_size`.
+    pub fn scale(self: *const Sprite) Vec2F {
+        return .{ .x = self.size.x / self.base_size.x, .y = self.size.y / self.base_size.y };
+    }
+
+    /// Sets the draw sub-region of the sprite's texture in texture pixels,
+    /// relative to the texture frame's top-left corner. Does not resize the
+    /// sprite; call `setSize` too if the on-screen size should follow.
+    pub fn setSrcRect(self: *Sprite, px: RectI) void {
+        self.src_coords = pixelsToUv(&self.texture.val, px);
     }
 };
+
+/// Converts a pixel rectangle, relative to `tex`'s own frame, into the UV
+/// coordinates of the underlying image. Works for sub-textures and atlas
+/// frames as well as whole images.
+pub fn pixelsToUv(tex: *const Texture, px: RectI) RectF {
+    const src = tex.src;
+    const uPerPx = src.width() / @as(f32, @floatFromInt(tex.size.x));
+    const vPerPx = src.height() / @as(f32, @floatFromInt(tex.size.y));
+    return .{
+        .l = src.l + @as(f32, @floatFromInt(px.l)) * uPerPx,
+        .t = src.t + @as(f32, @floatFromInt(px.t)) * vPerPx,
+        .r = src.l + @as(f32, @floatFromInt(px.r)) * uPerPx,
+        .b = src.t + @as(f32, @floatFromInt(px.b)) * vPerPx,
+    };
+}
 
 /// A enum for flipping sprites.
 pub const Flip = enum {

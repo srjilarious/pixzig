@@ -15,7 +15,7 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{
 });
 ```
 
-[](sym:PixzigEngineOptions) is evaluated at compile time. Use it to enable rendering, audio, and input features required by the application.
+[](sym:PixzigEngineOptions) is evaluated at compile time. Use it to enable rendering, audio, and input features required by the application. Calling a method whose feature is turned off (for example `drawString` with `textRendering = false`, or `eng.audio.playSound` with audio disabled) is a compile error that names the option to set.
 
 Note that these options strip unused engine *code paths* only, not native dependencies: `build.zig` always links the platform backend, OpenGL, flecs, zaudio/miniaudio, Lua, XML, and STB TrueType into every build regardless of which options are set.
 
@@ -62,11 +62,13 @@ The engine reference `eng` gives you access to:
 | `eng.renderer` | `Renderer` | Sprite, shape, and text drawing |
 | `eng.resources` | `ResourceManager` | Texture and atlas loading |
 | `eng.viewport` | `Viewport` | Logical size, scaling, and projection |
-| `eng.audio` | `AudioEngine` | Sound playback (if enabled) |
+| `eng.audio` | `AudioEngine` | Sound playback (if enabled; otherwise a stub whose methods are compile errors naming `audioOpts.enabled`) |
 | `eng.window` | `*platform.Window` | The engine's window handle for sizing, cursor state, clipboard, and buffer swaps |
 | `eng.allocator` | `std.mem.Allocator` | Engine-owned allocator |
 | `eng.projection()` | `zmath.Mat` | Orthographic matrix for the logical coordinate space; use this as the MVP base for all game rendering |
 | `eng.screenProjection()` | `zmath.Mat` | Orthographic matrix for the full framebuffer in actual pixels; use for UI overlays that should be in screen-pixel coordinates |
+
+Those two plus `Camera2D.matrix(&eng.viewport)` for a scrolling world view are the only projection matrices. To scale up a low-resolution game, set `logicalSize` (and optionally `scalePolicy`) in the init options.
 
 ## Game Loop Details
 

@@ -35,7 +35,7 @@ class Actor:
 
     def _check_alive(self) -> None:
         if self._destroyed:
-            raise _n.PixzigError("actor already destroyed")
+            raise _n.PixzigError("actor already destroyed (or the app has shut down)")
 
     def add_state(self, name: str) -> None:
         """Copies a state registered on the app (by name) into this actor.

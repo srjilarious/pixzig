@@ -16,7 +16,7 @@ const Vec2F = pixzig.common.Vec2F;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{ .gameScale = 8.0 });
+const AppRunner = pixzig.PixzigAppRunner(App, .{});
 
 // Game-specific flash state. Owned by App; shared with FlashStep via pointer.
 pub const FlashState = struct {
@@ -235,7 +235,7 @@ pub const App = struct {
         }
         self.fps.renderTick();
 
-        eng.renderer.begin(eng.projMat);
+        eng.renderer.begin(eng.projection());
         if (flecs.get_mut(self.world, self.entity, Sprite)) |spr| {
             eng.renderer.drawSprite(spr);
         }

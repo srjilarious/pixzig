@@ -34,14 +34,9 @@ var g_fakeHandle: pixzig.resources.TextureHandle = .{
 // Build a Sprite at (x, y) with a 16×16 size backed by the module-level fake
 // handle, whose pointer remains valid for the lifetime of the test binary.
 fn makeSprite(x: i32, y: i32) Sprite {
-    return .{
-        .texture = &g_fakeHandle,
-        .src_coords = .{ .l = 0, .t = 0, .r = 1, .b = 1 },
-        .dest = RectF.fromPosSize(x, y, 16, 16),
-        .size = .{ .x = 16, .y = 16 },
-        .flip = .none,
-        .rotate = .none,
-    };
+    var spr = Sprite.createFromHandle(&g_fakeHandle);
+    spr.setPos(x, y);
+    return spr;
 }
 
 // A single WaitStep should not be done before its duration elapses.

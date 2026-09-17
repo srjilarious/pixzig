@@ -56,7 +56,7 @@ class TileMapRenderer:
 
     def _check_alive(self) -> None:
         if self._destroyed:
-            raise _n.PixzigError("tilemap renderer already destroyed")
+            raise _n.PixzigError("tilemap renderer already destroyed (or the app has shut down)")
 
     # --- Rendering -------------------------------------------------------
 

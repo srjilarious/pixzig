@@ -42,7 +42,7 @@ pub const App = struct {
 
 
         const bigtex = try eng.resources.loadTexture("tiles", "assets/pac-tiles.png");
-        _ = try eng.resources.addSubTexture(bigtex, "guy", RectF.fromCoords(32, 32, 32, 32, 512, 512));
+        _ = try eng.resources.addSubTexture(bigtex, "guy", RectI.init(32, 32, 32, 32));
 
         const tex_shader = try eng.resources.getShader(shaders.TextureShader);
         const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, tex_shader);
@@ -237,7 +237,7 @@ pub const App = struct {
         eng.renderer.clear(0, 0, 0.2, 1);
         self.fps.renderTick();
        
-        self.spriteBatch.begin(eng.projMat);
+        self.spriteBatch.begin(eng.projection());
 
         var it = flecs.query_iter(self.world, self.draw_query);
         while (flecs.query_next(&it)) {

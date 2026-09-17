@@ -18,7 +18,7 @@ const FontAtlas = pixzig.renderer.FontAtlas;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{ .gameScale = 3.0, .rendererOpts = .{ .textRendering = true } });
+const AppRunner = pixzig.PixzigAppRunner(App, .{ .rendererOpts = .{ .textRendering = true } });
 
 pub const App = struct {
     fps: FpsCounter,
@@ -71,7 +71,7 @@ pub const App = struct {
         eng.renderer.clear(0.0, 0.0, 0.2, 1.0);
         self.fps.renderTick();
 
-        eng.renderer.begin(eng.projMat);
+        eng.renderer.begin(eng.projection());
 
         const size = eng.renderer.drawString("@!$ hello world!", .{ .x = 0, .y = 60 });
 
@@ -84,7 +84,7 @@ pub const App = struct {
 pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig Bitmap Font Text Rendering Example", .{});
 
-    const appRunner = try AppRunner.init("Pixzig Bitmap FontText Rendering Example.", init.gpa, .{ .renderInitOpts = .{} });
+    const appRunner = try AppRunner.init("Pixzig Bitmap FontText Rendering Example.", init.gpa, .{ .logicalSize = .{ .x = 266, .y = 160 } });
     const app = try App.init(init.gpa, appRunner.engine);
 
     appRunner.run(app);

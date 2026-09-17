@@ -29,7 +29,7 @@ class ActionMap:
 
     def _check_alive(self) -> None:
         if self._destroyed:
-            raise _n.PixzigError("action map already destroyed")
+            raise _n.PixzigError("action map already destroyed (or the app has shut down)")
 
     def _slot_for_bind(self, slots: dict, name: str, max_slots: int, kind: str) -> int:
         slot = slots.get(name)

@@ -40,15 +40,16 @@ fn rotateFromInt(v: c_int) Rotate {
     };
 }
 
+/// Converts a caller-supplied integer to enum `E`, or null when it is out of
+/// range. Python passes plain ints, so an unchecked `@enumFromInt` would
+/// panic the whole process on a typo like `keyboard.down(999)`.
+fn enumArg(comptime E: type, v: c_int) ?E {
+    return std.enums.fromInt(E, v);
+}
+
 const PzSprite = struct {
     eng: *PzEngine,
     sprite: pixzig.sprites.Sprite,
-    /// The sprite's size at creation (full texture frame), kept so
-    /// `pz_sprite_set_scale` has a stable reference to scale from.
-    base_size: pixzig.Vec2F,
-    /// Colour multiplier applied by `pz_sprite_draw`. Null means "untinted",
-    /// which routes to the faster plain sprite batch.
-    tint: ?pixzig.Color,
     registry_index: usize,
 };
 
@@ -282,7 +283,7 @@ export fn pz_swap_buffers(eng: *PzEngine) callconv(.c) void {
 }
 
 export fn pz_render_begin(eng: *PzEngine) callconv(.c) void {
-    eng.engine.renderer.begin(eng.engine.uiMatrix());
+    eng.engine.renderer.begin(eng.engine.projection());
 }
 
 /// Like pz_render_begin, but begins a world-space pass using the given
@@ -305,15 +306,18 @@ export fn pz_render_end(eng: *PzEngine) callconv(.c) void {
 // ---------------------------------------------------------------------------
 
 export fn pz_key_down(eng: *PzEngine, key: c_int) callconv(.c) bool {
-    return eng.engine.inputs.keyboard.down(@enumFromInt(key));
+    const k = enumArg(pixzig.Key, key) orelse return false;
+    return eng.engine.inputs.keyboard.down(k);
 }
 
 export fn pz_key_pressed(eng: *PzEngine, key: c_int) callconv(.c) bool {
-    return eng.engine.inputs.keyboard.pressed(@enumFromInt(key));
+    const k = enumArg(pixzig.Key, key) orelse return false;
+    return eng.engine.inputs.keyboard.pressed(k);
 }
 
 export fn pz_key_released(eng: *PzEngine, key: c_int) callconv(.c) bool {
-    return eng.engine.inputs.keyboard.released(@enumFromInt(key));
+    const k = enumArg(pixzig.Key, key) orelse return false;
+    return eng.engine.inputs.keyboard.released(k);
 }
 
 export fn pz_mouse_pos(eng: *PzEngine, out_x: *f32, out_y: *f32) callconv(.c) void {
@@ -323,15 +327,18 @@ export fn pz_mouse_pos(eng: *PzEngine, out_x: *f32, out_y: *f32) callconv(.c) vo
 }
 
 export fn pz_mouse_button_down(eng: *PzEngine, btn: c_int) callconv(.c) bool {
-    return eng.engine.inputs.mouse.down(@enumFromInt(btn));
+    const b = enumArg(pixzig.MouseButton, btn) orelse return false;
+    return eng.engine.inputs.mouse.down(b);
 }
 
 export fn pz_mouse_button_pressed(eng: *PzEngine, btn: c_int) callconv(.c) bool {
-    return eng.engine.inputs.mouse.pressed(@enumFromInt(btn));
+    const b = enumArg(pixzig.MouseButton, btn) orelse return false;
+    return eng.engine.inputs.mouse.pressed(b);
 }
 
 export fn pz_mouse_button_released(eng: *PzEngine, btn: c_int) callconv(.c) bool {
-    return eng.engine.inputs.mouse.released(@enumFromInt(btn));
+    const b = enumArg(pixzig.MouseButton, btn) orelse return false;
+    return eng.engine.inputs.mouse.released(b);
 }
 
 export fn pz_gamepad_connected(eng: *PzEngine, idx: c_int) callconv(.c) bool {
@@ -341,22 +348,26 @@ export fn pz_gamepad_connected(eng: *PzEngine, idx: c_int) callconv(.c) bool {
 
 export fn pz_gamepad_button_down(eng: *PzEngine, idx: c_int, btn: c_int) callconv(.c) bool {
     if (idx < 0 or idx >= pixzig.input.MaxGamepads) return false;
-    return eng.engine.inputs.gamepad(@intCast(idx)).down(@enumFromInt(@as(u8, @intCast(btn))));
+    const b = enumArg(pixzig.GamepadButton, btn) orelse return false;
+    return eng.engine.inputs.gamepad(@intCast(idx)).down(b);
 }
 
 export fn pz_gamepad_button_pressed(eng: *PzEngine, idx: c_int, btn: c_int) callconv(.c) bool {
     if (idx < 0 or idx >= pixzig.input.MaxGamepads) return false;
-    return eng.engine.inputs.gamepad(@intCast(idx)).pressed(@enumFromInt(@as(u8, @intCast(btn))));
+    const b = enumArg(pixzig.GamepadButton, btn) orelse return false;
+    return eng.engine.inputs.gamepad(@intCast(idx)).pressed(b);
 }
 
 export fn pz_gamepad_button_released(eng: *PzEngine, idx: c_int, btn: c_int) callconv(.c) bool {
     if (idx < 0 or idx >= pixzig.input.MaxGamepads) return false;
-    return eng.engine.inputs.gamepad(@intCast(idx)).released(@enumFromInt(@as(u8, @intCast(btn))));
+    const b = enumArg(pixzig.GamepadButton, btn) orelse return false;
+    return eng.engine.inputs.gamepad(@intCast(idx)).released(b);
 }
 
 export fn pz_gamepad_axis(eng: *PzEngine, idx: c_int, axis: c_int) callconv(.c) f32 {
     if (idx < 0 or idx >= pixzig.input.MaxGamepads) return 0;
-    return eng.engine.inputs.gamepad(@intCast(idx)).axis(@enumFromInt(@as(u8, @intCast(axis))));
+    const a = enumArg(pixzig.GamepadAxis, axis) orelse return 0;
+    return eng.engine.inputs.gamepad(@intCast(idx)).axis(a);
 }
 
 // ---------------------------------------------------------------------------
@@ -376,12 +387,7 @@ export fn pz_texture_sub(eng: *PzEngine, base_name: [*:0]const u8, new_name: [*:
         setLastErrorErr(err);
         return -1;
     };
-    const current = managed.get() orelse {
-        setLastErrorMsg("texture not loaded");
-        return -1;
-    };
-    const coords = pixzig.RectF.fromCoords(x, y, w, h, @intCast(current.val.size.x), @intCast(current.val.size.y));
-    _ = eng.engine.resources.addSubTexture(managed, std.mem.span(new_name), coords) catch |err| {
+    _ = eng.engine.resources.addSubTexture(managed, std.mem.span(new_name), pixzig.RectI.init(x, y, w, h)) catch |err| {
         setLastErrorErr(err);
         return -1;
     };
@@ -410,12 +416,7 @@ export fn pz_set_default_font(eng: *PzEngine, name: [*:0]const u8) callconv(.c) 
 // ---------------------------------------------------------------------------
 
 fn pzSpriteCreateImpl(eng: *PzEngine, texture_name: []const u8) !*PzSprite {
-    const handle = try eng.engine.resources.acquireTexture(texture_name);
-    const size = pixzig.Vec2F{
-        .x = @floatFromInt(handle.val.size.x),
-        .y = @floatFromInt(handle.val.size.y),
-    };
-    var sprite = pixzig.sprites.Sprite.create(handle, size);
+    var sprite = try eng.engine.resources.createSprite(texture_name);
     errdefer sprite.deinit();
 
     const wrapper = try eng.alloc.create(PzSprite);
@@ -424,8 +425,6 @@ fn pzSpriteCreateImpl(eng: *PzEngine, texture_name: []const u8) !*PzSprite {
     wrapper.* = .{
         .eng = eng,
         .sprite = sprite,
-        .base_size = size,
-        .tint = null,
         .registry_index = undefined,
     };
     try registryAdd(PzSprite, &eng.sprites, eng.alloc, wrapper);
@@ -439,25 +438,19 @@ export fn pz_sprite_create(eng: *PzEngine, texture_name: [*:0]const u8) callconv
     };
 }
 
-export fn pz_sprite_set_pos(spr: *PzSprite, x: i32, y: i32) callconv(.c) void {
-    spr.sprite.setPos(x, y);
+export fn pz_sprite_set_pos(spr: *PzSprite, x: f32, y: f32) callconv(.c) void {
+    spr.sprite.setPosF(x, y);
 }
 
 /// Resizes the sprite's on-screen rectangle, keeping its top-left corner.
 export fn pz_sprite_set_size(spr: *PzSprite, w: f32, h: f32) callconv(.c) void {
-    spr.sprite.size = .{ .x = w, .y = h };
-    spr.sprite.dest = .{
-        .l = spr.sprite.dest.l,
-        .t = spr.sprite.dest.t,
-        .r = spr.sprite.dest.l + w,
-        .b = spr.sprite.dest.t + h,
-    };
+    spr.sprite.setSize(w, h);
 }
 
 /// Scales the sprite relative to its creation size (the full texture frame),
 /// keeping its top-left corner. `sx`/`sy` of 1.0 restores the original size.
 export fn pz_sprite_set_scale(spr: *PzSprite, sx: f32, sy: f32) callconv(.c) void {
-    pz_sprite_set_size(spr, spr.base_size.x * sx, spr.base_size.y * sy);
+    spr.sprite.setScale(sx, sy);
 }
 
 /// Sets a 90-degree rotation / flip for the sprite. `rot`: 0=none, 1=rot90,
@@ -468,17 +461,16 @@ export fn pz_sprite_set_rotate(spr: *PzSprite, rot: c_int) callconv(.c) void {
 
 /// Sets the sub-region of the sprite's texture to draw, in texture pixels.
 export fn pz_sprite_set_src_rect(spr: *PzSprite, x: i32, y: i32, w: i32, h: i32) callconv(.c) void {
-    const tex_sz = spr.sprite.texture.val.size;
-    spr.sprite.src_coords = pixzig.RectF.fromCoords(x, y, w, h, @intCast(tex_sz.x), @intCast(tex_sz.y));
+    spr.sprite.setSrcRect(pixzig.RectI.init(x, y, w, h));
 }
 
 /// Sets a per-sprite colour multiplier used by `pz_sprite_draw`. (1,1,1,1)
 /// clears the tint and restores the plain (faster) draw path.
 export fn pz_sprite_set_tint(spr: *PzSprite, r: f32, g: f32, b: f32, a: f32) callconv(.c) void {
     if (r == 1 and g == 1 and b == 1 and a == 1) {
-        spr.tint = null;
+        spr.sprite.tint = null;
     } else {
-        spr.tint = .{ .r = r, .g = g, .b = b, .a = a };
+        spr.sprite.tint = .{ .r = r, .g = g, .b = b, .a = a };
     }
 }
 
@@ -495,11 +487,7 @@ export fn pz_sprite_get_rect(spr: *PzSprite, out_x: *f32, out_y: *f32, out_w: *f
 }
 
 export fn pz_sprite_draw(spr: *PzSprite) callconv(.c) void {
-    if (spr.tint) |c| {
-        spr.eng.engine.renderer.drawSpriteColored(&spr.sprite, c);
-    } else {
-        spr.eng.engine.renderer.drawSprite(&spr.sprite);
-    }
+    spr.eng.engine.renderer.drawSprite(&spr.sprite);
 }
 
 export fn pz_sprite_destroy(spr: *PzSprite) callconv(.c) void {
@@ -730,7 +718,11 @@ export fn pz_action_bind_key(am: *PzActionMap, action_slot: i32, key: c_int) cal
         setLastErrorMsg("invalid action slot");
         return -1;
     };
-    am.map.bind(act, .{ .key = @enumFromInt(key) }) catch |err| {
+    const k = enumArg(pixzig.Key, key) orelse {
+        setLastErrorMsg("invalid key");
+        return -1;
+    };
+    am.map.bind(act, .{ .key = k }) catch |err| {
         setLastErrorErr(err);
         return -1;
     };
@@ -742,7 +734,11 @@ export fn pz_action_bind_mouse_button(am: *PzActionMap, action_slot: i32, button
         setLastErrorMsg("invalid action slot");
         return -1;
     };
-    am.map.bind(act, .{ .mouse_button = @enumFromInt(button) }) catch |err| {
+    const b = enumArg(pixzig.MouseButton, button) orelse {
+        setLastErrorMsg("invalid mouse button");
+        return -1;
+    };
+    am.map.bind(act, .{ .mouse_button = b }) catch |err| {
         setLastErrorErr(err);
         return -1;
     };
@@ -754,7 +750,11 @@ export fn pz_action_bind_gamepad_button(am: *PzActionMap, action_slot: i32, butt
         setLastErrorMsg("invalid action slot");
         return -1;
     };
-    am.map.bind(act, .{ .gamepad_button = @enumFromInt(@as(u8, @intCast(button))) }) catch |err| {
+    const b = enumArg(pixzig.GamepadButton, button) orelse {
+        setLastErrorMsg("invalid gamepad button");
+        return -1;
+    };
+    am.map.bind(act, .{ .gamepad_button = b }) catch |err| {
         setLastErrorErr(err);
         return -1;
     };
@@ -766,9 +766,17 @@ export fn pz_action_bind_axis_buttons(am: *PzActionMap, axis_slot: i32, neg_key:
         setLastErrorMsg("invalid axis slot");
         return -1;
     };
+    const neg = enumArg(pixzig.Key, neg_key) orelse {
+        setLastErrorMsg("invalid negative key");
+        return -1;
+    };
+    const pos = enumArg(pixzig.Key, pos_key) orelse {
+        setLastErrorMsg("invalid positive key");
+        return -1;
+    };
     am.map.bindAxis(ax, .{ .buttons = .{
-        .negative = .{ .key = @enumFromInt(neg_key) },
-        .positive = .{ .key = @enumFromInt(pos_key) },
+        .negative = .{ .key = neg },
+        .positive = .{ .key = pos },
     } }) catch |err| {
         setLastErrorErr(err);
         return -1;
@@ -781,8 +789,12 @@ export fn pz_action_bind_axis_gamepad(am: *PzActionMap, axis_slot: i32, gamepad_
         setLastErrorMsg("invalid axis slot");
         return -1;
     };
+    const ga = enumArg(pixzig.GamepadAxis, gamepad_axis) orelse {
+        setLastErrorMsg("invalid gamepad axis");
+        return -1;
+    };
     am.map.bindAxis(ax, .{ .gamepad_axis = .{
-        .axis = @enumFromInt(@as(u8, @intCast(gamepad_axis))),
+        .axis = ga,
         .deadzone = deadzone,
     } }) catch |err| {
         setLastErrorErr(err);

@@ -6,6 +6,7 @@ const common = @import("./common.zig");
 const utils = @import("./utils.zig");
 const shaders = @import("./renderer/shaders.zig");
 const textures = @import("./renderer/textures.zig");
+const sprites = @import("./renderer/sprites.zig");
 const font_atlas_mod = @import("./renderer/font_atlas.zig");
 const file_watcher_mod = @import("./file_watcher.zig");
 const tilemap_mod = @import("./tile/tilemap.zig");
@@ -1072,8 +1073,27 @@ pub const ResourceManager = struct {
     }
 
     /// Adds a named subtexture from a region of an existing managed texture.
-    /// Coordinates are in UV space: (0,0) is top-left, (1,1) is bottom-right.
+    /// `px` is in pixels, relative to `tex`'s own top-left corner (so a
+    /// subtexture of a subtexture or atlas frame works as expected).
     pub fn addSubTexture(
+        self: *Self,
+        tex: *ManagedTexture,
+        name: []const u8,
+        px: RectI,
+    ) !*ManagedTexture {
+        const current = tex.get() orelse return error.NoTextureInPool;
+        const managed = try self.getOrCreateAtlasTexture(name);
+        try managed.add(.{
+            .texture = current.val.texture,
+            .size = .{ .x = @intCast(px.width()), .y = @intCast(px.height()) },
+            .src = sprites.pixelsToUv(&current.val, px),
+        });
+        return managed;
+    }
+
+    /// Like `addSubTexture`, but `coords` are in the underlying image's UV
+    /// space: (0,0) is top-left, (1,1) is bottom-right.
+    pub fn addSubTextureUV(
         self: *Self,
         tex: *ManagedTexture,
         name: []const u8,
@@ -1083,6 +1103,14 @@ pub const ResourceManager = struct {
         const managed = try self.getOrCreateAtlasTexture(name);
         try managed.add(current.val.sub(coords));
         return managed;
+    }
+
+    /// Creates a `Sprite` for the texture (or atlas frame / subtexture)
+    /// registered as `name`. The sprite acquires its own handle; call
+    /// `sprite.deinit()` to release it.
+    pub fn createSprite(self: *Self, name: []const u8) !sprites.Sprite {
+        const handle = try self.acquireTexture(name);
+        return sprites.Sprite.createFromHandle(handle);
     }
 
     /// Returns the `ManagedTexture` for `name`. Use `acquire` on the result

@@ -89,7 +89,7 @@ pub const App = struct {
         eng.renderer.clear(0.5, 0.4, 0.8, 1);
 
         // const fb_size = eng.window.getFramebufferSize();
-        eng.renderer.begin(eng.projMat);
+        eng.renderer.begin(eng.projection());
         self.cons.draw();
         eng.renderer.end();
 

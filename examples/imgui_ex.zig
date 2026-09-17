@@ -15,6 +15,7 @@ const std = @import("std");
 const pixzig = @import("pixzig");
 const zmath = pixzig.zmath;
 const RectF = pixzig.common.RectF;
+const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
 
 const input = pixzig.input;
@@ -106,7 +107,7 @@ pub const App = struct {
         const preview_managed = try eng.resources.addSubTexture(
             sheet,
             "imgui_preview",
-            RectF.fromCoords(32, 32, 32, 32, 512, 512),
+            RectI.init(32, 32, 32, 32),
         );
         app.preview = preview_managed.acquire() orelse return error.NoTextureInPool;
         app.ui.setClipboardWindow(eng.window);
@@ -148,7 +149,7 @@ pub const App = struct {
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
         eng.renderer.clear(0.15, 0.15, 0.40, 1.0);
-        eng.renderer.begin(eng.projMat);
+        eng.renderer.begin(eng.projection());
 
         self.ui.begin();
 

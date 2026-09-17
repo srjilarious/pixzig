@@ -115,11 +115,9 @@ pub const PixzigEngineOptions = struct {
     /// PixzigEngine.setIcon
     defaultIcon: bool = true,
 
-    /// Whether vsync should be enabled on init, defaults true.
+    /// Whether vsync should be enabled on init, defaults true. Change it at
+    /// runtime with `PixzigEngine.enableVSync`.
     vsyncEnabled: bool = true,
-
-    // How much to scale the rendered contents by, defaults to 1.0.
-    gameScale: f32 = 1.0,
 
     /// The update time frequency, defaults to 120 Hz.
     updateStepHz: f64 = 120.0,
@@ -151,8 +149,8 @@ pub const PixzigEngineInitOptions = struct {
     fullscreen: bool = false,
     windowSize: Vec2I = .{ .x = 800, .y = 480 },
     resizable: bool = true,
-    /// Logical game resolution. When null, logical size tracks the framebuffer
-    /// and projMat preserves the existing gameScale-based behavior.
+    /// Logical game resolution. When null, logical size tracks the framebuffer,
+    /// so `PixzigEngine.projection()` maps one unit to one framebuffer pixel.
     logicalSize: ?Vec2I = null,
     scalePolicy: windowing.ScalePolicy = .fit,
     renderInitOpts: renderer.RendererInitOpts = .{},
@@ -277,13 +275,14 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         options: PixzigEngineInitOptions,
         scaleFactor: f32,
         allocator: std.mem.Allocator,
-        projMat: zmath.Mat,
         window_state: windowing.WindowState,
         viewport: windowing.Viewport,
         resources: ResourceManager,
         inputs: Inputs,
         renderer: Renderer = undefined,
-        audio: audio.AudioEngine = undefined,
+        /// The audio engine. When `audioOpts.enabled` is false this is a
+        /// `DisabledAudioEngine`, whose methods are compile errors naming the flag.
+        audio: if (engOpts.audioOpts.enabled) audio.AudioEngine else audio.DisabledAudioEngine = undefined,
         manifest: if (engOpts.manifestOpts != null) assets.AssetManifest else void,
 
         const Self = @This();
@@ -307,8 +306,6 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 .text_input = engOpts.inputOpts.textInput,
             });
             errdefer window.destroy();
-
-            platform.setSwapInterval(1);
 
             // ----------------------------------------------------------------
             std.log.info("Loading OpenGL profile.", .{});
@@ -354,26 +351,12 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 }
             }
 
-            const fb_w: f32 = @floatFromInt(ws.framebuffer_size.x);
-            const fb_h: f32 = @floatFromInt(ws.framebuffer_size.y);
             const scaleFactor = @max(ws.scale_factor.x, ws.scale_factor.y);
 
             const vp = windowing.Viewport.init(logical_size, ws.framebuffer_size, options.scalePolicy);
 
-            // Apply GL viewport and build the initial projection matrix.
+            // Apply the GL viewport; `projection()` derives its matrix from it.
             vp.apply();
-
-            // projMat: compatibility alias.
-            // When logicalSize is null, match the old gameScale-based formula so
-            // existing examples that use eng.projMat continue to work unchanged.
-            // When logicalSize is set, projMat mirrors viewport.projection().
-            const projMat = if (options.logicalSize == null)
-                zmath.mul(
-                    zmath.scaling(engOpts.gameScale, engOpts.gameScale, 1.0),
-                    zmath.orthographicOffCenterLhGl(0, fb_w, 0, fb_h, -0.1, 1000),
-                )
-            else
-                vp.projection();
 
             // ----------------------------------------------------------------
             std.log.debug("Initializing STBI.", .{});
@@ -387,7 +370,6 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 .options = options,
                 .scaleFactor = scaleFactor,
                 .allocator = allocator,
-                .projMat = projMat,
                 .window_state = ws,
                 .viewport = vp,
                 .resources = ResourceManager.init(allocator),
@@ -416,9 +398,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 try eng.setIcon(&defaultIcon);
             }
 
-            if (engOpts.vsyncEnabled) {
-                eng.enableVSync(engOpts.vsyncEnabled);
-            }
+            eng.enableVSync(engOpts.vsyncEnabled);
 
             // ----------------------------------------------------------------
             if (engOpts.audioOpts.enabled) {
@@ -523,7 +503,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
 
         /// Called each frame (after `pollEvents`) to pick up resize events
         /// recorded by the event pump. Rebuilds the viewport and updates
-        /// projMat when the framebuffer has changed.
+        /// the viewport when the framebuffer has changed.
         pub fn refreshWindowState(self: *Self) void {
             if (!self.window_state.resized) return;
             self.window_state.resized = false;
@@ -545,17 +525,6 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             self.viewport.apply();
 
             self.scaleFactor = @max(self.window_state.scale_factor.x, self.window_state.scale_factor.y);
-
-            if (self.options.logicalSize == null) {
-                const fw: f32 = @floatFromInt(self.window_state.framebuffer_size.x);
-                const fh: f32 = @floatFromInt(self.window_state.framebuffer_size.y);
-                self.projMat = zmath.mul(
-                    zmath.scaling(engOpts.gameScale, engOpts.gameScale, 1.0),
-                    zmath.orthographicOffCenterLhGl(0, fw, 0, fh, -0.1, 1000),
-                );
-            } else {
-                self.projMat = self.viewport.projection();
-            }
         }
 
         /// Projection matrix for the logical game coordinate space.
@@ -573,11 +542,6 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             const fw: f32 = @floatFromInt(self.window_state.framebuffer_size.x);
             const fh: f32 = @floatFromInt(self.window_state.framebuffer_size.y);
             return zmath.orthographicOffCenterLhGl(0, fw, 0, fh, -0.1, 1000);
-        }
-
-        /// Deprecated: use `projection()` instead.
-        pub fn uiMatrix(self: *const Self) zmath.Mat {
-            return self.projection();
         }
 
         /// Converts a window-coordinate position to framebuffer pixels,

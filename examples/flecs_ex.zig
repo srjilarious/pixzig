@@ -43,7 +43,7 @@ pub const App = struct {
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const bigtex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
-        _ = try eng.resources.addSubTexture(bigtex, "guy", RectF.fromCoords(192, 64, 32, 32, 512, 512));
+        _ = try eng.resources.addSubTexture(bigtex, "guy", RectI.init(192, 64, 32, 32));
 
         std.log.info("Initializing world.\n", .{});
 
@@ -197,7 +197,7 @@ pub const App = struct {
 
         self.fps.renderTick();
 
-        eng.renderer.begin(eng.projMat);
+        eng.renderer.begin(eng.projection());
 
         var it = flecs.query_iter(self.world, self.draw_query);
         while (flecs.query_next(&it)) {

@@ -25,7 +25,7 @@ pub const App = struct {
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !App {
         const bigtex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
-        _ = try eng.resources.addSubTexture(bigtex, "guy", RectF.fromCoords(32, 32, 32, 32, 512, 512));
+        _ = try eng.resources.addSubTexture(bigtex, "guy", RectI.init(32, 32, 32, 32));
 
         eng.showCursor(false);
 
@@ -67,7 +67,7 @@ pub const App = struct {
         eng.renderer.clear(0, 0, 0.2, 1);
         self.fps.renderTick();
 
-        eng.renderer.begin(eng.projMat);
+        eng.renderer.begin(eng.projection());
         eng.renderer.drawSprite(&self.pointer);
         eng.renderer.end();
     }

@@ -43,7 +43,7 @@ const MapHeight = 18;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{ .gameScale = 5.0 });
+const AppRunner = pixzig.PixzigAppRunner(App, .{});
 
 pub const App = struct {
     alloc: std.mem.Allocator,
@@ -390,7 +390,7 @@ pub const App = struct {
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
         self.fps.renderTick();
 
-        eng.renderer.begin(eng.projMat);
+        eng.renderer.begin(eng.projection());
 
         eng.renderer.clear(0.0, 0.0, 0.2, 1.0);
         //eng.renderer.drawFullTexture(self.tex, .{ .x = 0, .y = 0 }, 8);
@@ -401,16 +401,16 @@ pub const App = struct {
         );
         eng.renderer.end();
 
-        try self.pathLayerRenderer.draw(&self.layer, eng.projMat);
+        try self.pathLayerRenderer.draw(&self.layer, eng.projection());
 
-        try self.grid.draw(eng.projMat);
+        try self.grid.draw(eng.projection());
     }
 };
 
 pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig A* path example!", .{});
 
-    const appRunner = try AppRunner.init("Pixzig A* Path Example.", init.gpa, .{});
+    const appRunner = try AppRunner.init("Pixzig A* Path Example.", init.gpa, .{ .logicalSize = .{ .x = 160, .y = 96 } });
     const app = try App.init(init.gpa, appRunner.engine);
     appRunner.run(app);
 }

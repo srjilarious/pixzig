@@ -119,3 +119,26 @@ pub const AudioEngine = struct {
         }
     }
 };
+
+/// Stand-in for `AudioEngine` used as `PixzigEngine.audio` when
+/// `AudioOptions.enabled` is false. Every method is a compile error naming
+/// the flag, so using audio without enabling it fails at build time instead
+/// of touching an uninitialized engine.
+pub const DisabledAudioEngine = struct {
+    fn disabled(comptime method: []const u8) noreturn {
+        @compileError("audio." ++ method ++ " requires AudioOptions.enabled = true (set PixzigEngineOptions.audioOpts.enabled)");
+    }
+
+    pub fn loadSound(self: *DisabledAudioEngine, name: []const u8, path: []const u8) !void {
+        _ = self;
+        _ = name;
+        _ = path;
+        disabled("loadSound");
+    }
+
+    pub fn playSound(self: *DisabledAudioEngine, name: []const u8) !void {
+        _ = self;
+        _ = name;
+        disabled("playSound");
+    }
+};

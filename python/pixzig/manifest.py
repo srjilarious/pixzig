@@ -30,7 +30,7 @@ class AssetManifest:
 
     def _check_alive(self) -> None:
         if self._destroyed:
-            raise _n.PixzigError("asset manifest already destroyed")
+            raise _n.PixzigError("asset manifest already destroyed (or the app has shut down)")
 
     def load_group(self, name: str) -> None:
         self._check_alive()

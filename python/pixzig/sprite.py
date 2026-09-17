@@ -33,11 +33,12 @@ class Sprite:
 
     def _check_alive(self) -> None:
         if self._destroyed:
-            raise _n.PixzigError("sprite already destroyed")
+            raise _n.PixzigError("sprite already destroyed (or the app has shut down)")
 
-    def set_pos(self, x: int, y: int) -> None:
+    def set_pos(self, x: float, y: float) -> None:
+        """Moves the sprite's top-left corner. Fractional positions are kept."""
         self._check_alive()
-        _n.pz_sprite_set_pos(self._handle, int(x), int(y))
+        _n.pz_sprite_set_pos(self._handle, float(x), float(y))
 
     def set_size(self, w: float, h: float) -> None:
         """Resizes the on-screen rectangle, keeping the top-left corner."""

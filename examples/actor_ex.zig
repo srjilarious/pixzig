@@ -20,7 +20,7 @@ const Actor = pixzig.sprites.Actor;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{ .gameScale = 8.0 });
+const AppRunner = pixzig.PixzigAppRunner(App, .{});
 
 pub const App = struct {
     alloc: std.mem.Allocator,
@@ -110,7 +110,7 @@ pub const App = struct {
         eng.renderer.clear(0.2, 0, 0.2, 1);
         self.fps.renderTick();
 
-        eng.renderer.begin(eng.projMat);
+        eng.renderer.begin(eng.projection());
         eng.renderer.drawSprite(&self.spr);
         eng.renderer.end();
     }
@@ -119,7 +119,7 @@ pub const App = struct {
 pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig Actor Example", .{});
 
-    const appRunner = try AppRunner.init("Pixzig Actor Example.", init.gpa, .{});
+    const appRunner = try AppRunner.init("Pixzig Actor Example.", init.gpa, .{ .logicalSize = .{ .x = 100, .y = 60 } });
     const app = try App.init(init.gpa, appRunner.engine);
 
     appRunner.run(app);

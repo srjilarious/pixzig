@@ -59,18 +59,34 @@ _ = try eng.resources.loadAtlasNamed("main_sprites", "assets/pac-tiles");
 
 ## Drawing Sprites
 
-`Sprite.create` takes ownership of an already-acquired `*TextureHandle` and a size in logical pixels. The sprite releases the handle in its own `deinit()`; don't release the handle separately:
+`eng.resources.createSprite(name)` builds a sprite from any loaded texture, atlas frame, or subtexture. The sprite acquires its own handle and starts at the frame's size; release it with `deinit()`:
 
 ```zig
 // During App.init:
-var spr = pixzig.sprites.Sprite.create(self.player_tex, .{ .x = 16, .y = 16 });
-spr.setPos(100, 50);
+self.spr = try eng.resources.createSprite("player_right_1");
+self.spr.setPosF(100.5, 50);  // or setPos(i32, i32)
+self.spr.setScale(2, 2);      // relative to the frame size
+self.spr.tint = .{ .r = 1, .g = 0.4, .b = 0.4, .a = 1 }; // null = untinted
 
 // Each frame:
-eng.renderer.drawSprite(&spr);
+eng.renderer.drawSprite(&self.spr); // uses the tinted batch when tint is set
 
 // During App.deinit:
-spr.deinit();
+self.spr.deinit();
+```
+
+`setPos`, `setPosF`, `setSize`, and `setScale` keep `dest` and `size` in sync; writing `dest` directly skips that. `setSrcRect(RectI)` draws a sub-region of the frame, in pixels.
+
+`Sprite.create(managed)` does the same from a `*ManagedTexture` (it acquires a new handle; `managed` is not consumed). `Sprite.createFromHandle(handle)` takes ownership of a handle you already acquired, so don't release that handle separately.
+
+### Subtextures
+
+`addSubTexture` registers a named region of a texture, in pixels relative to that texture's top-left corner. It works on atlas frames and other subtextures too. Use `addSubTextureUV` if you have UV coordinates (0..1) instead.
+
+```zig
+const sheet = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
+_ = try eng.resources.addSubTexture(sheet, "guy", RectI.init(32, 32, 32, 32));
+var guy = try eng.resources.createSprite("guy");
 ```
 
 To draw a raw texture region instead:
@@ -98,7 +114,7 @@ pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
 
 ## Text and Fonts
 
-Text rendering must be enabled at compile time (`rendererOpts.textRendering = true`). The renderer keeps one default font, set through `renderInitOpts.font`:
+Text rendering must be enabled at compile time (`rendererOpts.textRendering = true`); calling `drawString` and friends without it is a compile error that names the flag. The renderer keeps one default font, set through `renderInitOpts.font`:
 
 ```zig
 const appRunner = try AppRunner.init("My Game", alloc, .{

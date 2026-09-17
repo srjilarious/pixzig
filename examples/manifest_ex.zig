@@ -138,7 +138,7 @@ pub const App = struct {
 
         if (!self.group_loaded) return;
 
-        eng.renderer.begin(eng.projMat);
+        eng.renderer.begin(eng.projection());
         eng.renderer.drawSprite(&self.spr);
         eng.renderer.end();
     }

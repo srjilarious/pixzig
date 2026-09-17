@@ -85,6 +85,15 @@ pub fn Renderer(opts: RendererOptions) type {
     return struct {
         const Self = @This();
 
+        /// Emits a compile error naming `flag` when a method needs a
+        /// renderer feature that `opts` compiled out.
+        inline fn requireFlag(comptime method: []const u8, comptime flag: []const u8) void {
+            if (comptime !@field(opts, flag)) {
+                @compileError("Renderer." ++ method ++ " requires RendererOptions." ++ flag ++
+                    " = true (set PixzigEngineOptions.rendererOpts." ++ flag ++ ")");
+            }
+        }
+
         alloc: std.mem.Allocator,
         impl: *Impl,
 
@@ -207,7 +216,7 @@ pub fn Renderer(opts: RendererOptions) type {
         /// Set the renderer's default font to an already-loaded font in `resMgr`.
         /// Useful when the font is loaded post-init (e.g. via a manifest boot group).
         pub fn setDefaultFont(self: *Self, resMgr: *ResourceManager, id: []const u8) !void {
-            std.debug.assert(opts.textRendering);
+            requireFlag("setDefaultFont", "textRendering");
             const font = resMgr.fonts.get(id) orelse return error.NoFontWithThatName;
             try self.impl.text.setFont(font);
         }
@@ -218,8 +227,8 @@ pub fn Renderer(opts: RendererOptions) type {
         /// falls back to the atlas's `.notdef` box. `faceIndex` selects a
         /// face inside a `.ttc`; use 0 for a plain font file.
         pub fn addDefaultFontFallback(self: *Self, resMgr: *ResourceManager, fontPath: []const u8, faceIndex: i32) !void {
+            requireFlag("addDefaultFontFallback", "textRendering");
             _ = self;
-            std.debug.assert(opts.textRendering);
             try resMgr.addFontFallback(DefaultFontName, fontPath, faceIndex);
         }
 
@@ -291,8 +300,14 @@ pub fn Renderer(opts: RendererOptions) type {
             self.impl.batches[0].draw(texture, dest, srcCoords, .none);
         }
 
-        /// Draws a `Sprite`. Always submits to `batches[0]`; see `draw()`.
+        /// Draws a `Sprite`. When `sprite.tint` is set this routes to the
+        /// tinted batch (see `drawSpriteColored`); otherwise it submits to
+        /// `batches[0]` (see `draw()`).
         pub fn drawSprite(self: *Self, sprite: *const Sprite) void {
+            if (sprite.tint) |color| {
+                self.drawSpriteColored(sprite, color);
+                return;
+            }
             // TODO: Handle batches
             self.impl.batches[0].drawSprite(sprite);
         }
@@ -324,52 +339,50 @@ pub fn Renderer(opts: RendererOptions) type {
             self.impl.batches[0].draw(texture, RectF.fromPosSize(pos.x, pos.y, @intFromFloat(tsx), @intFromFloat(tsy)), texture.src, .none);
         }
 
-        /// Requires `RendererOptions.shapeRendering == true`. Only checked
-        /// with `std.debug.assert`, so calling this when shape rendering is
-        /// compiled out is undefined behavior in release builds (`shapes` is
-        /// `undefined`), not a caught error.
+        /// Requires `RendererOptions.shapeRendering == true`; calling it with
+        /// shape rendering compiled out is a compile error.
         pub fn drawFilledRect(self: *Self, dest: RectF, color: Color) void {
-            std.debug.assert(opts.shapeRendering);
+            requireFlag("drawFilledRect", "shapeRendering");
             self.impl.shapes.drawFilledRect(dest, color);
         }
 
         /// Requires `RendererOptions.shapeRendering == true`; see `drawFilledRect()`.
         pub fn drawRect(self: *Self, dest: RectF, color: Color, lineWidth: u8) void {
-            std.debug.assert(opts.shapeRendering);
+            requireFlag("drawRect", "shapeRendering");
             self.impl.shapes.drawRect(dest, color, lineWidth);
         }
 
         // This moves the outline of the rect to enclose the dest by lineWidth.
         /// Requires `RendererOptions.shapeRendering == true`; see `drawFilledRect()`.
         pub fn drawEnclosingRect(self: *Self, dest: RectF, color: Color, lineWidth: u8) void {
-            std.debug.assert(opts.shapeRendering);
+            requireFlag("drawEnclosingRect", "shapeRendering");
             self.impl.shapes.drawEnclosingRect(dest, color, lineWidth);
         }
 
-        /// Requires `RendererOptions.textRendering == true`. Only checked
-        /// with `std.debug.assert`; see `drawFilledRect()` for the release-build
-        /// caveat. Also traps if no default font has been set (see `setDefaultFont`).
+        /// Requires `RendererOptions.textRendering == true`; calling it with
+        /// text rendering compiled out is a compile error. Draws nothing (and
+        /// logs an error) if no default font has been set (see `setDefaultFont`).
         pub fn drawString(self: *Self, text: []const u8, pos: Vec2I) Vec2I {
-            std.debug.assert(opts.textRendering);
+            requireFlag("drawString", "textRendering");
             return self.impl.text.drawString(text, pos);
         }
 
         /// Requires `RendererOptions.textRendering == true`; see `drawString()`.
         pub fn drawScaledString(self: *Self, text: []const u8, pos: Vec2I, scale: f32) Vec2I {
-            std.debug.assert(opts.textRendering);
+            requireFlag("drawScaledString", "textRendering");
             return self.impl.text.drawScaledString(text, pos, scale);
         }
 
         /// Like `drawString`, but tints every glyph by `color` instead of
         /// rendering plain white. Requires `RendererOptions.textRendering == true`.
         pub fn drawStringColored(self: *Self, text: []const u8, pos: Vec2I, color: Color) Vec2I {
-            std.debug.assert(opts.textRendering);
+            requireFlag("drawStringColored", "textRendering");
             return self.impl.text.drawStringColored(text, pos, color);
         }
 
         /// Measures `text` without drawing it. Requires `RendererOptions.textRendering == true`.
         pub fn measureString(self: *Self, text: []const u8) Vec2I {
-            std.debug.assert(opts.textRendering);
+            requireFlag("measureString", "textRendering");
             return self.impl.text.measureString(text);
         }
     };

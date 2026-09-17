@@ -7,6 +7,7 @@ timestep loop below mirrors pixzig's own `PixzigAppRunner.gameLoopCore`
 import ctypes
 import os
 import time
+import weakref
 
 from . import _native as _n
 from .action import ActionMap
@@ -32,6 +33,11 @@ class PixzigApp:
         self._lag = 0.0
         self._curr_time = time.perf_counter() * 1000.0
         self._running = True
+        # Every handle-owning wrapper handed out (sprites, actors, cameras,
+        # ...). `pz_deinit` frees their native objects, so `run()` marks them
+        # destroyed on the way out; a later `sprite.destroy()` is then a no-op
+        # and other calls raise instead of touching freed memory.
+        self._handles = weakref.WeakSet()
 
         self.keyboard = Keyboard(eng)
         self.mouse = Mouse(eng)
@@ -39,6 +45,10 @@ class PixzigApp:
         self.text = Text(eng)
         self.audio = Audio(eng)
         self.window = Window(eng)
+
+    def _track(self, wrapper):
+        self._handles.add(wrapper)
+        return wrapper
 
     def gamepad(self, index: int) -> Gamepad:
         return Gamepad(self._eng, index)
@@ -60,7 +70,7 @@ class PixzigApp:
         handle = _n.pz_sprite_create(self._eng, texture_name.encode("utf-8"))
         if not handle:
             raise _n.PixzigError(_n.last_error())
-        return Sprite(handle)
+        return self._track(Sprite(handle))
 
     def load_tilemap(self, name: str, path: str) -> None:
         _n.check(_n.pz_load_tilemap(self._eng, name.encode("utf-8"), path.encode("utf-8")) == 0)
@@ -69,7 +79,7 @@ class PixzigApp:
         handle = _n.pz_tilemap_renderer_create(self._eng, map_name.encode("utf-8"), texture_name.encode("utf-8"))
         if not handle:
             raise _n.PixzigError(_n.last_error())
-        return TileMapRenderer(handle)
+        return self._track(TileMapRenderer(handle))
 
     def load_manifest(self, path: str) -> AssetManifest:
         # A relative path is resolved (by AssetManifest.loadFromFile, Zig
@@ -82,7 +92,7 @@ class PixzigApp:
         handle = _n.pz_manifest_load(self._eng, abs_path.encode("utf-8"))
         if not handle:
             raise _n.PixzigError(_n.last_error())
-        return AssetManifest(handle)
+        return self._track(AssetManifest(handle))
 
     # --- Sprite animation -----------------------------------------------
     # Frame sequences and actor states live in one shared library owned by
@@ -120,7 +130,7 @@ class PixzigApp:
         handle = _n.pz_actor_create(self._eng)
         if not handle:
             raise _n.PixzigError(_n.last_error())
-        return Actor(handle)
+        return self._track(Actor(handle))
 
     # --- Action mapping ---------------------------------------------------
 
@@ -128,7 +138,7 @@ class PixzigApp:
         handle = _n.pz_action_map_create(self._eng)
         if not handle:
             raise _n.PixzigError(_n.last_error())
-        return ActionMap(handle)
+        return self._track(ActionMap(handle))
 
     # --- Camera ----------------------------------------------------------
 
@@ -136,7 +146,7 @@ class PixzigApp:
         handle = _n.pz_camera_create(self._eng)
         if not handle:
             raise _n.PixzigError(_n.last_error())
-        return Camera(handle)
+        return self._track(Camera(handle))
 
     # --- Coordinate transforms -----------------------------------------
     # "screen" = window coordinates (what `mouse.raw_pos` reports), "logical"
@@ -196,9 +206,10 @@ class PixzigApp:
 
     # --- Overridable hooks -----------------------------------------------
 
-    def update(self, dt_ms: float) -> bool:
-        """Called at a fixed timestep. Return False to quit."""
-        return True
+    def update(self, dt_ms: float):
+        """Called at a fixed timestep. Return False (or call `quit()`) to
+        quit; returning None, i.e. no return statement, keeps running."""
+        return None
 
     def render(self) -> None:
         """Called once per displayed frame, after the screen is cleared."""
@@ -210,6 +221,8 @@ class PixzigApp:
         self._running = False
 
     def run(self) -> None:
+        if self._eng is None:
+            raise _n.PixzigError("run() called after the app has already shut down")
         try:
             while self._running and not _n.pz_should_close(self._eng):
                 now = time.perf_counter() * 1000.0
@@ -221,15 +234,22 @@ class PixzigApp:
                 while self._lag > self._update_step_ms:
                     self._lag -= self._update_step_ms
                     _n.pz_update_input(self._eng)
-                    keep_running = self.update(self._update_step_ms)
+                    result = self.update(self._update_step_ms)
                     # Closes the input tick: without it, key_pressed() would
                     # keep reporting the same press on every later tick.
                     _n.pz_finish_tick(self._eng)
-                    if not keep_running:
+                    # Only an explicit False quits. A subclass `update` with
+                    # no return statement returns None, which must not end
+                    # the app on its first frame.
+                    if result is False:
                         return
 
                 _n.pz_render_clear(self._eng, 0.0, 0.0, 0.0, 1.0)
                 self.render()
                 _n.pz_swap_buffers(self._eng)
         finally:
+            for wrapper in list(self._handles):
+                wrapper._destroyed = True
+            self._handles.clear()
             _n.pz_deinit(self._eng)
+            self._eng = None

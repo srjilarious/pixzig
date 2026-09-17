@@ -41,12 +41,12 @@ class HelloApp(PixzigApp):
         if self.keyboard.down(Key.DOWN) or self.keyboard.down(Key.S):
             self.player_pos[1] += speed
 
-        self.player.set_pos(int(self.player_pos[0]), int(self.player_pos[1]))
+        self.player.set_pos(self.player_pos[0], self.player_pos[1])
 
         self.orbit_angle += 0.002 * dt_ms
         orbit_x = self.player_pos[0] + 80.0 * math.cos(self.orbit_angle)
         orbit_y = self.player_pos[1] + 80.0 * math.sin(self.orbit_angle)
-        self.orbiter.set_pos(int(orbit_x), int(orbit_y))
+        self.orbiter.set_pos(orbit_x, orbit_y)
 
         return True
 

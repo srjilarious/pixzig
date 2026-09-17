@@ -11,7 +11,7 @@ class Camera:
 
     def _check_alive(self) -> None:
         if self._destroyed:
-            raise _n.PixzigError("camera already destroyed")
+            raise _n.PixzigError("camera already destroyed (or the app has shut down)")
 
     def set_pos(self, x: float, y: float) -> None:
         self._check_alive()

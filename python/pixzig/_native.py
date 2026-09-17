@@ -154,7 +154,7 @@ pz_set_default_font = _sig("pz_set_default_font", [PzEnginePtr, c_char_p], c_int
 
 # --- Sprites -----------------------------------------------------------
 pz_sprite_create = _sig("pz_sprite_create", [PzEnginePtr, c_char_p], PzSpritePtr)
-pz_sprite_set_pos = _sig("pz_sprite_set_pos", [PzSpritePtr, c_int32, c_int32], None)
+pz_sprite_set_pos = _sig("pz_sprite_set_pos", [PzSpritePtr, c_float, c_float], None)
 pz_sprite_get_rect = _sig(
     "pz_sprite_get_rect",
     [PzSpritePtr, ctypes.POINTER(c_float), ctypes.POINTER(c_float), ctypes.POINTER(c_float), ctypes.POINTER(c_float)],

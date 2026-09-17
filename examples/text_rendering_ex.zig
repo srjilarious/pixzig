@@ -85,7 +85,7 @@ pub const App = struct {
         eng.renderer.clear(0.0, 0.0, 0.2, 1.0);
         self.fps.renderTick();
 
-        eng.renderer.begin(eng.projMat);
+        eng.renderer.begin(eng.projection());
 
         var buf: [80]u8 = undefined;
         const pt = if (eng.defaultFontAtlas()) |fa| fa.font_size else 0;

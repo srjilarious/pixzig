@@ -3,6 +3,7 @@ const std = @import("std");
 const pixzig = @import("pixzig");
 const zmath = pixzig.zmath;
 const RectF = pixzig.common.RectF;
+const RectI = pixzig.common.RectI;
 const Vec3F = pixzig.common.Vec3F;
 
 const EngOptions = pixzig.PixzigEngineOptions;
@@ -72,14 +73,7 @@ pub const App = struct {
         //* size), then acquire it like any other managed texture -- draw
         //* calls need no explicit tile math from here on.
         const texManaged = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
-        _ = try eng.resources.addSubTexture(texManaged, "quad3d_stone", RectF.fromCoords(
-            TileCol * TileSize,
-            TileRow * TileSize,
-            TileSize,
-            TileSize,
-            512,
-            512,
-        ));
+        _ = try eng.resources.addSubTexture(texManaged, "quad3d_stone", RectI.init(TileCol * TileSize, TileRow * TileSize, TileSize, TileSize));
         const stoneTex = try eng.resources.acquireTexture("quad3d_stone");
 
         var dynamicQuad = try Quad3DBatchQueue.init(alloc, &eng.resources);

@@ -102,7 +102,7 @@ pub const App = struct {
         self.fps.renderTick();
 
         //* We start a renderer batch, which will group together all of our draw calls and render them at once when we call end.
-        eng.renderer.begin(eng.projMat);
+        eng.renderer.begin(eng.projection());
 
         //* Here we're directly drawing a source rectangle from the texture to a destination rectangle on the screen.  The sprite batch will handle creating the vertices for this and batching it together with other draw calls.
         for (0..3) |idx| {
