@@ -49,7 +49,16 @@ pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type
         alloc: std.mem.Allocator,
         freeFunc: Handle.FreeFunc,
         id: u32,
+        /// The name the resource is registered under, used in leak and
+        /// error logs. Borrowed: the `ResourceManager` owns the bytes (its
+        /// map key) and frees them only after this resource is deinited.
+        name: []const u8,
         gen: u32,
+        /// When true, superseded generations are never freed before
+        /// `deinit`, even at refCount 0. The `ResourceManager` sets this for
+        /// textures in debug builds so a borrowed (unreferenced) handle from
+        /// `getTexture` can't dangle after a hot-reload.
+        keepStale: bool = false,
 
         const Self = @This();
 
@@ -75,7 +84,7 @@ pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type
                 new.refCount += 1;
                 std.debug.assert(self.refCount > 0);
                 self.refCount -= 1;
-                if (self.refCount == 0 and self.dirty) {
+                if (self.refCount == 0 and self.dirty and !self.parent.keepStale) {
                     self.parent.freeHandle(self);
                 }
                 return new;
@@ -93,12 +102,13 @@ pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type
             }
         };
 
-        pub fn init(alloc: std.mem.Allocator, id: u32, freeFunc: Handle.FreeFunc) Self {
+        pub fn init(alloc: std.mem.Allocator, id: u32, name: []const u8, freeFunc: Handle.FreeFunc) Self {
             return .{
                 .res = .empty,
                 .alloc = alloc,
                 .freeFunc = freeFunc,
                 .id = id,
+                .name = name,
                 .gen = 0,
             };
         }
@@ -107,7 +117,7 @@ pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type
             for (self.res.items) |hOpt| {
                 if (hOpt) |h| {
                     if (h.refCount != 0) {
-                        std.log.err("{s}:{}: refCount = {} on deinit", .{ ResourceName, h.id, h.refCount });
+                        std.log.err("{s} '{s}' (generation {}): refCount = {} on deinit, a handle was never released", .{ ResourceName, self.name, h.generation, h.refCount });
                     }
                     self.freeFunc(h.val);
                     self.alloc.destroy(h);
@@ -125,7 +135,7 @@ pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type
             // creates null slots that insertHandle can reuse without allocating.
             for (self.res.items, 0..) |hOpt, i| {
                 if (hOpt) |h| {
-                    if (h.refCount == 0) {
+                    if (h.refCount == 0 and !self.keepStale) {
                         self.freeFunc(h.val);
                         self.alloc.destroy(h);
                         self.res.items[i] = null;
@@ -189,7 +199,7 @@ pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type
         pub fn release(self: *Self, handle: *Handle) void {
             std.debug.assert(handle.refCount > 0);
             handle.refCount -= 1;
-            if (handle.refCount == 0 and handle.dirty) {
+            if (handle.refCount == 0 and handle.dirty and !self.keepStale) {
                 self.freeHandle(handle);
             }
         }
@@ -256,6 +266,11 @@ pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type
 /// holds a reference on its `TextureImage` generation, released when the
 /// view is reclaimed.
 pub const ManagedTexture = ManagedResource("Texture", Texture);
+
+/// Debug builds keep superseded texture generations alive until the manager
+/// deinits, so borrowed handles (`getTexture`, `load*` return values) stay
+/// valid across hot-reloads. Release builds reclaim them eagerly.
+pub const keepStaleTextures = builtin.mode == .debug;
 
 /// A TextureImage owns the GL texture handle. Reclaiming a stale
 /// TextureImage deletes the GL handle.
@@ -424,8 +439,20 @@ const HotReload = struct {
 
 /// Owns all loaded game assets: textures, shaders, atlases, fonts, and tilemaps.
 /// Each resource type is stored in a `ManagedResource` pool that supports multiple
-/// generations and ref-counting.  Callers interact via handles (`*TextureHandle`, etc.)
-/// obtained from `acquire*` methods; call `handle.release()` when done.
+/// generations and ref-counting.
+///
+/// Textures have two ways in:
+/// - Borrowed: `load*`, `addSubTexture*` and `getTexture(name)` return a
+///   `*TextureHandle` without taking a reference. Never release it; it stays
+///   valid until the manager deinits (in debug builds even across
+///   hot-reloads; in release builds re-loading the same name frees an
+///   unreferenced older generation). This is the simple path: load, draw,
+///   forget.
+/// - Owned: `acquireTexture(name)` bumps the refcount; call `handle.release()`
+///   when done. Use this when something must keep a texture alive on its own.
+///
+/// A `Sprite` (or tile renderer) given a handle of either kind retains its
+/// own reference and releases it in `deinit`.
 ///
 /// In debug builds, all file-backed resources are watched via `FileWatcher`.
 /// When a file changes, the resource is reloaded and live handles are marked
@@ -628,7 +655,8 @@ pub const ResourceManager = struct {
         const managed = try self.alloc.create(ManagedTexture);
         errdefer self.alloc.destroy(managed);
 
-        managed.* = ManagedTexture.init(self.alloc, self.gid, freeTextureView);
+        managed.* = ManagedTexture.init(self.alloc, self.gid, keyOwned, freeTextureView);
+        managed.keepStale = keepStaleTextures;
         self.gid += 1;
 
         try self.atlas.put(keyOwned, managed);
@@ -644,7 +672,7 @@ pub const ResourceManager = struct {
         const managed = try self.alloc.create(ManagedTextureImage);
         errdefer self.alloc.destroy(managed);
 
-        managed.* = ManagedTextureImage.init(self.alloc, self.gid, freeTextureImage);
+        managed.* = ManagedTextureImage.init(self.alloc, self.gid, keyOwned, freeTextureImage);
         self.gid += 1;
 
         try self.textures.put(keyOwned, managed);
@@ -660,7 +688,7 @@ pub const ResourceManager = struct {
         const managed = try self.alloc.create(ManagedShader);
         errdefer self.alloc.destroy(managed);
 
-        managed.* = ManagedShader.init(self.alloc, self.gid, freeShader);
+        managed.* = ManagedShader.init(self.alloc, self.gid, keyOwned, freeShader);
         self.gid += 1;
 
         try self.shaders.put(keyOwned, managed);
@@ -676,7 +704,7 @@ pub const ResourceManager = struct {
         const managed = try self.alloc.create(ManagedTileMap);
         errdefer self.alloc.destroy(managed);
 
-        managed.* = ManagedTileMap.init(self.alloc, self.gid, freeTileMap);
+        managed.* = ManagedTileMap.init(self.alloc, self.gid, keyOwned, freeTileMap);
         self.gid += 1;
 
         try self.tilemaps.put(keyOwned, managed);
@@ -692,7 +720,7 @@ pub const ResourceManager = struct {
         const managed = try self.alloc.create(ManagedFont);
         errdefer self.alloc.destroy(managed);
 
-        managed.* = ManagedFont.init(self.alloc, self.gid, freeFontAtlas);
+        managed.* = ManagedFont.init(self.alloc, self.gid, keyOwned, freeFontAtlas);
         self.gid += 1;
 
         try self.fonts.put(keyOwned, managed);
@@ -737,7 +765,7 @@ pub const ResourceManager = struct {
         height: usize,
         chars: []const u8,
         mapping: []const CharToColor,
-    ) !*ManagedTexture {
+    ) !*TextureHandle {
         // Generate the color buffer, mapping chars to their given colors.
         var buffer: []u8 = try self.alloc.alloc(u8, width * height * 4);
         defer self.alloc.free(buffer);
@@ -843,15 +871,16 @@ pub const ResourceManager = struct {
     /// format, with 4 bytes per pixel. The name is the name that the texture
     /// will be stored with in the resource manager, and is used to access the
     /// texture later with `getTexture`. The width and height are the dimensions
-    /// of the texture and must match the buffer size.
+    /// of the texture and must match the buffer size. Returns a borrowed
+    /// handle (see `ResourceManager`).
     pub fn loadTextureFromBuffer(
         self: *Self,
         name: []const u8,
         width: usize,
         height: usize,
         buffer: []u8,
-    ) !*ManagedTexture {
-        return (try self.loadTextureFromBufferTracked(name, width, height, buffer)).managed;
+    ) !*TextureHandle {
+        return latestOf((try self.loadTextureFromBufferTracked(name, width, height, buffer)).managed);
     }
 
     /// Internal: loads a texture from a file without registering a hot-reload
@@ -891,11 +920,13 @@ pub const ResourceManager = struct {
     ///
     /// In debug builds, the file is automatically watched and the texture
     /// is reloaded (with any live handles marked dirty) when the file changes.
+    ///
+    /// Returns a borrowed handle (see `ResourceManager`).
     pub fn loadTexture(
         self: *Self,
         name: []const u8,
         file_path: []const u8,
-    ) !*ManagedTexture {
+    ) !*TextureHandle {
         const result = try self.loadTextureImpl(name, file_path);
 
         if (comptime builtin.mode == .debug) {
@@ -909,7 +940,12 @@ pub const ResourceManager = struct {
             }
         }
 
-        return result;
+        return latestOf(result);
+    }
+
+    /// The newest generation of `managed`, which every loader has just added.
+    fn latestOf(managed: *ManagedTexture) *TextureHandle {
+        return managed.get().?;
     }
 
     // -----------------------------------------------------------------------
@@ -1094,16 +1130,18 @@ pub const ResourceManager = struct {
         return num;
     }
 
-    /// Adds a named subtexture from a region of an existing managed texture.
-    /// `px` is in pixels, relative to `tex`'s own top-left corner (so a
-    /// subtexture of a subtexture or atlas frame works as expected).
+    /// Adds a named subtexture from a region of an existing texture. `px` is
+    /// in pixels, relative to `tex`'s own top-left corner (so a subtexture of
+    /// a subtexture or atlas frame works as expected). Cuts from the exact
+    /// generation `tex` points at. Returns a borrowed handle (see
+    /// `ResourceManager`).
     pub fn addSubTexture(
         self: *Self,
-        tex: *ManagedTexture,
+        tex: *TextureHandle,
         name: []const u8,
         px: RectI,
-    ) !*ManagedTexture {
-        const current = tex.get() orelse return error.NoTextureInPool;
+    ) !*TextureHandle {
+        const current = tex;
         const managed = try self.getOrCreateAtlasTexture(name);
         try self.addTextureView(managed, .{
             .texture = current.val.texture,
@@ -1111,35 +1149,37 @@ pub const ResourceManager = struct {
             .src = sprites.pixelsToUv(&current.val, px),
             .image = current.val.image,
         });
-        return managed;
+        return latestOf(managed);
     }
 
     /// Like `addSubTexture`, but `coords` are in the underlying image's UV
     /// space: (0,0) is top-left, (1,1) is bottom-right.
     pub fn addSubTextureUV(
         self: *Self,
-        tex: *ManagedTexture,
+        tex: *TextureHandle,
         name: []const u8,
         coords: RectF,
-    ) !*ManagedTexture {
-        const current = tex.get() orelse return error.NoTextureInPool;
+    ) !*TextureHandle {
+        const current = tex;
         const managed = try self.getOrCreateAtlasTexture(name);
         try self.addTextureView(managed, current.val.sub(coords));
-        return managed;
+        return latestOf(managed);
     }
 
     /// Creates a `Sprite` for the texture (or atlas frame / subtexture)
-    /// registered as `name`. The sprite acquires its own handle; call
+    /// registered as `name`. The sprite retains its own reference; call
     /// `sprite.deinit()` to release it.
     pub fn createSprite(self: *Self, name: []const u8) !sprites.Sprite {
-        const handle = try self.acquireTexture(name);
-        return sprites.Sprite.createFromHandle(handle);
+        return sprites.Sprite.create(try self.getTexture(name));
     }
 
-    /// Returns the `ManagedTexture` for `name`. Use `acquire` on the result
-    /// to get a refcounted handle, or `get` to peek at the latest value.
-    pub fn getTexture(self: *Self, name: []const u8) !*ManagedTexture {
-        return self.atlas.get(name) orelse return error.NoTextureWithThatName;
+    /// Borrows the newest generation of the texture (or atlas frame /
+    /// subtexture) registered as `name`, without taking a reference. Don't
+    /// release it; see `ResourceManager` for how long it stays valid. Use
+    /// `acquireTexture` for a refcounted handle instead.
+    pub fn getTexture(self: *Self, name: []const u8) !*TextureHandle {
+        const managed = self.atlas.get(name) orelse return error.NoTextureWithThatName;
+        return managed.get() orelse return error.NoTextureWithThatName;
     }
 
     /// Acquires a refcounted handle to a texture by name. The handle stays

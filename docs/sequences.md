@@ -22,7 +22,7 @@ try sequence.add(alloc, try seq.WaitStep.init(alloc, 500.0)); // 500 ms pause
 
 ### MoveToStep
 
-Linearly interpolates a flecs entity's `Sprite` component from its current position to a target over a duration. Start position is captured lazily on the first tick.
+Linearly interpolates a flecs entity's sprite from its current position to a target over a duration. The sprite is the entity's `Sprite` component, or its `Actor`'s own sprite when it has no `Sprite` component; register both component types in the world. Positions are the sprite's origin (`Sprite.pos()`, the top-left corner by default). Start position is captured lazily on the first tick.
 
 ```zig
 const target = Vec2F{ .x = 100, .y = 48 };
@@ -145,10 +145,11 @@ Set entity ID and position globals from Zig before running the script:
 scriptEng.lua.pushInteger(@intCast(self.entity));
 scriptEng.lua.setGlobal("player_entity");
 
-const spr = flecs.get(world, entity, Sprite).?;
-scriptEng.lua.pushNumber(@floatCast(spr.dest.l));
+const actor = flecs.get(world, entity, Actor).?;
+const pos = actor.sprite.pos();
+scriptEng.lua.pushNumber(@floatCast(pos.x));
 scriptEng.lua.setGlobal("player_x");
-scriptEng.lua.pushNumber(@floatCast(spr.dest.t));
+scriptEng.lua.pushNumber(@floatCast(pos.y));
 scriptEng.lua.setGlobal("player_y");
 
 try scriptEng.runScript("assets/circle_move.lua");

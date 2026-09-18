@@ -49,13 +49,23 @@ fn enumArg(comptime E: type, v: c_int) ?E {
 
 const PzSprite = struct {
     eng: *PzEngine,
-    sprite: pixzig.sprites.Sprite,
+    /// What every `pz_sprite_*` call operates on: `&storage` for a sprite
+    /// from pz_sprite_create, or an actor's own sprite for the view
+    /// returned by pz_actor_sprite.
+    sprite: *pixzig.sprites.Sprite,
+    storage: pixzig.sprites.Sprite = undefined,
+    /// The actor that owns `sprite` when this is a view; null for a
+    /// standalone sprite. Views aren't in the sprite registry and are
+    /// freed with their actor.
+    owner: ?*PzActor = null,
     registry_index: usize,
 };
 
 const PzActor = struct {
     eng: *PzEngine,
     actor: pixzig.sprites.Actor,
+    /// Borrowed view of `actor.sprite`, handed out by pz_actor_sprite.
+    sprite_view: PzSprite,
     registry_index: usize,
 };
 
@@ -383,11 +393,11 @@ export fn pz_load_texture(eng: *PzEngine, name: [*:0]const u8, path: [*:0]const 
 }
 
 export fn pz_texture_sub(eng: *PzEngine, base_name: [*:0]const u8, new_name: [*:0]const u8, x: i32, y: i32, w: i32, h: i32) callconv(.c) i32 {
-    const managed = eng.engine.resources.getTexture(std.mem.span(base_name)) catch |err| {
+    const base = eng.engine.resources.getTexture(std.mem.span(base_name)) catch |err| {
         setLastErrorErr(err);
         return -1;
     };
-    _ = eng.engine.resources.addSubTexture(managed, std.mem.span(new_name), pixzig.RectI.init(x, y, w, h)) catch |err| {
+    _ = eng.engine.resources.addSubTexture(base, std.mem.span(new_name), pixzig.RectI.init(x, y, w, h)) catch |err| {
         setLastErrorErr(err);
         return -1;
     };
@@ -424,7 +434,8 @@ fn pzSpriteCreateImpl(eng: *PzEngine, texture_name: []const u8) !*PzSprite {
 
     wrapper.* = .{
         .eng = eng,
-        .sprite = sprite,
+        .sprite = &wrapper.storage,
+        .storage = sprite,
         .registry_index = undefined,
     };
     try registryAdd(PzSprite, &eng.sprites, eng.alloc, wrapper);
@@ -438,17 +449,24 @@ export fn pz_sprite_create(eng: *PzEngine, texture_name: [*:0]const u8) callconv
     };
 }
 
+/// Moves the sprite's origin (top-left corner by default) to (x, y).
 export fn pz_sprite_set_pos(spr: *PzSprite, x: f32, y: f32) callconv(.c) void {
     spr.sprite.setPosF(x, y);
 }
 
-/// Resizes the sprite's on-screen rectangle, keeping its top-left corner.
+/// Resizes the sprite's on-screen rectangle around its origin.
 export fn pz_sprite_set_size(spr: *PzSprite, w: f32, h: f32) callconv(.c) void {
     spr.sprite.setSize(w, h);
 }
 
+/// Sets the sprite's pivot in texture-frame pixels. Its position stays put,
+/// so the image shifts to place the new origin there.
+export fn pz_sprite_set_origin(spr: *PzSprite, x: f32, y: f32) callconv(.c) void {
+    spr.sprite.setOrigin(x, y);
+}
+
 /// Scales the sprite relative to its creation size (the full texture frame),
-/// keeping its top-left corner. `sx`/`sy` of 1.0 restores the original size.
+/// around its origin. `sx`/`sy` of 1.0 restores the original size.
 export fn pz_sprite_set_scale(spr: *PzSprite, sx: f32, sy: f32) callconv(.c) void {
     spr.sprite.setScale(sx, sy);
 }
@@ -474,6 +492,13 @@ export fn pz_sprite_set_tint(spr: *PzSprite, r: f32, g: f32, b: f32, a: f32) cal
     }
 }
 
+/// The sprite's origin position (what pz_sprite_set_pos set).
+export fn pz_sprite_get_pos(spr: *PzSprite, out_x: *f32, out_y: *f32) callconv(.c) void {
+    const p = spr.sprite.pos();
+    out_x.* = p.x;
+    out_y.* = p.y;
+}
+
 export fn pz_sprite_get_size(spr: *PzSprite, out_w: *f32, out_h: *f32) callconv(.c) void {
     out_w.* = spr.sprite.size.x;
     out_h.* = spr.sprite.size.y;
@@ -487,10 +512,13 @@ export fn pz_sprite_get_rect(spr: *PzSprite, out_x: *f32, out_y: *f32, out_w: *f
 }
 
 export fn pz_sprite_draw(spr: *PzSprite) callconv(.c) void {
-    spr.eng.engine.renderer.drawSprite(&spr.sprite);
+    spr.eng.engine.renderer.drawSprite(spr.sprite);
 }
 
+/// Frees a sprite from pz_sprite_create. A no-op for an actor's sprite view,
+/// which pz_actor_destroy frees.
 export fn pz_sprite_destroy(spr: *PzSprite) callconv(.c) void {
+    if (spr.owner != null) return;
     spr.sprite.deinit();
     registryRemove(PzSprite, &spr.eng.sprites, spr);
     spr.eng.alloc.destroy(spr);
@@ -890,7 +918,8 @@ export fn pz_audio_play(eng: *PzEngine, name: [*:0]const u8) callconv(.c) i32 {
 // Sprite animation. The engine owns one shared FrameSequenceManager (created
 // lazily). Frame textures must already be loaded (pz_load_texture / an atlas
 // / a manifest) under the names the sequences reference. Actors are opaque
-// handles (*PzActor); valid from pz_actor_create until pz_actor_destroy.
+// handles (*PzActor); valid from pz_actor_create until pz_actor_destroy. Each
+// actor owns a sprite, reached through pz_actor_sprite.
 // ---------------------------------------------------------------------------
 
 /// Loads a JSON frame-sequence + actor-state file into the shared manager.
@@ -974,20 +1003,27 @@ export fn pz_anim_add_state(eng: *PzEngine, state_name: [*:0]const u8, seq_name:
     return 0;
 }
 
-fn pzActorCreateImpl(eng: *PzEngine) !*PzActor {
-    var actor = try pixzig.sprites.Actor.init(eng.alloc);
+fn pzActorCreateImpl(eng: *PzEngine, texture_name: []const u8) !*PzActor {
+    var actor = pixzig.sprites.Actor.init(eng.alloc, try eng.engine.resources.createSprite(texture_name));
     errdefer actor.deinit();
 
     const wrapper = try eng.alloc.create(PzActor);
     errdefer eng.alloc.destroy(wrapper);
 
-    wrapper.* = .{ .eng = eng, .actor = actor, .registry_index = undefined };
+    wrapper.* = .{ .eng = eng, .actor = actor, .sprite_view = undefined, .registry_index = undefined };
+    wrapper.sprite_view = .{
+        .eng = eng,
+        .sprite = &wrapper.actor.sprite,
+        .owner = wrapper,
+        .registry_index = undefined,
+    };
     try registryAdd(PzActor, &eng.actors, eng.alloc, wrapper);
     return wrapper;
 }
 
-export fn pz_actor_create(eng: *PzEngine) callconv(.c) ?*PzActor {
-    return pzActorCreateImpl(eng) catch |err| {
+/// Creates an actor whose sprite starts on the texture `texture_name`.
+export fn pz_actor_create(eng: *PzEngine, texture_name: [*:0]const u8) callconv(.c) ?*PzActor {
+    return pzActorCreateImpl(eng, std.mem.span(texture_name)) catch |err| {
         setLastErrorErr(err);
         return null;
     };
@@ -1017,19 +1053,21 @@ export fn pz_actor_add_state(ac: *PzActor, state_name: [*:0]const u8) callconv(.
     return 0;
 }
 
-/// Switches the actor to `state_name` and applies that state's first frame to
-/// `spr` right away, so the sprite updates even before the next tick.
-export fn pz_actor_set_state(ac: *PzActor, state_name: [*:0]const u8, spr: *PzSprite) callconv(.c) void {
-    ac.actor.setState(std.mem.span(state_name));
-    const st = ac.actor.currState orelse return;
-    if (st.sequence.frames.items.len == 0) return;
-    st.sequence.frames.items[0].apply(&spr.sprite, st.flip);
+/// The actor's own sprite, as a view usable with every `pz_sprite_*` call.
+/// Valid until pz_actor_destroy; pz_sprite_destroy on it is a no-op.
+export fn pz_actor_sprite(ac: *PzActor) callconv(.c) *PzSprite {
+    return &ac.sprite_view;
 }
 
-/// Advances the actor's animation by `dt_ms` and writes the current frame
-/// into `spr` (texture sub-rect + flip).
-export fn pz_actor_update(ac: *PzActor, dt_ms: f64, spr: *PzSprite) callconv(.c) void {
-    ac.actor.update(dt_ms, &spr.sprite);
+/// Switches the actor to `state_name` and applies that state's first frame to
+/// its sprite right away, so it updates even before the next tick.
+export fn pz_actor_set_state(ac: *PzActor, state_name: [*:0]const u8) callconv(.c) void {
+    ac.actor.setState(std.mem.span(state_name));
+}
+
+/// Advances the actor's animation by `dt_ms`, updating its sprite's frame.
+export fn pz_actor_update(ac: *PzActor, dt_ms: f64) callconv(.c) void {
+    ac.actor.update(dt_ms);
 }
 
 // ---------------------------------------------------------------------------

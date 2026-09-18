@@ -127,7 +127,7 @@ pub const App = struct {
         const ent = flecs.new_id(self.world);
         _ = which;
 
-        var spr = try Sprite.create(try self.eng.resources.getTexture("guy"));
+        var spr = Sprite.create(try self.eng.resources.getTexture("guy"));
 
         spr.setPos(x, y);
         _ = flecs.set(self.world, ent, Sprite, spr);

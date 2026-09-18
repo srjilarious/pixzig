@@ -3,8 +3,8 @@
 --
 -- Expected globals set by Zig before running this script:
 --   player_entity  : integer  (flecs entity ID)
---   player_x       : number   (sprite left edge in game units)
---   player_y       : number   (sprite top edge in game units)
+--   player_x       : number   (sprite position, i.e. its origin; top-left by default)
+--   player_y       : number   (sprite position, i.e. its origin; top-left by default)
 
 local step = 16
 local ms   = 300

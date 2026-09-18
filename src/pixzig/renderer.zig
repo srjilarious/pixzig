@@ -18,6 +18,7 @@ const textures = @import("./renderer/textures.zig");
 const shaders = @import("./renderer/shaders.zig");
 
 const Sprite = @import("./renderer/sprites.zig").Sprite;
+const TextureHandle = resources.TextureHandle;
 const Vec2I = common.Vec2I;
 const Vec2U = common.Vec2U;
 const RectF = common.RectF;
@@ -46,12 +47,6 @@ pub const TextRenderer = textMod.TextRenderer;
 /// shapeRendering to false and the related code will not be included in the
 ///  final binary.
 pub const RendererOptions = struct {
-    /// Number of sprite batch queues to allocate. `begin`/`end`/`deinit`
-    /// operate on all of them, but the public draw calls (`draw`,
-    /// `drawSprite`, `drawTexture`, `drawFullTexture`) currently only submit
-    /// to `batches[0]` — there is no API yet to route a draw call to a
-    /// different batch index, so raising this above 1 has no visible effect.
-    numSpriteTextures: u8 = 1,
     shapeRendering: bool = true,
     textRendering: bool = false,
 
@@ -81,6 +76,12 @@ pub const RendererInitOpts = struct {
 
 /// A rendering interface that provides methods for drawing sprites, shapes
 /// and writing text.
+///
+/// Draws appear in the order they are submitted. Each kind of draw (plain
+/// sprites, tinted sprites, shapes, text, colored text) queues into its own
+/// batch, and switching to a different kind flushes the previous batch
+/// first. Runs of the same kind (and texture) still coalesce into one GL
+/// call, so group similar draws together when order doesn't matter.
 pub fn Renderer(opts: RendererOptions) type {
     return struct {
         const Self = @This();
@@ -97,9 +98,11 @@ pub fn Renderer(opts: RendererOptions) type {
         alloc: std.mem.Allocator,
         impl: *Impl,
 
+        /// Which batch holds the queued-but-unflushed draws.
+        const BatchKind = enum { none, sprites, tinted, shapes, text, text_colored };
+
         const Impl = struct {
-            batches: [opts.numSpriteTextures]SpriteBatchQueue,
-            overlays: SpriteBatchQueue,
+            sprites: SpriteBatchQueue,
             /// Dedicated sprite batch bound to `TintTextureShader`, used by
             /// `drawSpriteColored` so the plain sprite path stays on the
             /// untinted `TextureShader` program.
@@ -107,6 +110,10 @@ pub fn Renderer(opts: RendererOptions) type {
 
             shapes: ShapeBatchQueue = undefined,
             text: TextRenderer = undefined,
+
+            /// The batch the last draw went to. A draw to any other batch
+            /// flushes this one first, which keeps submission order.
+            active: BatchKind = .none,
         };
 
         const DefaultFontName = "__pixzig_default_font";
@@ -118,8 +125,7 @@ pub fn Renderer(opts: RendererOptions) type {
             // Tracks exactly which fields of `rend` are live so a later
             // failure unwinds only what actually got initialized, in
             // reverse construction order.
-            var batchesInit: usize = 0;
-            var overlaysInit = false;
+            var spritesInit = false;
             var tintedInit = false;
             var shapesInit = false;
             var textInit = false;
@@ -127,21 +133,16 @@ pub fn Renderer(opts: RendererOptions) type {
                 if (textInit) rend.text.deinit();
                 if (shapesInit) rend.shapes.deinit();
                 if (tintedInit) rend.tinted.deinit();
-                if (overlaysInit) rend.overlays.deinit();
-                for (0..batchesInit) |idx| rend.batches[idx].deinit();
+                if (spritesInit) rend.sprites.deinit();
             }
 
             std.log.info("Initializing shaders.", .{});
             const texShader = try resMgr.loadShader(shaders.TextureShader, &shaders.TexVertexShader, &shaders.TexPixelShader);
             const tintShader = try resMgr.loadShader(shaders.TintTextureShader, &shaders.TexVertexShader, &shaders.TexTintPixelShader);
 
-            std.log.info("Setting up {} sprite batch queues.", .{opts.numSpriteTextures});
-            for (0..opts.numSpriteTextures) |idx| {
-                rend.batches[idx] = try SpriteBatchQueue.initCapacity(alloc, texShader, opts.maxSprites);
-                batchesInit += 1;
-            }
-            rend.overlays = try SpriteBatchQueue.initCapacity(alloc, texShader, opts.maxSprites);
-            overlaysInit = true;
+            rend.active = .none;
+            rend.sprites = try SpriteBatchQueue.initCapacity(alloc, texShader, opts.maxSprites);
+            spritesInit = true;
             rend.tinted = try SpriteBatchQueue.initCapacity(alloc, tintShader, opts.maxSprites);
             tintedInit = true;
 
@@ -197,10 +198,7 @@ pub fn Renderer(opts: RendererOptions) type {
         }
 
         pub fn deinit(self: *Self) void {
-            for (0..self.impl.batches.len) |idx| {
-                self.impl.batches[idx].deinit();
-            }
-            self.impl.overlays.deinit();
+            self.impl.sprites.deinit();
             self.impl.tinted.deinit();
             if (opts.shapeRendering) {
                 self.impl.shapes.deinit();
@@ -248,15 +246,13 @@ pub fn Renderer(opts: RendererOptions) type {
             return &handle.val;
         }
 
-        /// Starts a frame: opens all sprite batches (plus shape/text batches
+        /// Starts a frame: opens the sprite batches (plus shape/text batches
         /// if enabled) with the given model-view-projection matrix. Pair
-        /// with `end()`; draw calls between them are buffered, not submitted
-        /// immediately.
+        /// with `end()`; draw calls between them are buffered, and flushed
+        /// when the next draw needs a different batch or at `end()`.
         pub fn begin(self: *Self, mvp: zmath.Mat) void {
-            for (0..self.impl.batches.len) |idx| {
-                self.impl.batches[idx].begin(mvp);
-            }
-            self.impl.overlays.begin(mvp);
+            self.impl.active = .none;
+            self.impl.sprites.begin(mvp);
             self.impl.tinted.begin(mvp);
 
             if (opts.shapeRendering) {
@@ -268,23 +264,36 @@ pub fn Renderer(opts: RendererOptions) type {
             }
         }
 
-        /// Flushes every open batch queue (sprites, overlays, shapes, text),
-        /// issuing the actual GL draw calls buffered since `begin()`.
+        /// Flushes whatever is still queued and closes every batch. Only the
+        /// active batch can hold draws at this point, so the others' `end`
+        /// just closes them.
         pub fn end(self: *Self) void {
-            for (0..self.impl.batches.len) |idx| {
-                self.impl.batches[idx].end();
-            }
+            self.impl.sprites.end();
             self.impl.tinted.end();
 
             if (opts.shapeRendering) {
                 self.impl.shapes.end();
             }
 
-            self.impl.overlays.end();
-
             if (opts.textRendering) {
                 self.impl.text.end();
             }
+            self.impl.active = .none;
+        }
+
+        /// Makes `kind` the batch receiving draws, flushing the previously
+        /// active batch if it was a different one so earlier draws land
+        /// underneath later ones.
+        fn use(self: *Self, kind: BatchKind) void {
+            if (self.impl.active == kind) return;
+            switch (self.impl.active) {
+                .none => {},
+                .sprites => self.impl.sprites.flush(),
+                .tinted => self.impl.tinted.flush(),
+                .shapes => if (comptime opts.shapeRendering) self.impl.shapes.flush(),
+                .text, .text_colored => if (comptime opts.textRendering) self.impl.text.flush(),
+            }
+            self.impl.active = kind;
         }
 
         pub fn clear(self: *const Self, r: f32, g: f32, b: f32, a: f32) void {
@@ -293,23 +302,16 @@ pub fn Renderer(opts: RendererOptions) type {
             gl.clear(gl.COLOR_BUFFER_BIT);
         }
 
-        /// Draws a texture region. Always submits to `batches[0]`, regardless
-        /// of `RendererOptions.numSpriteTextures`; see the field doc there.
-        pub fn draw(self: *Self, texture: *Texture, dest: RectF, srcCoords: RectF) void {
-            // TODO: Handle multiple batches
-            self.impl.batches[0].draw(texture, dest, srcCoords, .none);
-        }
-
         /// Draws a `Sprite`. When `sprite.tint` is set this routes to the
-        /// tinted batch (see `drawSpriteColored`); otherwise it submits to
-        /// `batches[0]` (see `draw()`).
+        /// tinted batch (see `drawSpriteColored`); otherwise it goes to the
+        /// plain sprite batch.
         pub fn drawSprite(self: *Self, sprite: *const Sprite) void {
             if (sprite.tint) |color| {
                 self.drawSpriteColored(sprite, color);
                 return;
             }
-            // TODO: Handle batches
-            self.impl.batches[0].drawSprite(sprite);
+            self.use(.sprites);
+            self.impl.sprites.drawSprite(sprite);
         }
 
         /// Draws a `Sprite` multiplied by `color` (a straight per-channel
@@ -317,38 +319,39 @@ pub fn Renderer(opts: RendererOptions) type {
         /// Submits to a separate batch bound to `TintTextureShader`; runs of
         /// same-colour draws still coalesce into one GL call.
         pub fn drawSpriteColored(self: *Self, sprite: *const Sprite, color: Color) void {
+            self.use(.tinted);
             self.impl.tinted.setTint(color.r, color.g, color.b, color.a);
             self.impl.tinted.drawSprite(sprite);
         }
 
-        /// Equivalent to `draw()`. Always submits to `batches[0]`.
-        pub fn drawTexture(self: *Self, texture: *Texture, dest: RectF, srcCoords: RectF) void {
-            self.impl.batches[0].draw(texture, dest, srcCoords, .none);
+        /// Draws the `srcCoords` region (UVs of the underlying image) of
+        /// `texture` into `dest`. Takes a borrowed or acquired handle alike.
+        pub fn drawTexture(self: *Self, texture: *TextureHandle, dest: RectF, srcCoords: RectF) void {
+            self.use(.sprites);
+            self.impl.sprites.draw(&texture.val, dest, srcCoords, .none);
         }
 
-        /// Draws a texture after shape batches, useful for image content in UI panels.
-        pub fn drawOverlayTexture(self: *Self, texture: *Texture, dest: RectF, srcCoords: RectF) void {
-            self.impl.overlays.draw(texture, dest, srcCoords, .none);
-        }
-
-        /// Draws the whole texture at `pos`, scaled uniformly by `scale`.
-        /// Always submits to `batches[0]`; see `draw()`.
-        pub fn drawFullTexture(self: *Self, texture: *Texture, pos: Vec2I, scale: f32) void {
-            const tsx = @as(f32, @floatFromInt(texture.size.x)) * scale;
-            const tsy = @as(f32, @floatFromInt(texture.size.y)) * scale;
-            self.impl.batches[0].draw(texture, RectF.fromPosSize(pos.x, pos.y, @intFromFloat(tsx), @intFromFloat(tsy)), texture.src, .none);
+        /// Draws the whole texture (frame) at `pos`, scaled uniformly by `scale`.
+        pub fn drawFullTexture(self: *Self, texture: *TextureHandle, pos: Vec2I, scale: f32) void {
+            const tex = &texture.val;
+            const tsx = @as(f32, @floatFromInt(tex.size.x)) * scale;
+            const tsy = @as(f32, @floatFromInt(tex.size.y)) * scale;
+            self.use(.sprites);
+            self.impl.sprites.draw(tex, RectF.fromPosSize(pos.x, pos.y, @intFromFloat(tsx), @intFromFloat(tsy)), tex.src, .none);
         }
 
         /// Requires `RendererOptions.shapeRendering == true`; calling it with
         /// shape rendering compiled out is a compile error.
         pub fn drawFilledRect(self: *Self, dest: RectF, color: Color) void {
             requireFlag("drawFilledRect", "shapeRendering");
+            self.use(.shapes);
             self.impl.shapes.drawFilledRect(dest, color);
         }
 
         /// Requires `RendererOptions.shapeRendering == true`; see `drawFilledRect()`.
         pub fn drawRect(self: *Self, dest: RectF, color: Color, lineWidth: u8) void {
             requireFlag("drawRect", "shapeRendering");
+            self.use(.shapes);
             self.impl.shapes.drawRect(dest, color, lineWidth);
         }
 
@@ -356,6 +359,7 @@ pub fn Renderer(opts: RendererOptions) type {
         /// Requires `RendererOptions.shapeRendering == true`; see `drawFilledRect()`.
         pub fn drawEnclosingRect(self: *Self, dest: RectF, color: Color, lineWidth: u8) void {
             requireFlag("drawEnclosingRect", "shapeRendering");
+            self.use(.shapes);
             self.impl.shapes.drawEnclosingRect(dest, color, lineWidth);
         }
 
@@ -364,12 +368,14 @@ pub fn Renderer(opts: RendererOptions) type {
         /// logs an error) if no default font has been set (see `setDefaultFont`).
         pub fn drawString(self: *Self, text: []const u8, pos: Vec2I) Vec2I {
             requireFlag("drawString", "textRendering");
+            self.use(.text);
             return self.impl.text.drawString(text, pos);
         }
 
         /// Requires `RendererOptions.textRendering == true`; see `drawString()`.
         pub fn drawScaledString(self: *Self, text: []const u8, pos: Vec2I, scale: f32) Vec2I {
             requireFlag("drawScaledString", "textRendering");
+            self.use(.text);
             return self.impl.text.drawScaledString(text, pos, scale);
         }
 
@@ -377,6 +383,7 @@ pub fn Renderer(opts: RendererOptions) type {
         /// rendering plain white. Requires `RendererOptions.textRendering == true`.
         pub fn drawStringColored(self: *Self, text: []const u8, pos: Vec2I, color: Color) Vec2I {
             requireFlag("drawStringColored", "textRendering");
+            self.use(.text_colored);
             return self.impl.text.drawStringColored(text, pos, color);
         }
 

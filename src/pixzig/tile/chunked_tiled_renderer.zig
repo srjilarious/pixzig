@@ -10,7 +10,7 @@ const ChunkedTiledLayerRenderer = @import("./chunked_tile_renderer.zig").Chunked
 
 const RectF = common.RectF;
 const ManagedShader = resources.ManagedShader;
-const ManagedTexture = resources.ManagedTexture;
+const TextureHandle = resources.TextureHandle;
 const TileMap = tilemap.TileMap;
 const Camera2D = camera_mod.Camera2D;
 const Viewport = window_mod.Viewport;
@@ -42,7 +42,9 @@ pub const ChunkedTiledRenderer = struct {
     entries: []LayerEntry,
     /// Retained so reload() can create renderers for newly added layers.
     shader: *ManagedShader,
-    texture: *ManagedTexture,
+    /// Our own reference (retained in `init`, released in `deinit`), so
+    /// reload() still has a live texture to hand new layer renderers.
+    texture: *TextureHandle,
 
     const Self = @This();
 
@@ -50,7 +52,7 @@ pub const ChunkedTiledRenderer = struct {
         alloc: std.mem.Allocator,
         map: *const TileMap,
         shader: *ManagedShader,
-        texture: *ManagedTexture,
+        texture: *TextureHandle,
     ) !Self {
         const n = map.layers.items.len;
         const entries = try alloc.alloc(LayerEntry, n);
@@ -72,12 +74,13 @@ pub const ChunkedTiledRenderer = struct {
 
         std.sort.block(LayerEntry, entries, {}, entryLessThan);
 
-        return .{ .alloc = alloc, .entries = entries, .shader = shader, .texture = texture };
+        return .{ .alloc = alloc, .entries = entries, .shader = shader, .texture = texture.retain() };
     }
 
     pub fn deinit(self: *Self) void {
         for (self.entries) |*e| e.renderer.deinit();
         self.alloc.free(self.entries);
+        self.texture.release();
     }
 
     /// Mark all chunks in all layers as dirty. Chunks rebuild lazily as they
@@ -102,6 +105,8 @@ pub const ChunkedTiledRenderer = struct {
     /// changes to z or parallax properties. On error the existing renderers
     /// are left intact.
     pub fn reload(self: *Self, map: *const TileMap) !void {
+        if (self.texture.dirty) self.texture = self.texture.reacquire();
+
         const n = map.layers.items.len;
         const new_entries = try self.alloc.alloc(LayerEntry, n);
         errdefer self.alloc.free(new_entries);

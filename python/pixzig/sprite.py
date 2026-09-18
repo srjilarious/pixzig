@@ -27,28 +27,39 @@ class Flip(IntEnum):
 
 
 class Sprite:
-    def __init__(self, handle):
+    def __init__(self, handle, owner=None):
         self._handle = handle
         self._destroyed = False
+        # The Actor this sprite belongs to, or None for a standalone sprite.
+        # An actor's sprite lives and dies with the actor.
+        self._owner = owner
 
     def _check_alive(self) -> None:
-        if self._destroyed:
+        if self._destroyed or (self._owner is not None and self._owner._destroyed):
             raise _n.PixzigError("sprite already destroyed (or the app has shut down)")
 
     def set_pos(self, x: float, y: float) -> None:
-        """Moves the sprite's top-left corner. Fractional positions are kept."""
+        """Moves the sprite's origin (top-left corner unless `set_origin` was
+        called). Fractional positions are kept."""
         self._check_alive()
         _n.pz_sprite_set_pos(self._handle, float(x), float(y))
 
+    def set_origin(self, x: float, y: float) -> None:
+        """Sets the pivot in texture-frame pixels (e.g. (8, 16) is the
+        bottom-center of a 16x16 frame). `set_pos` places this point and
+        scaling grows around it. The sprite's position stays the same."""
+        self._check_alive()
+        _n.pz_sprite_set_origin(self._handle, float(x), float(y))
+
     def set_size(self, w: float, h: float) -> None:
-        """Resizes the on-screen rectangle, keeping the top-left corner."""
+        """Resizes the on-screen rectangle around the origin."""
         self._check_alive()
         _n.pz_sprite_set_size(self._handle, float(w), float(h))
 
     def set_scale(self, sx: float, sy: float = None) -> None:
         """Scales relative to the sprite's creation size (the full texture
-        frame). `set_scale(2)` doubles it; `set_scale(1)` restores it. Pass a
-        single value for a uniform scale."""
+        frame), around the origin. `set_scale(2)` doubles it; `set_scale(1)`
+        restores it. Pass a single value for a uniform scale."""
         self._check_alive()
         if sy is None:
             sy = sx
@@ -88,8 +99,11 @@ class Sprite:
 
     @property
     def pos(self):
-        x, y, _, _ = self.rect
-        return (x, y)
+        """The origin's position (what `set_pos` set)."""
+        self._check_alive()
+        x, y = ctypes.c_float(), ctypes.c_float()
+        _n.pz_sprite_get_pos(self._handle, ctypes.byref(x), ctypes.byref(y))
+        return (x.value, y.value)
 
     @property
     def size(self):
@@ -111,6 +125,10 @@ class Sprite:
         _n.pz_sprite_draw(self._handle)
 
     def destroy(self) -> None:
+        """Frees the sprite. An actor's sprite is freed with its actor, so
+        this does nothing for one."""
+        if self._owner is not None:
+            return
         if not self._destroyed:
             _n.pz_sprite_destroy(self._handle)
             self._destroyed = True

@@ -51,16 +51,17 @@ class ActorAnimationApp(PixzigApp):
         self.add_anim_state("down", "walk_down")
         self.add_anim_state("up", "walk_down", flip=Flip.VERT)
 
-        self.sprite = self.load_sprite("right_1")
+        # The actor owns its sprite; move and draw it through `actor.sprite`.
+        self.actor = self.create_actor("right_1")
+        self.sprite = self.actor.sprite
         self.sprite.set_scale(3)
         self.pos = [300.0, 220.0]
         self.sprite.set_pos(*map(int, self.pos))
 
-        self.actor = self.create_actor()
         for state in ("right", "left", "down", "up"):
             self.actor.add_state(state)
         self.facing = "right"
-        self.actor.set_state(self.facing, self.sprite)
+        self.actor.set_state(self.facing)
 
     def update(self, dt_ms: float) -> bool:
         if self.keyboard.pressed(Key.ESCAPE):
@@ -81,9 +82,9 @@ class ActorAnimationApp(PixzigApp):
         if want is not None:
             if want != self.facing:
                 self.facing = want
-                self.actor.set_state(want, self.sprite)
+                self.actor.set_state(want)
             # Only advance the animation while actually moving.
-            self.actor.update(dt_ms, self.sprite)
+            self.actor.update(dt_ms)
 
         self.pos[0] += dx
         self.pos[1] += dy

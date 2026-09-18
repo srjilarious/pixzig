@@ -15,31 +15,28 @@ pub fn render(self: *App, eng: *AppRunner.Engine) void {
 }
 ```
 
-`end` flushes each batch queue.
+Draws appear in the order you submit them. Each kind of draw (plain sprites and textures, tinted sprites, shapes, text, colored text) queues into its own batch; switching to a different kind flushes the previous batch first, and `end` flushes whatever is left. Consecutive draws of the same kind and texture still go out as one GL call, so when order doesn't matter, grouping similar draws keeps the call count down.
 
 ## Loading Textures
 
-Resources are reference-counted. `loadTexture` registers the file and returns a `*ManagedTexture`. Call `acquire()` on it to get a `*TextureHandle` with a bumped refcount, store the handle in your app, and call `handle.release()` in `deinit`.
+Every texture loader returns a `*TextureHandle`. There are two ways to hold one:
+
+- **Borrowed** (the simple path): `loadTexture`, `loadTextureFromBuffer`, `createTextureImageFromChars`, `addSubTexture`, and `getTexture(name)` return a handle without taking a reference. Keep it and draw with it; never release it. It stays valid until the resource manager deinits.
+- **Owned**: `acquireTexture(name)` bumps the refcount. Call `handle.release()` when you're done. Use this when something must keep a texture alive on its own terms (a cache, a long-lived renderer).
 
 ```zig
-// During App.init:
-const managed = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
-self.tex = managed.acquire() orelse return error.NoTexture;
+// During App.init -- nothing to release later:
+self.tex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
 
-// During App.deinit:
-self.tex.release();
+// Later, anywhere:
+const tiles = try eng.resources.getTexture("tiles");
 ```
 
-To draw, pass a pointer to the `Texture` value inside the handle:
+To draw a region of a texture, pass the handle straight to `drawTexture`:
 
 ```zig
-eng.renderer.draw(&self.tex.val, dest, srcCoords);
-```
-
-`acquireTexture` is a convenience that combines the lookup and acquire in one call:
-
-```zig
-self.tex = try eng.resources.acquireTexture("tiles");
+eng.renderer.drawTexture(self.tex, dest, srcCoords);
+eng.renderer.drawFullTexture(self.tex, .{ .x = 10, .y = 10 }, 2.0); // whole frame, 2x
 ```
 
 ### Atlas Loading
@@ -59,7 +56,7 @@ _ = try eng.resources.loadAtlasNamed("main_sprites", "assets/pac-tiles");
 
 ## Drawing Sprites
 
-`eng.resources.createSprite(name)` builds a sprite from any loaded texture, atlas frame, or subtexture. The sprite acquires its own handle and starts at the frame's size; release it with `deinit()`:
+`eng.resources.createSprite(name)` builds a sprite from any loaded texture, atlas frame, or subtexture, sized to that frame. `Sprite.create(handle)` does the same from a handle, borrowed or owned. Either way the sprite retains its own reference and releases it in `deinit()`; your handle is untouched.
 
 ```zig
 // During App.init:
@@ -75,9 +72,46 @@ eng.renderer.drawSprite(&self.spr); // uses the tinted batch when tint is set
 self.spr.deinit();
 ```
 
-`setPos`, `setPosF`, `setSize`, and `setScale` keep `dest` and `size` in sync; writing `dest` directly skips that. `setSrcRect(RectI)` draws a sub-region of the frame, in pixels.
+`setPos`, `setPosF`, `setSize`, `setScale`, and `setOrigin` keep `dest` and `size` in sync; writing `dest` directly skips that. `setSrcRect(RectI)` draws a sub-region of the frame, in pixels. `setTexture(handle)` switches the texture (retaining the new one, releasing the old).
 
-`Sprite.create(managed)` does the same from a `*ManagedTexture` (it acquires a new handle; `managed` is not consumed). `Sprite.createFromHandle(handle)` takes ownership of a handle you already acquired, so don't release that handle separately.
+### Origin
+
+A sprite's origin is its pivot, in the texture frame's own pixels, measured from the frame's top-left corner. `setPos` places the origin, and `setSize`/`setScale` grow the sprite around it. It defaults to `(0, 0)`, the top-left corner.
+
+```zig
+spr.setOriginNormalized(0.5, 1); // bottom-center: feet on the ground
+spr.setPos(100, 50);             // feet at (100, 50)
+spr.setScale(2, 2);              // grows up and out; feet stay put
+
+spr.setOriginCentered();         // same as setOriginNormalized(0.5, 0.5)
+spr.setOrigin(3, 12);            // an exact pixel of the frame, e.g. a hand
+```
+
+`setOrigin` keeps `pos()` where it was and shifts the image so the new origin lands on it.
+
+### Animated Actors
+
+An `Actor` owns the `Sprite` it animates and plays named states (each a `FrameSequence`) on it. Move, scale, and draw it through `actor.sprite`:
+
+```zig
+// During App.init (the actor takes ownership of the sprite):
+self.hero = Actor.init(alloc, try eng.resources.createSprite("player_right_1"));
+_ = try self.hero.addState(seqMgr.getState("walk_right").?, .{}); // first state applies its first frame
+self.hero.sprite.setOriginNormalized(0.5, 1);
+
+// In update:
+self.hero.setState("walk_right"); // no-op if already in it; otherwise shows frame 0 now
+self.hero.update(delta);
+self.hero.sprite.setPosF(x, y);
+
+// In render:
+eng.renderer.drawSprite(&self.hero.sprite);
+
+// During App.deinit (also releases the sprite):
+self.hero.deinit();
+```
+
+Frames may come from different textures; applying a frame switches the sprite's texture as needed.
 
 ### Subtextures
 
@@ -94,7 +128,7 @@ To draw a raw texture region instead:
 ```zig
 const dest = RectF.fromPosSize(10, 10, 32, 32);
 const src  = RectF.fromCoords(32, 32, 32, 32, 512, 512); // px, py, pw, ph, texW, texH
-eng.renderer.draw(&self.tex.val, dest, src);
+eng.renderer.drawTexture(self.tex, dest, src);
 ```
 
 ## Hot Reload
@@ -111,6 +145,10 @@ pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
 ```
 
 `reacquire` atomically upgrades to the latest generation and releases the old handle. In release builds, `dirty` is always false and `reacquire` is a no-op. Until you reacquire, a stale handle keeps drawing the old image: atlas frames and subtextures hold a reference to their image, so a reload doesn't delete the GL texture out from under them.
+
+`reacquire` is for owned handles. A borrowed handle can't be reacquired (it holds no reference to hand back); call `getTexture(name)` again to pick up the new generation. In debug builds, superseded texture generations are kept until the resource manager deinits, so a borrowed handle you kept in a struct still points at valid (stale) data after a reload. Release builds reclaim an unreferenced older generation as soon as the same name is loaded again, so don't hold a borrowed handle across an explicit re-load there.
+
+When the resource manager deinits with a handle still referenced, the log names it, e.g. `Texture 'player_right_1' (generation 1): refCount = 1 on deinit`.
 
 ## Text and Fonts
 
@@ -173,7 +211,7 @@ eng.renderer.drawEnclosingRect(rect, Color.from(255, 0, 255, 200), 2);
 eng.renderer.drawFilledRect(rect, Color.from(100, 200, 255, 128));
 ```
 
-Calling a shape or text draw function when the corresponding option is compiled out is only checked with a debug assertion. In a release build it isn't a caught error — it reads an uninitialized batch, which is undefined behavior. Only call these when the matching `rendererOpts` flag is `true`.
+Calling a shape or text draw function when the corresponding option is compiled out is a compile error that names the flag.
 
 ## Logical Resolution
 
@@ -193,17 +231,19 @@ Pass `eng.projection()` to `renderer.begin`. With `.integer_fit`, the logical gr
 
 ```zig
 pub const App = struct {
-    tex: *pixzig.TextureHandle,
+    alloc: std.mem.Allocator,
+    tex: *pixzig.TextureHandle, // borrowed: never released
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app = try alloc.create(App);
-        const managed = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
-        app.* = .{ .tex = managed.acquire() orelse return error.NoTexture };
+        app.* = .{
+            .alloc = alloc,
+            .tex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png"),
+        };
         return app;
     }
 
     pub fn deinit(self: *App) void {
-        self.tex.release();
         self.alloc.destroy(self);
     }
 
@@ -211,9 +251,10 @@ pub const App = struct {
         eng.renderer.clear(0, 0, 0.2, 1);
         eng.renderer.begin(eng.projection());
 
-        eng.renderer.draw(&self.tex.val, RectF.fromPosSize(10, 10, 32, 32),
-                          RectF.fromCoords(32, 32, 32, 32, 512, 512));
+        eng.renderer.drawTexture(self.tex, RectF.fromPosSize(10, 10, 32, 32),
+                                 RectF.fromCoords(32, 32, 32, 32, 512, 512));
 
+        // Drawn after the texture, so the outline sits on top of it.
         eng.renderer.drawRect(RectF.fromPosSize(10, 10, 32, 32),
                               Color.from(255, 255, 0, 200), 2);
 

@@ -24,7 +24,7 @@ pub const App = struct {
     eng: *AppRunner.Engine,
     manifest: AssetManifest,
     group_loaded: bool,
-    sprite_tex: ?*pixzig.resources.ManagedTexture,
+    sprite_tex: ?*pixzig.TextureHandle,
     spr: Sprite,
     /// World position tracked separately from sprite.dest (which is pixels).
     pos: Vec2F,
@@ -43,7 +43,7 @@ pub const App = struct {
         const sprite_tex = eng.resources.getTexture("player_right_1") catch null;
 
         const init_pos = Vec2F{ .x = 100, .y = 100 };
-        var spr = try Sprite.create(sprite_tex.?);
+        var spr = Sprite.create(sprite_tex.?);
         spr.setPos(@intFromFloat(init_pos.x), @intFromFloat(init_pos.y));
 
         const app = try alloc.create(App);
@@ -92,12 +92,9 @@ pub const App = struct {
                 self.group_loaded = true;
                 self.sprite_tex = eng.resources.getTexture("player_right_1") catch null;
 
-                if (self.sprite_tex) |_| {
-                    const spr = Sprite.create(self.sprite_tex.?) catch null;
-                    if (spr) |_| {
-                        self.spr = spr.?;
-                        self.spr.setPos(@intFromFloat(self.pos.x), @intFromFloat(self.pos.y));
-                    }
+                if (self.sprite_tex) |tex| {
+                    self.spr = Sprite.create(tex);
+                    self.spr.setPos(@intFromFloat(self.pos.x), @intFromFloat(self.pos.y));
                 }
             }
         }

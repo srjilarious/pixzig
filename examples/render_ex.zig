@@ -42,11 +42,10 @@ pub const App = struct {
 
         //* We load a texture through the resource manager, which will cache
         //* it and return the same texture if we try to load it again.  The
-        //* resource manager also handles deinitialization of the texture when
-        //* the engine is deinitialized, so we don't have to worry about freeing it ourselves.
+        //* handle it returns is borrowed: the resource manager frees the
+        //* texture when the engine is deinitialized, so we never release it.
 
-        const texManaged = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
-        const tex = texManaged.acquire() orelse return error.NoTextureInPool;
+        const tex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
 
         app.* = .{
             .alloc = alloc,
@@ -82,7 +81,6 @@ pub const App = struct {
 
     pub fn deinit(self: *App) void {
         std.log.info("Deiniting application..", .{});
-        self.tex.release();
         self.alloc.destroy(self);
     }
 
@@ -106,7 +104,7 @@ pub const App = struct {
 
         //* Here we're directly drawing a source rectangle from the texture to a destination rectangle on the screen.  The sprite batch will handle creating the vertices for this and batching it together with other draw calls.
         for (0..3) |idx| {
-            eng.renderer.draw(&self.tex.val, self.dest[idx], self.srcCoords[idx]);
+            eng.renderer.drawTexture(self.tex, self.dest[idx], self.srcCoords[idx]);
         }
 
         //* Draw sprite outlines.

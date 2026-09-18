@@ -108,7 +108,7 @@ pub fn tiledReloadAddsLayerTest(io: std.Io, alloc: std.mem.Allocator) !void {
     const layer1 = try makeLayer(alloc);
     try map1.layers.append(alloc, layer1);
 
-    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, &shader, &tex);
+    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, &shader, tex.get().?);
     defer renderer.deinit();
 
     try testz.expectEqual(renderer.entries.len, 1);
@@ -139,7 +139,7 @@ pub fn tiledReloadRemovesLayerTest(io: std.Io, alloc: std.mem.Allocator) !void {
     try map1.layers.append(alloc, try makeLayer(alloc));
     try map1.layers.append(alloc, try makeLayer(alloc));
 
-    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, &shader, &tex);
+    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, &shader, tex.get().?);
     defer renderer.deinit();
 
     try testz.expectEqual(renderer.entries.len, 2);
@@ -169,7 +169,7 @@ pub fn tiledReloadZOrderTest(io: std.Io, alloc: std.mem.Allocator) !void {
     try map1.layers.append(alloc, try makeLayer(alloc));
     try map1.layers.append(alloc, try makeLayer(alloc));
 
-    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, &shader, &tex);
+    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, &shader, tex.get().?);
     defer renderer.deinit();
 
     // Reload: layer 0 gets z=1, layer 1 stays z=0.

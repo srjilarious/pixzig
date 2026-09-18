@@ -113,17 +113,14 @@ pub const App = struct {
         down_seq.ownsHandles = true;
         try app.seqMgr.addSeq("player_down", down_seq);
 
-        // --- Set up flecs world with Sprite and Actor components ---
+        // --- Set up flecs world with an Actor component (which owns its Sprite) ---
         app.world = flecs.init();
         flecs.COMPONENT(app.world, Sprite);
         flecs.COMPONENT(app.world, Actor);
 
         app.entity = flecs.new_entity(app.world, "player");
 
-        const spr = try Sprite.create(try eng.resources.getTexture("player_right_1"));
-        flecs.set(app.world, app.entity, Sprite, spr);
-
-        var actor = try Actor.init(alloc);
+        var actor = Actor.init(alloc, Sprite.create(try eng.resources.getTexture("player_right_1")));
         _ = try actor.addState(&.{ .name = "right", .sequence = app.seqMgr.getSeq("player_right").?, .flip = .none }, .{});
         _ = try actor.addState(&.{ .name = "left", .sequence = app.seqMgr.getSeq("player_right").?, .flip = .horz }, .{});
         _ = try actor.addState(&.{ .name = "down", .sequence = app.seqMgr.getSeq("player_down").?, .flip = .none }, .{});
@@ -141,14 +138,10 @@ pub const App = struct {
     pub fn deinit(self: *App) void {
         self.scriptEng.deinit();
         self.seqCtx.deinit();
-        // Free the Actor's StringHashMap before destroying the world.
+        // Free the Actor's states and release its sprite's texture while the
+        // ECS component storage (and thus the Actor value) is still alive.
         if (flecs.get_mut(self.world, self.entity, Actor)) |actor| {
             actor.deinit();
-        }
-        // Release the sprite's texture handle while its ECS component
-        // storage (and thus the Sprite value itself) is still alive.
-        if (flecs.get_mut(self.world, self.entity, Sprite)) |spr| {
-            spr.deinit();
         }
         _ = flecs.fini(self.world);
         self.seqPlayer.deinit();
@@ -157,19 +150,21 @@ pub const App = struct {
     }
 
     fn runCircle(self: *App) !void {
-        const spr = flecs.get(self.world, self.entity, Sprite) orelse return;
+        const actor = flecs.get(self.world, self.entity, Actor) orelse return;
+        const pos = actor.sprite.pos();
         self.scriptEng.lua.pushInteger(@intCast(self.entity));
         self.scriptEng.lua.setGlobal("player_entity");
-        self.scriptEng.lua.pushNumber(@floatCast(spr.dest.l));
+        self.scriptEng.lua.pushNumber(@floatCast(pos.x));
         self.scriptEng.lua.setGlobal("player_x");
-        self.scriptEng.lua.pushNumber(@floatCast(spr.dest.t));
+        self.scriptEng.lua.pushNumber(@floatCast(pos.y));
         self.scriptEng.lua.setGlobal("player_y");
         try self.scriptEng.runScript("assets/circle_move.lua");
     }
 
     fn queueMove(self: *App, dir: []const u8, dx: f32, dy: f32) !void {
-        const spr = flecs.get(self.world, self.entity, Sprite) orelse return;
-        const target = Vec2F{ .x = spr.dest.l + dx, .y = spr.dest.t + dy };
+        const actor = flecs.get(self.world, self.entity, Actor) orelse return;
+        const pos = actor.sprite.pos();
+        const target = Vec2F{ .x = pos.x + dx, .y = pos.y + dy };
 
         var sequence = seq.Sequence.init(self.alloc);
         try sequence.add(self.alloc, try seq.SetActorStateStep.init(self.alloc, self.world, self.entity, dir));
@@ -191,13 +186,10 @@ pub const App = struct {
             }
         }
 
-        // Update actor animation on the ECS sprite.
+        // Advance the actor's animation (it updates its own sprite).
         if (flecs.get_mut(self.world, self.entity, Actor)) |actor| {
-            if (flecs.get_mut(self.world, self.entity, Sprite)) |spr| {
-                actor.update(delta, spr);
-                flecs.modified(self.world, self.entity, Sprite);
-                flecs.modified(self.world, self.entity, Actor);
-            }
+            actor.update(delta);
+            flecs.modified(self.world, self.entity, Actor);
         }
 
         // Tick all active sequences.
@@ -236,8 +228,8 @@ pub const App = struct {
         self.fps.renderTick();
 
         eng.renderer.begin(eng.projection());
-        if (flecs.get_mut(self.world, self.entity, Sprite)) |spr| {
-            eng.renderer.drawSprite(spr);
+        if (flecs.get_mut(self.world, self.entity, Actor)) |actor| {
+            eng.renderer.drawSprite(&actor.sprite);
         }
         eng.renderer.end();
     }

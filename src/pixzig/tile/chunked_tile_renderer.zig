@@ -11,7 +11,6 @@ const tilemap = @import("./tilemap.zig");
 const RectF = common.RectF;
 const ManagedShader = resources.ManagedShader;
 const ShaderHandle = resources.ShaderHandle;
-const ManagedTexture = resources.ManagedTexture;
 const TextureHandle = resources.TextureHandle;
 const TileSet = tilemap.TileSet;
 const TileLayer = tilemap.TileLayer;
@@ -75,12 +74,12 @@ pub const ChunkedTiledLayerRenderer = struct {
     pub fn init(
         alloc: std.mem.Allocator,
         shader: *ManagedShader,
-        texture: *ManagedTexture,
+        texture: *TextureHandle,
         layer: *const TileLayer,
     ) !Self {
         const shader_handle = shader.acquire() orelse return error.NoShaderInPool;
         errdefer shader_handle.release();
-        const texture_handle = texture.acquire() orelse return error.NoTextureInPool;
+        const texture_handle = texture.retain();
         errdefer texture_handle.release();
 
         const map_w: u32 = @intCast(layer.size.x);

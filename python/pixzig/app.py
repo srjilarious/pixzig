@@ -136,8 +136,10 @@ class PixzigApp:
             _n.pz_anim_add_state(self._eng, name.encode("utf-8"), sequence.encode("utf-8"), ns, int(flip)) == 0
         )
 
-    def create_actor(self) -> Actor:
-        handle = _n.pz_actor_create(self._eng)
+    def create_actor(self, texture_name: str) -> Actor:
+        """Creates an actor whose sprite (`actor.sprite`) starts on the
+        texture `texture_name`."""
+        handle = _n.pz_actor_create(self._eng, texture_name.encode("utf-8"))
         if not handle:
             raise _n.PixzigError(_n.last_error())
         return self._track(Actor(handle))

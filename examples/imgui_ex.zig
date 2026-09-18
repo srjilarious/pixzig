@@ -83,8 +83,7 @@ pub const App = struct {
                 &eng.inputs.mouse,
                 &eng.inputs.keyboard,
                 &eng.viewport,
-                &eng.renderer.impl.batches[0],
-                &eng.renderer.impl.overlays,
+                &eng.renderer.impl.sprites,
                 &eng.renderer.impl.shapes,
                 &eng.renderer.impl.text,
             ),
@@ -104,12 +103,11 @@ pub const App = struct {
             .sprite_scroll = 0,
         };
         const sheet = try eng.resources.loadTexture("imgui_tiles", "assets/mario_grassish2.png");
-        const preview_managed = try eng.resources.addSubTexture(
+        app.preview = try eng.resources.addSubTexture(
             sheet,
             "imgui_preview",
             RectI.init(32, 32, 32, 32),
         );
-        app.preview = preview_managed.acquire() orelse return error.NoTextureInPool;
         app.ui.setClipboardWindow(eng.window);
 
         try app.addLog("GUI test started. Type something and press Submit.");
@@ -133,7 +131,6 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        self.preview.release();
         for (self.log.items) |line| self.alloc.free(line);
         self.log.deinit(self.alloc);
         self.alloc.destroy(self);
@@ -236,7 +233,7 @@ pub const App = struct {
         }
         self.ui.spacing();
         self.ui.label("Preview:");
-        self.ui.image(&self.preview.val, .{ .x = 48, .y = 48 });
+        self.ui.image(self.preview, .{ .x = 48, .y = 48 });
         _ = self.ui.toggle("loop_animation", "Loop animation", &self.loop_animation);
         self.ui.label("Frame duration (ms):");
         _ = self.ui.inputInt("frame_ms", &self.frame_ms);

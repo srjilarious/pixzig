@@ -34,7 +34,7 @@ var g_fakeHandle: pixzig.resources.TextureHandle = .{
 // Build a Sprite at (x, y) with a 16×16 size backed by the module-level fake
 // handle, whose pointer remains valid for the lifetime of the test binary.
 fn makeSprite(x: i32, y: i32) Sprite {
-    var spr = Sprite.createFromHandle(&g_fakeHandle);
+    var spr = Sprite.create(&g_fakeHandle);
     spr.setPos(x, y);
     return spr;
 }
@@ -161,6 +161,35 @@ pub fn moveToStepInterpolatesAtMidpointTest(io: std.Io, alloc: std.mem.Allocator
     try testz.expectEqual(spr.dest.t, 30.0);
 }
 
+// MoveToStep falls back to an Actor's own sprite when the entity has no
+// Sprite component, and moves the sprite's origin rather than its corner.
+pub fn moveToStepMovesActorSpriteOriginTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    const world = makeWorld(.{ Sprite, Actor });
+    defer _ = flecs.fini(world);
+
+    const entity = flecs.new_entity(world, "move_actor");
+    // Not deinit'd: the fake handle has no parent to release into.
+    var actor = Actor.init(alloc, makeSprite(0, 0));
+    actor.sprite.setOriginCentered();
+    actor.sprite.setPos(0, 0);
+    flecs.set(world, entity, Actor, actor);
+    defer if (flecs.get_mut(world, entity, Actor)) |a| a.states.deinit();
+
+    var sequence = seq.Sequence.init(alloc);
+    defer sequence.deinit(alloc);
+    try sequence.add(alloc, try seq.MoveToStep.init(alloc, world, entity, .{ .x = 40, .y = 20 }, 100.0));
+
+    try testz.expectTrue(sequence.update(100.0));
+
+    const moved = flecs.get(world, entity, Actor).?;
+    try testz.expectEqual(moved.sprite.pos().x, 40.0);
+    try testz.expectEqual(moved.sprite.pos().y, 20.0);
+    // 16x16 frame centered on (40, 20).
+    try testz.expectEqual(moved.sprite.dest.l, 32.0);
+    try testz.expectEqual(moved.sprite.dest.t, 12.0);
+}
+
 // ---------------------------------------------------------------------------
 // SetActorStateStep tests
 // ---------------------------------------------------------------------------
@@ -193,7 +222,7 @@ pub fn setActorStateStepCompletesWithActorTest(io: std.Io, alloc: std.mem.Alloca
     const entity = flecs.new_entity(world, "actor2");
     // Actor is heap-backed (StringHashMap); intentionally not deinit'd here
     // so the ECS copy's backing memory stays valid for the test duration.
-    const actor = try Actor.init(alloc);
+    const actor = Actor.init(alloc, makeSprite(0, 0));
     flecs.set(world, entity, Actor, actor);
 
     var sequence = seq.Sequence.init(alloc);

@@ -155,6 +155,10 @@ pz_set_default_font = _sig("pz_set_default_font", [PzEnginePtr, c_char_p], c_int
 # --- Sprites -----------------------------------------------------------
 pz_sprite_create = _sig("pz_sprite_create", [PzEnginePtr, c_char_p], PzSpritePtr)
 pz_sprite_set_pos = _sig("pz_sprite_set_pos", [PzSpritePtr, c_float, c_float], None)
+pz_sprite_set_origin = _sig("pz_sprite_set_origin", [PzSpritePtr, c_float, c_float], None)
+pz_sprite_get_pos = _sig(
+    "pz_sprite_get_pos", [PzSpritePtr, ctypes.POINTER(c_float), ctypes.POINTER(c_float)], None
+)
 pz_sprite_get_rect = _sig(
     "pz_sprite_get_rect",
     [PzSpritePtr, ctypes.POINTER(c_float), ctypes.POINTER(c_float), ctypes.POINTER(c_float), ctypes.POINTER(c_float)],
@@ -186,11 +190,12 @@ pz_anim_seq_add_frame = _sig(
 pz_anim_add_state = _sig(
     "pz_anim_add_state", [PzEnginePtr, c_char_p, c_char_p, c_char_p, c_int], c_int32
 )
-pz_actor_create = _sig("pz_actor_create", [PzEnginePtr], PzActorPtr)
+pz_actor_create = _sig("pz_actor_create", [PzEnginePtr, c_char_p], PzActorPtr)
+pz_actor_sprite = _sig("pz_actor_sprite", [PzActorPtr], PzSpritePtr)
 pz_actor_destroy = _sig("pz_actor_destroy", [PzActorPtr], None)
 pz_actor_add_state = _sig("pz_actor_add_state", [PzActorPtr, c_char_p], c_int32)
-pz_actor_set_state = _sig("pz_actor_set_state", [PzActorPtr, c_char_p, PzSpritePtr], None)
-pz_actor_update = _sig("pz_actor_update", [PzActorPtr, ctypes.c_double, PzSpritePtr], None)
+pz_actor_set_state = _sig("pz_actor_set_state", [PzActorPtr, c_char_p], None)
+pz_actor_update = _sig("pz_actor_update", [PzActorPtr, ctypes.c_double], None)
 
 # --- Camera ----------------------------------------------------------------
 pz_camera_create = _sig("pz_camera_create", [PzEnginePtr], PzCameraPtr)

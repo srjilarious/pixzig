@@ -123,14 +123,14 @@ pub const Natetris = struct {
         \\=------=
         ;
 
-        const tex = (try eng.resources.createTextureImageFromChars("test", 8, 8, blockChars, &[_]CharToColor{
+        const tex = try eng.resources.createTextureImageFromChars("test", 8, 8, blockChars, &[_]CharToColor{
             .{ .char = '#', .color = Color8.from(40, 255, 40, 255) },
             .{ .char = '-', .color = Color8.from(100, 100, 200, 255) },
             .{ .char = '=', .color = Color8.from(100, 100, 100, 255) },
             .{ .char = '.', .color = Color8.from(240, 240, 240, 255) },
             .{ .char = '@', .color = Color8.from(30, 155, 30, 255) },
             .{ .char = ' ', .color = Color8.from(0, 0, 0, 0) },
-        })).acquire() orelse return error.NoTextureInPool;
+        });
 
         const lockedChars =
         \\=------=
@@ -143,23 +143,23 @@ pub const Natetris = struct {
         \\=------=
         ;
 
-        const wallTex = (try eng.resources.createTextureImageFromChars("wall", 8, 8, lockedChars, &[_]CharToColor{
+        const wallTex = try eng.resources.createTextureImageFromChars("wall", 8, 8, lockedChars, &[_]CharToColor{
             .{ .char = '#', .color = Color8.from(180, 180, 180, 255) },
             .{ .char = '-', .color = Color8.from(80, 80, 80, 255) },
             .{ .char = '=', .color = Color8.from(100, 100, 100, 255) },
             .{ .char = '.', .color = Color8.from(240, 240, 240, 255) },
             .{ .char = '@', .color = Color8.from(30, 30, 30, 255) },
             .{ .char = ' ', .color = Color8.from(0, 0, 0, 0) },
-        })).acquire() orelse return error.NoTextureInPool;
+        });
 
-        const lockedTex = (try eng.resources.createTextureImageFromChars("locked", 8, 8, lockedChars, &[_]CharToColor{
+        const lockedTex = try eng.resources.createTextureImageFromChars("locked", 8, 8, lockedChars, &[_]CharToColor{
             .{ .char = '#', .color = Color8.from(150, 150, 210, 255) },
             .{ .char = '-', .color = Color8.from(80, 80, 120, 255) },
             .{ .char = '=', .color = Color8.from(100, 100, 150, 255) },
             .{ .char = '.', .color = Color8.from(240, 240, 240, 255) },
             .{ .char = '@', .color = Color8.from(30, 30, 60, 255) },
             .{ .char = ' ', .color = Color8.from(0, 0, 0, 0) },
-        })).acquire() orelse return error.NoTextureInPool;
+        });
 
         std.log.debug("Created texture from characters.\n", .{});
 
@@ -211,9 +211,6 @@ pub const Natetris = struct {
     }
 
     pub fn deinit(self: *Natetris) void {
-        self.tex.release();
-        self.lockedTex.release();
-        self.wallTex.release();
         self.alloc.free(self.shape);
         self.alloc.free(self.board);
         self.alloc.destroy(self);
@@ -431,10 +428,10 @@ pub const Natetris = struct {
                         size.x, size.y);
                     const tex = which: {
                         if(self.board[bidx] == .Wall) {
-                            break :which &self.wallTex.val;
+                            break :which self.wallTex;
                         }
                         else {
-                            break :which &self.lockedTex.val;
+                            break :which self.lockedTex;
                         }
                     };
 
@@ -471,7 +468,7 @@ pub const Natetris = struct {
                         BaseX+(pos.x+w)*size.x, 
                         BaseY+(pos.y+h)*size.y, 
                         size.x, size.y);
-                    eng.renderer.drawTexture(&self.tex.val, dest, source);
+                    eng.renderer.drawTexture(self.tex, dest, source);
                     
                 }
             }

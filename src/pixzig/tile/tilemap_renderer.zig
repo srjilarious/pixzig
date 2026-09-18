@@ -16,7 +16,6 @@ const RectF = common.RectF;
 const Color = common.Color;
 const ManagedShader = resources.ManagedShader;
 const ShaderHandle = resources.ShaderHandle;
-const ManagedTexture = resources.ManagedTexture;
 const TextureHandle = resources.TextureHandle;
 
 const TileLayer = tilemap.TileLayer;
@@ -49,11 +48,11 @@ pub const TiledLayerRenderer = struct {
     pub fn init(
         alloc: std.mem.Allocator,
         shader: *ManagedShader,
-        texture: *ManagedTexture,
+        texture: *TextureHandle,
     ) !TiledLayerRenderer {
         const shader_handle = shader.acquire() orelse return error.NoShaderInPool;
         errdefer shader_handle.release();
-        const texture_handle = texture.acquire() orelse return error.NoTextureInPool;
+        const texture_handle = texture.retain();
         errdefer texture_handle.release();
 
         var tr = TiledLayerRenderer{

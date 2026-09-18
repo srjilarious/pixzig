@@ -25,7 +25,7 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{});
 pub const App = struct {
     alloc: std.mem.Allocator,
     eng: *AppRunner.Engine,
-    spr: Sprite,
+    /// Owns the sprite it animates; move and draw it through `actor.sprite`.
     actor: Actor,
     seqMgr: FrameSequenceManager,
     fps: FpsCounter,
@@ -38,8 +38,7 @@ pub const App = struct {
         app.* = .{
             .alloc = alloc,
             .eng = eng,
-            .spr = try Sprite.create(try eng.resources.getTexture("player_right_1")),
-            .actor = try pixzig.sprites.Actor.init(alloc),
+            .actor = Actor.init(alloc, Sprite.create(try eng.resources.getTexture("player_right_1"))),
             .seqMgr = try FrameSequenceManager.init(alloc),
             .fps = FpsCounter.init(),
         };
@@ -66,13 +65,17 @@ pub const App = struct {
         _ = try app.actor.addState(&.{ .name = "right", .sequence = app.seqMgr.getSeq("player_right").?, .flip = .none }, .{});
         _ = try app.actor.addState(&.{ .name = "left", .sequence = app.seqMgr.getSeq("player_right").?, .flip = .horz }, .{});
 
+        // Pivot on the frame's center and park it mid-screen, so flips and
+        // rotations turn in place.
+        app.actor.sprite.setOriginCentered();
+        app.actor.sprite.setPos(50, 30);
+
         return app;
     }
 
     pub fn deinit(self: *App) void {
-        self.seqMgr.deinit();
         self.actor.deinit();
-        self.spr.deinit();
+        self.seqMgr.deinit();
         self.alloc.destroy(self);
     }
 
@@ -81,23 +84,22 @@ pub const App = struct {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        self.actor.update(30, &self.spr);
+        self.actor.update(30);
 
+        const spr = &self.actor.sprite;
         if (eng.inputs.keyboard.pressed(.up)) {
-            self.spr.rotate = .rot90;
+            spr.rotate = .rot90;
         }
         if (eng.inputs.keyboard.pressed(.down)) {
-            self.spr.rotate = .rot270;
+            spr.rotate = .rot270;
         }
         if (eng.inputs.keyboard.pressed(.left)) {
-            std.log.debug("Left!\n", .{});
-            self.spr.rotate = .flipHorz;
-            // actor.setState("left");
+            spr.rotate = .none;
+            self.actor.setState("left");
         }
         if (eng.inputs.keyboard.pressed(.right)) {
-            self.spr.rotate = .none;
-            std.log.debug("Right!\n", .{});
-            // actor.setState("right");
+            spr.rotate = .none;
+            self.actor.setState("right");
         }
 
         if (eng.inputs.keyboard.pressed(.escape)) {
@@ -111,7 +113,7 @@ pub const App = struct {
         self.fps.renderTick();
 
         eng.renderer.begin(eng.projection());
-        eng.renderer.drawSprite(&self.spr);
+        eng.renderer.drawSprite(&self.actor.sprite);
         eng.renderer.end();
     }
 };

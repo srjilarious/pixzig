@@ -32,6 +32,7 @@ const TextRenderer = @import("./renderer/text.zig").TextRenderer;
 const ShapeBatchQueue = @import("./renderer/shape.zig").ShapeBatchQueue;
 const SpriteBatchQueue = @import("./renderer/sprite_batch.zig").SpriteBatchQueue;
 const Texture = @import("./renderer/textures.zig").Texture;
+const TextureHandle = @import("./resources.zig").TextureHandle;
 const Viewport = @import("./window.zig").Viewport;
 const common = @import("./common.zig");
 const input = @import("./input.zig");
@@ -174,8 +175,9 @@ pub const UiContext = struct {
     mouse: *Mouse,
     keyboard: *Keyboard,
     viewport: *const Viewport,
+    /// Scene sprites and `image()` widgets both queue here; window layers
+    /// flush it so images land above their window's shapes.
     sprites: *SpriteBatchQueue,
-    images: *SpriteBatchQueue,
     shapes: *ShapeBatchQueue,
     text: *TextRenderer,
     clipboard_window: ?*platform.Window,
@@ -261,7 +263,6 @@ pub const UiContext = struct {
         keyboard: *Keyboard,
         viewport: *const Viewport,
         sprites: *SpriteBatchQueue,
-        images: *SpriteBatchQueue,
         shapes: *ShapeBatchQueue,
         text: *TextRenderer,
     ) UiContext {
@@ -274,7 +275,6 @@ pub const UiContext = struct {
             .keyboard = keyboard,
             .viewport = viewport,
             .sprites = sprites,
-            .images = images,
             .shapes = shapes,
             .text = text,
             .clipboard_window = null,
@@ -395,8 +395,10 @@ pub const UiContext = struct {
 
     /// Call at the start of each render frame before any widgets.
     pub fn begin(self: *UiContext) void {
-        // Scene sprites should be behind all window layers.
+        // Everything the scene queued should be behind all window layers.
         self.sprites.flush();
+        self.shapes.flush();
+        self.text.flush();
         self.hot_id = 0;
         self.tab_focus_count = 0;
     }
@@ -658,7 +660,7 @@ pub const UiContext = struct {
         self.win_depth += 1;
 
         self.shapes.flush();
-        self.images.flush();
+        self.sprites.flush();
         self.text.flush();
         self.applyContentClip(content_rect);
     }
@@ -689,7 +691,7 @@ pub const UiContext = struct {
         }
 
         self.shapes.flush();
-        self.images.flush();
+        self.sprites.flush();
         self.text.flush();
         self.restoreContentClip();
 
@@ -864,12 +866,12 @@ pub const UiContext = struct {
     // ----------------------------------------------------------
 
     /// Draw a texture or atlas subtexture at the requested logical size.
-    pub fn image(self: *UiContext, texture: *Texture, size: Vec2I) void {
+    pub fn image(self: *UiContext, texture: *TextureHandle, size: Vec2I) void {
         const rect = self.allocWidget(
             @floatFromInt(size.x),
             @floatFromInt(size.y),
         );
-        self.images.draw(texture, rect, texture.src, .none);
+        self.sprites.draw(&texture.val, rect, texture.val.src, .none);
     }
 
     // ----------------------------------------------------------

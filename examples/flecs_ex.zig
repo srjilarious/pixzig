@@ -118,7 +118,7 @@ pub const App = struct {
         // const srcX: i32 = @intCast(32*@rem(which, 16));
         // const srcY:i32 = @intCast(32*@divTrunc(which, 16));
         std.log.info("  - Creating sprite", .{});
-        var spr = try Sprite.create(try self.eng.resources.getTexture("guy"));
+        var spr = Sprite.create(try self.eng.resources.getTexture("guy"));
 
         spr.setPos(x, y);
         std.log.info("  - Setting sprite", .{});

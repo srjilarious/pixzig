@@ -33,7 +33,7 @@ pub const App = struct {
             .fps = FpsCounter.init(),
             .alloc = alloc,
             .eng = eng,
-            .pointer = try pixzig.sprites.Sprite.create(try eng.resources.getTexture("guy")),
+            .pointer = pixzig.sprites.Sprite.create(try eng.resources.getTexture("guy")),
         };
     }
 

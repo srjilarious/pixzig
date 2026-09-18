@@ -88,7 +88,6 @@ pub const TextureHandle = resources.TextureHandle;
 pub const ShaderHandle = resources.ShaderHandle;
 pub const FontAtlasHandle = resources.FontAtlasHandle;
 pub const TileMapHandle = resources.TileMapHandle;
-pub const ManagedTexture = resources.ManagedTexture;
 pub const ManagedShader = resources.ManagedShader;
 pub const ManagedFont = resources.ManagedFont;
 pub const ManagedTileMap = resources.ManagedTileMap;

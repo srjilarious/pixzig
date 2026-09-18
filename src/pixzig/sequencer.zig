@@ -134,8 +134,11 @@ pub const ParallelStep = struct {
     }
 };
 
-/// Lerps a Sprite's position from its location on first tick to `target`
-/// over `durationMs`. Captures start position lazily on the first update call.
+/// Lerps a sprite's position (its origin, see `Sprite.pos`) from its location
+/// on first tick to `target` over `durationMs`. The sprite is the entity's
+/// `Sprite` component, or else its `Actor`'s sprite, so the world must have
+/// both component types registered. Captures start position lazily on the
+/// first update call.
 pub const MoveToStep = struct {
     world: *flecs.world_t,
     entityId: flecs.entity_t,
@@ -170,14 +173,14 @@ pub const MoveToStep = struct {
 
     pub fn update(step: *Step, deltaMs: f64) f64 {
         const self: *MoveToStep = @ptrCast(@alignCast(step.ptr));
-        const spr = flecs.get_mut(self.world, self.entityId, Sprite) orelse {
+        const spr = self.sprite() orelse {
             step.done = true;
             return -1.0;
         };
 
         // Lazy-capture start position on the first tick.
         if (self.startPos == null) {
-            self.startPos = .{ .x = spr.dest.l, .y = spr.dest.t };
+            self.startPos = spr.pos();
         }
 
         self.elapsedMs += deltaMs;
@@ -185,8 +188,8 @@ pub const MoveToStep = struct {
         const start = self.startPos.?;
         const x = start.x + t * (self.target.x - start.x);
         const y = start.y + t * (self.target.y - start.y);
-        spr.setPos(@intFromFloat(x), @intFromFloat(y));
-        flecs.modified(self.world, self.entityId, Sprite);
+        spr.setPosF(x, y);
+        self.markModified();
 
         const timeLeft = self.durationMs - self.elapsedMs;
         step.done = timeLeft <= 0;
@@ -196,6 +199,20 @@ pub const MoveToStep = struct {
     pub fn deinit(step: *Step, alloc: std.mem.Allocator) void {
         const self: *MoveToStep = @ptrCast(@alignCast(step.ptr));
         alloc.destroy(self);
+    }
+
+    fn sprite(self: *MoveToStep) ?*Sprite {
+        if (flecs.get_mut(self.world, self.entityId, Sprite)) |spr| return spr;
+        if (flecs.get_mut(self.world, self.entityId, Actor)) |actor| return &actor.sprite;
+        return null;
+    }
+
+    fn markModified(self: *MoveToStep) void {
+        if (flecs.get_mut(self.world, self.entityId, Sprite) != null) {
+            flecs.modified(self.world, self.entityId, Sprite);
+        } else {
+            flecs.modified(self.world, self.entityId, Actor);
+        }
     }
 };
 

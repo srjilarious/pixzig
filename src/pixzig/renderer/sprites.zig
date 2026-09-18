@@ -12,48 +12,41 @@ const Rotate = common.Rotate;
 
 const Texture = textures.Texture;
 const ResourceManager = resources.ResourceManager;
-const ManagedTexture = resources.ManagedTexture;
 const TextureHandle = resources.TextureHandle;
 
 pub const Sprite = struct {
-    /// Owning handle to a managed texture, acquired by `create` (or passed
-    /// in to `createFromHandle`). Call `deinit()` when the sprite is no
-    /// longer needed to release it.
+    /// The sprite's own reference to its texture, retained by `create` and
+    /// released by `deinit()`.
     texture: *TextureHandle,
     src_coords: RectF,
     /// On-screen rectangle. Kept in sync by `setPos`/`setPosF`/`setSize`/
-    /// `setScale`; if you write it directly, `size` will no longer match.
+    /// `setScale`/`setOrigin`; if you write it directly, `size` will no
+    /// longer match.
     dest: RectF,
     /// Current on-screen size (the width/height of `dest`).
     size: Vec2F,
     /// Size of the texture frame at creation. `setScale` scales from this.
     base_size: Vec2F,
+    /// Pivot point in the texture frame's own (unscaled) pixels, relative to
+    /// its top-left corner. `setPos` places this point, and `setSize`/
+    /// `setScale` grow the sprite around it. Defaults to the top-left
+    /// corner; change it with `setOrigin`/`setOriginNormalized`.
+    origin: Vec2F = .{ .x = 0, .y = 0 },
     flip: Flip,
     rotate: Rotate,
     /// Colour multiplier. `Renderer.drawSprite` routes to the tinted batch
     /// when this is set, and to the plain (faster) batch when null.
     tint: ?Color = null,
 
-    /// Acquires a new handle from `tex` and builds a sprite the size of its
-    /// texture frame. The sprite owns that handle and releases it in
-    /// `deinit()`; `tex` itself is not consumed. To create a sprite straight
-    /// from a texture name, use `ResourceManager.createSprite`.
-    pub fn create(tex: *ManagedTexture) !Sprite {
-        const handle = tex.acquire();
-        if (handle == null) {
-            return error.CouldntAcquireTexture;
-        }
-
-        return createFromHandle(handle.?);
-    }
-
-    /// Builds a sprite from an already-acquired handle. Takes ownership of
-    /// `tex`: the sprite releases it in `deinit()`, so the caller must not
-    /// release it separately.
-    pub fn createFromHandle(tex: *TextureHandle) Sprite {
+    /// Builds a sprite the size of `tex`'s texture frame. The sprite retains
+    /// its own reference to `tex` and releases it in `deinit()`, so `tex` may
+    /// be either a borrowed handle (`ResourceManager.getTexture`) or one you
+    /// acquired and still release yourself. To create a sprite straight from
+    /// a texture name, use `ResourceManager.createSprite`.
+    pub fn create(tex: *TextureHandle) Sprite {
         const size = tex.val.size.asVec2F();
         return Sprite{
-            .texture = tex,
+            .texture = tex.retain(),
             .src_coords = tex.val.src,
             .dest = .{ .l = 0, .t = 0, .r = size.x, .b = size.y },
             .size = size,
@@ -63,43 +56,82 @@ pub const Sprite = struct {
         };
     }
 
-    /// Releases the sprite's texture handle. Call exactly once, when the
+    /// Releases the sprite's texture reference. Call exactly once, when the
     /// sprite is no longer needed.
     pub fn deinit(self: *Sprite) void {
         self.texture.release();
     }
 
-    /// Moves the sprite's top-left corner to integer coordinates.
+    /// Switches the texture the sprite draws from, retaining `tex` and
+    /// releasing the previous one. Size, position, and `src_coords` are left
+    /// alone; set `src_coords` (or call `setSrcRect`) to match the new frame.
+    pub fn setTexture(self: *Sprite, tex: *TextureHandle) void {
+        if (tex == self.texture) return;
+        const old = self.texture;
+        self.texture = tex.retain();
+        old.release();
+    }
+
+    /// Moves the sprite's origin to integer coordinates.
     pub fn setPos(self: *Sprite, x: i32, y: i32) void {
         self.setPosF(@floatFromInt(x), @floatFromInt(y));
     }
 
-    /// Moves the sprite's top-left corner, keeping its size.
+    /// Moves the sprite's origin to (x, y), keeping its size. With the
+    /// default origin this is the top-left corner.
     pub fn setPosF(self: *Sprite, x: f32, y: f32) void {
-        self.dest = .{ .l = x, .t = y, .r = x + self.size.x, .b = y + self.size.y };
+        const o = self.scaledOrigin();
+        const l = x - o.x;
+        const t = y - o.y;
+        self.dest = .{ .l = l, .t = t, .r = l + self.size.x, .b = t + self.size.y };
     }
 
-    /// The sprite's top-left corner.
+    /// Where the sprite's origin sits on screen (the value last passed to
+    /// `setPos`/`setPosF`).
     pub fn pos(self: *const Sprite) Vec2F {
-        return .{ .x = self.dest.l, .y = self.dest.t };
+        const o = self.scaledOrigin();
+        return .{ .x = self.dest.l + o.x, .y = self.dest.t + o.y };
     }
 
-    /// Resizes the on-screen rectangle, keeping its top-left corner.
+    /// Resizes the on-screen rectangle around the origin, which stays put.
     pub fn setSize(self: *Sprite, w: f32, h: f32) void {
+        const p = self.pos();
         self.size = .{ .x = w, .y = h };
-        self.dest.r = self.dest.l + w;
-        self.dest.b = self.dest.t + h;
+        self.setPosF(p.x, p.y);
     }
 
     /// Scales relative to `base_size` (the texture frame at creation),
-    /// keeping the top-left corner. `setScale(1, 1)` restores the original size.
+    /// around the origin. `setScale(1, 1)` restores the original size.
     pub fn setScale(self: *Sprite, sx: f32, sy: f32) void {
         self.setSize(self.base_size.x * sx, self.base_size.y * sy);
     }
 
     /// The current scale relative to `base_size`.
     pub fn scale(self: *const Sprite) Vec2F {
-        return .{ .x = self.size.x / self.base_size.x, .y = self.size.y / self.base_size.y };
+        return .{
+            .x = if (self.base_size.x != 0) self.size.x / self.base_size.x else 1,
+            .y = if (self.base_size.y != 0) self.size.y / self.base_size.y else 1,
+        };
+    }
+
+    /// Sets the pivot in texture-frame pixels (e.g. `{8, 16}` is the
+    /// bottom-center of a 16x16 frame). The sprite's position (`pos()`)
+    /// stays the same, so the image shifts to put the new origin there.
+    pub fn setOrigin(self: *Sprite, x: f32, y: f32) void {
+        const p = self.pos();
+        self.origin = .{ .x = x, .y = y };
+        self.setPosF(p.x, p.y);
+    }
+
+    /// Sets the pivot as a fraction of the frame size: (0, 0) is top-left,
+    /// (0.5, 0.5) the center, (0.5, 1) bottom-center.
+    pub fn setOriginNormalized(self: *Sprite, nx: f32, ny: f32) void {
+        self.setOrigin(nx * self.base_size.x, ny * self.base_size.y);
+    }
+
+    /// Shorthand for `setOriginNormalized(0.5, 0.5)`.
+    pub fn setOriginCentered(self: *Sprite) void {
+        self.setOriginNormalized(0.5, 0.5);
     }
 
     /// Sets the draw sub-region of the sprite's texture in texture pixels,
@@ -107,6 +139,12 @@ pub const Sprite = struct {
     /// sprite; call `setSize` too if the on-screen size should follow.
     pub fn setSrcRect(self: *Sprite, px: RectI) void {
         self.src_coords = pixelsToUv(&self.texture.val, px);
+    }
+
+    /// The origin in on-screen pixels (frame pixels times the current scale).
+    fn scaledOrigin(self: *const Sprite) Vec2F {
+        const s = self.scale();
+        return .{ .x = self.origin.x * s.x, .y = self.origin.y * s.y };
     }
 };
 
@@ -138,7 +176,10 @@ pub const Frame = struct {
     frameTimeMs: f64,
     flip: Flip,
 
+    /// Points `spr` at this frame: switches its texture if the frame lives
+    /// on a different one, and sets `src_coords` with the combined flip.
     pub fn apply(self: *Frame, spr: *Sprite, extraFlip: Flip) void {
+        spr.setTexture(self.tex);
         const src = self.tex.val.src;
         const flip = blk: {
             switch (self.flip) {
@@ -186,8 +227,6 @@ pub const Frame = struct {
 };
 
 pub const AnimPlayMode = enum { loop, once };
-
-pub const SpriteRenderOffset = enum { none, sequence, horzCenterBottomAligned };
 
 pub const ActorState = struct {
     name: []const u8,
@@ -405,17 +444,28 @@ pub const AddStateOpts = struct {
     name: ?[]const u8 = null,
 };
 
+/// Plays named animation states (each a `FrameSequence`) on the `Sprite` it
+/// owns. Move, scale, and draw it through `actor.sprite`.
 pub const Actor = struct {
+    /// The sprite this actor animates. Owned: `deinit` releases it.
+    sprite: Sprite,
     states: std.StringHashMap(*ActorState),
     alloc: std.mem.Allocator,
     currState: ?*ActorState,
     currFrame: i32,
     currFrameTimeMs: f64,
-    actorSize: Vec2I,
-    dirtyState: bool,
 
-    pub fn init(alloc: std.mem.Allocator) !Actor {
-        return .{ .states = std.StringHashMap(*ActorState).init(alloc), .alloc = alloc, .currState = null, .currFrame = 0, .currFrameTimeMs = 0, .actorSize = Vec2I{ .x = 0, .y = 0 }, .dirtyState = false };
+    /// Takes ownership of `sprite`; the actor releases it in `deinit`, so
+    /// don't deinit it separately.
+    pub fn init(alloc: std.mem.Allocator, sprite: Sprite) Actor {
+        return .{
+            .sprite = sprite,
+            .states = std.StringHashMap(*ActorState).init(alloc),
+            .alloc = alloc,
+            .currState = null,
+            .currFrame = 0,
+            .currFrameTimeMs = 0,
+        };
     }
 
     pub fn deinit(self: *Actor) void {
@@ -427,8 +477,11 @@ pub const Actor = struct {
             self.alloc.destroy(kv.value_ptr.*);
         }
         self.states.deinit();
+        self.sprite.deinit();
     }
 
+    /// Copies `state` into this actor. The first state added becomes current
+    /// and its first frame is applied to the sprite.
     pub fn addState(self: *Actor, state: *const ActorState, opts: AddStateOpts) !*Actor {
         const nameToUse = opts.name orelse state.name;
 
@@ -460,11 +513,14 @@ pub const Actor = struct {
         try self.states.put(nameCopy, val);
         if (self.currState == null) {
             self.currState = val;
+            self.applyCurrentFrame();
         }
 
         return self;
     }
 
+    /// Switches to the state named `name` and applies its first frame to the
+    /// sprite right away. No-op if already in that state or it isn't known.
     pub fn setState(self: *Actor, name: []const u8) void {
         // Don't reset the state if we're already on it.
         if (self.currState != null and std.mem.eql(u8, self.currState.?.name, name)) return;
@@ -473,13 +529,17 @@ pub const Actor = struct {
             self.currState = state.*;
             self.currFrame = 0;
             self.currFrameTimeMs = 0;
+            self.applyCurrentFrame();
         }
     }
 
-    pub fn update(self: *Actor, deltaMs: f64, spr: *Sprite) void {
+    /// Advances the current state's animation by `deltaMs`, applying the new
+    /// frame to the sprite whenever it changes.
+    pub fn update(self: *Actor, deltaMs: f64) void {
         if (self.currState == null) return;
 
         const currSeq = self.currState.?.sequence;
+        if (currSeq.frames.items.len == 0) return;
         const currFrame = &currSeq.frames.items[@intCast(self.currFrame)];
         self.currFrameTimeMs += deltaMs;
         if (self.currFrameTimeMs > currFrame.frameTimeMs) {
@@ -490,7 +550,7 @@ pub const Actor = struct {
                 self.currFrame = 0;
             }
 
-            currSeq.frames.items[@intCast(self.currFrame)].apply(spr, self.currState.?.flip);
+            self.applyCurrentFrame();
         }
     }
 
@@ -499,5 +559,11 @@ pub const Actor = struct {
 
         const currSeq = self.currState.?.sequence;
         return &currSeq.frames.items[@intCast(self.currFrame)];
+    }
+
+    fn applyCurrentFrame(self: *Actor) void {
+        const state = self.currState orelse return;
+        if (state.sequence.frames.items.len == 0) return;
+        state.sequence.frames.items[@intCast(self.currFrame)].apply(&self.sprite, state.flip);
     }
 };
