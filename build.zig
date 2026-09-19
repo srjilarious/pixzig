@@ -169,6 +169,9 @@ pub const ManifestHandle = struct {
     b: *std.Build,
     /// Non-null for file-based manifests: absolute path to the source JSON.
     file_abs_path: ?[]const u8,
+    /// Non-null for file-based manifests: the source JSON's path relative to
+    /// the build root, which is also its path in the Emscripten virtual FS.
+    file_rel_path: ?[]const u8 = null,
     /// Non-null for inline manifests: the serialised JSON content.
     inline_json: ?[]const u8,
     /// For inline manifests: absolute path to the directory that contains the
@@ -252,6 +255,31 @@ pub const ManifestHandle = struct {
 
         exe.root_module.addOptions("manifest_options", opts);
     }
+
+    /// Wire the manifest into a web (Emscripten) `exe`. Assets are preloaded
+    /// into the virtual FS relative to `/` (see the emcc args in
+    /// `buildExample`), so the manifest resolves from there rather than from
+    /// the host build root. A file-based manifest outside `assets/` is
+    /// preloaded here as well.
+    pub fn addToWeb(self: ManifestHandle, exe: *std.Build.Step.Compile, emcc_command: *std.Build.Step.Run) void {
+        const b = self.b;
+        const opts = b.addOptions();
+
+        if (self.file_rel_path) |rel| {
+            if (!std.mem.startsWith(u8, rel, assets_dir ++ "/")) {
+                emcc_command.addArgs(&.{ "--preload-file", b.fmt("{s}@/{s}", .{ rel, rel }) });
+            }
+            opts.addOption([]const u8, "manifest_path", b.fmt("/{s}", .{rel}));
+            opts.addOption([]const u8, "manifest_json", "");
+            opts.addOption([]const u8, "manifest_base_dir", "");
+        } else {
+            opts.addOption([]const u8, "manifest_path", "");
+            opts.addOption([]const u8, "manifest_json", self.inline_json.?);
+            opts.addOption([]const u8, "manifest_base_dir", "/");
+        }
+
+        exe.root_module.addOptions("manifest_options", opts);
+    }
 };
 
 /// Reference an existing manifest JSON file in the repository.
@@ -260,6 +288,7 @@ pub fn manifestFromFile(b: *std.Build, path: []const u8) ManifestHandle {
     return .{
         .b = b,
         .file_abs_path = fromRoot(b, path),
+        .file_rel_path = path,
         .inline_json = null,
         .inline_base_dir = fromRoot(b, "."),
     };
@@ -1015,6 +1044,7 @@ pub fn buildExample(
             } else {
                 emcc_command.addArgs(&[_][]const u8{ "--preload-file", b.fmt("{s}@/{s}", .{ assets_dir, assets_dir }) });
             }
+            manifest.addToWeb(exe, emcc_command);
 
             emcc_command.addFileArg(exe.getEmittedBin());
             if (engine_lib) |lib| {
