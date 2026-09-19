@@ -55,9 +55,12 @@ jobs:
 
       - name: Install Zig
         run: |
-          # Pinned dev build (matches build.zig.zon's minimum_zig_version).
-          # Pruned from ziglang.org; the mach project keeps it on a mirror.
-          curl -sL https://pkg.hexops.org/zig/zig-x86_64-linux-0.17.0-dev.1857+3c46da14d.tar.xz -o /tmp/zig.tar.xz
+          # Pinned dev build (matches build.zig.zon's minimum_zig_version),
+          # served from our own zig-toolchains releases since nightlies get
+          # pruned from ziglang.org and the community mirrors. setup-zig
+          # isn't used here because this job runs in the manylinux container.
+          curl -fsSL https://github.com/srjilarious/zig-toolchains/releases/download/0.17.0-dev.1857+3c46da14d/zig-x86_64-linux-0.17.0-dev.1857+3c46da14d.tar.xz -o /tmp/zig.tar.xz
+          echo "0825e4a55baf4a6647c3ce3077a7236c9ffec5b17e1ca0102a930fe33d631bc6  /tmp/zig.tar.xz" | sha256sum -c -
           mkdir -p /tmp/zig
           tar -xf /tmp/zig.tar.xz -C /tmp/zig --strip-components=1
           echo "/tmp/zig" >> "$GITHUB_PATH"
@@ -100,9 +103,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pinned dev build (matches build.zig.zon's minimum_zig_version),
+      # served from our own zig-toolchains releases since nightlies get
+      # pruned from ziglang.org and the community mirrors.
       - uses: mlugg/setup-zig@v2
         with:
           version: 0.17.0-dev.1857+3c46da14d
+          mirror: https://github.com/srjilarious/zig-toolchains/releases/download/0.17.0-dev.1857+3c46da14d
 
       - name: Install uv
         run: |
