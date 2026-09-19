@@ -30,7 +30,7 @@ const StateA = struct {
 
     pub fn render(self: *StateA, eng: *AppRunner.Engine) void {
         _ = self;
-        eng.renderer.clear(0, 1, 0, 1);
+        eng.renderer.clear(0, 255, 0, 255);
     }
 
     pub fn activate(self: *StateA) void {
@@ -54,7 +54,7 @@ const ParamState = struct {
 
     pub fn render(self: *ParamState, eng: *AppRunner.Engine) void {
         _ = self;
-        eng.renderer.clear(1, 0, 0, 1);
+        eng.renderer.clear(255, 0, 0, 255);
     }
 };
 

@@ -18,6 +18,8 @@ const textures = @import("./renderer/textures.zig");
 const shaders = @import("./renderer/shaders.zig");
 
 const Sprite = @import("./renderer/sprites.zig").Sprite;
+const Viewport = @import("./window.zig").Viewport;
+const Camera2D = @import("./camera.zig").Camera2D;
 const TextureHandle = resources.TextureHandle;
 const Vec2I = common.Vec2I;
 const Vec2U = common.Vec2U;
@@ -83,6 +85,20 @@ pub const FontSource = union(enum) {
 /// The bytes `buildGame` embedded as the default font, or null.
 const embedded_default_font: ?[]const u8 = @import("pixzig_default_font").data;
 
+/// The coordinate space a `Renderer.begin` pass draws in.
+pub const Projection = union(enum) {
+    /// The logical game resolution: (0,0)..(logicalW, logicalH), y down.
+    /// The usual choice for game rendering.
+    logical,
+    /// Framebuffer pixels: (0,0)..(framebufferW, framebufferH), y down.
+    /// For debug overlays that should be positioned in physical pixels.
+    screen,
+    /// World space seen through a camera (see `Camera2D.matrix`).
+    camera: *const Camera2D,
+    /// A caller-built model-view-projection matrix.
+    matrix: zmath.Mat,
+};
+
 /// Runtime initialization options for the renderer.
 pub const RendererInitOpts = struct {
     font: FontSource = .{ .embedded = .{} },
@@ -111,6 +127,9 @@ pub fn Renderer(opts: RendererOptions) type {
 
         alloc: std.mem.Allocator,
         impl: *Impl,
+        /// The engine's viewport, used to resolve `Projection` and clip
+        /// rects. Owned by the engine, which outlives the renderer.
+        viewport: *const Viewport,
 
         /// Which batch holds the queued-but-unflushed draws.
         const BatchKind = enum { none, sprites, tinted, shapes, text, text_colored };
@@ -132,7 +151,7 @@ pub fn Renderer(opts: RendererOptions) type {
 
         const DefaultFontName = "__pixzig_default_font";
 
-        pub fn init(alloc: std.mem.Allocator, resMgr: *ResourceManager, initOpts: RendererInitOpts) !Self {
+        pub fn init(alloc: std.mem.Allocator, resMgr: *ResourceManager, viewport: *const Viewport, initOpts: RendererInitOpts) !Self {
             var rend = try alloc.create(Impl);
             errdefer alloc.destroy(rend);
 
@@ -214,7 +233,7 @@ pub fn Renderer(opts: RendererOptions) type {
             gl.enable(gl.BLEND);
             gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-            return .{ .alloc = alloc, .impl = rend };
+            return .{ .alloc = alloc, .impl = rend, .viewport = viewport };
         }
 
         pub fn deinit(self: *Self) void {
@@ -266,11 +285,23 @@ pub fn Renderer(opts: RendererOptions) type {
             return &handle.val;
         }
 
-        /// Starts a frame: opens the sprite batches (plus shape/text batches
-        /// if enabled) with the given model-view-projection matrix. Pair
-        /// with `end()`; draw calls between them are buffered, and flushed
-        /// when the next draw needs a different batch or at `end()`.
-        pub fn begin(self: *Self, mvp: zmath.Mat) void {
+        /// Starts a pass: opens the sprite batches (plus shape/text batches
+        /// if enabled) in the given coordinate space, e.g. `begin(.logical)`
+        /// or `begin(.{ .camera = &cam })`. Pair with `end()`; draw calls
+        /// between them are buffered, and flushed when the next draw needs a
+        /// different batch or at `end()`.
+        pub fn begin(self: *Self, projection: Projection) void {
+            const mvp = switch (projection) {
+                .logical => self.viewport.projection(),
+                .screen => blk: {
+                    const fw: f32 = @floatFromInt(self.viewport.framebuffer_size.x);
+                    const fh: f32 = @floatFromInt(self.viewport.framebuffer_size.y);
+                    break :blk zmath.orthographicOffCenterLhGl(0, fw, 0, fh, -0.1, 1000);
+                },
+                .camera => |cam| cam.matrix(self.viewport),
+                .matrix => |m| m,
+            };
+
             self.impl.active = .none;
             self.impl.sprites.begin(mvp);
             self.impl.tinted.begin(mvp);
@@ -316,9 +347,51 @@ pub fn Renderer(opts: RendererOptions) type {
             self.impl.active = kind;
         }
 
-        pub fn clear(self: *const Self, r: f32, g: f32, b: f32, a: f32) void {
+        /// Flushes queued draws, so draws made before a GL state change
+        /// (scissor, blend mode, ...) render under the old state.
+        pub fn flush(self: *Self) void {
+            self.use(.none);
+        }
+
+        /// Clips subsequent draws to `rect`, given in logical coordinates
+        /// (clamped to the logical screen). `null` restores the viewport's
+        /// own clip. Queued draws are flushed first, so they keep the
+        /// previous clip.
+        pub fn setClip(self: *Self, rect: ?RectF) void {
+            self.flush();
+            const r = rect orelse {
+                self.viewport.apply();
+                return;
+            };
+
+            const vp = self.viewport;
+            const logical_w: f32 = @floatFromInt(vp.logical_size.x);
+            const logical_h: f32 = @floatFromInt(vp.logical_size.y);
+            const l = std.math.clamp(r.l, 0.0, logical_w);
+            const t = std.math.clamp(r.t, 0.0, logical_h);
+            const right = std.math.clamp(r.r, l, logical_w);
+            const b = std.math.clamp(r.b, t, logical_h);
+            const top_left = vp.logicalToFramebuffer(.{ .x = l, .y = t });
+            const bottom_right = vp.logicalToFramebuffer(.{ .x = right, .y = b });
+            const left_px: i32 = @intFromFloat(top_left.x);
+            const top_px: i32 = @intFromFloat(top_left.y);
+            const right_px: i32 = @intFromFloat(bottom_right.x);
+            const bottom_px: i32 = @intFromFloat(bottom_right.y);
+            gl.enable(gl.SCISSOR_TEST);
+            gl.scissor(
+                left_px,
+                vp.framebuffer_size.y - bottom_px,
+                @max(0, right_px - left_px),
+                @max(0, bottom_px - top_px),
+            );
+        }
+
+        /// Clears the color buffer (inside the current scissor) to a 0-255
+        /// color.
+        pub fn clear(self: *const Self, r: u8, g: u8, b: u8, a: u8) void {
             _ = self;
-            gl.clearColor(r, g, b, a);
+            const c = Color.from(r, g, b, a);
+            gl.clearColor(c.r, c.g, c.b, c.a);
             gl.clear(gl.COLOR_BUFFER_BIT);
         }
 
@@ -405,6 +478,23 @@ pub fn Renderer(opts: RendererOptions) type {
             requireFlag("drawStringColored", "textRendering");
             self.use(.text_colored);
             return self.impl.text.drawStringColored(text, pos, color);
+        }
+
+        /// Like `drawString`, but only the parts of glyphs inside `clip` are
+        /// drawn (edge glyphs are trimmed, not dropped). Requires
+        /// `RendererOptions.textRendering == true`.
+        pub fn drawClippedString(self: *Self, text: []const u8, pos: Vec2I, clip: RectF) Vec2I {
+            requireFlag("drawClippedString", "textRendering");
+            self.use(.text);
+            return self.impl.text.drawClippedString(text, pos, clip);
+        }
+
+        /// The default font's line height in pixels, or null when no font is
+        /// set. Requires `RendererOptions.textRendering == true`.
+        pub fn lineHeight(self: *const Self) ?i32 {
+            requireFlag("lineHeight", "textRendering");
+            const font = self.impl.text.font orelse return null;
+            return font.val.maxY;
         }
 
         /// Measures `text` without drawing it. Requires `RendererOptions.textRendering == true`.

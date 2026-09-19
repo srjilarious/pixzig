@@ -132,7 +132,7 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0, 0, 0.05, 1);
+        eng.renderer.clear(0, 0, 13, 255);
 
         const fbSize = eng.window_state.framebuffer_size;
         const aspect = @as(f32, @floatFromInt(fbSize.x)) / @as(f32, @floatFromInt(fbSize.y));

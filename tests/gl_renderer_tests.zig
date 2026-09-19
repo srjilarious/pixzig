@@ -15,6 +15,9 @@ fn glCtx() *GlTestContext {
     return GlTestContext.get();
 }
 
+/// An 800x480 logical screen on a same-size framebuffer.
+const test_viewport = pixzig.Viewport.init(.{ .x = 800, .y = 480 }, .{ .x = 800, .y = 480 }, .fit);
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -51,7 +54,7 @@ pub fn rendererDefaultFontAtlasResizeTest(io: std.Io, alloc: std.mem.Allocator) 
     var rm = pixzig.resources.ResourceManager.init(alloc);
     defer rm.deinit();
 
-    var r = try Rndr.init(alloc, &rm, .{
+    var r = try Rndr.init(alloc, &rm, &test_viewport, .{
         .font = .{ .path = .{ .face = "assets/Roboto-Medium.ttf", .size = 18.0 } },
     });
     defer r.deinit();
@@ -72,7 +75,7 @@ pub fn rendererDefaultFontAtlasNullWithoutFontTest(io: std.Io, alloc: std.mem.Al
     var rm = pixzig.resources.ResourceManager.init(alloc);
     defer rm.deinit();
 
-    var r = try Rndr.init(alloc, &rm, .{ .font = .none });
+    var r = try Rndr.init(alloc, &rm, &test_viewport, .{ .font = .none });
     defer r.deinit();
 
     try testz.expectTrue(r.defaultFontAtlas() == null);
@@ -87,7 +90,7 @@ pub fn rendererLoadsEmbeddedFontByDefaultTest(io: std.Io, alloc: std.mem.Allocat
     defer rm.deinit();
 
     // No font option at all: the build-embedded Karla loads at 20px.
-    var r = try Rndr.init(alloc, &rm, .{});
+    var r = try Rndr.init(alloc, &rm, &test_viewport, .{});
     defer r.deinit();
 
     const fa = r.defaultFontAtlas() orelse return error.NoDefaultFont;
@@ -107,7 +110,7 @@ pub fn rendererLoadsFontFromDataTest(io: std.Io, alloc: std.mem.Allocator) !void
     var r = blk: {
         // The atlas copies the bytes, so they can go before the renderer does.
         defer alloc.free(bytes);
-        break :blk try Rndr.init(alloc, &rm, .{ .font = .{ .data = .{ .bytes = bytes, .size = 24.0 } } });
+        break :blk try Rndr.init(alloc, &rm, &test_viewport, .{ .font = .{ .data = .{ .bytes = bytes, .size = 24.0 } } });
     };
     defer r.deinit();
 
@@ -129,6 +132,70 @@ pub fn spriteBatchSmokeTest(io: std.Io, alloc: std.mem.Allocator) !void {
     const mvp = zmath.identity();
     batch.begin(mvp);
     batch.end();
+}
+
+pub fn spriteBatchSnapsSpriteToWholePixelsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    const ctx = glCtx();
+
+    var shader = try ctx.makeManagedShader(alloc);
+    defer shader.deinit();
+    var tex = try ctx.makeDummyManagedTexture(alloc);
+    defer tex.deinit();
+
+    var batch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &shader);
+    defer batch.deinit();
+
+    var spr = pixzig.sprites.Sprite.create(tex.get().?);
+    defer spr.deinit();
+    spr.setSize(10, 10);
+    spr.setPosF(3.4, 7.6);
+
+    batch.begin(zmath.identity());
+    batch.drawSprite(&spr);
+
+    // Corners are (l,b) (l,t) (r,t) (r,b): top-left rounds to (3, 8) and
+    // the 10px size is kept. The sprite's own position stays fractional.
+    const v = batch.inner.vertices;
+    try testz.expectEqual(v[0], @as(f32, 3));
+    try testz.expectEqual(v[1], @as(f32, 18));
+    try testz.expectEqual(v[2], @as(f32, 3));
+    try testz.expectEqual(v[3], @as(f32, 8));
+    try testz.expectEqual(v[4], @as(f32, 13));
+    try testz.expectEqual(spr.pos().x, @as(f32, 3.4));
+    batch.end();
+}
+
+pub fn rendererPassesInEveryProjectionTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = glCtx();
+
+    const Rndr = pixzig.renderer.Renderer(.{});
+    var rm = pixzig.resources.ResourceManager.init(alloc);
+    defer rm.deinit();
+
+    var r = try Rndr.init(alloc, &rm, &test_viewport, .{});
+    defer r.deinit();
+
+    const cam = pixzig.Camera2D.init(test_viewport.logical_size);
+    const projections = [_]pixzig.renderer.Projection{
+        .logical,
+        .screen,
+        .{ .camera = &cam },
+        .{ .matrix = zmath.identity() },
+    };
+
+    r.clear(0, 0, 51, 255);
+    for (projections) |p| {
+        r.begin(p);
+        r.drawFilledRect(RectF.fromPosSize(10, 10, 20, 20), pixzig.Color.from(255, 0, 0, 255));
+        r.setClip(RectF.fromPosSize(0, 0, 100, 100));
+        _ = r.drawClippedString("clip", .{ .x = 10, .y = 10 }, RectF.fromPosSize(0, 0, 100, 100));
+        r.setClip(null);
+        r.end();
+    }
+
+    try testz.expectTrue(r.lineHeight().? > 0);
 }
 
 pub fn tiledReloadAddsLayerTest(io: std.Io, alloc: std.mem.Allocator) !void {

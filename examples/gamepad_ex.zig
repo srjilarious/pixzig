@@ -12,20 +12,20 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{ .inputOpts = .{ .numGamepads = 
 
 // Colors cycled by gamepad buttons.
 const Colors = struct {
-    r: f32,
-    g: f32,
-    b: f32,
+    r: u8,
+    g: u8,
+    b: u8,
 };
 
 const ButtonColors = [_]struct { btn: pixzig.GamepadButton, color: Colors }{
-    .{ .btn = .a, .color = .{ .r = 0.8, .g = 0.1, .b = 0.1 } }, // A  -> red
-    .{ .btn = .b, .color = .{ .r = 0.1, .g = 0.8, .b = 0.1 } }, // B  -> green
-    .{ .btn = .x, .color = .{ .r = 0.1, .g = 0.1, .b = 0.8 } }, // X  -> blue
-    .{ .btn = .y, .color = .{ .r = 0.8, .g = 0.8, .b = 0.1 } }, // Y  -> yellow
-    .{ .btn = .left_bumper, .color = .{ .r = 0.1, .g = 0.8, .b = 0.8 } }, // LB -> cyan
-    .{ .btn = .right_bumper, .color = .{ .r = 0.8, .g = 0.1, .b = 0.8 } }, // RB -> magenta
-    .{ .btn = .start, .color = .{ .r = 0.9, .g = 0.9, .b = 0.9 } }, // Start -> white
-    .{ .btn = .back, .color = .{ .r = 0.2, .g = 0.2, .b = 0.2 } }, // Back  -> dark gray
+    .{ .btn = .a, .color = .{ .r = 204, .g = 26, .b = 26 } }, // A  -> red
+    .{ .btn = .b, .color = .{ .r = 26, .g = 204, .b = 26 } }, // B  -> green
+    .{ .btn = .x, .color = .{ .r = 26, .g = 26, .b = 204 } }, // X  -> blue
+    .{ .btn = .y, .color = .{ .r = 204, .g = 204, .b = 26 } }, // Y  -> yellow
+    .{ .btn = .left_bumper, .color = .{ .r = 26, .g = 204, .b = 204 } }, // LB -> cyan
+    .{ .btn = .right_bumper, .color = .{ .r = 204, .g = 26, .b = 204 } }, // RB -> magenta
+    .{ .btn = .start, .color = .{ .r = 230, .g = 230, .b = 230 } }, // Start -> white
+    .{ .btn = .back, .color = .{ .r = 51, .g = 51, .b = 51 } }, // Back  -> dark gray
 };
 
 pub const App = struct {
@@ -36,7 +36,7 @@ pub const App = struct {
     pub fn init() App {
         return .{
             .fps = FpsCounter.init(),
-            .color = .{ .r = 0.0, .g = 0.0, .b = 0.5 },
+            .color = .{ .r = 0, .g = 0, .b = 128 },
             .printDelay = .{ .max = 60 },
         };
     }
@@ -85,7 +85,7 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(self.color.r, self.color.g, self.color.b, 1.0);
+        eng.renderer.clear(self.color.r, self.color.g, self.color.b, 255);
         self.fps.renderTick();
     }
 };

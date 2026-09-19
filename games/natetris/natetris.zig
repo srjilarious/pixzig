@@ -279,10 +279,10 @@ pub const Natetris = struct {
     }
 
     pub fn render(self: *Natetris, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0, 0, 0.1, 1);
+        eng.renderer.clear(0, 0, 26, 255);
         
         // const fb_size = eng.window.getFramebufferSize();
-        eng.renderer.begin(self.projMat);
+        eng.renderer.begin(.{ .matrix = self.projMat });
         
         self.drawBoard(eng, .{ .x = 32, .y = 32});
         self.drawShape(eng, self.shapePos, .{ .x = 32, .y = 32}, self.shape);

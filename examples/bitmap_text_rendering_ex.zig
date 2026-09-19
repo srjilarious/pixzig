@@ -39,8 +39,7 @@ pub const App = struct {
             return error.FontLoadFailed;
         };
 
-        const font = eng.resources.fonts.get("font5r").?;
-        try eng.renderer.impl.text.setFont(font);
+        try eng.renderer.setDefaultFont(&eng.resources, "font5r");
 
         app.* = .{
             .fps = FpsCounter.init(),
@@ -68,10 +67,10 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0.0, 0.0, 0.2, 1.0);
+        eng.renderer.clear(0, 0, 51, 255);
         self.fps.renderTick();
 
-        eng.renderer.begin(eng.projection());
+        eng.renderer.begin(.logical);
 
         const size = eng.renderer.drawString("@!$ hello world!", .{ .x = 0, .y = 60 });
 

@@ -129,7 +129,7 @@ pz_finish_tick = _sig("pz_finish_tick", [PzEnginePtr], None)
 pz_swap_buffers = _sig("pz_swap_buffers", [PzEnginePtr], None)
 pz_render_begin = _sig("pz_render_begin", [PzEnginePtr], None)
 pz_render_begin_world = _sig("pz_render_begin_world", [PzEnginePtr, PzCameraPtr], None)
-pz_render_clear = _sig("pz_render_clear", [PzEnginePtr, c_float, c_float, c_float, c_float], None)
+pz_render_clear = _sig("pz_render_clear", [PzEnginePtr, c_uint8, c_uint8, c_uint8, c_uint8], None)
 pz_render_end = _sig("pz_render_end", [PzEnginePtr], None)
 
 # --- Input ---------------------------------------------------------------

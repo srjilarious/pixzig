@@ -488,6 +488,10 @@ pub fn build(b: *std.Build) void {
             .path = "examples/grid_render_ex.zig",
         },
         .{
+            .name = "create_texture_ex",
+            .path = "examples/create_texture_ex.zig",
+        },
+        .{
             .name = "quad3d_ex",
             .path = "examples/quad3d_ex.zig",
             .manifest_def = .{

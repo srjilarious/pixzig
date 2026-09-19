@@ -27,14 +27,10 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{});
 
 pub const App = struct {
     alloc: std.mem.Allocator,
-    projMat: zmath.Mat,
     fps: FpsCounter,
     grid: GridRenderer,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
-        // Orthographic projection matrix
-        const projMat = zmath.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
-
         const colorPool = eng.resources.shaders.get(shaders.ColorShader) orelse return error.ColorShaderNotLoaded;
         const grid = try GridRenderer.init(
             alloc,
@@ -48,7 +44,6 @@ pub const App = struct {
         const app = try alloc.create(App);
         app.* = .{
             .alloc = alloc,
-            .projMat = projMat,
             .fps = FpsCounter.init(),
             .grid = grid,
         };
@@ -77,9 +72,9 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0, 0, 0.2, 1);
+        eng.renderer.clear(0, 0, 51, 255);
         self.fps.renderTick();
-        try self.grid.draw(self.projMat);
+        try self.grid.draw(eng.projection());
     }
 };
 

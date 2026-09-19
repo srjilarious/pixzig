@@ -90,7 +90,7 @@ pub const App = struct {
     }
 
     pub fn render(_: *App, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0.1, 0.1, 0.2, 1);
+        eng.renderer.clear(26, 26, 51, 255);
     }
 };
 

@@ -4,7 +4,6 @@ const std = @import("std");
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
 
-const imgui = @import("./imgui.zig");
 const scripting = @import("./scripting.zig");
 const utils = @import("./utils.zig");
 const common = @import("./common.zig");
@@ -291,8 +290,8 @@ pub const Console = struct {
         return true;
     }
 
-    fn scrollToBottomForArea(self: *Console, ui: *imgui.UiContext, area_height: f32) void {
-        const line_h: f32 = if (ui.text.font) |h| @floatFromInt(h.val.maxY) else 16;
+    fn scrollToBottomForArea(self: *Console, ui: anytype, area_height: f32) void {
+        const line_h: f32 = @floatFromInt(ui.renderer.lineHeight() orelse 16);
         const pad_y: f32 = @floatFromInt(ui.style.padding.y);
         const usable_h = @max(0.0, area_height - pad_y * 2.0);
         const visible: usize = @max(1, @as(usize, @intFromFloat(@floor(usable_h / line_h))));
@@ -303,7 +302,8 @@ pub const Console = struct {
     }
 
     /// Emits the console window and widgets into the current imgui frame.
-    pub fn draw(self: *Console, ui: *imgui.UiContext) void {
+    /// `ui` is a `*imgui.UiContext(Engine)`.
+    pub fn draw(self: *Console, ui: anytype) void {
         if (!self.enabled) return;
 
         const old_padding = ui.style.padding;

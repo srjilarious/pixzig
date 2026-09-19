@@ -55,9 +55,15 @@ pub const SpriteBatchQueue = struct {
         self.inner.begin(mvp);
     }
 
-    // Enqueues drawing a `Sprite`
+    /// Enqueues drawing a `Sprite`. Sprites keep float positions so slow
+    /// movement accumulates, but the top-left is snapped to a whole pixel
+    /// here (size unchanged) so a sprite between pixels never draws blurry.
     pub fn drawSprite(self: *SpriteBatchQueue, sprite: *const Sprite) void {
-        self.draw(&sprite.texture.val, sprite.dest, sprite.src_coords, sprite.rotate);
+        const d = sprite.dest;
+        const l = @round(d.l);
+        const t = @round(d.t);
+        const snapped: RectF = .{ .l = l, .t = t, .r = l + (d.r - d.l), .b = t + (d.b - d.t) };
+        self.draw(&sprite.texture.val, snapped, sprite.src_coords, sprite.rotate);
     }
 
     /// Sets the colour that subsequently queued sprites are multiplied by.

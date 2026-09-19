@@ -18,7 +18,7 @@ const FpsCounter = pixzig.utils.FpsCounter;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{ .vsyncEnabled = false });
+const AppRunner = pixzig.PixzigAppRunner(App, .{});
 
 pub const App = struct {
     alloc: std.mem.Allocator,
@@ -136,7 +136,7 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0, 0, 0.2, 1);
+        eng.renderer.clear(0, 0, 51, 255);
 
         self.fps.renderTick();
 
@@ -145,8 +145,7 @@ pub const App = struct {
         // Set a `z` float property on a layer in Tiled to control ordering.
         self.mapRenderer.renderLayersBelow(1.0, &self.map.val, &self.camera, &eng.viewport);
 
-        const mvp = self.camera.matrix(&eng.viewport);
-        eng.renderer.begin(mvp);
+        eng.renderer.begin(.{ .camera = &self.camera });
         eng.renderer.drawRect(self.guy, Color.from(255, 255, 0, 200), 2);
         eng.renderer.end();
 
@@ -157,7 +156,7 @@ pub const App = struct {
 pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig Tilemap Example", .{});
 
-    const appRunner = try AppRunner.init("Pixzig: Tilemap Example.", init.gpa, .{});
+    const appRunner = try AppRunner.init("Pixzig: Tilemap Example.", init.gpa, .{ .vsync = false });
 
     std.log.info("Initializing app.", .{});
     const app: *App = try App.init(init.gpa, appRunner.engine);

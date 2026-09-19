@@ -19,13 +19,14 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{
     .inputOpts = .{ .mouse = true, .textInput = true },
     .manifestOpts = manifest_options,
 });
+const UiContext = imgui.UiContext(AppRunner.Engine);
 
 pub const App = struct {
     fps: FpsCounter,
     alloc: std.mem.Allocator,
     script: *scripting.ScriptEngine,
     cons: *console.Console,
-    ui: imgui.UiContext,
+    ui: UiContext,
     delay: Delay = .{ .max = 120 },
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
@@ -42,14 +43,7 @@ pub const App = struct {
                 script,
                 .{ .displaySize = console_size },
             ),
-            .ui = imgui.UiContext.init(
-                &eng.inputs.mouse,
-                &eng.inputs.keyboard,
-                &eng.viewport,
-                &eng.renderer.impl.sprites,
-                &eng.renderer.impl.shapes,
-                &eng.renderer.impl.text,
-            ),
+            .ui = UiContext.init(eng),
             .fps = FpsCounter.init(),
         };
         app.ui.setClipboardWindow(eng.window);
@@ -81,9 +75,9 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0.5, 0.4, 0.8, 1);
+        eng.renderer.clear(128, 102, 204, 255);
 
-        eng.renderer.begin(eng.projection());
+        eng.renderer.begin(.logical);
         self.ui.begin();
         self.cons.draw(&self.ui);
         self.ui.end();

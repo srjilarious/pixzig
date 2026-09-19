@@ -31,6 +31,7 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{
     .inputOpts = .{ .mouse = true, .textInput = true },
     .manifestOpts = manifest_options,
 });
+const UiContext = imgui.UiContext(AppRunner.Engine);
 
 const MaxLogLines = 200;
 const InputBufLen = 128;
@@ -45,7 +46,7 @@ const SpriteNames = [_][]const u8{
 
 pub const App = struct {
     alloc: std.mem.Allocator,
-    ui: imgui.UiContext,
+    ui: UiContext,
     preview: *pixzig.TextureHandle,
     main_window: RectF,
     editor_window: RectF,
@@ -76,14 +77,7 @@ pub const App = struct {
 
         app.* = .{
             .alloc = alloc,
-            .ui = imgui.UiContext.init(
-                &eng.inputs.mouse,
-                &eng.inputs.keyboard,
-                &eng.viewport,
-                &eng.renderer.impl.sprites,
-                &eng.renderer.impl.shapes,
-                &eng.renderer.impl.text,
-            ),
+            .ui = UiContext.init(eng),
             .preview = undefined,
             .main_window = RectF.fromPosSize(30, 30, 380, 430),
             .editor_window = RectF.fromPosSize(440, 30, 300, 430),
@@ -142,8 +136,8 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0.15, 0.15, 0.40, 1.0);
-        eng.renderer.begin(eng.projection());
+        eng.renderer.clear(38, 38, 102, 255);
+        eng.renderer.begin(.logical);
 
         self.ui.begin();
 

@@ -260,7 +260,7 @@ class PixzigApp:
                     if result is False:
                         return
 
-                _n.pz_render_clear(self._eng, 0.0, 0.0, 0.0, 1.0)
+                _n.pz_render_clear(self._eng, 0, 0, 0, 255)
                 self.render()
                 _n.pz_swap_buffers(self._eng)
         finally:

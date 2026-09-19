@@ -18,6 +18,11 @@ pub const std_options = pixzig.system.std_options;
 
 const AppRunner = pixzig.PixzigAppRunner(App, .{});
 
+// Maps a 0-1 color channel to the 0-255 range `renderer.clear` takes.
+fn unit8(v: f32) u8 {
+    return @intFromFloat(@round(std.math.clamp(v, 0.0, 1.0) * 255.0));
+}
+
 // Game-specific flash state. Owned by App; shared with FlashStep via pointer.
 pub const FlashState = struct {
     active: bool = false,
@@ -221,13 +226,13 @@ pub const App = struct {
         if (self.flashState.active) {
             const a = self.flashState.alpha();
             const c = self.flashState.color;
-            eng.renderer.clear(0.2 + (c[0] - 0.2) * a, c[1] * a, 0.2 + (c[2] - 0.2) * a, 1);
+            eng.renderer.clear(unit8(0.2 + (c[0] - 0.2) * a), unit8(c[1] * a), unit8(0.2 + (c[2] - 0.2) * a), 255);
         } else {
-            eng.renderer.clear(0.2, 0, 0.2, 1);
+            eng.renderer.clear(51, 0, 51, 255);
         }
         self.fps.renderTick();
 
-        eng.renderer.begin(eng.projection());
+        eng.renderer.begin(.logical);
         if (flecs.get_mut(self.world, self.entity, Actor)) |actor| {
             eng.renderer.drawSprite(&actor.sprite);
         }

@@ -6,16 +6,29 @@ Pixzig renders sprites, rectangles, and optional text. Submit drawing between `r
 
 ```zig
 pub fn render(self: *App, eng: *AppRunner.Engine) void {
-    eng.renderer.clear(0.0, 0.0, 0.2, 1.0);
+    eng.renderer.clear(0, 0, 51, 255);
 
-    eng.renderer.begin(eng.projection());
+    eng.renderer.begin(.logical);
     // Issue draw calls.
 
     eng.renderer.end();
 }
 ```
 
+`clear` takes 0-255 RGBA values. `begin` takes the coordinate space to draw in:
+
+| `begin(...)` | Space |
+|---|---|
+| `.logical` | The logical game resolution, y down. The usual choice. |
+| `.screen` | Framebuffer pixels, y down. For debug overlays in physical pixels. |
+| `.{ .camera = &cam }` | World space seen through a `Camera2D`. |
+| `.{ .matrix = m }` | Your own model-view-projection matrix. |
+
 Draws appear in the order you submit them. Each kind of draw (plain sprites and textures, tinted sprites, shapes, text, colored text) queues into its own batch; switching to a different kind flushes the previous batch first, and `end` flushes whatever is left. Consecutive draws of the same kind and texture still go out as one GL call, so when order doesn't matter, grouping similar draws keeps the call count down.
+
+Sprites keep float positions so slow movement accumulates smoothly, but `drawSprite` snaps a sprite's top-left to a whole pixel, so a sprite between pixels never draws blurry. The other draw calls take integer positions (`drawString`) or whole-pixel rects.
+
+`renderer.setClip(rect)` clips later draws to a rect in logical coordinates, and `setClip(null)` restores the viewport's clip. It flushes queued draws first, so they keep the clip they were submitted under. Call `renderer.flush()` yourself before changing any other GL state mid-pass.
 
 ## Loading Textures
 
@@ -240,7 +253,7 @@ const appRunner = try AppRunner.init("My Game", alloc, .{
 });
 ```
 
-Pass `eng.projection()` to `renderer.begin`. With `.integer_fit`, the logical grid is scaled to the largest integer multiple that fits, and the remainder is letterboxed.
+Draw with `renderer.begin(.logical)`. With `.integer_fit`, the logical grid is scaled to the largest integer multiple that fits, and the remainder is letterboxed.
 
 ## Full Sprite+Shape Example
 
@@ -263,8 +276,8 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0, 0, 0.2, 1);
-        eng.renderer.begin(eng.projection());
+        eng.renderer.clear(0, 0, 51, 255);
+        eng.renderer.begin(.logical);
 
         eng.renderer.drawTexture(self.tex, RectF.fromPosSize(10, 10, 32, 32),
                                  RectF.fromCoords(32, 32, 32, 32, 512, 512));

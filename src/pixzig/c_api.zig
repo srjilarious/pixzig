@@ -292,17 +292,18 @@ export fn pz_swap_buffers(eng: *PzEngine) callconv(.c) void {
 }
 
 export fn pz_render_begin(eng: *PzEngine) callconv(.c) void {
-    eng.engine.renderer.begin(eng.engine.projection());
+    eng.engine.renderer.begin(.logical);
 }
 
 /// Like pz_render_begin, but begins a world-space pass using the given
 /// camera's matrix instead of screen-space UI coordinates. Use this to draw
 /// sprites/shapes interleaved with tilemap layers (see pz_tilemap_render_*).
 export fn pz_render_begin_world(eng: *PzEngine, cam: *PzCamera) callconv(.c) void {
-    eng.engine.renderer.begin(cam.camera.matrix(&eng.engine.viewport));
+    eng.engine.renderer.begin(.{ .camera = &cam.camera });
 }
 
-export fn pz_render_clear(eng: *PzEngine, r: f32, g: f32, b: f32, a: f32) callconv(.c) void {
+/// Clears to a 0-255 RGBA color.
+export fn pz_render_clear(eng: *PzEngine, r: u8, g: u8, b: u8, a: u8) callconv(.c) void {
     eng.engine.renderer.clear(r, g, b, a);
 }
 

@@ -77,7 +77,7 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0, 0, 1, 1);
+        eng.renderer.clear(0, 0, 255, 255);
         self.fps.renderTick();
     }
 };

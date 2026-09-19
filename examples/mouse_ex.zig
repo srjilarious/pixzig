@@ -64,10 +64,10 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0, 0, 0.2, 1);
+        eng.renderer.clear(0, 0, 51, 255);
         self.fps.renderTick();
 
-        eng.renderer.begin(eng.projection());
+        eng.renderer.begin(.logical);
         eng.renderer.drawSprite(&self.pointer);
         eng.renderer.end();
     }

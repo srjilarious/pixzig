@@ -130,12 +130,12 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0.05, 0.05, 0.15, 1.0);
+        eng.renderer.clear(13, 13, 38, 255);
         self.fps.renderTick();
 
         if (!self.group_loaded) return;
 
-        eng.renderer.begin(eng.projection());
+        eng.renderer.begin(.logical);
         eng.renderer.drawSprite(&self.spr);
         eng.renderer.end();
     }

@@ -44,7 +44,7 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0.8, 0, 0.8, 1);
+        eng.renderer.clear(204, 0, 204, 255);
         self.pixBuff.clear(28, 28, 60);
         for (0..200) |i| {
             self.pixBuff.setPixel(i, 0, 0, 255, 255);

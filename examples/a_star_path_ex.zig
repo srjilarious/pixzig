@@ -390,9 +390,9 @@ pub const App = struct {
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
         self.fps.renderTick();
 
-        eng.renderer.begin(eng.projection());
+        eng.renderer.begin(.logical);
 
-        eng.renderer.clear(0.0, 0.0, 0.2, 1.0);
+        eng.renderer.clear(0, 0, 51, 255);
         //eng.renderer.drawFullTexture(self.tex, .{ .x = 0, .y = 0 }, 8);
 
         eng.renderer.drawFilledRect(

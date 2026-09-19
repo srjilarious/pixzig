@@ -24,7 +24,7 @@ const StateA = struct {
     }
 
     pub fn render(self: *StateA, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0, 1, 0, 1); // green background
+        eng.renderer.clear(0, 255, 0, 255); // green background
     }
 };
 
@@ -35,7 +35,7 @@ const StateB = struct {
     }
 
     pub fn render(self: *StateB, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(1, 0, 0, 1); // red background
+        eng.renderer.clear(255, 0, 0, 255); // red background
     }
 };
 ```

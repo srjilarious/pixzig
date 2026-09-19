@@ -5,68 +5,69 @@ const std = @import("std");
 const pixzig = @import("pixzig");
 const RectF = pixzig.RectF;
 const Color8 = pixzig.Color8;
-const EngOptions = pixzig.PixzigEngineOptions;
 const CharToColor = pixzig.textures.CharToColor;
 
-pub fn main() !void {
-    var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa_state.deinit();
-    const gpa = gpa_state.allocator();
+pub const panic = pixzig.system.panic;
+pub const std_options = pixzig.system.std_options;
 
-    var eng = try pixzig.PixzigEngine.init("Create Texture Example", gpa, EngOptions{});
-    defer eng.deinit();
+const AppRunner = pixzig.PixzigAppRunner(App, .{});
 
-    std.log.info("Engine initialized.\n", .{});
+pub const App = struct {
+    alloc: std.mem.Allocator,
+    tex: *pixzig.TextureHandle,
 
-    const chars =
-        \\=------=
-        \\-..####-
-        \\-.####=-
-        \\-#####=-
-        \\-#####=-
-        \\-#####=-
-        \\-##===@-
-        \\=------=
-    ;
+    pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
+        const chars =
+            \\=------=
+            \\-..####-
+            \\-.####=-
+            \\-#####=-
+            \\-#####=-
+            \\-#####=-
+            \\-##===@-
+            \\=------=
+        ;
 
-    const tex = try eng.resources.createTextureImageFromChars("test", 8, 8, chars, &[_]CharToColor{
-        .{ .char = '#', .color = Color8.from(40, 255, 40, 255) },
-        .{ .char = '-', .color = Color8.from(100, 100, 200, 255) },
-        .{ .char = '=', .color = Color8.from(100, 100, 100, 255) },
-        .{ .char = '.', .color = Color8.from(240, 240, 240, 255) },
-        .{ .char = '@', .color = Color8.from(30, 155, 30, 255) },
-        .{ .char = ' ', .color = Color8.from(0, 0, 0, 0) },
-    });
+        // Borrowed handle: the resource manager owns the texture.
+        const tex = try eng.resources.createTextureImageFromChars("test", 8, 8, chars, &[_]CharToColor{
+            .{ .char = '#', .color = Color8.from(40, 255, 40, 255) },
+            .{ .char = '-', .color = Color8.from(100, 100, 200, 255) },
+            .{ .char = '=', .color = Color8.from(100, 100, 100, 255) },
+            .{ .char = '.', .color = Color8.from(240, 240, 240, 255) },
+            .{ .char = '@', .color = Color8.from(30, 155, 30, 255) },
+            .{ .char = ' ', .color = Color8.from(0, 0, 0, 0) },
+        });
+        std.log.info("Created texture from characters.", .{});
 
-    std.log.info("Created texture from characters.\n", .{});
-
-    const projMat = math.orthographicOffCenterLhGl(0, 320, 0, 240, -0.1, 1000);
-
-    var texShader = try pixzig.shaders.Shader.init(&pixzig.shaders.TexVertexShader, &pixzig.shaders.TexPixelShader);
-
-    var spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(gpa, &texShader);
-
-    while (!eng.window.shouldClose() and !eng.inputs.keyboard.down(.escape)) {
-        eng.pollEvents();
-
-        gl.clearBufferfv(gl.COLOR, 0, &[_]f32{ 0, 0, 0.1, 1.0 });
-
-        // const fb_size = eng.window.getFramebufferSize();
-        spriteBatch.begin(projMat);
-        // set texture options
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-        spriteBatch.draw(tex, RectF.fromPosSize(64, 64, 64, 64), RectF.fromCoords(0, 0, 8, 8, 8, 8), .none);
-        spriteBatch.draw(tex, RectF.fromPosSize(128, 64, 64, 64), RectF.fromCoords(0, 0, 8, 8, 8, 8), .none);
-        spriteBatch.draw(tex, RectF.fromPosSize(192, 64, 64, 64), RectF.fromCoords(0, 0, 8, 8, 8, 8), .none);
-        spriteBatch.draw(tex, RectF.fromPosSize(128, 128, 64, 64), RectF.fromCoords(0, 0, 8, 8, 8, 8), .none);
-        spriteBatch.end();
-
-        eng.window.swapBuffers();
+        const app = try alloc.create(App);
+        app.* = .{ .alloc = alloc, .tex = tex };
+        return app;
     }
+
+    pub fn deinit(self: *App) void {
+        self.alloc.destroy(self);
+    }
+
+    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
+        _ = self;
+        _ = delta;
+        return !eng.inputs.keyboard.pressed(.escape);
+    }
+
+    pub fn render(self: *App, eng: *AppRunner.Engine) void {
+        eng.renderer.clear(0, 0, 26, 255);
+        eng.renderer.begin(.logical);
+        const src = self.tex.val.src;
+        eng.renderer.drawTexture(self.tex, RectF.fromPosSize(64, 64, 64, 64), src);
+        eng.renderer.drawTexture(self.tex, RectF.fromPosSize(128, 64, 64, 64), src);
+        eng.renderer.drawTexture(self.tex, RectF.fromPosSize(192, 64, 64, 64), src);
+        eng.renderer.drawTexture(self.tex, RectF.fromPosSize(128, 128, 64, 64), src);
+        eng.renderer.end();
+    }
+};
+
+pub fn main(init: std.process.Init) !void {
+    const appRunner = try AppRunner.init("Pixzig: Create Texture Example.", init.gpa, .{});
+    const app: *App = try App.init(init.gpa, appRunner.engine);
+    appRunner.run(app);
 }

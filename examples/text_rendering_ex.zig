@@ -81,10 +81,10 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0.0, 0.0, 0.2, 1.0);
+        eng.renderer.clear(0, 0, 51, 255);
         self.fps.renderTick();
 
-        eng.renderer.begin(eng.projection());
+        eng.renderer.begin(.logical);
 
         var buf: [80]u8 = undefined;
         const pt = if (eng.defaultFontAtlas()) |fa| fa.font_size else 0;

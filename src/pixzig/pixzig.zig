@@ -114,10 +114,6 @@ pub const PixzigEngineOptions = struct {
     /// PixzigEngine.setIcon
     defaultIcon: bool = true,
 
-    /// Whether vsync should be enabled on init, defaults true. Change it at
-    /// runtime with `PixzigEngine.enableVSync`.
-    vsyncEnabled: bool = true,
-
     /// The update time frequency, defaults to 120 Hz.
     updateStepHz: f64 = 120.0,
 
@@ -158,6 +154,9 @@ pub const PixzigEngineInitOptions = struct {
     /// so `PixzigEngine.projection()` maps one unit to one framebuffer pixel.
     logicalSize: ?Vec2I = null,
     scalePolicy: windowing.ScalePolicy = .fit,
+    /// Whether vsync is enabled on init. Change it later with
+    /// `PixzigEngine.enableVSync`, e.g. from a settings menu.
+    vsync: bool = true,
     renderInitOpts: renderer.RendererInitOpts = .{},
 };
 
@@ -405,7 +404,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
 
             // ----------------------------------------------------------------
             std.log.info("Initializing Renderer.", .{});
-            eng.renderer = try Renderer.init(allocator, &eng.resources, options.renderInitOpts);
+            eng.renderer = try Renderer.init(allocator, &eng.resources, &eng.viewport, options.renderInitOpts);
             errdefer eng.renderer.deinit();
             if (engOpts.defaultIcon) {
                 std.log.debug("Setting default window icon.", .{});
@@ -413,7 +412,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 try eng.setIcon(&defaultIcon);
             }
 
-            eng.enableVSync(engOpts.vsyncEnabled);
+            eng.enableVSync(options.vsync);
 
             // ----------------------------------------------------------------
             if (engOpts.audioOpts.enabled) {
@@ -535,7 +534,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             //gl.scissor(0, 0, fbsz.x, fbsz.y);
 
             gl.disable(gl.SCISSOR_TEST);
-            self.renderer.clear(0, 0, 0, 1);
+            self.renderer.clear(0, 0, 0, 255);
 
             self.viewport.apply();
 

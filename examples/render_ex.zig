@@ -96,11 +96,11 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0, 0, 0.2, 1);
+        eng.renderer.clear(0, 0, 51, 255);
         self.fps.renderTick();
 
         //* We start a renderer batch, which will group together all of our draw calls and render them at once when we call end.
-        eng.renderer.begin(eng.projection());
+        eng.renderer.begin(.logical);
 
         //* Here we're directly drawing a source rectangle from the texture to a destination rectangle on the screen.  The sprite batch will handle creating the vertices for this and batching it together with other draw calls.
         for (0..3) |idx| {

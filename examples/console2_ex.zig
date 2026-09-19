@@ -83,10 +83,10 @@ pub const App = struct {
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0.5, 0.4, 0.8, 1);
+        eng.renderer.clear(128, 102, 204, 255);
 
         // const fb_size = eng.window.getFramebufferSize();
-        eng.renderer.begin(eng.projection());
+        eng.renderer.begin(.logical);
         self.cons.draw();
         eng.renderer.end();
 
