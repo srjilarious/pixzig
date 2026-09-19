@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned dev build (matches build.zig.zon's minimum_zig_version),
+      # served from our own zig-toolchains releases since nightlies get
+      # pruned from ziglang.org and the community mirrors.
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0-dev.1857+3c46da14d
+          mirror: https://github.com/srjilarious/zig-toolchains/releases/download/0.17.0-dev.1857+3c46da14d
+
+      # The unit tests create a real GL 4.5 core context (tests/main.zig's
+      # GlTestContext), so the runner needs an EGL loader and Mesa's software
+      # rasterizer. SDL's dummy video driver has no GL at all, so the
+      # offscreen driver below is what makes this work without a display.
+      - name: Install Mesa
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libegl-mesa0 libgl1-mesa-dri libgbm1
+
+      # Runs first: it builds far less than build-all, so a broken test
+      # reports quickly. testz exits non-zero on a failing test as of 1.7.0.
+      - name: Run unit tests
+        env:
+          SDL_VIDEODRIVER: offscreen
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          GALLIUM_DRIVER: llvmpipe
+        run: zig build tests
+
+      # Nothing else compiles the examples, so without this they can rot
+      # unnoticed while the engine changes around them.
+      - name: Build all examples
+        run: zig build build-all
