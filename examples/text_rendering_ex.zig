@@ -19,7 +19,6 @@ pub const std_options = pixzig.system.std_options;
 
 const manifest_options = @import("manifest_options");
 const AppRunner = pixzig.PixzigAppRunner(App, .{
-    .rendererOpts = .{ .textRendering = true },
     .manifestOpts = manifest_options,
 });
 

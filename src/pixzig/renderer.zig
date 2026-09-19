@@ -48,7 +48,9 @@ pub const TextRenderer = textMod.TextRenderer;
 ///  final binary.
 pub const RendererOptions = struct {
     shapeRendering: bool = true,
-    textRendering: bool = false,
+    /// Also gates the build-embedded default font: with this false its
+    /// bytes are never referenced, so they stay out of the binary.
+    textRendering: bool = true,
 
     /// Quad capacity of every batch queue (sprite, overlay, shape, and the
     /// two text batches). A batch auto-flushes once this many quads are
@@ -60,18 +62,30 @@ pub const RendererOptions = struct {
     maxSprites: u32 = constants.MaxSprites,
 };
 
-/// Specifies the default font for the renderer — either a TTF file path to
-/// load at init time, or the id of a font already in the ResourceManager.
+/// Specifies the default font for the renderer.
 pub const FontSource = union(enum) {
+    /// The font `buildGame` embedded in the binary: Karla-Regular unless the
+    /// build picked another `default_font`. With `default_font = .none`
+    /// nothing is embedded and the renderer starts without a font.
+    embedded: struct { size: f32 = 20.0 },
     /// `face` is the font file path; `face_index` selects a face inside a
     /// `.ttc` collection (0 for a plain font file).
     path: struct { face: [:0]const u8, size: f32 = 20.0, face_index: i32 = 0 },
+    /// Raw TTF/OTF bytes, e.g. the game's own `@embedFile`. The atlas keeps
+    /// its own copy, so `bytes` only has to live through init.
+    data: struct { bytes: []const u8, size: f32 = 20.0, face_index: i32 = 0 },
+    /// A font already loaded into the ResourceManager (e.g. a manifest boot group).
     id: []const u8,
+    /// Start without a default font.
+    none,
 };
+
+/// The bytes `buildGame` embedded as the default font, or null.
+const embedded_default_font: ?[]const u8 = @import("pixzig_default_font").data;
 
 /// Runtime initialization options for the renderer.
 pub const RendererInitOpts = struct {
-    font: ?FontSource = null,
+    font: FontSource = .{ .embedded = .{} },
 };
 
 /// A rendering interface that provides methods for drawing sprites, shapes
@@ -167,22 +181,28 @@ pub fn Renderer(opts: RendererOptions) type {
                 rend.text = try TextRenderer.initCapacity(alloc, resMgr, opts.maxSprites);
                 textInit = true;
 
-                if (initOpts.font) |src| {
-                    switch (src) {
-                        .path => |p| {
-                            try resMgr.loadFontFromTtfFileIndexed(DefaultFontName, p.face, p.face_index, p.size);
-                            const font = resMgr.fonts.get(DefaultFontName).?;
-                            try rend.text.setFont(font);
-                        },
-                        .id => |id| {
-                            const font = resMgr.fonts.get(id) orelse return error.NoFontWithThatName;
-                            try rend.text.setFont(font);
-                        },
-                    }
-                } else {
-                    if (builtin.mode == .debug) {
-                        std.log.warn("No default font provided. Text rendering will not work until a FontAtlas is set.", .{});
-                    }
+                switch (initOpts.font) {
+                    .embedded => |e| {
+                        if (embedded_default_font) |bytes| {
+                            try resMgr.loadFontFromTtfData(DefaultFontName, bytes, 0, e.size);
+                            try rend.text.setFont(resMgr.fonts.get(DefaultFontName).?);
+                        } else if (builtin.mode == .debug) {
+                            std.log.warn("The build embedded no default font (default_font = .none). Text rendering will not work until a FontAtlas is set.", .{});
+                        }
+                    },
+                    .path => |p| {
+                        try resMgr.loadFontFromTtfFileIndexed(DefaultFontName, p.face, p.face_index, p.size);
+                        try rend.text.setFont(resMgr.fonts.get(DefaultFontName).?);
+                    },
+                    .data => |d| {
+                        try resMgr.loadFontFromTtfData(DefaultFontName, d.bytes, d.face_index, d.size);
+                        try rend.text.setFont(resMgr.fonts.get(DefaultFontName).?);
+                    },
+                    .id => |id| {
+                        const font = resMgr.fonts.get(id) orelse return error.NoFontWithThatName;
+                        try rend.text.setFont(font);
+                    },
+                    .none => {},
                 }
             }
 

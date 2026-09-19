@@ -72,10 +72,48 @@ pub fn rendererDefaultFontAtlasNullWithoutFontTest(io: std.Io, alloc: std.mem.Al
     var rm = pixzig.resources.ResourceManager.init(alloc);
     defer rm.deinit();
 
-    var r = try Rndr.init(alloc, &rm, .{});
+    var r = try Rndr.init(alloc, &rm, .{ .font = .none });
     defer r.deinit();
 
     try testz.expectTrue(r.defaultFontAtlas() == null);
+}
+
+pub fn rendererLoadsEmbeddedFontByDefaultTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = glCtx();
+
+    const Rndr = pixzig.renderer.Renderer(.{});
+    var rm = pixzig.resources.ResourceManager.init(alloc);
+    defer rm.deinit();
+
+    // No font option at all: the build-embedded Karla loads at 20px.
+    var r = try Rndr.init(alloc, &rm, .{});
+    defer r.deinit();
+
+    const fa = r.defaultFontAtlas() orelse return error.NoDefaultFont;
+    try testz.expectEqual(fa.font_size, @as(f32, 20.0));
+    try testz.expectTrue(fa.getChar('A') != null);
+}
+
+pub fn rendererLoadsFontFromDataTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = glCtx();
+
+    const Rndr = pixzig.renderer.Renderer(.{});
+    var rm = pixzig.resources.ResourceManager.init(alloc);
+    defer rm.deinit();
+
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(std.Io.Threaded.global_single_threaded.io(), "assets/Roboto-Medium.ttf", alloc, .unlimited);
+    var r = blk: {
+        // The atlas copies the bytes, so they can go before the renderer does.
+        defer alloc.free(bytes);
+        break :blk try Rndr.init(alloc, &rm, .{ .font = .{ .data = .{ .bytes = bytes, .size = 24.0 } } });
+    };
+    defer r.deinit();
+
+    const fa = r.defaultFontAtlas() orelse return error.NoDefaultFont;
+    try testz.expectEqual(fa.font_size, @as(f32, 24.0));
+    try testz.expectTrue(fa.getChar('A') != null);
 }
 
 pub fn spriteBatchSmokeTest(io: std.Io, alloc: std.mem.Allocator) !void {

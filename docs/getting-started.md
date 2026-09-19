@@ -38,17 +38,23 @@ pub fn build(b: *std.Build) void {
     // add textures, atlases, fonts, and other assets.
     const manifest = manifestFromDef(b, .{});
 
-    const game = buildGame(b, target, optimize,
-        pixzig_dep,
-        pixzig_dep.module("pixzig"),
-        "my_game",
-        exe_mod,
-        manifest,
-    );
+    const game = buildGame(b, .{
+        .target = target,
+        .optimize = optimize,
+        .engine_dep = pixzig_dep,
+        .name = "my_game",
+        .root_module = exe_mod,
+        .manifest = manifest,
+    });
 
     b.default_step.dependOn(&game.step);
 }
 ```
+
+`BuildGameOptions` also takes two optional fields:
+
+- `default_font` -- the font embedded in the executable as the renderer's default. It is pixzig's bundled Karla-Regular (`.karla`) unless you pass `.{ .path = b.path("assets/MyFont.ttf") }` to embed your own font instead, or `.none` to embed no font. Every game in one `build.zig` shares the engine module, so they must all use the same `default_font`.
+- `package` -- copy assets next to the executable. When null, the `-Dpackage` build option decides.
 
 `manifestFromDef` defines assets inline; use `manifestFromFile(b, "assets/manifest.json")` instead if the manifest lives as a separate JSON file. See [Asset Manifest](assets.html) for the full manifest format and runtime loading options.
 

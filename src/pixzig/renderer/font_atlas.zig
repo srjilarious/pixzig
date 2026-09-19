@@ -512,9 +512,15 @@ pub const FontAtlas = struct {
     }
 
     fn initFromTtf(fontData: []const u8, fontSize: f32, alloc: std.mem.Allocator) !FontAtlas {
+        return initFromTtfData(fontData, 0, fontSize, alloc);
+    }
+
+    /// Loads a TTF/OTF (or a `.ttc` collection face) from bytes in memory.
+    /// The atlas keeps its own copy of `fontData`.
+    pub fn initFromTtfData(fontData: []const u8, faceIndex: i32, fontSize: f32, alloc: std.mem.Allocator) !FontAtlas {
         const owned = try alloc.dupe(u8, fontData);
         errdefer alloc.free(owned);
-        return initFromOwnedData(owned, 0, fontSize, alloc);
+        return initFromOwnedData(owned, faceIndex, fontSize, alloc);
     }
 
     /// Loads a TTF/OTF (or a `.ttc` collection face) from disk. `face_index`

@@ -34,13 +34,14 @@ const buildGame = @import("pixzig").buildGame;
 const manifestFromFile = @import("pixzig").manifestFromFile;
 
 const manifest = manifestFromFile(b, "assets/manifest.json");
-const game = buildGame(b, target, optimize,
-    pixzig_dep,
-    pixzig_dep.module("pixzig"),
-    "my_game",
-    exe_mod,
-    manifest,
-);
+const game = buildGame(b, .{
+    .target = target,
+    .optimize = optimize,
+    .engine_dep = pixzig_dep,
+    .name = "my_game",
+    .root_module = exe_mod,
+    .manifest = manifest,
+});
 ```
 
 Use `manifestFromDef` to define assets inline in `build.zig` with no separate JSON file:

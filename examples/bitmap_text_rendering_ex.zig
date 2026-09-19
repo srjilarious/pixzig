@@ -18,7 +18,7 @@ const FontAtlas = pixzig.renderer.FontAtlas;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{ .rendererOpts = .{ .textRendering = true } });
+const AppRunner = pixzig.PixzigAppRunner(App, .{});
 
 pub const App = struct {
     fps: FpsCounter,
@@ -84,7 +84,11 @@ pub const App = struct {
 pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig Bitmap Font Text Rendering Example", .{});
 
-    const appRunner = try AppRunner.init("Pixzig Bitmap FontText Rendering Example.", init.gpa, .{ .logicalSize = .{ .x = 266, .y = 160 } });
+    const appRunner = try AppRunner.init("Pixzig Bitmap FontText Rendering Example.", init.gpa, .{
+        .logicalSize = .{ .x = 266, .y = 160 },
+        // App.init swaps in the bitmap font, so skip loading the embedded one.
+        .renderInitOpts = .{ .font = .none },
+    });
     const app = try App.init(init.gpa, appRunner.engine);
 
     appRunner.run(app);

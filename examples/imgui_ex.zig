@@ -26,9 +26,6 @@ pub const std_options = pixzig.system.std_options;
 
 const manifest_options = @import("manifest_options");
 const AppRunner = pixzig.PixzigAppRunner(App, .{
-    .rendererOpts = .{
-        .textRendering = true,
-    },
     // textInput arms the OS text-input machinery, which is what makes
     // Keyboard.text() -- and so the UI's text fields -- produce anything.
     .inputOpts = .{ .mouse = true, .textInput = true },

@@ -19,9 +19,6 @@ pub const std_options = pixzig.system.std_options;
 
 const manifest_options = @import("manifest_options");
 const AppRunner = pixzig.PixzigAppRunner(App, .{
-    .rendererOpts = .{
-        .textRendering = true,
-    },
     // The console reads typed characters through Keyboard.text(), which
     // needs the OS text-input machinery armed.
     .inputOpts = .{ .textInput = true },

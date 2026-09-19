@@ -781,6 +781,10 @@ fn buildEngine(
     }
     pixeng.addImport("c_time", time_c_translate.createModule());
 
+    // The renderer's default font. `buildGame` replaces this import when a
+    // game picks a different `default_font`.
+    pixeng.addImport("pixzig_default_font", defaultFontModule(b, b.path(karla_path)));
+
     // Install the engine library
     if (target.result.os.tag != .emscripten) {
         b.installArtifact(engine_lib);
@@ -838,27 +842,98 @@ fn buildPythonFfi(
     python_ffi_step.dependOn(&install_ffi.step);
 }
 
-pub fn buildGame(
-    b: *std.Build,
+/// Which font `buildGame` embeds into the game as the renderer's default.
+pub const DefaultFont = union(enum) {
+    /// pixzig's bundled Karla-Regular.
+    karla,
+    /// Embed no font at all. The renderer starts without a default font
+    /// unless the game passes one through `renderInitOpts.font`.
+    none,
+    /// Embed this TTF/OTF file instead of Karla.
+    path: std.Build.LazyPath,
+};
+
+/// Options for `buildGame`.
+pub const BuildGameOptions = struct {
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
+    /// The pixzig dependency, e.g. `b.dependency("pixzig", .{ .target = target })`.
     engine_dep: *std.Build.Dependency,
-    engine_mod: *std.Build.Module,
+    /// The executable's name; also the name of its run step.
     name: []const u8,
-    exe_mod: *std.Build.Module,
+    /// The game's root module.
+    root_module: *std.Build.Module,
     manifest: ManifestHandle,
-) *std.Build.Step.Compile {
+    /// Font embedded as the renderer's default (`renderInitOpts.font = .embedded`).
+    default_font: DefaultFont = .karla,
+    /// Package assets next to the executable. Null reads the `-Dpackage`
+    /// build option instead.
+    package: ?bool = null,
+};
+
+const karla_path = "src/pixzig/assets/Karla-Regular.ttf";
+
+/// Builds the `pixzig_default_font` module: a single
+/// `pub const data: ?[]const u8`, the embedded font bytes or null.
+fn defaultFontModule(b: *std.Build, font: ?std.Build.LazyPath) *std.Build.Module {
+    const files = b.addWriteFiles();
+    const root = if (font) |f| blk: {
+        _ = files.addCopyFile(f, "default_font.ttf");
+        break :blk files.add("default_font.zig", "pub const data: ?[]const u8 = @embedFile(\"default_font.ttf\");\n");
+    } else files.add("default_font.zig", "pub const data: ?[]const u8 = null;\n");
+    return b.createModule(.{ .root_source_file = root });
+}
+
+/// The `default_font` the first `buildGame` call chose. Every game in a build
+/// graph shares the one engine module, so they all share its default font too.
+var chosen_default_font: ?DefaultFont = null;
+
+fn sameDefaultFont(a: DefaultFont, b: DefaultFont) bool {
+    return switch (a) {
+        .karla => b == .karla,
+        .none => b == .none,
+        .path => |pa| switch (b) {
+            .path => |pb| pa == .src_path and pb == .src_path and
+                pa.src_path.owner == pb.src_path.owner and
+                std.mem.eql(u8, pa.src_path.sub_path, pb.src_path.sub_path),
+            else => false,
+        },
+    };
+}
+
+/// Builds a game executable against the pixzig dependency, wiring in the
+/// engine, its asset manifest and its embedded default font, plus a run
+/// step named after the game.
+pub fn buildGame(b: *std.Build, opts: BuildGameOptions) *std.Build.Step.Compile {
+    const engine_mod = opts.engine_dep.module("pixzig");
+
+    if (chosen_default_font) |prev| {
+        if (!sameDefaultFont(prev, opts.default_font)) {
+            @panic("buildGame: every game in one build must use the same default_font (they share the pixzig engine module)");
+        }
+    } else {
+        chosen_default_font = opts.default_font;
+        // The engine module ships with Karla wired in (see buildEngine);
+        // swap the import only when the game asks for something else.
+        switch (opts.default_font) {
+            .karla => {},
+            .none => engine_mod.addImport("pixzig_default_font", defaultFontModule(b, null)),
+            .path => |p| engine_mod.addImport("pixzig_default_font", defaultFontModule(b, p)),
+        }
+    }
+
     const engine_lib: ?*std.Build.Step.Compile = blk: {
-        if (target.result.os.tag != .emscripten) {
-            break :blk engine_dep.artifact("pixzig");
+        if (opts.target.result.os.tag != .emscripten) {
+            break :blk opts.engine_dep.artifact("pixzig");
         } else {
             break :blk null;
         }
     };
 
-    const is_package = b.option(bool, "package", "Package assets to the output directory") orelse false;
+    const is_package = opts.package orelse
+        (b.option(bool, "package", "Package assets to the output directory") orelse false);
 
-    return buildExample(b, target, optimize, engine_lib, engine_mod, name, exe_mod, manifest, is_package);
+    return buildExample(b, opts.target, opts.optimize, engine_lib, engine_mod, opts.name, opts.root_module, opts.manifest, is_package);
 }
 
 pub fn buildExample(

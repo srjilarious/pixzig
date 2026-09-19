@@ -152,7 +152,16 @@ When the resource manager deinits with a handle still referenced, the log names 
 
 ## Text and Fonts
 
-Text rendering must be enabled at compile time (`rendererOpts.textRendering = true`); calling `drawString` and friends without it is a compile error that names the flag. The renderer keeps one default font, set through `renderInitOpts.font`:
+Text rendering is on by default (`rendererOpts.textRendering = true`). Setting it to false compiles the text path out, along with the embedded font bytes; calling `drawString` and friends then is a compile error that names the flag.
+
+The renderer keeps one default font, set through `renderInitOpts.font`. Out of the box that is `.embedded`: the font `buildGame` compiled into the executable, which is Karla-Regular at 20px unless the build's `default_font` names another file (see [Getting Started](getting-started.html)). `drawString` works with no font setup at all.
+
+```zig
+// The embedded font at a different size.
+.renderInitOpts = .{ .font = .{ .embedded = .{ .size = 16.0 } } },
+```
+
+To use a different font at runtime, load it from a file:
 
 ```zig
 const appRunner = try AppRunner.init("My Game", alloc, .{
@@ -164,7 +173,13 @@ const appRunner = try AppRunner.init("My Game", alloc, .{
 });
 ```
 
-`font` is a `FontSource`: either `.path` (a file, as above) or `.id` for a font already loaded elsewhere (e.g. a manifest boot group). An app that reads its font from a Lua config just fills the `.path` struct from those values.
+`font` is a `FontSource`:
+
+- `.embedded` -- the build's embedded font (the default). If the build set `default_font = .none`, nothing is loaded and a debug build logs a warning.
+- `.path` -- a font file, as above. An app that reads its font from a Lua config just fills this struct from those values.
+- `.data` -- font bytes already in memory, e.g. `.{ .data = .{ .bytes = @embedFile("MyFont.ttf"), .size = 18.0 } }`.
+- `.id` -- a font already loaded elsewhere (e.g. a manifest boot group).
+- `.none` -- start with no default font, for a game that only draws bitmap fonts or sets its font later with `renderer.setDefaultFont`.
 
 Draw with `drawString`, `drawStringColored`, or `drawScaledString` between `begin` and `end`. Add extra coverage for codepoints the primary face lacks with `eng.renderer.addDefaultFontFallback(&eng.resources, path, face_index)`.
 

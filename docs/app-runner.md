@@ -8,7 +8,7 @@
 const AppRunner = pixzig.PixzigAppRunner(App, .{
     .rendererOpts = .{
         .shapeRendering = true,
-        .textRendering = false,
+        .textRendering = true, // the default; false compiles out text and the embedded font
     },
     .audioOpts = .{ .enabled = false },
     .inputOpts = .{ .numGamepads = 1 },

@@ -1244,6 +1244,22 @@ pub const ResourceManager = struct {
         }
     }
 
+    /// Loads a TTF/OTF font from bytes in memory (e.g. an `@embedFile`) and
+    /// registers it under `name`. The atlas copies `fontData`.
+    pub fn loadFontFromTtfData(
+        self: *Self,
+        name: []const u8,
+        fontData: []const u8,
+        faceIndex: i32,
+        fontSize: f32,
+    ) !void {
+        var fa = try FontAtlas.initFromTtfData(fontData, faceIndex, fontSize, self.alloc);
+        errdefer fa.deinit();
+
+        const managed = try self.getOrCreateFont(name);
+        try managed.add(fa);
+    }
+
     /// Loads a TTF font embedded at comptime into the binary and registers
     /// it under `name`.
     pub fn loadFontFromTtfEmbedded(

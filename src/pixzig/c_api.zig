@@ -9,7 +9,6 @@ const pixzig = @import("pixzig");
 
 const FfiOpts = pixzig.PixzigEngineOptions{
     .inputOpts = .{ .mouse = true, .numGamepads = pixzig.input.MaxGamepads, .textInput = true },
-    .rendererOpts = .{ .textRendering = true },
     .audioOpts = .{ .enabled = true },
 };
 const Engine = pixzig.PixzigEngine(FfiOpts);
