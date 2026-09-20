@@ -8,14 +8,14 @@ const Color = pixzig.common.Color;
 const GameStateMgr = pixzig.gamestate.GameStateMgr;
 
 const math = @import("zmath");
-const EngOptions = pixzig.PixzigEngineOptions;
+const EngOptions = pixzig.EngineOptions;
 const FpsCounter = pixzig.utils.FpsCounter;
-const PixzigEngine = pixzig.PixzigEngine;
+const Engine = pixzig.Engine;
 
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{ .inputOpts = .{ .mouse = true } });
+const AppRunner = pixzig.AppRunner(App, .{ .inputOpts = .{ .mouse = true } });
 
 pub const App = struct {
     fps: FpsCounter,

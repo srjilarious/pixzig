@@ -9,7 +9,7 @@ const quad_batch = @import("./quad_batch.zig");
 
 const RectF = common.RectF;
 const Color = common.Color;
-const ManagedShader = resources.ManagedShader;
+const ShaderHandle = resources.ShaderHandle;
 
 const Inner = quad_batch.QuadBatch(.{ .posDim = 2, .colorDim = 4 });
 
@@ -26,13 +26,13 @@ pub const ShapeBatchQueue = struct {
 
     /// Creates the batch with the default `C.MaxSprites` quad capacity.
     /// Use `initCapacity` to size it explicitly.
-    pub fn init(alloc: std.mem.Allocator, shader: *ManagedShader) !ShapeBatchQueue {
+    pub fn init(alloc: std.mem.Allocator, shader: *ShaderHandle) !ShapeBatchQueue {
         return initCapacity(alloc, shader, C.MaxSprites);
     }
 
     /// Like `init`, but caps the batch at `maxQuads` queued quads before it
     /// auto-flushes. Sizes the CPU scratch buffers and GPU VBOs up front.
-    pub fn initCapacity(alloc: std.mem.Allocator, shader: *ManagedShader, maxQuads: usize) !ShapeBatchQueue {
+    pub fn initCapacity(alloc: std.mem.Allocator, shader: *ShaderHandle, maxQuads: usize) !ShapeBatchQueue {
         return .{ .inner = try Inner.init(alloc, shader, maxQuads) };
     }
 

@@ -7,7 +7,7 @@ const Color = pixzig.common.Color;
 const shaders = pixzig.shaders;
 const Shader = shaders.Shader;
 
-const EngOptions = pixzig.PixzigEngineOptions;
+const EngOptions = pixzig.EngineOptions;
 
 const tile = pixzig.tile;
 const Flip = pixzig.sprites.Flip;
@@ -43,7 +43,7 @@ const MapHeight = 18;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.AppRunner(App, .{});
 
 pub const App = struct {
     alloc: std.mem.Allocator,

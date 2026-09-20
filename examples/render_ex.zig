@@ -6,7 +6,7 @@ const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
 
-const EngOptions = pixzig.PixzigEngineOptions;
+const EngOptions = pixzig.EngineOptions;
 
 const tile = pixzig.tile;
 const Flip = pixzig.sprites.Flip;
@@ -20,7 +20,7 @@ const FpsCounter = pixzig.utils.FpsCounter;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.AppRunner(App, .{});
 //* ---
 
 //* For this application, we load a texture and define some coordinates to

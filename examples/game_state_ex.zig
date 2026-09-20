@@ -9,7 +9,7 @@ const Delay = pixzig.utils.Delay;
 const GameStateMgr = pixzig.gamestate.GameStateMgr;
 
 const math = @import("zmath");
-const EngOptions = pixzig.PixzigEngineOptions;
+const EngOptions = pixzig.EngineOptions;
 const FpsCounter = pixzig.utils.FpsCounter;
 
 const States = enum {
@@ -18,7 +18,7 @@ const States = enum {
     //StateC
 };
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.AppRunner(App, .{});
 
 const StateA = struct {
     pub fn update(self: *StateA, eng: *AppRunner.Engine, delta: f64) bool {

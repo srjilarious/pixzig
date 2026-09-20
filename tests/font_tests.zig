@@ -5,7 +5,7 @@ const pixzig = @import("pixzig");
 const FontAtlas = pixzig.renderer.FontAtlas;
 
 fn sameGlyph(a: pixzig.renderer.Character, b: pixzig.renderer.Character) bool {
-    return a.atlas_pos.x == b.atlas_pos.x and a.atlas_pos.y == b.atlas_pos.y and
+    return a.atlasPos.x == b.atlasPos.x and a.atlasPos.y == b.atlasPos.y and
         a.size.x == b.size.x and a.size.y == b.size.y and a.advance == b.advance;
 }
 
@@ -85,11 +85,11 @@ pub fn atlasLoadsNonAsciiBlockOnDemandTest(io: std.Io, alloc: std.mem.Allocator)
     defer atlas.deinit();
 
     // Cyrillic capital Zhe (U+0416) lives in block 0x04; Roboto has it.
-    try testz.expectFalse(atlas.loaded_blocks.contains(0x04));
+    try testz.expectFalse(atlas.loadedBlocks.contains(0x04));
     const zhe = atlas.getChar(0x0416).?;
     try testz.expectTrue(zhe.size.x > 0);
     try testz.expectTrue(zhe.advance > 0);
-    try testz.expectTrue(atlas.loaded_blocks.contains(0x04));
+    try testz.expectTrue(atlas.loadedBlocks.contains(0x04));
 
     // Greek capital Gamma (U+0393), block 0x03.
     const gamma = atlas.getChar(0x0393).?;
@@ -140,7 +140,7 @@ pub fn atlasGrowPreservesGlyphPixelPositionTest(io: std.Io, alloc: std.mem.Alloc
     const before = atlas.getChar('A').?;
     const dim_before = atlas.dim;
     // A packed glyph's normalized UV is its pixel rect over the atlas edge.
-    try testz.expectTrue(@abs(before.coords.l - @as(f32, @floatFromInt(before.atlas_pos.x)) / @as(f32, @floatFromInt(dim_before))) < 0.0001);
+    try testz.expectTrue(@abs(before.coords.l - @as(f32, @floatFromInt(before.atlasPos.x)) / @as(f32, @floatFromInt(dim_before))) < 0.0001);
 
     try testz.expectTrue(atlas.grow());
     try testz.expectTrue(atlas.grow());
@@ -148,10 +148,10 @@ pub fn atlasGrowPreservesGlyphPixelPositionTest(io: std.Io, alloc: std.mem.Alloc
 
     const after = atlas.getChar('A').?;
     // Pixel position is unchanged; only the normalization changed.
-    try testz.expectEqual(after.atlas_pos.x, before.atlas_pos.x);
-    try testz.expectEqual(after.atlas_pos.y, before.atlas_pos.y);
+    try testz.expectEqual(after.atlasPos.x, before.atlasPos.x);
+    try testz.expectEqual(after.atlasPos.y, before.atlasPos.y);
     try testz.expectEqual(atlas.dim, dim_before * 4);
-    try testz.expectTrue(@abs(after.coords.l - @as(f32, @floatFromInt(after.atlas_pos.x)) / @as(f32, @floatFromInt(atlas.dim))) < 0.0001);
+    try testz.expectTrue(@abs(after.coords.l - @as(f32, @floatFromInt(after.atlasPos.x)) / @as(f32, @floatFromInt(atlas.dim))) < 0.0001);
 
     // The glyph bitmap itself survived the row-by-row copy into the wider buffer.
     var any_ink = false;
@@ -159,7 +159,7 @@ pub fn atlasGrowPreservesGlyphPixelPositionTest(io: std.Io, alloc: std.mem.Alloc
     while (yy < after.size.y) : (yy += 1) {
         var xx: i32 = 0;
         while (xx < after.size.x) : (xx += 1) {
-            const idx: usize = @intCast((after.atlas_pos.y + yy) * atlas.dim + (after.atlas_pos.x + xx));
+            const idx: usize = @intCast((after.atlasPos.y + yy) * atlas.dim + (after.atlasPos.x + xx));
             if (atlas.pixels[idx] != 0) any_ink = true;
         }
     }
@@ -177,7 +177,7 @@ pub fn atlasSetFontSizeRepacksInPlaceTest(io: std.Io, alloc: std.mem.Allocator) 
 
     try atlas.setFontSize(48.0);
 
-    try testz.expectEqual(atlas.font_size, @as(f32, 48.0));
+    try testz.expectEqual(atlas.fontSize, @as(f32, 48.0));
     // Same GL texture object -> a batch holding &atlas.texture stays valid.
     try testz.expectEqual(atlas.texture.texture, tex_id);
     // Glyphs are re-rasterized at the larger size.
@@ -186,7 +186,7 @@ pub fn atlasSetFontSizeRepacksInPlaceTest(io: std.Io, alloc: std.mem.Allocator) 
 
     // And back down again.
     try atlas.setFontSize(10.0);
-    try testz.expectEqual(atlas.font_size, @as(f32, 10.0));
+    try testz.expectEqual(atlas.fontSize, @as(f32, 10.0));
     try testz.expectTrue(atlas.getChar('M').?.size.y < small_h);
 }
 

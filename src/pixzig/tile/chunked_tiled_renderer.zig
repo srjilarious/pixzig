@@ -9,7 +9,7 @@ const tilemap = @import("./tilemap.zig");
 const ChunkedTiledLayerRenderer = @import("./chunked_tile_renderer.zig").ChunkedTiledLayerRenderer;
 
 const RectF = common.RectF;
-const ManagedShader = resources.ManagedShader;
+const ShaderHandle = resources.ShaderHandle;
 const TextureHandle = resources.TextureHandle;
 const TileMap = tilemap.TileMap;
 const Camera2D = camera_mod.Camera2D;
@@ -17,9 +17,9 @@ const Viewport = window_mod.Viewport;
 
 const LayerEntry = struct {
     renderer: ChunkedTiledLayerRenderer,
-    parallax_x: f32,
-    parallax_y: f32,
-    layer_index: usize,
+    parallaxX: f32,
+    parallaxY: f32,
+    layerIndex: usize,
     /// Draw order depth. Layers are rendered lowest-z-first. Set via the
     /// `z` float custom property on the layer in Tiled; defaults to 0.
     z: f32,
@@ -27,21 +27,22 @@ const LayerEntry = struct {
 
 fn entryLessThan(_: void, a: LayerEntry, b: LayerEntry) bool {
     if (a.z != b.z) return a.z < b.z;
-    return a.layer_index < b.layer_index;
+    return a.layerIndex < b.layerIndex;
 }
 
 /// Renders all tile layers in a TileMap, one ChunkedTiledLayerRenderer per
 /// layer. Per-layer properties read from Tiled custom properties:
 ///   `z`           - draw order depth (f32, default 0.0); lower renders first
-///   `parallax_x`  - horizontal scroll factor (f32, default 1.0)
-///   `parallax_y`  - vertical scroll factor   (f32, default 1.0)
+///   `parallax_x` - horizontal scroll factor (f32, default 1.0)
+///   `parallax_y` - vertical scroll factor   (f32, default 1.0)
 ///
 /// Entries are sorted by z ascending at init time and remain in that order.
 pub const ChunkedTiledRenderer = struct {
     alloc: std.mem.Allocator,
     entries: []LayerEntry,
-    /// Retained so reload() can create renderers for newly added layers.
-    shader: *ManagedShader,
+    /// Our own reference, so reload() can still build renderers for newly
+    /// added layers. Released in `deinit`.
+    shader: *ShaderHandle,
     /// Our own reference (retained in `init`, released in `deinit`), so
     /// reload() still has a live texture to hand new layer renderers.
     texture: *TextureHandle,
@@ -51,7 +52,7 @@ pub const ChunkedTiledRenderer = struct {
     pub fn init(
         alloc: std.mem.Allocator,
         map: *const TileMap,
-        shader: *ManagedShader,
+        shader: *ShaderHandle,
         texture: *TextureHandle,
     ) !Self {
         const n = map.layers.items.len;
@@ -64,9 +65,9 @@ pub const ChunkedTiledRenderer = struct {
         for (map.layers.items, 0..) |*layer, i| {
             entries[i] = .{
                 .renderer = try ChunkedTiledLayerRenderer.init(alloc, shader, texture, layer),
-                .parallax_x = layer.floatPropWithDefault("parallax_x", 1.0),
-                .parallax_y = layer.floatPropWithDefault("parallax_y", 1.0),
-                .layer_index = i,
+                .parallaxX = layer.floatPropWithDefault("parallax_x", 1.0),
+                .parallaxY = layer.floatPropWithDefault("parallax_y", 1.0),
+                .layerIndex = i,
                 .z = layer.floatPropWithDefault("z", 0.0),
             };
             inited += 1;
@@ -74,12 +75,13 @@ pub const ChunkedTiledRenderer = struct {
 
         std.sort.block(LayerEntry, entries, {}, entryLessThan);
 
-        return .{ .alloc = alloc, .entries = entries, .shader = shader, .texture = texture.retain() };
+        return .{ .alloc = alloc, .entries = entries, .shader = shader.retain(), .texture = texture.retain() };
     }
 
     pub fn deinit(self: *Self) void {
         for (self.entries) |*e| e.renderer.deinit();
         self.alloc.free(self.entries);
+        self.shader.release();
         self.texture.release();
     }
 
@@ -95,7 +97,7 @@ pub const ChunkedTiledRenderer = struct {
     /// added, removed, or reordered layers.
     pub fn rebuildAll(self: *Self, map: *const TileMap) void {
         for (self.entries) |*entry| {
-            const layer = map.layerByIndex(entry.layer_index) orelse continue;
+            const layer = map.layerByIndex(entry.layerIndex) orelse continue;
             entry.renderer.rebuildAll(layer);
         }
     }
@@ -117,9 +119,9 @@ pub const ChunkedTiledRenderer = struct {
         for (map.layers.items, 0..) |*layer, i| {
             new_entries[i] = .{
                 .renderer = try ChunkedTiledLayerRenderer.init(self.alloc, self.shader, self.texture, layer),
-                .parallax_x = layer.floatPropWithDefault("parallax_x", 1.0),
-                .parallax_y = layer.floatPropWithDefault("parallax_y", 1.0),
-                .layer_index = i,
+                .parallaxX = layer.floatPropWithDefault("parallax_x", 1.0),
+                .parallaxY = layer.floatPropWithDefault("parallax_y", 1.0),
+                .layerIndex = i,
                 .z = layer.floatPropWithDefault("z", 0.0),
             };
             new_entries[i].renderer.rebuildAll(layer);
@@ -148,43 +150,43 @@ pub const ChunkedTiledRenderer = struct {
     /// Render a single layer by its original map index.
     pub fn renderLayer(
         self: *Self,
-        layer_index: usize,
+        layerIndex: usize,
         map: *const TileMap,
         camera: *const Camera2D,
         viewport: *const Viewport,
     ) void {
         for (self.entries) |*entry| {
-            if (entry.layer_index == layer_index) {
+            if (entry.layerIndex == layerIndex) {
                 renderEntry(entry, map, camera, viewport);
                 return;
             }
         }
     }
 
-    /// Render all layers whose z is strictly less than `z_threshold`.
+    /// Render all layers whose z is strictly less than `zThreshold`.
     pub fn renderLayersBelow(
         self: *Self,
-        z_threshold: f32,
+        zThreshold: f32,
         map: *const TileMap,
         camera: *const Camera2D,
         viewport: *const Viewport,
     ) void {
         for (self.entries) |*entry| {
-            if (entry.z >= z_threshold) break; // entries are sorted; can stop early
+            if (entry.z >= zThreshold) break; // entries are sorted; can stop early
             renderEntry(entry, map, camera, viewport);
         }
     }
 
-    /// Render all layers whose z is greater than or equal to `z_threshold`.
+    /// Render all layers whose z is greater than or equal to `zThreshold`.
     pub fn renderLayersAbove(
         self: *Self,
-        z_threshold: f32,
+        zThreshold: f32,
         map: *const TileMap,
         camera: *const Camera2D,
         viewport: *const Viewport,
     ) void {
         for (self.entries) |*entry| {
-            if (entry.z >= z_threshold) {
+            if (entry.z >= zThreshold) {
                 renderEntry(entry, map, camera, viewport);
             }
         }
@@ -193,9 +195,9 @@ pub const ChunkedTiledRenderer = struct {
     // -------------------------------------------------------------------------
 
     fn renderEntry(entry: *LayerEntry, map: *const TileMap, camera: *const Camera2D, viewport: *const Viewport) void {
-        const layer = map.layerByIndex(entry.layer_index) orelse return;
-        const mvp = layerMvp(camera, viewport, entry.parallax_x, entry.parallax_y);
-        const vp_rect = layerViewport(camera, entry.parallax_x, entry.parallax_y);
+        const layer = map.layerByIndex(entry.layerIndex) orelse return;
+        const mvp = layerMvp(camera, viewport, entry.parallaxX, entry.parallaxY);
+        const vp_rect = layerViewport(camera, entry.parallaxX, entry.parallaxY);
         entry.renderer.render(layer, mvp, vp_rect);
     }
 
@@ -205,8 +207,8 @@ pub const ChunkedTiledRenderer = struct {
         const view = camera.viewRect();
         const cam_x = (view.l + view.r) * 0.5;
         const cam_y = (view.t + view.b) * 0.5;
-        const lw: f32 = @floatFromInt(camera.logical_size.x);
-        const lh: f32 = @floatFromInt(camera.logical_size.y);
+        const lw: f32 = @floatFromInt(camera.logicalSize.x);
+        const lh: f32 = @floatFromInt(camera.logicalSize.y);
         const z = camera.zoom;
 
         const t_neg = zmath.translation(-cam_x * px, -cam_y * py, 0.0);

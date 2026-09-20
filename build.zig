@@ -374,7 +374,7 @@ pub fn build(b: *std.Build) void {
     const is_package = b.option(bool, "package", "Package assets to the output directory") orelse false;
 
     // Build the engine as a static library
-    const engDat = buildEngine(b, target, optimize);
+    const engDat = buildEngine(b, target, optimize, is_package);
 
     buildPythonFfi(b, target, optimize, engDat.pixeng_mod);
 
@@ -498,16 +498,6 @@ pub fn build(b: *std.Build) void {
                 .groups = &.{.{ .name = "boot", .assets = &.{"tiles"} }},
                 .assets = &.{
                     .{ .id = "tiles", .kind = "texture", .path = "mario_grassish2.png" },
-                },
-            },
-        },
-        .{
-            .name = "console2_ex",
-            .path = "examples/console2_ex.zig",
-            .manifest_def = .{
-                .groups = &.{.{ .name = "boot", .assets = &.{"Roboto-Medium"} }},
-                .assets = &.{
-                    .{ .id = "Roboto-Medium", .kind = "font", .path = "Roboto-Medium.ttf", .font_size = 20.0 },
                 },
             },
         },
@@ -693,6 +683,7 @@ fn buildEngine(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
+    is_package: bool,
 ) EngineData {
     // Create the engine module
     const pixeng = b.addModule("pixzig", .{
@@ -818,6 +809,10 @@ fn buildEngine(
     // game picks a different `default_font`.
     pixeng.addImport("pixzig_default_font", defaultFontModule(b, b.path(karla_path)));
 
+    // Where relative asset paths resolve. `buildGame` replaces this import
+    // so a downstream game points at its own source tree.
+    pixeng.addImport("pixzig_asset_base", assetBaseModule(b, devAssetBase(b, target, is_package)));
+
     // Install the engine library
     if (target.result.os.tag != .emscripten) {
         b.installArtifact(engine_lib);
@@ -906,6 +901,29 @@ pub const BuildGameOptions = struct {
 
 const karla_path = "src/pixzig/assets/Karla-Regular.ttf";
 
+/// Builds the `pixzig_asset_base` module: a single
+/// `pub const dir: ?[]const u8`, the directory relative asset paths resolve
+/// against. Null means "use the executable's own directory"
+/// (`SDL_GetBasePath`), which is what a packaged build wants.
+fn assetBaseModule(b: *std.Build, dir: ?[]const u8) *std.Build.Module {
+    const files = b.addWriteFiles();
+    const src = if (dir) |d|
+        b.fmt("pub const dir: ?[]const u8 = \"{f}\";\n", .{std.zig.fmtString(d)})
+    else
+        "pub const dir: ?[]const u8 = null;\n";
+    return b.createModule(.{ .root_source_file = files.add("asset_base.zig", src) });
+}
+
+/// The asset base directory for a dev build: the build root, so a freshly
+/// built example reads (and hot-reloads) the assets in the source tree
+/// rather than a copy. Package builds and web builds get null, which falls
+/// back to the executable's own directory / the Emscripten VFS root.
+fn devAssetBase(b: *std.Build, target: std.Build.ResolvedTarget, is_package: bool) ?[]const u8 {
+    if (is_package) return null;
+    if (target.result.os.tag == .emscripten) return null;
+    return fromRoot(b, ".");
+}
+
 /// Builds the `pixzig_default_font` module: a single
 /// `pub const data: ?[]const u8`, the embedded font bytes or null.
 fn defaultFontModule(b: *std.Build, font: ?std.Build.LazyPath) *std.Build.Module {
@@ -965,6 +983,15 @@ pub fn buildGame(b: *std.Build, opts: BuildGameOptions) *std.Build.Step.Compile 
 
     const is_package = opts.package orelse
         (b.option(bool, "package", "Package assets to the output directory") orelse false);
+
+    // Relative asset paths resolve against the game's own source tree in dev
+    // builds (so hot-reload watches the real files) and against the
+    // executable's directory once packaged. The engine module is shared, so
+    // like `default_font` this is one setting for every game in a build.
+    engine_mod.addImport(
+        "pixzig_asset_base",
+        assetBaseModule(b, devAssetBase(b, opts.target, is_package)),
+    );
 
     return buildExample(b, opts.target, opts.optimize, engine_lib, engine_mod, opts.name, opts.root_module, opts.manifest, is_package);
 }

@@ -67,15 +67,18 @@ pub const TextRenderer = struct {
     /// see `ColorBatch`'s doc comment for why it isn't folded into
     /// `spriteBatch`.
     colorBatch: ColorBatch,
-    /// Pool refs (not pre-acquired handles) so setFont can swap the active
-    /// shader on the underlying batch via swapShader. The batch itself owns
-    /// whichever handle is currently in use.
-    alphaShader: *resources.ManagedShader,
-    texShader: *resources.ManagedShader,
+    /// Borrowed shader handles so `setFont` can swap the active program on
+    /// the underlying batch via `swapShader`. The batch takes its own
+    /// reference on whichever of the two is currently in use.
+    alphaShader: *resources.ShaderHandle,
+    texShader: *resources.ShaderHandle,
     alloc: std.mem.Allocator,
     /// Active font handle. Released in deinit. The parent back-pointer is
     /// used to reacquire after a hot-reload without re-doing the name lookup.
     font: ?*resources.FontAtlasHandle,
+    /// Set once the first draw call finds no font, so the "no font" warning
+    /// is logged one time rather than on every string, every frame.
+    warnedNoFont: bool = false,
 
     /// Initializes the text renderer with the default `C.MaxSprites` glyph
     /// capacity per batch. Use `initCapacity` to size it explicitly.
@@ -140,7 +143,7 @@ pub const TextRenderer = struct {
     fn syncAtlasForText(self: *TextRenderer, text: []const u8) void {
         const fa = &self.font.?.val;
         fa.loadBlocksForText(text);
-        if (fa.grew_since_upload) {
+        if (fa.grewSinceUpload) {
             self.spriteBatch.flush();
             self.colorBatch.flush();
         }
@@ -148,18 +151,33 @@ pub const TextRenderer = struct {
     }
 
     /// Adopt a new font for rendering. Releases any previously held handle,
-    /// acquires ownership of a new handle, and swaps the underlying batch's
-    /// shader to the alpha-channel program when the atlas was packed as
-    /// alpha, or the regular texture program otherwise.
+    /// takes a reference on `font`, and swaps the underlying batch's shader
+    /// to the alpha-channel program when the atlas was packed as alpha, or
+    /// the regular texture program otherwise.
+    ///
+    /// `font` is a borrowed handle (from `ResourceManager.getFontAtlas` or a
+    /// `load*` call); the text renderer retains its own reference and
+    /// releases it in `deinit`.
     pub fn setFont(
         self: *TextRenderer,
-        font: *resources.ManagedFont,
+        font: *resources.FontAtlasHandle,
     ) !void {
         if (self.font) |h| h.release();
-        self.font = font.acquire();
+        self.font = font.retain();
+        self.warnedNoFont = false;
 
         const shader = if (self.font.?.val.isAlpha) self.alphaShader else self.texShader;
         try self.spriteBatch.swapShader(shader);
+    }
+
+    /// Logs the missing-font error once per renderer (reset by `setFont`),
+    /// so a game that draws text before setting a font gets one clear line
+    /// instead of one per string per frame.
+    fn warnNoFont(self: *TextRenderer) void {
+        if (self.warnedNoFont) return;
+        self.warnedNoFont = true;
+        std.log.err("TextRenderer: No Font set. Cannot draw text. " ++
+            "Set one with Renderer.setDefaultFont, or EngineInitOptions.renderInitOpts.font.", .{});
     }
 
     pub fn drawString(self: *TextRenderer, text: []const u8, pos: Vec2I) Vec2I {
@@ -168,7 +186,7 @@ pub const TextRenderer = struct {
         var drawSize: Vec2I = .{ .x = 0, .y = 0 };
 
         if (self.font == null) {
-            std.log.err("TextRenderer: No Font set. Cannot draw text.", .{});
+            self.warnNoFont();
             return drawSize;
         }
 
@@ -202,7 +220,7 @@ pub const TextRenderer = struct {
         var drawSize: Vec2I = .{ .x = 0, .y = 0 };
 
         if (self.font == null) {
-            std.log.err("TextRenderer: No Font set. Cannot draw text.", .{});
+            self.warnNoFont();
             return drawSize;
         }
 
@@ -254,7 +272,7 @@ pub const TextRenderer = struct {
         var drawSize: Vec2I = .{ .x = 0, .y = 0 };
 
         if (self.font == null) {
-            std.log.err("TextRenderer: No Font set. Cannot draw text.", .{});
+            self.warnNoFont();
             return drawSize;
         }
 
@@ -297,7 +315,7 @@ pub const TextRenderer = struct {
         var drawSize: Vec2I = .{ .x = 0, .y = 0 };
 
         if (self.font == null) {
-            std.log.err("TextRenderer: No Font set. Cannot draw text.", .{});
+            self.warnNoFont();
             return drawSize;
         }
 

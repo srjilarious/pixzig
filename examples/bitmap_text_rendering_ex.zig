@@ -5,7 +5,7 @@ const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
 
-const EngOptions = pixzig.PixzigEngineOptions;
+const EngOptions = pixzig.EngineOptions;
 
 const tile = pixzig.tile;
 const Flip = pixzig.sprites.Flip;
@@ -18,7 +18,7 @@ const FontAtlas = pixzig.renderer.FontAtlas;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.AppRunner(App, .{});
 
 pub const App = struct {
     fps: FpsCounter,
@@ -27,7 +27,7 @@ pub const App = struct {
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app = try alloc.create(App);
 
-        eng.resources.loadFontFromBitmap(
+        _ = eng.resources.loadFontFromBitmap(
             "font5r",
             "assets/font5r.png",
             16,

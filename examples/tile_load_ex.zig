@@ -6,7 +6,7 @@ const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
 
 const math = @import("zmath");
-const EngOptions = pixzig.PixzigEngineOptions;
+const EngOptions = pixzig.EngineOptions;
 
 const tile = pixzig.tile;
 const Flip = pixzig.sprites.Flip;
@@ -18,7 +18,7 @@ const FpsCounter = pixzig.utils.FpsCounter;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.AppRunner(App, .{});
 
 pub const App = struct {
     alloc: std.mem.Allocator,
@@ -32,7 +32,7 @@ pub const App = struct {
         _ = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
 
         std.log.info("Loading tile map", .{});
-        try eng.resources.loadTileMap("level1a", "assets/level1a.tmx");
+        _ = try eng.resources.loadTileMap("level1a", "assets/level1a.tmx");
         const map = try eng.resources.acquireTileMap("level1a");
 
         std.log.info("Initializing map renderer.", .{});
@@ -43,7 +43,7 @@ pub const App = struct {
         std.log.info("Done initializing map renderer.", .{});
 
         const guy_rect = RectF.fromPosSize(33, 33, 32, 32);
-        var cam = pixzig.Camera2D.init(eng.viewport.logical_size);
+        var cam = pixzig.Camera2D.init(eng.viewport.logicalSize);
         cam.pos = guy_rect.centerF();
         const main_layer = &map.val.layers.items[1];
         cam.bounds = .{

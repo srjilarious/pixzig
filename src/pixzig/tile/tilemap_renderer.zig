@@ -14,7 +14,6 @@ const Vec2I = common.Vec2I;
 const Vec2U = common.Vec2U;
 const RectF = common.RectF;
 const Color = common.Color;
-const ManagedShader = resources.ManagedShader;
 const ShaderHandle = resources.ShaderHandle;
 const TextureHandle = resources.TextureHandle;
 
@@ -47,10 +46,10 @@ pub const TiledLayerRenderer = struct {
 
     pub fn init(
         alloc: std.mem.Allocator,
-        shader: *ManagedShader,
+        shader: *ShaderHandle,
         texture: *TextureHandle,
     ) !TiledLayerRenderer {
-        const shader_handle = shader.acquire() orelse return error.NoShaderInPool;
+        const shader_handle = shader.retain();
         errdefer shader_handle.release();
         const texture_handle = texture.retain();
         errdefer texture_handle.release();

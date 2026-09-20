@@ -1,7 +1,7 @@
 //! The SDL3 window and OpenGL context, wrapped so nothing above this file
 //! needs to know which windowing library is underneath.
 //!
-//! `PixzigEngine` owns one of these as `eng.window`. Callers use the
+//! `Engine` owns one of these as `eng.window`. Callers use the
 //! `*platform.Window` API (`swapBuffers`, `shouldClose`, `getSize`, ...)
 //! instead of naming SDL directly.
 
@@ -23,7 +23,7 @@ pub fn sdlError(err: anyerror) anyerror {
 }
 
 /// Options that must be known before the window exists. A subset of
-/// `PixzigEngineInitOptions`; passed separately so this file does not have
+/// `EngineInitOptions`; passed separately so this file does not have
 /// to import the engine and create an import cycle.
 pub const WindowCreateOptions = struct {
     size: Vec2I,
@@ -32,23 +32,23 @@ pub const WindowCreateOptions = struct {
     /// Arms SDL's text-input machinery on the window, which is what makes
     /// `SDL_EVENT_TEXT_INPUT` (and the IME composition events) arrive at
     /// all. See `InputOptions.textInput`.
-    text_input: bool,
+    textInput: bool,
 };
 
 pub const Window = struct {
     allocator: std.mem.Allocator,
     handle: *sdl.SDL_Window,
-    gl_context: sdl.SDL_GLContext,
+    glContext: sdl.SDL_GLContext,
     /// SDL has no `shouldClose()`; the quit and window-close events set
     /// this instead, and `shouldClose()` reads it.
-    close_requested: bool = false,
+    closeRequested: bool = false,
     /// Backing store for `getClipboardString`. SDL hands back a buffer the
     /// caller must free; copying into a window-owned buffer keeps the
     /// borrowed-slice signature callers expect.
-    clipboard_buf: std.ArrayList(u8) = .empty,
+    clipboardBuf: std.ArrayList(u8) = .empty,
     /// Whether `SDL_StartTextInput` succeeded, so `deinit` knows whether
     /// there is anything to stop.
-    text_input_active: bool = false,
+    textInputActive: bool = false,
 
     pub fn create(
         allocator: std.mem.Allocator,
@@ -57,7 +57,7 @@ pub const Window = struct {
     ) !*Window {
         // HIGH_PIXEL_DENSITY is what makes the framebuffer genuinely
         // larger than the window on a HiDPI display, which is what
-        // WindowState.scale_factor and all the mouse coordinate math
+        // WindowState.scaleFactor and all the mouse coordinate math
         // assume. Without it SDL silently hands back a 1x framebuffer.
         var flags: sdl.SDL_WindowFlags = sdl.SDL_WINDOW_OPENGL | sdl.SDL_WINDOW_HIGH_PIXEL_DENSITY;
         if (options.resizable) flags |= sdl.SDL_WINDOW_RESIZABLE;
@@ -69,24 +69,24 @@ pub const Window = struct {
 
         _ = sdl.SDL_SetWindowMinimumSize(handle, 400, 400);
 
-        const gl_context = sdl.SDL_GL_CreateContext(handle) orelse
+        const glContext = sdl.SDL_GL_CreateContext(handle) orelse
             return sdlError(error.SdlCreateContextFailed);
-        errdefer _ = sdl.SDL_GL_DestroyContext(gl_context);
+        errdefer _ = sdl.SDL_GL_DestroyContext(glContext);
 
-        if (!sdl.SDL_GL_MakeCurrent(handle, gl_context)) return sdlError(error.SdlMakeCurrentFailed);
+        if (!sdl.SDL_GL_MakeCurrent(handle, glContext)) return sdlError(error.SdlMakeCurrentFailed);
 
         const window = try allocator.create(Window);
         window.* = .{
             .allocator = allocator,
             .handle = handle,
-            .gl_context = gl_context,
+            .glContext = glContext,
         };
 
-        if (options.text_input) {
+        if (options.textInput) {
             // A failure here costs typed text and IME support but leaves a
             // perfectly usable window, so warn rather than abort startup.
             if (sdl.SDL_StartTextInput(handle)) {
-                window.text_input_active = true;
+                window.textInputActive = true;
             } else {
                 std.log.warn("SDL_StartTextInput failed, typed text will be unavailable: {s}", .{sdl.SDL_GetError()});
             }
@@ -96,10 +96,10 @@ pub const Window = struct {
     }
 
     pub fn destroy(self: *Window) void {
-        self.clipboard_buf.deinit(self.allocator);
-        if (self.text_input_active) _ = sdl.SDL_StopTextInput(self.handle);
+        self.clipboardBuf.deinit(self.allocator);
+        if (self.textInputActive) _ = sdl.SDL_StopTextInput(self.handle);
         _ = sdl.SDL_GL_MakeCurrent(self.handle, null);
-        _ = sdl.SDL_GL_DestroyContext(self.gl_context);
+        _ = sdl.SDL_GL_DestroyContext(self.glContext);
         sdl.SDL_DestroyWindow(self.handle);
         self.allocator.destroy(self);
     }
@@ -109,12 +109,12 @@ pub const Window = struct {
     }
 
     pub fn shouldClose(self: *const Window) bool {
-        return self.close_requested;
+        return self.closeRequested;
     }
 
     /// Asks the main loop to exit, as if the user had closed the window.
     pub fn requestClose(self: *Window) void {
-        self.close_requested = true;
+        self.closeRequested = true;
     }
 
     /// Window size in screen coordinates, not pixels. On HiDPI this is
@@ -203,15 +203,15 @@ pub const Window = struct {
         defer sdl.SDL_free(text);
 
         const slice = std.mem.span(text);
-        self.clipboard_buf.clearRetainingCapacity();
-        self.clipboard_buf.appendSlice(self.allocator, slice) catch return null;
-        return self.clipboard_buf.items;
+        self.clipboardBuf.clearRetainingCapacity();
+        self.clipboardBuf.appendSlice(self.allocator, slice) catch return null;
+        return self.clipboardBuf.items;
     }
 
     /// Tells the OS where the text caret is so an IME puts its candidate
     /// window next to it rather than at the window origin. The rect is in
     /// *window* coordinates, so a caller holding a framebuffer-pixel rect
-    /// must divide it by `WindowState.scale_factor` first.
+    /// must divide it by `WindowState.scaleFactor` first.
     pub fn setTextInputArea(self: *Window, x: i32, y: i32, width: i32, height: i32, cursor: i32) void {
         var rect = sdl.SDL_Rect{ .x = x, .y = y, .w = width, .h = height };
         if (!sdl.SDL_SetTextInputArea(self.handle, &rect, cursor)) {
@@ -236,6 +236,16 @@ pub const Window = struct {
 /// Shows or hides the system cursor. SDL3 applies this process-wide.
 pub fn showCursor(visible: bool) void {
     _ = if (visible) sdl.SDL_ShowCursor() else sdl.SDL_HideCursor();
+}
+
+/// The directory the running executable lives in, with a trailing path
+/// separator. SDL owns the string and keeps it alive for the whole process,
+/// so callers may borrow it without freeing. Null when SDL cannot work the
+/// directory out, which is the normal case under Emscripten (its virtual
+/// filesystem is rooted at `/` instead).
+pub fn basePath() ?[]const u8 {
+    const p = sdl.SDL_GetBasePath() orelse return null;
+    return std.mem.span(p);
 }
 
 /// Milliseconds since SDL was initialised, as a float.

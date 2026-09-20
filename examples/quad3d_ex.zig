@@ -6,7 +6,7 @@ const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Vec3F = pixzig.common.Vec3F;
 
-const EngOptions = pixzig.PixzigEngineOptions;
+const EngOptions = pixzig.EngineOptions;
 const Quad3DBatchQueue = pixzig.quad3d.Quad3DBatchQueue;
 const Quad3DBatch = pixzig.quad3d.Quad3DBatch;
 const Camera3D = pixzig.Camera3D;
@@ -16,7 +16,7 @@ const Camera3D = pixzig.Camera3D;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.AppRunner(App, .{});
 //* ---
 
 //* Torus mesh parameters, shared between init() (mesh generation) and
@@ -134,7 +134,7 @@ pub const App = struct {
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
         eng.renderer.clear(0, 0, 13, 255);
 
-        const fbSize = eng.window_state.framebuffer_size;
+        const fbSize = eng.windowState.framebufferSize;
         const aspect = @as(f32, @floatFromInt(fbSize.x)) / @as(f32, @floatFromInt(fbSize.y));
         const viewProj = self.camera.viewProjMatrix(aspect);
 

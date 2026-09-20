@@ -21,7 +21,7 @@
 //!   self.ui.sameLine();
 //!   if (self.ui.buttonSized("cancel", "Cancel", self.ui.contentWidth() / 2.0 - 2)) { ... }
 //!   _ = self.ui.inputText("input1", &buf, &buf_len);
-//!   _ = self.ui.inputInt("frame_ms", &frame_ms);
+//!   _ = self.ui.inputInt("frame_ms", &frameMs);
 //!   _ = self.ui.checkbox("loop", "Loop", &loop);
 //!   _ = self.ui.selectableList("sprites", names, &selection, &scroll, 120);
 //!   self.ui.textArea("log", log_lines.items, &scroll, 120);
@@ -47,62 +47,62 @@ const Mouse = input.Mouse;
 // ============================================================
 
 pub const Style = struct {
-    window_bg: Color = Color.from(30, 30, 35, 230),
-    window_border: Color = Color.from(80, 80, 90, 255),
-    window_title_bg: Color = Color.from(50, 50, 70, 255),
-    window_resize_handle: Color = Color.from(100, 100, 120, 255),
-    window_resize_handle_hover: Color = Color.from(135, 155, 205, 255),
-    window_scrollbar_track: Color = Color.from(20, 20, 28, 255),
-    window_scrollbar_thumb: Color = Color.from(80, 80, 100, 255),
-    window_scrollbar_thumb_hover: Color = Color.from(110, 110, 140, 255),
-    window_scrollbar_thumb_active: Color = Color.from(60, 60, 80, 255),
-    title_text: Color = Color.from(230, 230, 255, 255),
-    button_normal: Color = Color.from(60, 60, 80, 255),
-    button_hover: Color = Color.from(90, 90, 120, 255),
-    button_pressed: Color = Color.from(40, 40, 60, 255),
-    button_disabled: Color = Color.from(45, 45, 50, 200),
-    button_text: Color = Color.from(220, 220, 220, 255),
-    button_disabled_text: Color = Color.from(100, 100, 100, 255),
-    selectable_normal: Color = Color.from(35, 35, 42, 255),
-    selectable_hover: Color = Color.from(65, 65, 85, 255),
-    selectable_pressed: Color = Color.from(45, 55, 78, 255),
-    selectable_selected: Color = Color.from(60, 95, 145, 255),
-    selectable_text: Color = Color.from(220, 220, 220, 255),
-    checkbox_bg: Color = Color.from(20, 20, 25, 255),
-    checkbox_border: Color = Color.from(100, 100, 120, 255),
-    checkbox_hover: Color = Color.from(130, 150, 190, 255),
-    checkbox_check: Color = Color.from(95, 155, 230, 255),
-    input_bg: Color = Color.from(20, 20, 25, 255),
-    input_border: Color = Color.from(70, 70, 80, 255),
-    input_border_hover: Color = Color.from(100, 100, 120, 255),
-    input_border_focused: Color = Color.from(100, 130, 200, 255),
-    input_text: Color = Color.from(220, 220, 220, 255),
-    input_cursor: Color = Color.from(180, 220, 255, 200),
-    label_text: Color = Color.from(220, 220, 220, 255),
-    text_area_bg: Color = Color.from(15, 15, 20, 255),
-    text_area_border: Color = Color.from(60, 60, 70, 255),
-    slider_track: Color = Color.from(30, 30, 40, 255),
-    slider_fill: Color = Color.from(60, 100, 160, 255),
-    slider_thumb: Color = Color.from(100, 150, 220, 255),
-    slider_thumb_hover: Color = Color.from(130, 180, 255, 255),
-    slider_thumb_active: Color = Color.from(80, 120, 200, 255),
-    slider_text: Color = Color.from(220, 220, 220, 255),
+    windowBg: Color = Color.from(30, 30, 35, 230),
+    windowBorder: Color = Color.from(80, 80, 90, 255),
+    windowTitleBg: Color = Color.from(50, 50, 70, 255),
+    windowResizeHandle: Color = Color.from(100, 100, 120, 255),
+    windowResizeHandleHover: Color = Color.from(135, 155, 205, 255),
+    windowScrollbarTrack: Color = Color.from(20, 20, 28, 255),
+    windowScrollbarThumb: Color = Color.from(80, 80, 100, 255),
+    windowScrollbarThumbHover: Color = Color.from(110, 110, 140, 255),
+    windowScrollbarThumbActive: Color = Color.from(60, 60, 80, 255),
+    titleText: Color = Color.from(230, 230, 255, 255),
+    buttonNormal: Color = Color.from(60, 60, 80, 255),
+    buttonHover: Color = Color.from(90, 90, 120, 255),
+    buttonPressed: Color = Color.from(40, 40, 60, 255),
+    buttonDisabled: Color = Color.from(45, 45, 50, 200),
+    buttonText: Color = Color.from(220, 220, 220, 255),
+    buttonDisabledText: Color = Color.from(100, 100, 100, 255),
+    selectableNormal: Color = Color.from(35, 35, 42, 255),
+    selectableHover: Color = Color.from(65, 65, 85, 255),
+    selectablePressed: Color = Color.from(45, 55, 78, 255),
+    selectableSelected: Color = Color.from(60, 95, 145, 255),
+    selectableText: Color = Color.from(220, 220, 220, 255),
+    checkboxBg: Color = Color.from(20, 20, 25, 255),
+    checkboxBorder: Color = Color.from(100, 100, 120, 255),
+    checkboxHover: Color = Color.from(130, 150, 190, 255),
+    checkboxCheck: Color = Color.from(95, 155, 230, 255),
+    inputBg: Color = Color.from(20, 20, 25, 255),
+    inputBorder: Color = Color.from(70, 70, 80, 255),
+    inputBorderHover: Color = Color.from(100, 100, 120, 255),
+    inputBorderFocused: Color = Color.from(100, 130, 200, 255),
+    inputText: Color = Color.from(220, 220, 220, 255),
+    inputCursor: Color = Color.from(180, 220, 255, 200),
+    labelText: Color = Color.from(220, 220, 220, 255),
+    textAreaBg: Color = Color.from(15, 15, 20, 255),
+    textAreaBorder: Color = Color.from(60, 60, 70, 255),
+    sliderTrack: Color = Color.from(30, 30, 40, 255),
+    sliderFill: Color = Color.from(60, 100, 160, 255),
+    sliderThumb: Color = Color.from(100, 150, 220, 255),
+    sliderThumbHover: Color = Color.from(130, 180, 255, 255),
+    sliderThumbActive: Color = Color.from(80, 120, 200, 255),
+    sliderText: Color = Color.from(220, 220, 220, 255),
     padding: Vec2I = .{ .x = 8, .y = 6 },
-    item_spacing: i32 = 4,
-    title_height: i32 = 22,
-    resize_handle_size: i32 = 14,
-    min_window_size: Vec2I = .{ .x = 120, .y = 70 },
-    button_height: i32 = 24,
-    selectable_height: i32 = 24,
-    checkbox_size: i32 = 18,
-    input_height: i32 = 24,
-    slider_height: i32 = 24,
-    slider_thumb_w: i32 = 10,
-    scrollbar_w: f32 = 8,
-    scrollbar_track: Color = Color.from(20, 20, 28, 255),
-    scrollbar_thumb: Color = Color.from(80, 80, 100, 255),
-    scrollbar_thumb_hover: Color = Color.from(110, 110, 140, 255),
-    scrollbar_thumb_active: Color = Color.from(60, 60, 80, 255),
+    itemSpacing: i32 = 4,
+    titleHeight: i32 = 22,
+    resizeHandleSize: i32 = 14,
+    minWindowSize: Vec2I = .{ .x = 120, .y = 70 },
+    buttonHeight: i32 = 24,
+    selectableHeight: i32 = 24,
+    checkboxSize: i32 = 18,
+    inputHeight: i32 = 24,
+    sliderHeight: i32 = 24,
+    sliderThumbW: i32 = 10,
+    scrollbarW: f32 = 8,
+    scrollbarTrack: Color = Color.from(20, 20, 28, 255),
+    scrollbarThumb: Color = Color.from(80, 80, 100, 255),
+    scrollbarThumbHover: Color = Color.from(110, 110, 140, 255),
+    scrollbarThumbActive: Color = Color.from(60, 60, 80, 255),
 };
 
 // ============================================================
@@ -119,18 +119,18 @@ pub const ButtonResult = struct {
 pub const WindowSide = enum { left, right, up, down };
 
 pub const InputTextOptions = struct {
-    submit_on_enter: bool = false,
+    submitOnEnter: bool = false,
     clipboard: bool = true,
-    clear_on_ctrl_l: bool = true,
-    history_keys: bool = false,
+    clearOnCtrlL: bool = true,
+    historyKeys: bool = false,
 };
 
 pub const InputTextResult = struct {
     changed: bool = false,
     submitted: bool = false,
     focused: bool = false,
-    history_prev: bool = false,
-    history_next: bool = false,
+    historyPrev: bool = false,
+    historyNext: bool = false,
     copied: bool = false,
     pasted: bool = false,
     cleared: bool = false,
@@ -143,21 +143,21 @@ pub const InputTextResult = struct {
 const WindowCtx = struct {
     id: u64,
     rect: RectF,
-    content_rect: RectF,
-    scroll_y: f32,
-    content_y: f32, // next widget baseline Y
-    last_x: f32, // top-left of last placed widget
-    last_y: f32,
-    last_w: f32, // size of last placed widget
-    last_h: f32,
-    same_line: bool, // if true, next widget placed to the right
+    contentRect: RectF,
+    scrollY: f32,
+    contentY: f32, // next widget baseline Y
+    lastX: f32, // top-left of last placed widget
+    lastY: f32,
+    lastW: f32, // size of last placed widget
+    lastH: f32,
+    sameLine: bool, // if true, next widget placed to the right
 };
 
 const WindowState = struct {
     used: bool = false,
     id: u64 = 0,
-    content_height: f32 = 0,
-    scroll_y: f32 = 0,
+    contentHeight: f32 = 0,
+    scrollY: f32 = 0,
 };
 
 // ============================================================
@@ -171,9 +171,9 @@ pub fn UiContext(comptime Engine: type) type {
     return struct {
         const Self = @This();
 
-        hot_id: u64, // widget the mouse is currently over
-        active_id: u64, // widget being clicked/dragged
-        focus_id: u64, // widget with keyboard focus
+        hotId: u64, // widget the mouse is currently over
+        activeId: u64, // widget being clicked/dragged
+        focusId: u64, // widget with keyboard focus
         frame: u64, // frame counter (used for cursor blink)
 
         mouse: *Mouse,
@@ -182,141 +182,141 @@ pub fn UiContext(comptime Engine: type) type {
         /// Widgets draw in submission order through the renderer, so the UI
         /// lands above whatever the scene drew earlier in the same pass.
         renderer: *Engine.Renderer,
-        clipboard_window: ?*platform.Window,
+        clipboardWindow: ?*platform.Window,
         style: Style,
 
-        win_stack: [8]WindowCtx,
-        win_depth: usize,
-        window_states: [32]WindowState,
+        winStack: [8]WindowCtx,
+        winDepth: usize,
+        windowStates: [32]WindowState,
 
         // ----------------------------------------------------------
         // Input accumulated by update() — consumed each render frame
         // ----------------------------------------------------------
 
         /// Typed characters accumulated across all update() calls this frame.
-        text_input: [64]u8,
-        text_input_len: usize,
+        textInput: [64]u8,
+        textInputLen: usize,
         /// Number of backspace presses accumulated this frame.
-        backspace_count: usize,
+        backspaceCount: usize,
         /// Number of delete presses accumulated this frame.
-        delete_count: usize,
+        deleteCount: usize,
         /// Whether page-up was pressed in any update step this frame.
-        page_up_pressed: bool,
+        pageUpPressed: bool,
         /// Whether page-down was pressed in any update step this frame.
-        page_down_pressed: bool,
+        pageDownPressed: bool,
         /// Vertical scroll wheel delta accumulated this frame (positive = up).
-        scroll_delta: f32,
-        /// Set to true by the first widget that consumes scroll_delta this frame,
+        scrollDelta: f32,
+        /// Set to true by the first widget that consumes scrollDelta this frame,
         /// preventing parent containers from double-scrolling.
-        scroll_consumed: bool,
+        scrollConsumed: bool,
 
         /// Scratch text used by the currently focused integer input.
-        int_edit_buf: [32]u8,
-        int_edit_len: usize,
-        int_edit_id: u64,
-        int_edit_replace: bool,
+        intEditBuf: [32]u8,
+        intEditLen: usize,
+        intEditId: u64,
+        intEditReplace: bool,
 
         /// Cursor position within the focused text/int input buffer.
         /// Shared between inputText and inputInt; reset when focus changes.
-        edit_cursor_id: u64,
-        edit_cursor_pos: usize,
+        editCursorId: u64,
+        editCursorPos: usize,
 
         /// Number of left/right arrow key presses accumulated this frame.
-        left_arrow_count: usize,
-        right_arrow_count: usize,
+        leftArrowCount: usize,
+        rightArrowCount: usize,
         /// Number of up/down arrow key presses accumulated this frame.
-        up_arrow_count: usize,
-        down_arrow_count: usize,
+        upArrowCount: usize,
+        downArrowCount: usize,
         /// Home/end movement for focused text editors.
-        home_pressed: bool,
-        end_pressed: bool,
+        homePressed: bool,
+        endPressed: bool,
         /// Common text editing shortcuts accumulated this frame.
-        ctrl_c_pressed: bool,
-        ctrl_v_pressed: bool,
-        ctrl_l_pressed: bool,
+        ctrlCPressed: bool,
+        ctrlVPressed: bool,
+        ctrlLPressed: bool,
         /// Whether Tab was pressed this frame (forward) or shift+Tab (backward).
-        tab_pressed: bool,
-        tab_backward: bool,
+        tabPressed: bool,
+        tabBackward: bool,
         /// Whether Enter (or keypad enter) was pressed this frame.
-        enter_pressed: bool,
+        enterPressed: bool,
 
         /// Ordered list of focusable widget IDs registered this frame (for Tab cycling).
-        tab_focus_order: [64]u64,
-        tab_focus_count: usize,
+        tabFocusOrder: [64]u64,
+        tabFocusCount: usize,
 
         // ----------------------------------------------------------
         // Mouse state snapshotted by update()
         // ----------------------------------------------------------
 
         /// Mouse position in render coordinates (already scaled).
-        mouse_pos: Vec2F,
+        mousePos: Vec2F,
         /// True if the left button was pressed in any update step this frame.
-        left_pressed: bool,
+        leftPressed: bool,
         /// True if the left button was released in any update step this frame.
-        left_released: bool,
+        leftReleased: bool,
         /// True if the left button is currently held.
-        left_down: bool,
-        window_drag_offset: Vec2F,
-        window_resize_start_mouse: Vec2F,
-        window_resize_start_size: Vec2F,
+        leftDown: bool,
+        windowDragOffset: Vec2F,
+        windowResizeStartMouse: Vec2F,
+        windowResizeStartSize: Vec2F,
 
         pub fn init(eng: *Engine) Self {
             return .{
-                .hot_id = 0,
-                .active_id = 0,
-                .focus_id = 0,
+                .hotId = 0,
+                .activeId = 0,
+                .focusId = 0,
                 .frame = 0,
                 .mouse = &eng.inputs.mouse,
                 .keyboard = &eng.inputs.keyboard,
                 .viewport = &eng.viewport,
                 .renderer = &eng.renderer,
-                .clipboard_window = null,
+                .clipboardWindow = null,
                 .style = Style{},
-                .win_stack = undefined,
-                .win_depth = 0,
-                .window_states = @splat(.{}),
-                .text_input = undefined,
-                .text_input_len = 0,
-                .backspace_count = 0,
-                .delete_count = 0,
-                .page_up_pressed = false,
-                .page_down_pressed = false,
-                .scroll_delta = 0,
-                .scroll_consumed = false,
-                .int_edit_buf = undefined,
-                .int_edit_len = 0,
-                .int_edit_id = 0,
-                .int_edit_replace = false,
-                .edit_cursor_id = 0,
-                .edit_cursor_pos = 0,
-                .left_arrow_count = 0,
-                .right_arrow_count = 0,
-                .up_arrow_count = 0,
-                .down_arrow_count = 0,
-                .home_pressed = false,
-                .end_pressed = false,
-                .ctrl_c_pressed = false,
-                .ctrl_v_pressed = false,
-                .ctrl_l_pressed = false,
-                .tab_pressed = false,
-                .tab_backward = false,
-                .enter_pressed = false,
-                .tab_focus_order = undefined,
-                .tab_focus_count = 0,
-                .mouse_pos = .{ .x = 0, .y = 0 },
-                .left_pressed = false,
-                .left_released = false,
-                .left_down = false,
-                .window_drag_offset = .{ .x = 0, .y = 0 },
-                .window_resize_start_mouse = .{ .x = 0, .y = 0 },
-                .window_resize_start_size = .{ .x = 0, .y = 0 },
+                .winStack = undefined,
+                .winDepth = 0,
+                .windowStates = @splat(.{}),
+                .textInput = undefined,
+                .textInputLen = 0,
+                .backspaceCount = 0,
+                .deleteCount = 0,
+                .pageUpPressed = false,
+                .pageDownPressed = false,
+                .scrollDelta = 0,
+                .scrollConsumed = false,
+                .intEditBuf = undefined,
+                .intEditLen = 0,
+                .intEditId = 0,
+                .intEditReplace = false,
+                .editCursorId = 0,
+                .editCursorPos = 0,
+                .leftArrowCount = 0,
+                .rightArrowCount = 0,
+                .upArrowCount = 0,
+                .downArrowCount = 0,
+                .homePressed = false,
+                .endPressed = false,
+                .ctrlCPressed = false,
+                .ctrlVPressed = false,
+                .ctrlLPressed = false,
+                .tabPressed = false,
+                .tabBackward = false,
+                .enterPressed = false,
+                .tabFocusOrder = undefined,
+                .tabFocusCount = 0,
+                .mousePos = .{ .x = 0, .y = 0 },
+                .leftPressed = false,
+                .leftReleased = false,
+                .leftDown = false,
+                .windowDragOffset = .{ .x = 0, .y = 0 },
+                .windowResizeStartMouse = .{ .x = 0, .y = 0 },
+                .windowResizeStartSize = .{ .x = 0, .y = 0 },
             };
         }
 
         /// Enables clipboard shortcuts for text inputs. Without this, Ctrl+C and
         /// Ctrl+V are reported but cannot touch the OS clipboard.
         pub fn setClipboardWindow(self: *Self, window: *platform.Window) void {
-            self.clipboard_window = window;
+            self.clipboardWindow = window;
         }
 
         // ----------------------------------------------------------
@@ -333,11 +333,11 @@ pub fn UiContext(comptime Engine: type) type {
             // Re-derive mouse position from the framebuffer-space cursor position
             // through this UI's own viewport, so the coordinates match whichever
             // projection is used when draw() is called.
-            self.mouse_pos = self.viewport.framebufferToLogical(self.mouse.fbPos()) orelse
+            self.mousePos = self.viewport.framebufferToLogical(self.mouse.fbPos()) orelse
                 Vec2F{ .x = -1, .y = -1 };
-            self.left_down = self.mouse.down(.left);
-            if (self.mouse.pressed(.left)) self.left_pressed = true;
-            if (self.mouse.released(.left)) self.left_released = true;
+            self.leftDown = self.mouse.down(.left);
+            if (self.mouse.pressed(.left)) self.leftPressed = true;
+            if (self.mouse.released(.left)) self.leftReleased = true;
 
             const ctrl_down = self.keyboard.ctrl();
             const alt_down = self.keyboard.alt();
@@ -349,37 +349,37 @@ pub fn UiContext(comptime Engine: type) type {
                 var buf: [8]u8 = undefined;
                 const n = self.keyboard.text(&buf);
                 for (buf[0..n]) |c| {
-                    if (self.text_input_len < self.text_input.len) {
-                        self.text_input[self.text_input_len] = c;
-                        self.text_input_len += 1;
+                    if (self.textInputLen < self.textInput.len) {
+                        self.textInput[self.textInputLen] = c;
+                        self.textInputLen += 1;
                     }
                 }
             }
 
             // Accumulate special key presses
-            if (self.keyboard.pressed(.backspace)) self.backspace_count += 1;
-            if (self.keyboard.pressed(.delete)) self.delete_count += 1;
-            if (self.keyboard.pressed(.page_up)) self.page_up_pressed = true;
-            if (self.keyboard.pressed(.page_down)) self.page_down_pressed = true;
-            if (self.keyboard.pressed(.left)) self.left_arrow_count += 1;
-            if (self.keyboard.pressed(.right)) self.right_arrow_count += 1;
-            if (self.keyboard.pressed(.up)) self.up_arrow_count += 1;
-            if (self.keyboard.pressed(.down)) self.down_arrow_count += 1;
-            if (self.keyboard.pressed(.home)) self.home_pressed = true;
-            if (self.keyboard.pressed(.end)) self.end_pressed = true;
-            if (ctrl_down and self.keyboard.pressed(.c)) self.ctrl_c_pressed = true;
-            if (ctrl_down and self.keyboard.pressed(.v)) self.ctrl_v_pressed = true;
-            if (ctrl_down and self.keyboard.pressed(.l)) self.ctrl_l_pressed = true;
+            if (self.keyboard.pressed(.backspace)) self.backspaceCount += 1;
+            if (self.keyboard.pressed(.delete)) self.deleteCount += 1;
+            if (self.keyboard.pressed(.page_up)) self.pageUpPressed = true;
+            if (self.keyboard.pressed(.page_down)) self.pageDownPressed = true;
+            if (self.keyboard.pressed(.left)) self.leftArrowCount += 1;
+            if (self.keyboard.pressed(.right)) self.rightArrowCount += 1;
+            if (self.keyboard.pressed(.up)) self.upArrowCount += 1;
+            if (self.keyboard.pressed(.down)) self.downArrowCount += 1;
+            if (self.keyboard.pressed(.home)) self.homePressed = true;
+            if (self.keyboard.pressed(.end)) self.endPressed = true;
+            if (ctrl_down and self.keyboard.pressed(.c)) self.ctrlCPressed = true;
+            if (ctrl_down and self.keyboard.pressed(.v)) self.ctrlVPressed = true;
+            if (ctrl_down and self.keyboard.pressed(.l)) self.ctrlLPressed = true;
             if (self.keyboard.pressed(.tab)) {
                 if (self.keyboard.shift()) {
-                    self.tab_backward = true;
+                    self.tabBackward = true;
                 } else {
-                    self.tab_pressed = true;
+                    self.tabPressed = true;
                 }
             }
-            if (self.keyboard.pressed(.enter) or self.keyboard.pressed(.kp_enter)) self.enter_pressed = true;
+            if (self.keyboard.pressed(.enter) or self.keyboard.pressed(.kp_enter)) self.enterPressed = true;
 
-            self.scroll_delta += self.mouse.scroll().y;
+            self.scrollDelta += self.mouse.scroll().y;
         }
 
         // ----------------------------------------------------------
@@ -388,60 +388,60 @@ pub fn UiContext(comptime Engine: type) type {
 
         /// Call at the start of each render frame before any widgets.
         pub fn begin(self: *Self) void {
-            self.hot_id = 0;
-            self.tab_focus_count = 0;
+            self.hotId = 0;
+            self.tabFocusCount = 0;
         }
 
         /// Call at the end of each render frame after all widgets.
         /// Clears accumulated input state for the next frame.
         pub fn end(self: *Self) void {
             // Handle focus: click on empty space clears it
-            if (self.left_pressed and self.hot_id == 0) {
-                self.focus_id = 0;
+            if (self.leftPressed and self.hotId == 0) {
+                self.focusId = 0;
             }
             // Release active widget when mouse released
-            if (self.left_released) {
-                self.active_id = 0;
+            if (self.leftReleased) {
+                self.activeId = 0;
             }
 
             // Tab focus cycling
-            if ((self.tab_pressed or self.tab_backward) and self.tab_focus_count > 0) {
+            if ((self.tabPressed or self.tabBackward) and self.tabFocusCount > 0) {
                 var found: ?usize = null;
-                for (self.tab_focus_order[0..self.tab_focus_count], 0..) |id, i| {
-                    if (id == self.focus_id) {
+                for (self.tabFocusOrder[0..self.tabFocusCount], 0..) |id, i| {
+                    if (id == self.focusId) {
                         found = i;
                         break;
                     }
                 }
-                const n = self.tab_focus_count;
-                const next_idx = if (self.tab_backward)
+                const n = self.tabFocusCount;
+                const next_idx = if (self.tabBackward)
                     if (found) |i| (i + n - 1) % n else n - 1
                 else if (found) |i| (i + 1) % n else 0;
-                self.focus_id = self.tab_focus_order[next_idx];
+                self.focusId = self.tabFocusOrder[next_idx];
             }
 
             // Clear accumulated input for next frame
-            self.text_input_len = 0;
-            self.backspace_count = 0;
-            self.delete_count = 0;
-            self.page_up_pressed = false;
-            self.page_down_pressed = false;
-            self.left_arrow_count = 0;
-            self.right_arrow_count = 0;
-            self.up_arrow_count = 0;
-            self.down_arrow_count = 0;
-            self.home_pressed = false;
-            self.end_pressed = false;
-            self.ctrl_c_pressed = false;
-            self.ctrl_v_pressed = false;
-            self.ctrl_l_pressed = false;
-            self.tab_pressed = false;
-            self.tab_backward = false;
-            self.enter_pressed = false;
-            self.scroll_delta = 0;
-            self.scroll_consumed = false;
-            self.left_pressed = false;
-            self.left_released = false;
+            self.textInputLen = 0;
+            self.backspaceCount = 0;
+            self.deleteCount = 0;
+            self.pageUpPressed = false;
+            self.pageDownPressed = false;
+            self.leftArrowCount = 0;
+            self.rightArrowCount = 0;
+            self.upArrowCount = 0;
+            self.downArrowCount = 0;
+            self.homePressed = false;
+            self.endPressed = false;
+            self.ctrlCPressed = false;
+            self.ctrlVPressed = false;
+            self.ctrlLPressed = false;
+            self.tabPressed = false;
+            self.tabBackward = false;
+            self.enterPressed = false;
+            self.scrollDelta = 0;
+            self.scrollConsumed = false;
+            self.leftPressed = false;
+            self.leftReleased = false;
         }
 
         // ----------------------------------------------------------
@@ -464,23 +464,23 @@ pub fn UiContext(comptime Engine: type) type {
         }
 
         fn windowState(self: *Self, id: u64) *WindowState {
-            for (&self.window_states) |*state| {
+            for (&self.windowStates) |*state| {
                 if (state.used and state.id == id) return state;
             }
-            for (&self.window_states) |*state| {
+            for (&self.windowStates) |*state| {
                 if (!state.used) {
                     state.* = .{ .used = true, .id = id };
                     return state;
                 }
             }
-            return &self.window_states[@intCast(id % self.window_states.len)];
+            return &self.windowStates[@intCast(id % self.windowStates.len)];
         }
 
         /// Clips to the enclosing window's content, or back to the viewport
         /// when leaving the outermost window.
         fn restoreContentClip(self: *Self) void {
-            if (self.win_depth > 1) {
-                self.renderer.setClip(self.win_stack[self.win_depth - 2].content_rect);
+            if (self.winDepth > 1) {
+                self.renderer.setClip(self.winStack[self.winDepth - 2].contentRect);
             } else {
                 self.renderer.setClip(null);
             }
@@ -495,10 +495,10 @@ pub fn UiContext(comptime Engine: type) type {
             rect: *RectF,
         ) void {
             const s = &self.style;
-            const title_h: f32 = @floatFromInt(s.title_height);
+            const title_h: f32 = @floatFromInt(s.titleHeight);
             const pad_x: f32 = @floatFromInt(s.padding.x);
             const pad_y: f32 = @floatFromInt(s.padding.y);
-            const resize_size: f32 = @floatFromInt(s.resize_handle_size);
+            const resize_size: f32 = @floatFromInt(s.resizeHandleSize);
             const uid = hashId(id);
             const move_uid = uid ^ 0x5749_4e44_4f57_0001;
             const resize_uid = uid ^ 0x5749_4e44_4f57_0002;
@@ -512,17 +512,17 @@ pub fn UiContext(comptime Engine: type) type {
                 .b = rect.b,
             };
             const over_resize = self.testHot(resize_uid, resize_rect);
-            if (over_resize and self.left_pressed) {
-                self.active_id = resize_uid;
-                self.focus_id = resize_uid;
-                self.window_resize_start_mouse = self.mouse_pos;
-                self.window_resize_start_size = .{ .x = rect.width(), .y = rect.height() };
+            if (over_resize and self.leftPressed) {
+                self.activeId = resize_uid;
+                self.focusId = resize_uid;
+                self.windowResizeStartMouse = self.mousePos;
+                self.windowResizeStartSize = .{ .x = rect.width(), .y = rect.height() };
             }
-            if (self.active_id == resize_uid and self.left_down) {
-                const min_w: f32 = @floatFromInt(s.min_window_size.x);
-                const min_h: f32 = @floatFromInt(s.min_window_size.y);
-                const width = @max(min_w, self.window_resize_start_size.x + self.mouse_pos.x - self.window_resize_start_mouse.x);
-                const height = @max(min_h, self.window_resize_start_size.y + self.mouse_pos.y - self.window_resize_start_mouse.y);
+            if (self.activeId == resize_uid and self.leftDown) {
+                const min_w: f32 = @floatFromInt(s.minWindowSize.x);
+                const min_h: f32 = @floatFromInt(s.minWindowSize.y);
+                const width = @max(min_w, self.windowResizeStartSize.x + self.mousePos.x - self.windowResizeStartMouse.x);
+                const height = @max(min_h, self.windowResizeStartSize.y + self.mousePos.y - self.windowResizeStartMouse.y);
                 rect.r = rect.l + width;
                 rect.b = rect.t + height;
             }
@@ -534,19 +534,19 @@ pub fn UiContext(comptime Engine: type) type {
                 .b = rect.t + title_h,
             };
             const over_title = self.testHot(move_uid, title_rect);
-            if (over_title and self.left_pressed and self.active_id != resize_uid) {
-                self.active_id = move_uid;
-                self.focus_id = move_uid;
-                self.window_drag_offset = .{
-                    .x = self.mouse_pos.x - rect.l,
-                    .y = self.mouse_pos.y - rect.t,
+            if (over_title and self.leftPressed and self.activeId != resize_uid) {
+                self.activeId = move_uid;
+                self.focusId = move_uid;
+                self.windowDragOffset = .{
+                    .x = self.mousePos.x - rect.l,
+                    .y = self.mousePos.y - rect.t,
                 };
             }
-            if (self.active_id == move_uid and self.left_down) {
+            if (self.activeId == move_uid and self.leftDown) {
                 const width = rect.width();
                 const height = rect.height();
-                rect.l = self.mouse_pos.x - self.window_drag_offset.x;
-                rect.t = self.mouse_pos.y - self.window_drag_offset.y;
+                rect.l = self.mousePos.x - self.windowDragOffset.x;
+                rect.t = self.mousePos.y - self.windowDragOffset.y;
                 rect.r = rect.l + width;
                 rect.b = rect.t + height;
             }
@@ -554,11 +554,11 @@ pub fn UiContext(comptime Engine: type) type {
             const content_t = rect.t + title_h + pad_y;
             const content_b = rect.b - pad_y;
             const visible_h = @max(0.0, content_b - content_t);
-            const scrollable = state.content_height > visible_h;
-            const max_scroll = @max(0.0, state.content_height - visible_h);
-            state.scroll_y = std.math.clamp(state.scroll_y, 0.0, max_scroll);
-            const scroll_space = if (scrollable) s.scrollbar_w + @as(f32, @floatFromInt(s.item_spacing)) else 0.0;
-            const content_rect = RectF{
+            const scrollable = state.contentHeight > visible_h;
+            const max_scroll = @max(0.0, state.contentHeight - visible_h);
+            state.scrollY = std.math.clamp(state.scrollY, 0.0, max_scroll);
+            const scroll_space = if (scrollable) s.scrollbarW + @as(f32, @floatFromInt(s.itemSpacing)) else 0.0;
+            const contentRect = RectF{
                 .l = rect.l + pad_x,
                 .t = content_t,
                 .r = rect.r - pad_x - scroll_space,
@@ -567,24 +567,24 @@ pub fn UiContext(comptime Engine: type) type {
 
             if (scrollable) {
                 const sb_rect = RectF{
-                    .l = rect.r - pad_x - s.scrollbar_w,
+                    .l = rect.r - pad_x - s.scrollbarW,
                     .t = content_t,
                     .r = rect.r - pad_x,
                     .b = content_b,
                 };
                 const over_scrollbar = self.testHot(scroll_uid, sb_rect);
-                if (over_scrollbar and self.left_pressed) self.active_id = scroll_uid;
-                if (self.active_id == scroll_uid and self.left_down) {
-                    const thumb_h = @max(visible_h * visible_h / state.content_height, 12.0);
+                if (over_scrollbar and self.leftPressed) self.activeId = scroll_uid;
+                if (self.activeId == scroll_uid and self.leftDown) {
+                    const thumb_h = @max(visible_h * visible_h / state.contentHeight, 12.0);
                     const travel = @max(1.0, visible_h - thumb_h);
-                    const t = std.math.clamp((self.mouse_pos.y - sb_rect.t - thumb_h / 2.0) / travel, 0.0, 1.0);
-                    state.scroll_y = t * max_scroll;
+                    const t = std.math.clamp((self.mousePos.y - sb_rect.t - thumb_h / 2.0) / travel, 0.0, 1.0);
+                    state.scrollY = t * max_scroll;
                 }
             }
 
             // Background
-            self.renderer.drawFilledRect(rect.*, s.window_bg);
-            self.renderer.drawEnclosingRect(rect.*, s.window_border, 1);
+            self.renderer.drawFilledRect(rect.*, s.windowBg);
+            self.renderer.drawEnclosingRect(rect.*, s.windowBorder, 1);
 
             // Title bar
             title_rect = RectF{
@@ -593,7 +593,7 @@ pub fn UiContext(comptime Engine: type) type {
                 .r = rect.r,
                 .b = rect.t + title_h,
             };
-            self.renderer.drawFilledRect(title_rect, s.window_title_bg);
+            self.renderer.drawFilledRect(title_rect, s.windowTitleBg);
             resize_rect = .{
                 .l = rect.r - resize_size,
                 .t = rect.b - resize_size,
@@ -602,7 +602,7 @@ pub fn UiContext(comptime Engine: type) type {
             };
             self.renderer.drawFilledRect(
                 resize_rect.shrinkFrom(3.0),
-                if (over_resize or self.active_id == resize_uid) s.window_resize_handle_hover else s.window_resize_handle,
+                if (over_resize or self.activeId == resize_uid) s.windowResizeHandleHover else s.windowResizeHandle,
             );
 
             // Title text — vertically centered in title bar
@@ -613,46 +613,46 @@ pub fn UiContext(comptime Engine: type) type {
             });
 
             // Push window context
-            std.debug.assert(self.win_depth < self.win_stack.len);
-            self.win_stack[self.win_depth] = .{
+            std.debug.assert(self.winDepth < self.winStack.len);
+            self.winStack[self.winDepth] = .{
                 .id = uid,
                 .rect = rect.*,
-                .content_rect = content_rect,
-                .scroll_y = state.scroll_y,
-                .content_y = content_t - state.scroll_y,
-                .last_x = rect.l + pad_x,
-                .last_y = content_t - state.scroll_y,
-                .last_w = 0,
-                .last_h = 0,
-                .same_line = false,
+                .contentRect = contentRect,
+                .scrollY = state.scrollY,
+                .contentY = content_t - state.scrollY,
+                .lastX = rect.l + pad_x,
+                .lastY = content_t - state.scrollY,
+                .lastW = 0,
+                .lastH = 0,
+                .sameLine = false,
             };
-            self.win_depth += 1;
+            self.winDepth += 1;
 
-            self.renderer.setClip(content_rect);
+            self.renderer.setClip(contentRect);
         }
 
         /// End the current window.
         pub fn endWindow(self: *Self) void {
-            std.debug.assert(self.win_depth > 0);
+            std.debug.assert(self.winDepth > 0);
             const win = self.curWin().*;
             const state = self.windowState(win.id);
-            const content_top = win.content_rect.t;
-            state.content_height = @max(0.0, win.content_y + win.scroll_y - content_top);
-            const visible_h = win.content_rect.height();
-            const max_scroll = @max(0.0, state.content_height - visible_h);
-            state.scroll_y = std.math.clamp(state.scroll_y, 0.0, max_scroll);
+            const content_top = win.contentRect.t;
+            state.contentHeight = @max(0.0, win.contentY + win.scrollY - content_top);
+            const visible_h = win.contentRect.height();
+            const max_scroll = @max(0.0, state.contentHeight - visible_h);
+            state.scrollY = std.math.clamp(state.scrollY, 0.0, max_scroll);
 
-            if (max_scroll > 0.0 and !self.scroll_consumed and self.scroll_delta != 0.0) {
+            if (max_scroll > 0.0 and !self.scrollConsumed and self.scrollDelta != 0.0) {
                 const rect = win.rect;
-                const mp = self.mouse_pos;
+                const mp = self.mousePos;
                 if (mp.x >= rect.l and mp.x < rect.r and mp.y >= rect.t and mp.y < rect.b) {
                     const line_h: f32 = @floatFromInt(self.renderer.lineHeight() orelse 16);
-                    state.scroll_y = std.math.clamp(
-                        state.scroll_y - self.scroll_delta * line_h * 3.0,
+                    state.scrollY = std.math.clamp(
+                        state.scrollY - self.scrollDelta * line_h * 3.0,
                         0.0,
                         max_scroll,
                     );
-                    self.scroll_consumed = true;
+                    self.scrollConsumed = true;
                 }
             }
 
@@ -662,15 +662,15 @@ pub fn UiContext(comptime Engine: type) type {
                 const s = &self.style;
                 const pad_x: f32 = @floatFromInt(s.padding.x);
                 const sb_rect = RectF{
-                    .l = win.rect.r - pad_x - s.scrollbar_w,
-                    .t = win.content_rect.t,
+                    .l = win.rect.r - pad_x - s.scrollbarW,
+                    .t = win.contentRect.t,
                     .r = win.rect.r - pad_x,
-                    .b = win.content_rect.b,
+                    .b = win.contentRect.b,
                 };
                 const visible = sb_rect.height();
-                const thumb_h = @max(visible * visible / state.content_height, 12.0);
+                const thumb_h = @max(visible * visible / state.contentHeight, 12.0);
                 const travel = visible - thumb_h;
-                const scroll_t = if (max_scroll > 0.0) state.scroll_y / max_scroll else 0.0;
+                const scroll_t = if (max_scroll > 0.0) state.scrollY / max_scroll else 0.0;
                 const thumb = RectF{
                     .l = sb_rect.l + 1.0,
                     .t = sb_rect.t + scroll_t * travel,
@@ -678,18 +678,18 @@ pub fn UiContext(comptime Engine: type) type {
                     .b = sb_rect.t + scroll_t * travel + thumb_h,
                 };
                 const scroll_uid = win.id ^ 0x5749_4e44_4f57_0003;
-                self.renderer.drawFilledRect(sb_rect, s.window_scrollbar_track);
+                self.renderer.drawFilledRect(sb_rect, s.windowScrollbarTrack);
                 self.renderer.drawFilledRect(
                     thumb,
-                    if (self.active_id == scroll_uid)
-                        s.window_scrollbar_thumb_active
-                    else if (self.hot_id == scroll_uid)
-                        s.window_scrollbar_thumb_hover
+                    if (self.activeId == scroll_uid)
+                        s.windowScrollbarThumbActive
+                    else if (self.hotId == scroll_uid)
+                        s.windowScrollbarThumbHover
                     else
-                        s.window_scrollbar_thumb,
+                        s.windowScrollbarThumb,
                 );
             }
-            self.win_depth -= 1;
+            self.winDepth -= 1;
         }
 
         // ----------------------------------------------------------
@@ -697,37 +697,37 @@ pub fn UiContext(comptime Engine: type) type {
         // ----------------------------------------------------------
 
         fn curWin(self: *Self) *WindowCtx {
-            return &self.win_stack[self.win_depth - 1];
+            return &self.winStack[self.winDepth - 1];
         }
 
         /// Allocate a rect for the next widget, advancing the layout cursor.
         fn allocWidget(self: *Self, w: f32, h: f32) RectF {
             const win = self.curWin();
             const pad_x: f32 = @floatFromInt(self.style.padding.x);
-            const item_sp: f32 = @floatFromInt(self.style.item_spacing);
+            const item_sp: f32 = @floatFromInt(self.style.itemSpacing);
 
             var x: f32 = undefined;
             var y: f32 = undefined;
 
-            if (win.same_line) {
-                x = win.last_x + win.last_w + item_sp;
-                y = win.last_y;
-                win.same_line = false;
+            if (win.sameLine) {
+                x = win.lastX + win.lastW + item_sp;
+                y = win.lastY;
+                win.sameLine = false;
             } else {
                 x = win.rect.l + pad_x;
-                y = win.content_y;
+                y = win.contentY;
             }
 
             const rect = RectF{ .l = x, .t = y, .r = x + w, .b = y + h };
 
-            win.last_x = x;
-            win.last_y = y;
-            win.last_w = w;
-            win.last_h = h;
+            win.lastX = x;
+            win.lastY = y;
+            win.lastW = w;
+            win.lastH = h;
 
             const new_bottom = y + h + item_sp;
-            if (new_bottom > win.content_y) {
-                win.content_y = new_bottom;
+            if (new_bottom > win.contentY) {
+                win.contentY = new_bottom;
             }
 
             return rect;
@@ -735,18 +735,18 @@ pub fn UiContext(comptime Engine: type) type {
 
         /// Place the next widget on the same line as the previous widget.
         pub fn sameLine(self: *Self) void {
-            self.curWin().same_line = true;
+            self.curWin().sameLine = true;
         }
 
         /// Add extra vertical space.
         pub fn spacing(self: *Self) void {
             const win = self.curWin();
-            win.content_y += @as(f32, @floatFromInt(self.style.item_spacing)) * 2.0;
+            win.contentY += @as(f32, @floatFromInt(self.style.itemSpacing)) * 2.0;
         }
 
         pub fn contentWidth(self: *Self) f32 {
             const win = self.curWin();
-            return win.content_rect.width();
+            return win.contentRect.width();
         }
 
         /// Returns the remaining vertical space inside the current window,
@@ -754,7 +754,7 @@ pub fn UiContext(comptime Engine: type) type {
         /// window with a text area or other expanding widget.
         pub fn remainingHeight(self: *Self) f32 {
             const win = self.curWin();
-            const remaining = win.content_rect.b - (win.content_y + win.scroll_y);
+            const remaining = win.contentRect.b - (win.contentY + win.scrollY);
             return @max(0, remaining);
         }
 
@@ -782,9 +782,9 @@ pub fn UiContext(comptime Engine: type) type {
         }
 
         fn registerFocusable(self: *Self, uid: u64) void {
-            if (self.tab_focus_count < self.tab_focus_order.len) {
-                self.tab_focus_order[self.tab_focus_count] = uid;
-                self.tab_focus_count += 1;
+            if (self.tabFocusCount < self.tabFocusOrder.len) {
+                self.tabFocusOrder[self.tabFocusCount] = uid;
+                self.tabFocusCount += 1;
             }
         }
 
@@ -793,17 +793,17 @@ pub fn UiContext(comptime Engine: type) type {
         // ----------------------------------------------------------
 
         fn testHot(self: *Self, id: u64, rect: RectF) bool {
-            // mouse_pos is already in logical coordinates (converted in update()).
+            // mousePos is already in logical coordinates (converted in update()).
             // Widget rects live in the same logical space, so compare directly.
-            const mp = self.mouse_pos;
+            const mp = self.mousePos;
             var over = mp.x >= rect.l and mp.x < rect.r and
                 mp.y >= rect.t and mp.y < rect.b;
-            if (over and self.win_depth > 0) {
-                const clip = self.curWin().content_rect;
+            if (over and self.winDepth > 0) {
+                const clip = self.curWin().contentRect;
                 over = mp.x >= clip.l and mp.x < clip.r and
                     mp.y >= clip.t and mp.y < clip.b;
             }
-            if (over) self.hot_id = id;
+            if (over) self.hotId = id;
             return over;
         }
 
@@ -814,7 +814,7 @@ pub fn UiContext(comptime Engine: type) type {
         pub fn label(self: *Self, str: []const u8) void {
             const s = &self.style;
             const line_h: i32 = self.renderer.lineHeight() orelse 16;
-            const h: f32 = @floatFromInt(line_h + s.item_spacing);
+            const h: f32 = @floatFromInt(line_h + s.itemSpacing);
             const w: f32 = self.contentWidth();
             const rect = self.allocWidget(w, h);
             _ = self.renderer.drawString(str, .{
@@ -861,7 +861,7 @@ pub fn UiContext(comptime Engine: type) type {
         ) ButtonResult {
             const s = &self.style;
             const uid = hashId(id);
-            const h: f32 = @floatFromInt(s.button_height);
+            const h: f32 = @floatFromInt(s.buttonHeight);
             const rect = self.allocWidget(width, h);
 
             self.registerFocusable(uid);
@@ -873,31 +873,31 @@ pub fn UiContext(comptime Engine: type) type {
                 state = .disabled;
             } else {
                 const over = self.testHot(uid, rect);
-                if (over and self.left_pressed) {
-                    self.active_id = uid;
-                    self.focus_id = uid;
+                if (over and self.leftPressed) {
+                    self.activeId = uid;
+                    self.focusId = uid;
                 }
-                if (self.active_id == uid) {
+                if (self.activeId == uid) {
                     state = .pressed;
-                    if (over and self.left_released) {
+                    if (over and self.leftReleased) {
                         clicked = true;
                     }
                 } else if (over) {
                     state = .hover;
                 }
-                if (self.focus_id == uid and self.enter_pressed) {
+                if (self.focusId == uid and self.enterPressed) {
                     clicked = true;
                 }
             }
 
             const bg = switch (state) {
-                .normal => s.button_normal,
-                .hover => s.button_hover,
-                .pressed => s.button_pressed,
-                .disabled => s.button_disabled,
+                .normal => s.buttonNormal,
+                .hover => s.buttonHover,
+                .pressed => s.buttonPressed,
+                .disabled => s.buttonDisabled,
             };
             self.renderer.drawFilledRect(rect, bg);
-            self.renderer.drawEnclosingRect(rect, s.window_border, 1);
+            self.renderer.drawEnclosingRect(rect, s.windowBorder, 1);
 
             const ts = self.renderer.measureString(lbl);
             const line_h: f32 = @floatFromInt(self.renderer.lineHeight() orelse 16);
@@ -917,7 +917,7 @@ pub fn UiContext(comptime Engine: type) type {
         ) ButtonResult {
             const s = &self.style;
             const uid = hashId(id);
-            const h: f32 = @floatFromInt(s.button_height);
+            const h: f32 = @floatFromInt(s.buttonHeight);
             const w: f32 = self.contentWidth();
             const rect = self.allocWidget(w, h);
 
@@ -930,32 +930,32 @@ pub fn UiContext(comptime Engine: type) type {
                 state = .disabled;
             } else {
                 const over = self.testHot(uid, rect);
-                if (over and self.left_pressed) {
-                    self.active_id = uid;
-                    self.focus_id = uid;
+                if (over and self.leftPressed) {
+                    self.activeId = uid;
+                    self.focusId = uid;
                 }
-                if (self.active_id == uid) {
+                if (self.activeId == uid) {
                     state = .pressed;
-                    if (over and self.left_released) {
+                    if (over and self.leftReleased) {
                         clicked = true;
                     }
                 } else if (over) {
                     state = .hover;
                 }
                 // Enter key fires the focused button
-                if (self.focus_id == uid and self.enter_pressed) {
+                if (self.focusId == uid and self.enterPressed) {
                     clicked = true;
                 }
             }
 
             const bg = switch (state) {
-                .normal => s.button_normal,
-                .hover => s.button_hover,
-                .pressed => s.button_pressed,
-                .disabled => s.button_disabled,
+                .normal => s.buttonNormal,
+                .hover => s.buttonHover,
+                .pressed => s.buttonPressed,
+                .disabled => s.buttonDisabled,
             };
             self.renderer.drawFilledRect(rect, bg);
-            self.renderer.drawEnclosingRect(rect, s.window_border, 1);
+            self.renderer.drawEnclosingRect(rect, s.windowBorder, 1);
 
             // Centered label
             const ts = self.renderer.measureString(lbl);
@@ -982,22 +982,22 @@ pub fn UiContext(comptime Engine: type) type {
             const over = self.testHot(uid, rect);
             var clicked = false;
 
-            if (over and self.left_pressed) {
-                self.active_id = uid;
-                self.focus_id = uid;
+            if (over and self.leftPressed) {
+                self.activeId = uid;
+                self.focusId = uid;
             }
-            if (self.active_id == uid and over and self.left_released) {
+            if (self.activeId == uid and over and self.leftReleased) {
                 clicked = true;
             }
 
-            const bg = if (self.active_id == uid)
-                s.selectable_pressed
+            const bg = if (self.activeId == uid)
+                s.selectablePressed
             else if (selected)
-                s.selectable_selected
+                s.selectableSelected
             else if (over)
-                s.selectable_hover
+                s.selectableHover
             else
-                s.selectable_normal;
+                s.selectableNormal;
             self.renderer.drawFilledRect(rect, bg);
 
             const pad_x: f32 = @floatFromInt(s.padding.x);
@@ -1013,7 +1013,7 @@ pub fn UiContext(comptime Engine: type) type {
 
         /// A single selectable row. Returns true when it is clicked.
         pub fn selectable(self: *Self, id: []const u8, lbl: []const u8, selected: bool) bool {
-            const h: f32 = @floatFromInt(self.style.selectable_height);
+            const h: f32 = @floatFromInt(self.style.selectableHeight);
             const rect = self.allocWidget(self.contentWidth(), h);
             return self.drawSelectable(hashId(id), lbl, selected, rect);
         }
@@ -1026,17 +1026,17 @@ pub fn UiContext(comptime Engine: type) type {
             items: []const []const u8,
             selected: *?usize,
             scroll: *usize,
-            area_height: f32,
+            areaHeight: f32,
         ) bool {
             const s = &self.style;
             const uid = hashId(id);
             const sb_uid = uid ^ 0x5343_0000_0000_0002;
-            const rect = self.allocWidget(self.contentWidth(), area_height);
-            const row_h: f32 = @floatFromInt(s.selectable_height);
-            const visible: usize = @max(1, @as(usize, @intFromFloat(@floor(area_height / row_h))));
+            const rect = self.allocWidget(self.contentWidth(), areaHeight);
+            const row_h: f32 = @floatFromInt(s.selectableHeight);
+            const visible: usize = @max(1, @as(usize, @intFromFloat(@floor(areaHeight / row_h))));
             const scrollable = items.len > visible;
             const max_scroll = if (scrollable) items.len - visible else 0;
-            const sb_w = s.scrollbar_w;
+            const sb_w = s.scrollbarW;
             const row_r = if (scrollable) rect.r - sb_w - 2.0 else rect.r;
 
             if (scroll.* > max_scroll) scroll.* = max_scroll;
@@ -1047,38 +1047,38 @@ pub fn UiContext(comptime Engine: type) type {
             const body_rect = RectF{ .l = rect.l, .t = rect.t, .r = row_r, .b = rect.b };
             const over_body = self.testHot(uid, body_rect);
             if (over_body) {
-                if (self.page_up_pressed and scroll.* > 0) {
+                if (self.pageUpPressed and scroll.* > 0) {
                     scroll.* -= 1;
-                } else if (self.page_down_pressed and scroll.* < max_scroll) {
+                } else if (self.pageDownPressed and scroll.* < max_scroll) {
                     scroll.* += 1;
                 }
-                if (scrollable and self.scroll_delta != 0) {
-                    if (self.scroll_delta > 0 and scroll.* > 0) {
-                        const steps = @max(1, @as(usize, @intFromFloat(self.scroll_delta)));
+                if (scrollable and self.scrollDelta != 0) {
+                    if (self.scrollDelta > 0 and scroll.* > 0) {
+                        const steps = @max(1, @as(usize, @intFromFloat(self.scrollDelta)));
                         scroll.* -= @min(scroll.*, steps);
-                    } else if (self.scroll_delta < 0 and scroll.* < max_scroll) {
-                        const steps = @max(1, @as(usize, @intFromFloat(-self.scroll_delta)));
+                    } else if (self.scrollDelta < 0 and scroll.* < max_scroll) {
+                        const steps = @max(1, @as(usize, @intFromFloat(-self.scrollDelta)));
                         scroll.* = @min(max_scroll, scroll.* + steps);
                     }
-                    self.scroll_consumed = true;
+                    self.scrollConsumed = true;
                 }
             }
 
             const sb_rect = RectF{ .l = rect.r - sb_w, .t = rect.t, .r = rect.r, .b = rect.b };
             if (scrollable) {
                 const over_sb = self.testHot(sb_uid, sb_rect);
-                if (over_sb and self.left_pressed) self.active_id = sb_uid;
-                if (self.active_id == sb_uid and self.left_down) {
-                    const thumb_h = @max((area_height * @as(f32, @floatFromInt(visible))) /
+                if (over_sb and self.leftPressed) self.activeId = sb_uid;
+                if (self.activeId == sb_uid and self.leftDown) {
+                    const thumb_h = @max((areaHeight * @as(f32, @floatFromInt(visible))) /
                         @as(f32, @floatFromInt(items.len)), 12.0);
-                    const travel = area_height - thumb_h;
-                    const t = std.math.clamp((self.mouse_pos.y - sb_rect.t - thumb_h / 2.0) / travel, 0.0, 1.0);
+                    const travel = areaHeight - thumb_h;
+                    const t = std.math.clamp((self.mousePos.y - sb_rect.t - thumb_h / 2.0) / travel, 0.0, 1.0);
                     scroll.* = @intFromFloat(t * @as(f32, @floatFromInt(max_scroll)));
                 }
             }
 
-            self.renderer.drawFilledRect(rect, s.text_area_bg);
-            self.renderer.drawEnclosingRect(rect, s.text_area_border, 1);
+            self.renderer.drawFilledRect(rect, s.textAreaBg);
+            self.renderer.drawEnclosingRect(rect, s.textAreaBorder, 1);
 
             var changed = false;
             const end_idx = @min(scroll.* + visible, items.len);
@@ -1096,9 +1096,9 @@ pub fn UiContext(comptime Engine: type) type {
             }
 
             if (scrollable) {
-                const thumb_h = @max((area_height * @as(f32, @floatFromInt(visible))) /
+                const thumb_h = @max((areaHeight * @as(f32, @floatFromInt(visible))) /
                     @as(f32, @floatFromInt(items.len)), 12.0);
-                const travel = area_height - thumb_h;
+                const travel = areaHeight - thumb_h;
                 const scroll_t = @as(f32, @floatFromInt(scroll.*)) / @as(f32, @floatFromInt(max_scroll));
                 const thumb_t = sb_rect.t + scroll_t * travel;
                 const thumb_rect = RectF{
@@ -1107,13 +1107,13 @@ pub fn UiContext(comptime Engine: type) type {
                     .r = sb_rect.r - 1.0,
                     .b = thumb_t + thumb_h,
                 };
-                self.renderer.drawFilledRect(sb_rect, s.scrollbar_track);
-                const thumb_col = if (self.active_id == sb_uid)
-                    s.scrollbar_thumb_active
-                else if (self.hot_id == sb_uid)
-                    s.scrollbar_thumb_hover
+                self.renderer.drawFilledRect(sb_rect, s.scrollbarTrack);
+                const thumb_col = if (self.activeId == sb_uid)
+                    s.scrollbarThumbActive
+                else if (self.hotId == sb_uid)
+                    s.scrollbarThumbHover
                 else
-                    s.scrollbar_thumb;
+                    s.scrollbarThumb;
                 self.renderer.drawFilledRect(thumb_rect, thumb_col);
             }
 
@@ -1128,35 +1128,35 @@ pub fn UiContext(comptime Engine: type) type {
         pub fn checkbox(self: *Self, id: []const u8, lbl: []const u8, checked: *bool) bool {
             const s = &self.style;
             const uid = hashId(id);
-            const h: f32 = @floatFromInt(s.input_height);
+            const h: f32 = @floatFromInt(s.inputHeight);
             const rect = self.allocWidget(self.contentWidth(), h);
             const over = self.testHot(uid, rect);
             self.registerFocusable(uid);
             var changed = false;
 
-            if (over and self.left_pressed) {
-                self.active_id = uid;
-                self.focus_id = uid;
+            if (over and self.leftPressed) {
+                self.activeId = uid;
+                self.focusId = uid;
             }
-            if (self.active_id == uid and over and self.left_released) {
+            if (self.activeId == uid and over and self.leftReleased) {
                 checked.* = !checked.*;
                 changed = true;
             }
 
-            const box_size: f32 = @floatFromInt(s.checkbox_size);
+            const box_size: f32 = @floatFromInt(s.checkboxSize);
             const box = RectF{
                 .l = rect.l,
                 .t = rect.t + (h - box_size) / 2.0,
                 .r = rect.l + box_size,
                 .b = rect.t + (h + box_size) / 2.0,
             };
-            self.renderer.drawFilledRect(box, s.checkbox_bg);
-            self.renderer.drawEnclosingRect(box, if (over) s.checkbox_hover else s.checkbox_border, 1);
+            self.renderer.drawFilledRect(box, s.checkboxBg);
+            self.renderer.drawEnclosingRect(box, if (over) s.checkboxHover else s.checkboxBorder, 1);
             if (checked.*) {
-                self.renderer.drawFilledRect(box.shrinkFrom(4.0), s.checkbox_check);
+                self.renderer.drawFilledRect(box.shrinkFrom(4.0), s.checkboxCheck);
             }
 
-            const item_sp: f32 = @floatFromInt(s.item_spacing);
+            const item_sp: f32 = @floatFromInt(s.itemSpacing);
             const line_h: f32 = @floatFromInt(self.renderer.lineHeight() orelse 16);
             _ = self.renderer.drawString(lbl, .{
                 .x = @intFromFloat(box.r + item_sp * 2.0),
@@ -1173,27 +1173,27 @@ pub fn UiContext(comptime Engine: type) type {
 
         /// Give keyboard focus to a widget by ID.
         pub fn focusWidget(self: *Self, id: []const u8) void {
-            self.focus_id = hashId(id);
+            self.focusId = hashId(id);
         }
 
         /// Returns true when a widget has keyboard focus.
         pub fn widgetFocused(self: *const Self, id: []const u8) bool {
-            return self.focus_id == hashId(id);
+            return self.focusId == hashId(id);
         }
 
         /// Sets the cursor for a focused text input. Useful after replacing an
         /// input buffer from caller-owned command history.
         pub fn setInputCursor(self: *Self, id: []const u8, pos: usize) void {
             const uid = hashId(id);
-            self.edit_cursor_id = uid;
-            self.edit_cursor_pos = pos;
+            self.editCursorId = uid;
+            self.editCursorPos = pos;
         }
 
         fn insertTextAtCursor(self: *Self, uid: u64, buf: []u8, len: *usize, text_to_insert: []const u8) bool {
             if (buf.len == 0) return false;
-            if (self.edit_cursor_id != uid) {
-                self.edit_cursor_id = uid;
-                self.edit_cursor_pos = len.*;
+            if (self.editCursorId != uid) {
+                self.editCursorId = uid;
+                self.editCursorPos = len.*;
             }
 
             const capacity = buf.len - 1;
@@ -1203,12 +1203,12 @@ pub fn UiContext(comptime Engine: type) type {
             if (insert_len == 0) return false;
 
             var i = len.*;
-            while (i > self.edit_cursor_pos) : (i -= 1) {
+            while (i > self.editCursorPos) : (i -= 1) {
                 buf[i + insert_len - 1] = buf[i - 1];
             }
-            @memcpy(buf[self.edit_cursor_pos .. self.edit_cursor_pos + insert_len], text_to_insert[0..insert_len]);
+            @memcpy(buf[self.editCursorPos .. self.editCursorPos + insert_len], text_to_insert[0..insert_len]);
             len.* += insert_len;
-            self.edit_cursor_pos += insert_len;
+            self.editCursorPos += insert_len;
             buf[len.*] = 0;
             return true;
         }
@@ -1238,7 +1238,7 @@ pub fn UiContext(comptime Engine: type) type {
         ) InputTextResult {
             const s = &self.style;
             const uid = hashId(id);
-            const h: f32 = @floatFromInt(s.input_height);
+            const h: f32 = @floatFromInt(s.inputHeight);
             const w: f32 = self.contentWidth();
             const rect = self.allocWidget(w, h);
 
@@ -1248,37 +1248,37 @@ pub fn UiContext(comptime Engine: type) type {
 
             // Click to focus
             const over = self.testHot(uid, rect);
-            if (over and self.left_pressed) {
-                self.focus_id = uid;
+            if (over and self.leftPressed) {
+                self.focusId = uid;
             }
 
-            const focused = self.focus_id == uid;
+            const focused = self.focusId == uid;
             result.focused = focused;
 
             if (focused) {
                 // Initialize cursor when this widget first gains focus
-                if (self.edit_cursor_id != uid) {
-                    self.edit_cursor_id = uid;
-                    self.edit_cursor_pos = len.*;
+                if (self.editCursorId != uid) {
+                    self.editCursorId = uid;
+                    self.editCursorPos = len.*;
                 }
 
                 if (len.* >= buf.len) len.* = if (buf.len > 0) buf.len - 1 else 0;
-                if (self.edit_cursor_pos > len.*) self.edit_cursor_pos = len.*;
+                if (self.editCursorPos > len.*) self.editCursorPos = len.*;
 
-                if (opts.submit_on_enter and self.enter_pressed) {
+                if (opts.submitOnEnter and self.enterPressed) {
                     result.submitted = true;
                 }
 
-                if (opts.history_keys) {
-                    result.history_prev = self.up_arrow_count > 0;
-                    result.history_next = self.down_arrow_count > 0;
+                if (opts.historyKeys) {
+                    result.historyPrev = self.upArrowCount > 0;
+                    result.historyNext = self.downArrowCount > 0;
                 }
 
-                if (self.home_pressed) self.edit_cursor_pos = 0;
-                if (self.end_pressed) self.edit_cursor_pos = len.*;
+                if (self.homePressed) self.editCursorPos = 0;
+                if (self.endPressed) self.editCursorPos = len.*;
 
-                if (opts.clipboard and self.ctrl_c_pressed) {
-                    if (self.clipboard_window) |win| {
+                if (opts.clipboard and self.ctrlCPressed) {
+                    if (self.clipboardWindow) |win| {
                         if (buf.len > 0) {
                             buf[len.*] = 0;
                             win.setClipboardString(buf[0..len.* :0]);
@@ -1287,16 +1287,16 @@ pub fn UiContext(comptime Engine: type) type {
                     result.copied = true;
                 }
 
-                if (opts.clear_on_ctrl_l and self.ctrl_l_pressed) {
+                if (opts.clearOnCtrlL and self.ctrlLPressed) {
                     if (buf.len > 0) buf[0] = 0;
                     result.changed = result.changed or len.* > 0;
                     result.cleared = true;
                     len.* = 0;
-                    self.edit_cursor_pos = 0;
+                    self.editCursorPos = 0;
                 }
 
-                if (opts.clipboard and self.ctrl_v_pressed) {
-                    if (self.clipboard_window) |win| {
+                if (opts.clipboard and self.ctrlVPressed) {
+                    if (self.clipboardWindow) |win| {
                         if (win.getClipboardString()) |clip| {
                             if (self.insertTextAtCursor(uid, buf, len, clip)) {
                                 result.changed = true;
@@ -1307,35 +1307,35 @@ pub fn UiContext(comptime Engine: type) type {
                 }
 
                 // Move cursor with arrow keys
-                var la = self.left_arrow_count;
+                var la = self.leftArrowCount;
                 while (la > 0) : (la -= 1) {
-                    if (self.edit_cursor_pos > 0) self.edit_cursor_pos -= 1;
+                    if (self.editCursorPos > 0) self.editCursorPos -= 1;
                 }
-                var ra = self.right_arrow_count;
+                var ra = self.rightArrowCount;
                 while (ra > 0) : (ra -= 1) {
-                    if (self.edit_cursor_pos < len.*) self.edit_cursor_pos += 1;
+                    if (self.editCursorPos < len.*) self.editCursorPos += 1;
                 }
 
                 // Insert typed characters at cursor position
-                for (self.text_input[0..self.text_input_len]) |c| {
+                for (self.textInput[0..self.textInputLen]) |c| {
                     if (self.insertTextAtCursor(uid, buf, len, (&[_]u8{c})[0..])) result.changed = true;
                 }
 
                 // Backspace: delete character before cursor
-                var bs = self.backspace_count;
-                while (bs > 0 and self.edit_cursor_pos > 0) : (bs -= 1) {
-                    var i = self.edit_cursor_pos - 1;
+                var bs = self.backspaceCount;
+                while (bs > 0 and self.editCursorPos > 0) : (bs -= 1) {
+                    var i = self.editCursorPos - 1;
                     while (i < len.* - 1) : (i += 1) buf[i] = buf[i + 1];
                     len.* -= 1;
                     buf[len.*] = 0;
-                    self.edit_cursor_pos -= 1;
+                    self.editCursorPos -= 1;
                     result.changed = true;
                 }
 
                 // Delete: delete character at cursor
-                var del = self.delete_count;
-                while (del > 0 and self.edit_cursor_pos < len.*) : (del -= 1) {
-                    var i = self.edit_cursor_pos;
+                var del = self.deleteCount;
+                while (del > 0 and self.editCursorPos < len.*) : (del -= 1) {
+                    var i = self.editCursorPos;
                     while (i < len.* - 1) : (i += 1) buf[i] = buf[i + 1];
                     len.* -= 1;
                     buf[len.*] = 0;
@@ -1343,12 +1343,12 @@ pub fn UiContext(comptime Engine: type) type {
                 }
 
                 // Clamp cursor in case buffer shrank externally
-                if (self.edit_cursor_pos > len.*) self.edit_cursor_pos = len.*;
+                if (self.editCursorPos > len.*) self.editCursorPos = len.*;
             }
 
             // Draw background + border
-            self.renderer.drawFilledRect(rect, s.input_bg);
-            const border_col = if (focused) s.input_border_focused else if (over) s.input_border_hover else s.input_border;
+            self.renderer.drawFilledRect(rect, s.inputBg);
+            const border_col = if (focused) s.inputBorderFocused else if (over) s.inputBorderHover else s.inputBorder;
             self.renderer.drawEnclosingRect(rect, border_col, 1);
 
             const pad_x: f32 = @floatFromInt(s.padding.x);
@@ -1360,11 +1360,11 @@ pub fn UiContext(comptime Engine: type) type {
                 .y = ty,
             }, text_clip);
 
-            // Blinking cursor at edit_cursor_pos
+            // Blinking cursor at editCursorPos
             if (focused) {
                 const blink_on = (self.frame / 30) % 2 == 0;
                 if (blink_on) {
-                    const cursor_pos = if (self.edit_cursor_id == uid) self.edit_cursor_pos else len.*;
+                    const cursor_pos = if (self.editCursorId == uid) self.editCursorPos else len.*;
                     const pre_sz = self.renderer.measureString(buf[0..cursor_pos]);
                     const cx: f32 = rect.l + pad_x + @as(f32, @floatFromInt(pre_sz.x));
                     const cy: f32 = rect.t + (h - line_h) / 2.0;
@@ -1373,7 +1373,7 @@ pub fn UiContext(comptime Engine: type) type {
                         .t = cy + line_h - 3.0,
                         .r = cx + 8.0,
                         .b = cy + line_h,
-                    }, s.input_cursor);
+                    }, s.inputCursor);
                 }
             }
 
@@ -1385,12 +1385,12 @@ pub fn UiContext(comptime Engine: type) type {
         // ----------------------------------------------------------
 
         fn beginIntEdit(self: *Self, uid: u64, value: i32) void {
-            const str = std.fmt.bufPrint(&self.int_edit_buf, "{}", .{value}) catch "0";
-            self.int_edit_len = str.len;
-            self.int_edit_id = uid;
-            self.int_edit_replace = true;
-            self.edit_cursor_id = uid;
-            self.edit_cursor_pos = str.len;
+            const str = std.fmt.bufPrint(&self.intEditBuf, "{}", .{value}) catch "0";
+            self.intEditLen = str.len;
+            self.intEditId = uid;
+            self.intEditReplace = true;
+            self.editCursorId = uid;
+            self.editCursorPos = str.len;
         }
 
         /// Signed integer input. Typing after focus replaces the current value;
@@ -1398,91 +1398,91 @@ pub fn UiContext(comptime Engine: type) type {
         pub fn inputInt(self: *Self, id: []const u8, value: *i32) bool {
             const s = &self.style;
             const uid = hashId(id);
-            const h: f32 = @floatFromInt(s.input_height);
+            const h: f32 = @floatFromInt(s.inputHeight);
             const rect = self.allocWidget(self.contentWidth(), h);
             const over = self.testHot(uid, rect);
 
             self.registerFocusable(uid);
 
-            if (over and self.left_pressed) {
-                if (self.focus_id != uid or self.int_edit_id != uid) {
+            if (over and self.leftPressed) {
+                if (self.focusId != uid or self.intEditId != uid) {
                     self.beginIntEdit(uid, value.*);
                 }
-                self.focus_id = uid;
+                self.focusId = uid;
             }
 
-            const focused = self.focus_id == uid;
-            if (focused and self.int_edit_id != uid) {
+            const focused = self.focusId == uid;
+            if (focused and self.intEditId != uid) {
                 self.beginIntEdit(uid, value.*);
             }
 
             // Sync cursor if focus just arrived (from tab or external set)
-            if (focused and self.edit_cursor_id != uid) {
-                self.edit_cursor_id = uid;
-                self.edit_cursor_pos = self.int_edit_len;
+            if (focused and self.editCursorId != uid) {
+                self.editCursorId = uid;
+                self.editCursorPos = self.intEditLen;
             }
 
             var changed = false;
             if (focused) {
-                for (self.text_input[0..self.text_input_len]) |c| {
+                for (self.textInput[0..self.textInputLen]) |c| {
                     const valid = (c >= '0' and c <= '9') or
-                        (c == '-' and (self.int_edit_replace or self.int_edit_len == 0));
+                        (c == '-' and (self.intEditReplace or self.intEditLen == 0));
                     if (!valid) continue;
-                    if (self.int_edit_replace) {
-                        self.int_edit_len = 0;
-                        self.int_edit_replace = false;
-                        self.edit_cursor_pos = 0;
+                    if (self.intEditReplace) {
+                        self.intEditLen = 0;
+                        self.intEditReplace = false;
+                        self.editCursorPos = 0;
                     }
                     // '-' only allowed at position 0
-                    if (c == '-' and self.int_edit_len != 0) continue;
-                    if (self.int_edit_len < self.int_edit_buf.len) {
-                        var i = self.int_edit_len;
-                        while (i > self.edit_cursor_pos) : (i -= 1) {
-                            self.int_edit_buf[i] = self.int_edit_buf[i - 1];
+                    if (c == '-' and self.intEditLen != 0) continue;
+                    if (self.intEditLen < self.intEditBuf.len) {
+                        var i = self.intEditLen;
+                        while (i > self.editCursorPos) : (i -= 1) {
+                            self.intEditBuf[i] = self.intEditBuf[i - 1];
                         }
-                        self.int_edit_buf[self.edit_cursor_pos] = c;
-                        self.int_edit_len += 1;
-                        self.edit_cursor_pos += 1;
+                        self.intEditBuf[self.editCursorPos] = c;
+                        self.intEditLen += 1;
+                        self.editCursorPos += 1;
                     }
                 }
 
-                if (self.backspace_count + self.delete_count > 0) self.int_edit_replace = false;
+                if (self.backspaceCount + self.deleteCount > 0) self.intEditReplace = false;
 
                 // Arrow keys (only meaningful once out of replace mode)
-                var la = self.left_arrow_count;
+                var la = self.leftArrowCount;
                 while (la > 0) : (la -= 1) {
-                    if (self.edit_cursor_pos > 0) self.edit_cursor_pos -= 1;
+                    if (self.editCursorPos > 0) self.editCursorPos -= 1;
                 }
-                var ra = self.right_arrow_count;
+                var ra = self.rightArrowCount;
                 while (ra > 0) : (ra -= 1) {
-                    if (self.edit_cursor_pos < self.int_edit_len) self.edit_cursor_pos += 1;
+                    if (self.editCursorPos < self.intEditLen) self.editCursorPos += 1;
                 }
 
                 // Backspace: delete character before cursor
-                var bs = self.backspace_count;
-                while (bs > 0 and self.edit_cursor_pos > 0) : (bs -= 1) {
-                    var i = self.edit_cursor_pos - 1;
-                    while (i < self.int_edit_len - 1) : (i += 1) {
-                        self.int_edit_buf[i] = self.int_edit_buf[i + 1];
+                var bs = self.backspaceCount;
+                while (bs > 0 and self.editCursorPos > 0) : (bs -= 1) {
+                    var i = self.editCursorPos - 1;
+                    while (i < self.intEditLen - 1) : (i += 1) {
+                        self.intEditBuf[i] = self.intEditBuf[i + 1];
                     }
-                    self.int_edit_len -= 1;
-                    self.edit_cursor_pos -= 1;
+                    self.intEditLen -= 1;
+                    self.editCursorPos -= 1;
                 }
 
                 // Delete: delete character at cursor
-                var del = self.delete_count;
-                while (del > 0 and self.edit_cursor_pos < self.int_edit_len) : (del -= 1) {
-                    var i = self.edit_cursor_pos;
-                    while (i < self.int_edit_len - 1) : (i += 1) {
-                        self.int_edit_buf[i] = self.int_edit_buf[i + 1];
+                var del = self.deleteCount;
+                while (del > 0 and self.editCursorPos < self.intEditLen) : (del -= 1) {
+                    var i = self.editCursorPos;
+                    while (i < self.intEditLen - 1) : (i += 1) {
+                        self.intEditBuf[i] = self.intEditBuf[i + 1];
                     }
-                    self.int_edit_len -= 1;
+                    self.intEditLen -= 1;
                 }
 
-                if (self.int_edit_len > 0 and
-                    !(self.int_edit_len == 1 and self.int_edit_buf[0] == '-'))
+                if (self.intEditLen > 0 and
+                    !(self.intEditLen == 1 and self.intEditBuf[0] == '-'))
                 {
-                    if (std.fmt.parseInt(i32, self.int_edit_buf[0..self.int_edit_len], 10)) |new_value| {
+                    if (std.fmt.parseInt(i32, self.intEditBuf[0..self.intEditLen], 10)) |new_value| {
                         if (new_value != value.*) {
                             value.* = new_value;
                             changed = true;
@@ -1491,13 +1491,13 @@ pub fn UiContext(comptime Engine: type) type {
                 }
             }
 
-            self.renderer.drawFilledRect(rect, s.input_bg);
-            const border_col = if (focused) s.input_border_focused else if (over) s.input_border_hover else s.input_border;
+            self.renderer.drawFilledRect(rect, s.inputBg);
+            const border_col = if (focused) s.inputBorderFocused else if (over) s.inputBorderHover else s.inputBorder;
             self.renderer.drawEnclosingRect(rect, border_col, 1);
 
             var display_buf: [32]u8 = undefined;
             const value_str = if (focused)
-                self.int_edit_buf[0..self.int_edit_len]
+                self.intEditBuf[0..self.intEditLen]
             else
                 std.fmt.bufPrint(&display_buf, "{}", .{value.*}) catch "?";
             const pad_x: f32 = @floatFromInt(s.padding.x);
@@ -1509,9 +1509,9 @@ pub fn UiContext(comptime Engine: type) type {
                 .y = ty,
             }, text_clip);
 
-            // Blinking cursor at edit_cursor_pos
+            // Blinking cursor at editCursorPos
             if (focused and (self.frame / 30) % 2 == 0) {
-                const cursor_pos = if (self.edit_cursor_id == uid) self.edit_cursor_pos else self.int_edit_len;
+                const cursor_pos = if (self.editCursorId == uid) self.editCursorPos else self.intEditLen;
                 const pre_sz = self.renderer.measureString(value_str[0..cursor_pos]);
                 const cx: f32 = rect.l + pad_x + @as(f32, @floatFromInt(pre_sz.x));
                 const cy: f32 = rect.t + (h - line_h) / 2.0;
@@ -1520,7 +1520,7 @@ pub fn UiContext(comptime Engine: type) type {
                     .t = cy + line_h - 3.0,
                     .r = cx + 8.0,
                     .b = cy + line_h,
-                }, s.input_cursor);
+                }, s.inputCursor);
             }
 
             return changed;
@@ -1532,30 +1532,30 @@ pub fn UiContext(comptime Engine: type) type {
 
         /// Scrollable read-only text area with a vertical scrollbar.
         /// `lines` is the full list of lines; `scroll` is the top visible line index.
-        /// `area_height` is the pixel height of the area widget.
+        /// `areaHeight` is the pixel height of the area widget.
         pub fn textArea(
             self: *Self,
             id: []const u8,
             lines: []const []const u8,
             scroll: *usize,
-            area_height: f32,
+            areaHeight: f32,
         ) void {
             const s = &self.style;
             const uid = hashId(id);
             const sb_uid = uid ^ 0x5343_0000_0000_0001; // scrollbar thumb ID
             const w: f32 = self.contentWidth();
-            const rect = self.allocWidget(w, area_height);
+            const rect = self.allocWidget(w, areaHeight);
 
             const line_h: i32 = self.renderer.lineHeight() orelse 16;
             const line_hf: f32 = @floatFromInt(line_h);
             const pad_y: f32 = @floatFromInt(s.padding.y);
             const pad_x: f32 = @floatFromInt(s.padding.x);
-            const usable_h: f32 = @max(0.0, area_height - pad_y * 2.0);
+            const usable_h: f32 = @max(0.0, areaHeight - pad_y * 2.0);
             const lines_visible: usize = @intFromFloat(@floor(usable_h / line_hf));
             const scrollable = lines.len > lines_visible;
 
             // Scrollbar geometry
-            const sb_w = s.scrollbar_w;
+            const sb_w = s.scrollbarW;
             const sb_rect = RectF{ .l = rect.r - sb_w, .t = rect.t, .r = rect.r, .b = rect.b };
             const text_r = if (scrollable) rect.r - sb_w - 2.0 else rect.r;
 
@@ -1564,23 +1564,23 @@ pub fn UiContext(comptime Engine: type) type {
             const over_body = self.testHot(uid, body_rect);
 
             if (over_body) {
-                if (self.page_up_pressed and scroll.* > 0) {
+                if (self.pageUpPressed and scroll.* > 0) {
                     scroll.* -= 1;
-                } else if (self.page_down_pressed) {
+                } else if (self.pageDownPressed) {
                     if (scroll.* + lines_visible < lines.len) {
                         scroll.* += 1;
                     }
                 }
-                if (scrollable and self.scroll_delta != 0) {
+                if (scrollable and self.scrollDelta != 0) {
                     const max_scroll_ta = lines.len - lines_visible;
-                    if (self.scroll_delta > 0 and scroll.* > 0) {
-                        const steps = @max(1, @as(usize, @intFromFloat(self.scroll_delta)));
+                    if (self.scrollDelta > 0 and scroll.* > 0) {
+                        const steps = @max(1, @as(usize, @intFromFloat(self.scrollDelta)));
                         scroll.* -= @min(scroll.*, steps);
-                    } else if (self.scroll_delta < 0) {
-                        const steps = @max(1, @as(usize, @intFromFloat(-self.scroll_delta)));
+                    } else if (self.scrollDelta < 0) {
+                        const steps = @max(1, @as(usize, @intFromFloat(-self.scrollDelta)));
                         scroll.* = @min(max_scroll_ta, scroll.* + steps);
                     }
-                    self.scroll_consumed = true;
+                    self.scrollConsumed = true;
                 }
             }
 
@@ -1588,12 +1588,12 @@ pub fn UiContext(comptime Engine: type) type {
             if (scrollable) {
                 const max_scroll = lines.len - lines_visible;
                 const over_sb = self.testHot(sb_uid, sb_rect);
-                if (over_sb and self.left_pressed) self.active_id = sb_uid;
-                if (self.active_id == sb_uid and self.left_down) {
-                    const thumb_h = @max((area_height * @as(f32, @floatFromInt(lines_visible))) /
+                if (over_sb and self.leftPressed) self.activeId = sb_uid;
+                if (self.activeId == sb_uid and self.leftDown) {
+                    const thumb_h = @max((areaHeight * @as(f32, @floatFromInt(lines_visible))) /
                         @as(f32, @floatFromInt(lines.len)), 12.0);
-                    const travel = area_height - thumb_h;
-                    const my = self.mouse_pos.y;
+                    const travel = areaHeight - thumb_h;
+                    const my = self.mousePos.y;
                     const t = std.math.clamp((my - sb_rect.t - thumb_h / 2.0) / travel, 0.0, 1.0);
                     scroll.* = @intFromFloat(t * @as(f32, @floatFromInt(max_scroll)));
                 }
@@ -1602,8 +1602,8 @@ pub fn UiContext(comptime Engine: type) type {
             }
 
             // Background + border
-            self.renderer.drawFilledRect(rect, s.text_area_bg);
-            self.renderer.drawEnclosingRect(rect, s.text_area_border, 1);
+            self.renderer.drawFilledRect(rect, s.textAreaBg);
+            self.renderer.drawEnclosingRect(rect, s.textAreaBorder, 1);
 
             // Draw visible lines clipped to the text column so long lines don't
             // bleed into the scrollbar or past the border.
@@ -1622,13 +1622,13 @@ pub fn UiContext(comptime Engine: type) type {
             // Draw scrollbar
             if (scrollable) {
                 const max_scroll = lines.len - lines_visible;
-                const thumb_h = @max((area_height * @as(f32, @floatFromInt(lines_visible))) /
+                const thumb_h = @max((areaHeight * @as(f32, @floatFromInt(lines_visible))) /
                     @as(f32, @floatFromInt(lines.len)), 12.0);
                 const scroll_t = if (max_scroll > 0)
                     @as(f32, @floatFromInt(scroll.*)) / @as(f32, @floatFromInt(max_scroll))
                 else
                     0.0;
-                const travel = area_height - thumb_h;
+                const travel = areaHeight - thumb_h;
                 const thumb_t = sb_rect.t + scroll_t * travel;
                 const thumb_rect = RectF{
                     .l = sb_rect.l + 1.0,
@@ -1637,10 +1637,10 @@ pub fn UiContext(comptime Engine: type) type {
                     .b = thumb_t + thumb_h,
                 };
 
-                self.renderer.drawFilledRect(sb_rect, s.scrollbar_track);
-                const is_active = self.active_id == sb_uid;
-                const is_hot = self.hot_id == sb_uid;
-                const thumb_col = if (is_active) s.scrollbar_thumb_active else if (is_hot) s.scrollbar_thumb_hover else s.scrollbar_thumb;
+                self.renderer.drawFilledRect(sb_rect, s.scrollbarTrack);
+                const is_active = self.activeId == sb_uid;
+                const is_hot = self.hotId == sb_uid;
+                const thumb_col = if (is_active) s.scrollbarThumbActive else if (is_hot) s.scrollbarThumbHover else s.scrollbarThumb;
                 self.renderer.drawFilledRect(thumb_rect, thumb_col);
             }
         }
@@ -1649,40 +1649,40 @@ pub fn UiContext(comptime Engine: type) type {
         // slider
         // ----------------------------------------------------------
 
-        /// Horizontal slider. `value` is clamped to [min_val, max_val].
+        /// Horizontal slider. `value` is clamped to [minVal, maxVal].
         /// Returns true if the value changed this frame.
         pub fn slider(
             self: *Self,
             id: []const u8,
             value: *f32,
-            min_val: f32,
-            max_val: f32,
+            minVal: f32,
+            maxVal: f32,
         ) bool {
             const s = &self.style;
             const uid = hashId(id);
-            const h: f32 = @floatFromInt(s.slider_height);
+            const h: f32 = @floatFromInt(s.sliderHeight);
             const w: f32 = self.contentWidth();
             const rect = self.allocWidget(w, h);
 
-            const thumb_w: f32 = @floatFromInt(s.slider_thumb_w);
+            const thumb_w: f32 = @floatFromInt(s.sliderThumbW);
             const track_l = rect.l + thumb_w / 2.0;
             const track_r = rect.r - thumb_w / 2.0;
             const track_range = track_r - track_l;
-            const val_range = max_val - min_val;
+            const val_range = maxVal - minVal;
 
             self.registerFocusable(uid);
             const over = self.testHot(uid, rect);
 
-            if (over and self.left_pressed) {
-                self.active_id = uid;
-                self.focus_id = uid;
+            if (over and self.leftPressed) {
+                self.activeId = uid;
+                self.focusId = uid;
             }
 
             var changed = false;
-            if (self.active_id == uid and self.left_down) {
-                const mx = self.mouse_pos.x;
+            if (self.activeId == uid and self.leftDown) {
+                const mx = self.mousePos.x;
                 const t = std.math.clamp((mx - track_l) / track_range, 0.0, 1.0);
-                const new_val = min_val + t * val_range;
+                const new_val = minVal + t * val_range;
                 if (new_val != value.*) {
                     value.* = new_val;
                     changed = true;
@@ -1690,14 +1690,14 @@ pub fn UiContext(comptime Engine: type) type {
             }
 
             // Compute thumb center from current value
-            const t = std.math.clamp((value.* - min_val) / val_range, 0.0, 1.0);
+            const t = std.math.clamp((value.* - minVal) / val_range, 0.0, 1.0);
             const thumb_cx = track_l + t * track_range;
             const track_cy = rect.t + h / 2.0;
             const track_h: f32 = 4.0;
 
             // Track background
-            self.renderer.drawFilledRect(rect, s.slider_track);
-            self.renderer.drawEnclosingRect(rect, s.window_border, 1);
+            self.renderer.drawFilledRect(rect, s.sliderTrack);
+            self.renderer.drawEnclosingRect(rect, s.windowBorder, 1);
 
             // Filled portion (left of thumb)
             self.renderer.drawFilledRect(.{
@@ -1705,15 +1705,15 @@ pub fn UiContext(comptime Engine: type) type {
                 .t = track_cy - track_h / 2.0,
                 .r = thumb_cx,
                 .b = track_cy + track_h / 2.0,
-            }, s.slider_fill);
+            }, s.sliderFill);
 
             // Thumb
-            const thumb_col = if (self.active_id == uid)
-                s.slider_thumb_active
+            const thumb_col = if (self.activeId == uid)
+                s.sliderThumbActive
             else if (over)
-                s.slider_thumb_hover
+                s.sliderThumbHover
             else
-                s.slider_thumb;
+                s.sliderThumb;
 
             self.renderer.drawFilledRect(.{
                 .l = thumb_cx - thumb_w / 2.0,

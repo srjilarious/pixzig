@@ -10,28 +10,28 @@ pub const NumMouseButtons = keys.NumMouseButtons;
 pub const MouseState = struct {
     buttons: std.StaticBitSet(NumMouseButtons),
     /// Cursor position in window coordinates, as SDL reports it.
-    raw_pos: Vec2F,
-    /// Cursor position in framebuffer pixels (raw_pos * scale_factor).
+    rawPos: Vec2F,
+    /// Cursor position in framebuffer pixels (rawPos * scaleFactor).
     /// Suitable for passing to any Viewport.framebufferToLogical() call.
-    fb_pos: Vec2F,
+    fbPos: Vec2F,
     /// Logical game coordinates after viewport mapping.  Set to (-1, -1) when
     /// the cursor is outside the viewport (letterbox / pillarbox region).
-    logical_pos: Vec2F,
+    logicalPos: Vec2F,
     /// Mouse movement accumulated during the current tick, in SDL window
     /// coordinates. In captured/relative mode this is the unbounded motion.
-    raw_delta: Vec2F,
+    rawDelta: Vec2F,
     /// Scroll wheel delta accumulated during the current tick (x = horizontal, y = vertical).
-    scroll_delta: Vec2F,
+    scrollDelta: Vec2F,
 
     pub fn init() MouseState {
         const buttons = std.StaticBitSet(NumMouseButtons).empty;
         return .{
             .buttons = buttons,
-            .raw_pos = .{ .x = 0, .y = 0 },
-            .fb_pos = .{ .x = 0, .y = 0 },
-            .logical_pos = .{ .x = -1, .y = -1 },
-            .raw_delta = .{ .x = 0, .y = 0 },
-            .scroll_delta = .{ .x = 0, .y = 0 },
+            .rawPos = .{ .x = 0, .y = 0 },
+            .fbPos = .{ .x = 0, .y = 0 },
+            .logicalPos = .{ .x = -1, .y = -1 },
+            .rawDelta = .{ .x = 0, .y = 0 },
+            .scrollDelta = .{ .x = 0, .y = 0 },
         };
     }
 
@@ -52,22 +52,22 @@ pub const MouseState = struct {
     }
 
     pub fn setRawPos(self: *MouseState, x: f32, y: f32) void {
-        self.raw_pos = .{ .x = x, .y = y };
+        self.rawPos = .{ .x = x, .y = y };
     }
 
     pub fn addRawMotion(self: *MouseState, x: f32, y: f32, dx: f32, dy: f32) void {
-        self.raw_pos = .{ .x = x, .y = y };
-        self.raw_delta.x += dx;
-        self.raw_delta.y += dy;
+        self.rawPos = .{ .x = x, .y = y };
+        self.rawDelta.x += dx;
+        self.rawDelta.y += dy;
     }
 
     pub fn clear(self: *MouseState) void {
         self.buttons.setRangeValue(.{ .start = 0, .end = NumMouseButtons }, false);
-        self.raw_pos = .{ .x = 0, .y = 0 };
-        self.fb_pos = .{ .x = 0, .y = 0 };
-        self.logical_pos = .{ .x = -1, .y = -1 };
-        self.raw_delta = .{ .x = 0, .y = 0 };
-        self.scroll_delta = .{ .x = 0, .y = 0 };
+        self.rawPos = .{ .x = 0, .y = 0 };
+        self.fbPos = .{ .x = 0, .y = 0 };
+        self.logicalPos = .{ .x = -1, .y = -1 };
+        self.rawDelta = .{ .x = 0, .y = 0 };
+        self.scrollDelta = .{ .x = 0, .y = 0 };
     }
 };
 
@@ -95,8 +95,8 @@ pub const Mouse = struct {
     /// consumed.
     pub fn finishTick(self: *Mouse) void {
         self.mouseBuffers[self.prevIdx] = self.mouseBuffers[self.currIdx];
-        self.curr_mut().raw_delta = .{ .x = 0, .y = 0 };
-        self.curr_mut().scroll_delta = .{ .x = 0, .y = 0 };
+        self.curr_mut().rawDelta = .{ .x = 0, .y = 0 };
+        self.curr_mut().scrollDelta = .{ .x = 0, .y = 0 };
     }
 
     /// Drops all button state, for window focus loss where the
@@ -139,43 +139,43 @@ pub const Mouse = struct {
     /// Logical game coordinates for the current tick.  Returns (-1, -1) when
     /// the cursor is outside the viewport (letterbox / pillarbox region).
     pub fn pos(self: *const Mouse) Vec2F {
-        return self.curr().logical_pos;
+        return self.curr().logicalPos;
     }
 
     /// Logical game coordinates for the previous tick.
     pub fn lastPos(self: *const Mouse) Vec2F {
-        return self.prev().logical_pos;
+        return self.prev().logicalPos;
     }
 
     /// Cursor position in window coordinates for the current tick.
     pub fn rawPos(self: *const Mouse) Vec2F {
-        return self.curr().raw_pos;
+        return self.curr().rawPos;
     }
 
     /// Cursor position in window coordinates for the previous tick.
     pub fn lastRawPos(self: *const Mouse) Vec2F {
-        return self.prev().raw_pos;
+        return self.prev().rawPos;
     }
 
     /// Cursor position in framebuffer pixels for the current tick.
     /// Use with Viewport.framebufferToLogical() to map into any coordinate space.
     pub fn fbPos(self: *const Mouse) Vec2F {
-        return self.curr().fb_pos;
+        return self.curr().fbPos;
     }
 
     /// Cursor position in framebuffer pixels for the previous tick.
     pub fn lastFbPos(self: *const Mouse) Vec2F {
-        return self.prev().fb_pos;
+        return self.prev().fbPos;
     }
 
     /// Mouse movement accumulated during the current tick, in SDL window
     /// coordinates. This is valid in both normal and captured cursor modes.
     pub fn delta(self: *const Mouse) Vec2F {
-        return self.curr().raw_delta;
+        return self.curr().rawDelta;
     }
 
     /// Scroll wheel delta for the current tick (x = horizontal, y = vertical).
     pub fn scroll(self: *const Mouse) Vec2F {
-        return self.curr().scroll_delta;
+        return self.curr().scrollDelta;
     }
 };

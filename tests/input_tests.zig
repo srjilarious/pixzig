@@ -208,8 +208,8 @@ pub fn mouseScrollTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = alloc;
 
     var mouse = Mouse.init();
-    mouse.curr_mut().scroll_delta.y += 1.0;
-    mouse.curr_mut().scroll_delta.y += 2.0;
+    mouse.curr_mut().scrollDelta.y += 1.0;
+    mouse.curr_mut().scrollDelta.y += 2.0;
     try testz.expectEqual(mouse.scroll().y, 3.0);
 
     mouse.finishTick();

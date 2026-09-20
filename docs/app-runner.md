@@ -1,11 +1,11 @@
 # App Runner Model
 
-[](sym:PixzigAppRunner) owns the engine lifecycle and calls an application's `update` and `render` methods on desktop and web builds.
+[](sym:AppRunner) owns the engine lifecycle and calls an application's `update` and `render` methods on desktop and web builds.
 
 ## Creating the AppRunner
  
 ```zig
-const AppRunner = pixzig.PixzigAppRunner(App, .{
+const AppRunner = pixzig.AppRunner(App, .{
     .rendererOpts = .{
         .shapeRendering = true,
         .textRendering = true, // the default; false compiles out text and the embedded font
@@ -15,7 +15,7 @@ const AppRunner = pixzig.PixzigAppRunner(App, .{
 });
 ```
 
-[](sym:PixzigEngineOptions) is evaluated at compile time. Use it to enable rendering, audio, and input features required by the application. Calling a method whose feature is turned off (for example `drawString` with `textRendering = false`, or `eng.audio.playSound` with audio disabled) is a compile error that names the option to set.
+[](sym:EngineOptions) is evaluated at compile time. Use it to enable rendering, audio, and input features required by the application. Calling a method whose feature is turned off (for example `drawString` with `textRendering = false`, or `eng.audio.playSound` with audio disabled) is a compile error that names the option to set.
 
 Note that these options strip unused engine *code paths* only, not native dependencies: `build.zig` always links the platform backend, OpenGL, flecs, zaudio/miniaudio, Lua, XML, and STB TrueType into every build regardless of which options are set.
 
@@ -72,7 +72,7 @@ Those two plus `Camera2D.matrix(&eng.viewport)` for a scrolling world view are t
 
 ## Game Loop Details
 
-The default update rate is 120 Hz. Set `updateStepHz` in `PixzigEngineOptions` to change it. Rendering is uncapped unless vsync limits it. Vsync is on by default: set `.vsync = false` in the init options, or call `eng.enableVSync(bool)` at runtime (e.g. from a settings menu).
+The default update rate is 120 Hz. Set `updateStepHz` in `EngineOptions` to change it. Rendering is uncapped unless vsync limits it. Vsync is on by default: set `.vsync = false` in the init options, or call `eng.enableVSync(bool)` at runtime (e.g. from a settings menu).
 
 A single frame catches up on at most `maxLagMs` (default 250 ms) of updates. Any backlog past that, from a debugger pause or a long hitch, is dropped, so the game briefly slows down instead of running hundreds of updates at once. `run()` also restarts the clock before the first frame, so time spent loading assets in `App.init` isn't counted. Call `appRunner.resetClock()` yourself after any other long pause that shouldn't be caught up.
 
@@ -81,7 +81,7 @@ A single frame catches up on at most `maxLagMs` (default 250 ms) of updates. Any
 lag = @min(lag + delta, maxLagMs);
 while (lag > UpdateStepMs) {
     lag -= UpdateStepMs;
-    eng.inputs.update(eng.window, eng.window_state.scale_factor, &eng.viewport);
+    eng.inputs.update(eng.window, eng.windowState.scaleFactor, &eng.viewport);
     if (!app.update(eng, UpdateStepMs)) return false;
 }
 app.render(eng);

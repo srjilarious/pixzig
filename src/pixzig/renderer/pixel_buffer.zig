@@ -6,7 +6,6 @@ const shaders = @import("shaders.zig");
 const resources = @import("../resources.zig");
 const ResourceManager = resources.ResourceManager;
 const ShaderHandle = resources.ShaderHandle;
-const ManagedShader = resources.ManagedShader;
 
 /// A 2d buffer of pixels that can be used for old school effects, emulators, etc.
 /// It uses a texture and provides clearing and setting pixels.
@@ -32,13 +31,13 @@ pub const PixelBuffer = struct {
         errdefer allocator.free(pixels);
         @memset(pixels, 0);
 
-        // Load the shader and acquire a handle
-        const shader_managed = try res.loadShader(
+        // Load the shader and take our own reference on it.
+        const shader = try res.loadShader(
             shaders.PixelBuffShader,
             &shaders.PixBuffVertexShader,
             &shaders.TexPixelShader,
         );
-        const handle = shader_managed.acquire() orelse return error.NoShaderInPool;
+        const handle = shader.retain();
         errdefer handle.release();
 
         var self = PixelBuffer{

@@ -7,7 +7,7 @@ const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
 
-const EngOptions = pixzig.PixzigEngineOptions;
+const EngOptions = pixzig.EngineOptions;
 
 const tile = pixzig.tile;
 const Flip = pixzig.sprites.Flip;
@@ -27,7 +27,7 @@ pub const Velocity = struct { speed: Vec2F };
 
 pub const Dot = struct {};
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{
+const AppRunner = pixzig.AppRunner(App, .{
     .updateStepHz = 60.0,
 });
 
@@ -38,8 +38,8 @@ pub const App = struct {
     fps: FpsCounter,
     paused: bool,
     world: *flecs.world_t,
-    update_query: *flecs.query_t,
-    draw_query: *flecs.query_t,
+    updateQuery: *flecs.query_t,
+    drawQuery: *flecs.query_t,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const bigtex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
@@ -56,7 +56,7 @@ pub const App = struct {
         flecs.COMPONENT(world, DebugOutline);
 
         std.log.info("Created components", .{});
-        const update_query = try flecs.query_init(world, &.{
+        const updateQuery = try flecs.query_init(world, &.{
             .terms = [_]flecs.term_t{
                 .{ .id = flecs.id(Sprite) },
                 .{ .id = flecs.id(Velocity) },
@@ -79,8 +79,8 @@ pub const App = struct {
             .paused = false,
             .fps = FpsCounter.init(),
             .world = world,
-            .update_query = update_query,
-            .draw_query = query,
+            .updateQuery = updateQuery,
+            .drawQuery = query,
         };
 
         std.log.info("Spawning 50 entities...", .{});
@@ -98,7 +98,7 @@ pub const App = struct {
     pub fn deinit(self: *App) void {
         // Release each live entity's sprite texture handle before the world
         // (and its component storage) goes away.
-        var it = flecs.query_iter(self.world, self.draw_query);
+        var it = flecs.query_iter(self.world, self.drawQuery);
         while (flecs.query_next(&it)) {
             const spr = flecs.field(&it, Sprite, 0).?;
             for (0..it.count()) |idx| {
@@ -106,7 +106,7 @@ pub const App = struct {
             }
         }
 
-        flecs.query_fini(self.draw_query);
+        flecs.query_fini(self.drawQuery);
         _ = flecs.fini(self.world);
         self.alloc.destroy(self);
     }
@@ -164,7 +164,7 @@ pub const App = struct {
         }
 
         if (!self.paused) {
-            var it = flecs.query_iter(self.world, self.update_query);
+            var it = flecs.query_iter(self.world, self.updateQuery);
             while (flecs.query_next(&it)) {
                 const spr = flecs.field(&it, Sprite, 0).?;
                 const vel = flecs.field(&it, Velocity, 1).?;
@@ -199,7 +199,7 @@ pub const App = struct {
 
         eng.renderer.begin(.logical);
 
-        var it = flecs.query_iter(self.world, self.draw_query);
+        var it = flecs.query_iter(self.world, self.drawQuery);
         while (flecs.query_next(&it)) {
             const spr = flecs.field(&it, Sprite, 0).?;
 

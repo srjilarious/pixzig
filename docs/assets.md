@@ -2,6 +2,21 @@
 
 An asset manifest is a JSON file that describes a game's assets. At runtime, `AssetManifest` loads assets from disk via `ResourceManager` and manages their ref-counted handles.
 
+## Asset Paths
+
+Every relative path handed to the engine -- manifests, textures, atlases,
+fonts, tilemaps, sounds and Lua scripts -- resolves against the directory the
+executable lives in (`SDL_GetBasePath`), never the process's current working
+directory. A packaged game therefore runs correctly no matter where it is
+launched from, and `cd` in a shell never changes which files it loads.
+Absolute paths are used as given.
+
+In a dev build (`zig build` without `-Dpackage=true`), `buildGame` points the
+base directory at the game's own source tree instead, so relative paths reach
+the real `assets/` files and hot-reload watches the files you actually edit.
+Packaging flips it back to the executable's directory, where `buildGame`
+copies the assets.
+
 ## Manifest JSON Format
 
 ```json
@@ -66,12 +81,12 @@ There are two ways to open a manifest at runtime: let the engine load it automat
 
 ### Engine-Managed Manifest (`manifestOpts`)
 
-Set `manifestOpts` on `PixzigEngineOptions` to the build-generated `manifest_options` module, and the engine loads the manifest itself before the renderer is set up (so boot-group fonts are available for `renderInitOpts.font`):
+Set `manifestOpts` on `EngineOptions` to the build-generated `manifest_options` module, and the engine loads the manifest itself before the renderer is set up (so boot-group fonts are available for `renderInitOpts.font`):
 
 ```zig
 const manifest_options = @import("manifest_options");
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{
+const AppRunner = pixzig.AppRunner(App, .{
     .manifestOpts = manifest_options,
 });
 ```

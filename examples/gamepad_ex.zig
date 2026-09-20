@@ -8,7 +8,7 @@ const FpsCounter = pixzig.utils.FpsCounter;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{ .inputOpts = .{ .numGamepads = 1 } });
+const AppRunner = pixzig.AppRunner(App, .{ .inputOpts = .{ .numGamepads = 1 } });
 
 // Colors cycled by gamepad buttons.
 const Colors = struct {

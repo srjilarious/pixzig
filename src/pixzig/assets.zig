@@ -1,4 +1,5 @@
 const std = @import("std");
+const paths = @import("./paths.zig");
 const resources = @import("./resources.zig");
 const ResourceManager = resources.ResourceManager;
 const TextureHandle = resources.TextureHandle;
@@ -11,17 +12,16 @@ pub const icon48x48 = @embedFile("assets/pixzig_icon.png");
 /// Logs a contextual error for a failed asset file operation before the
 /// caller propagates `err` unchanged. A bare `FileNotFound` gives no
 /// indication of what was being loaded or where the loader looked for it;
-/// this reports the asset kind, the resolved path, and (for relative paths)
-/// the process's cwd, since that's what a relative path is resolved against.
+/// this reports the asset kind, the path, and (for relative paths) the
+/// executable's own directory, since that's what a relative path is
+/// resolved against.
 fn logAssetIoError(err: anyerror, kind: []const u8, path: []const u8) void {
     if (std.fs.path.isAbsolute(path)) {
         std.log.err("Failed to load {s} '{s}': {s}", .{ kind, path, @errorName(err) });
         return;
     }
-    const io = std.Io.Threaded.global_single_threaded.io();
-    var buf: [std.fs.max_path_bytes]u8 = undefined;
-    const cwd_str = if (std.Io.Dir.cwd().realPath(io, &buf)) |len| buf[0..len] else |_| "<unknown>";
-    std.log.err("Failed to load {s} '{s}' (cwd: '{s}'): {s}", .{ kind, path, cwd_str, @errorName(err) });
+    const base = paths.baseDir() orelse "<unknown>";
+    std.log.err("Failed to load {s} '{s}' (base dir: '{s}'): {s}", .{ kind, path, base, @errorName(err) });
 }
 
 /// Asset kinds for use in manifests. `raw` marks files that must be present
@@ -46,7 +46,7 @@ pub const AnyHandle = union(enum) {
 const AssetDef = struct {
     kind: AssetKind,
     path: []const u8,
-    font_size: f32,
+    fontSize: f32,
 };
 
 // JSON schema types for parsing the manifest file.
@@ -57,6 +57,9 @@ const ManifestJson = struct {
     assets: []const AssetJsonEntry = &.{},
 };
 
+/// Mirrors the manifest file's JSON schema, so these field names are the
+/// on-disk keys (and the ones `build.zig`'s `AssetEntry` writes) rather than
+/// pixzig's own naming.
 const AssetJsonEntry = struct {
     id: []const u8,
     kind: []const u8,
@@ -69,7 +72,7 @@ const AssetJsonEntry = struct {
 /// used at runtime to open the manifest.
 pub const ManifestSource = union(enum) {
     file: []const u8,
-    json: struct { content: []const u8, base_dir: []const u8 },
+    json: struct { content: []const u8, baseDir: []const u8 },
 
     pub fn fromOptions(comptime Opts: type) ManifestSource {
         return if (Opts.manifest_path.len > 0)
@@ -77,14 +80,14 @@ pub const ManifestSource = union(enum) {
         else
             .{ .json = .{
                 .content = Opts.manifest_json,
-                .base_dir = Opts.manifest_base_dir,
+                .baseDir = Opts.manifest_base_dir,
             } };
     }
 
     pub fn load(self: ManifestSource, alloc: std.mem.Allocator, res: *ResourceManager) !AssetManifest {
         return switch (self) {
             .file => |path| AssetManifest.loadFromFile(alloc, res, path),
-            .json => |j| AssetManifest.loadFromJson(alloc, res, j.content, j.base_dir),
+            .json => |j| AssetManifest.loadFromJson(alloc, res, j.content, j.baseDir),
         };
     }
 };
@@ -105,7 +108,7 @@ pub const AssetManifest = struct {
     alloc: std.mem.Allocator,
     res: *ResourceManager,
     /// Absolute or cwd-relative path to the asset root directory (owned).
-    root_dir: []u8,
+    rootDir: []u8,
 
     /// Parsed JSON data -- kept alive so string slices into it remain valid.
     parsed: std.json.Parsed(ManifestJson),
@@ -130,7 +133,7 @@ pub const AssetManifest = struct {
     /// Parse a manifest JSON file and return an `AssetManifest`. No assets are
     /// loaded yet; call `loadGroup` to load a group of assets.
     ///
-    /// `manifest_path` may be absolute, or relative -- a relative path is
+    /// `manifestPath` may be absolute, or relative -- a relative path is
     /// resolved against the running executable's own directory (not the
     /// process's current working directory), so a packaged build finds its
     /// assets no matter where it's launched from. All asset paths in the
@@ -139,47 +142,37 @@ pub const AssetManifest = struct {
     pub fn loadFromFile(
         alloc: std.mem.Allocator,
         res: *ResourceManager,
-        manifest_path: []const u8,
+        manifestPath: []const u8,
     ) !Self {
         const io = std.Io.Threaded.global_single_threaded.io();
 
-        var owned_path: ?[]u8 = null;
-        defer if (owned_path) |p| alloc.free(p);
+        const resolvedPath = try paths.resolve(alloc, manifestPath);
+        defer alloc.free(resolvedPath);
 
-        const resolved_path: []const u8 = if (std.fs.path.isAbsolute(manifest_path))
-            manifest_path
-        else blk: {
-            const exe_dir = try std.process.executableDirPathAlloc(io, alloc);
-            defer alloc.free(exe_dir);
-            const joined = try std.fs.path.join(alloc, &.{ exe_dir, manifest_path });
-            owned_path = joined;
-            break :blk joined;
-        };
-
-        const file_contents = std.Io.Dir.cwd().readFileAlloc(io, resolved_path, alloc, .unlimited) catch |err| {
-            logAssetIoError(err, "manifest", resolved_path);
+        const file_contents = std.Io.Dir.cwd().readFileAlloc(io, resolvedPath, alloc, .unlimited) catch |err| {
+            logAssetIoError(err, "manifest", resolvedPath);
             return err;
         };
         defer alloc.free(file_contents);
 
-        const manifest_dir = std.fs.path.dirname(resolved_path) orelse ".";
+        const manifest_dir = std.fs.path.dirname(resolvedPath) orelse ".";
         var result = try loadFromJsonImpl(alloc, res, file_contents, manifest_dir);
         errdefer result.deinit();
         if (result.groups.contains("boot")) try result.loadGroup("boot");
         return result;
     }
 
-    /// Parse an inline manifest JSON string. `assets_root` is the absolute (or
+    /// Parse an inline manifest JSON string. `assetsRoot` is the absolute (or
     /// cwd-relative) path to the directory that `root` in the JSON is relative
     /// to. Use this when the manifest content is embedded as a build option via
     /// `manifestFromDef` rather than read from a file.
     pub fn loadFromJson(
         alloc: std.mem.Allocator,
         res: *ResourceManager,
-        json_content: []const u8,
-        assets_root: []const u8,
+        jsonContent: []const u8,
+        assetsRoot: []const u8,
     ) !Self {
-        var result = try loadFromJsonImpl(alloc, res, json_content, assets_root);
+        var result = try loadFromJsonImpl(alloc, res, jsonContent, assetsRoot);
         errdefer result.deinit();
         if (result.groups.contains("boot")) try result.loadGroup("boot");
         return result;
@@ -188,23 +181,23 @@ pub const AssetManifest = struct {
     fn loadFromJsonImpl(
         alloc: std.mem.Allocator,
         res: *ResourceManager,
-        json_content: []const u8,
-        base_dir: []const u8,
+        jsonContent: []const u8,
+        baseDir: []const u8,
     ) !Self {
         // `allocate = .alloc_always` forces string values to be copied into
-        // `parsed`'s own arena rather than sliced from `json_content`. Without
-        // it, id/path strings alias `json_content` directly; `loadFromFile`
+        // `parsed`'s own arena rather than sliced from `jsonContent`. Without
+        // it, id/path strings alias `jsonContent` directly; `loadFromFile`
         // frees its `file_contents` buffer right after parsing, so any lookup
         // after that point (e.g. a later `loadGroup` or `resolvePath` call)
         // would read freed memory.
-        const parsed = try std.json.parseFromSlice(ManifestJson, alloc, json_content, .{
+        const parsed = try std.json.parseFromSlice(ManifestJson, alloc, jsonContent, .{
             .ignore_unknown_fields = true,
             .allocate = .alloc_always,
         });
         errdefer parsed.deinit();
 
-        const root_dir = try std.fs.path.join(alloc, &.{ base_dir, parsed.value.root });
-        errdefer alloc.free(root_dir);
+        const rootDir = try std.fs.path.join(alloc, &.{ baseDir, parsed.value.root });
+        errdefer alloc.free(rootDir);
 
         var groups = std.StringHashMap([]const []const u8).init(alloc);
         errdefer groups.deinit();
@@ -239,14 +232,14 @@ pub const AssetManifest = struct {
             gop.value_ptr.* = .{
                 .kind = kind,
                 .path = entry.path,
-                .font_size = entry.font_size orelse 0,
+                .fontSize = entry.font_size orelse 0,
             };
         }
 
         return .{
             .alloc = alloc,
             .res = res,
-            .root_dir = root_dir,
+            .rootDir = rootDir,
             .parsed = parsed,
             .groups = groups,
             .defs = defs,
@@ -276,7 +269,7 @@ pub const AssetManifest = struct {
                 std.log.err("AssetManifest: group '{s}' references unknown asset '{s}'", .{ group_name, id });
                 return error.UnknownAsset;
             };
-            const full_path = try std.fs.path.join(self.alloc, &.{ self.root_dir, def.path });
+            const full_path = try std.fs.path.join(self.alloc, &.{ self.rootDir, def.path });
             defer self.alloc.free(full_path);
 
             switch (def.kind) {
@@ -296,14 +289,14 @@ pub const AssetManifest = struct {
                     try self.appendAcquiredHandle(&handles, .{ .texture = try self.res.acquireTexture(id) });
                 },
                 .font => {
-                    self.res.loadFontFromTtfFile(id, full_path, def.font_size) catch |err| {
+                    _ = self.res.loadFontFromTtfFile(id, full_path, def.fontSize) catch |err| {
                         logAssetIoError(err, "font", full_path);
                         return err;
                     };
                     try self.appendAcquiredHandle(&handles, .{ .font = try self.res.acquireFontAtlas(id) });
                 },
                 .tilemap => {
-                    self.res.loadTileMap(id, full_path) catch |err| {
+                    _ = self.res.loadTileMap(id, full_path) catch |err| {
                         logAssetIoError(err, "tilemap", full_path);
                         return err;
                     };
@@ -346,7 +339,7 @@ pub const AssetManifest = struct {
         self.defs.deinit();
         self.groups.deinit();
         self.parsed.deinit();
-        self.alloc.free(self.root_dir);
+        self.alloc.free(self.rootDir);
     }
 
     /// Resolve the full filesystem path for `id` as declared in the manifest,
@@ -358,7 +351,7 @@ pub const AssetManifest = struct {
             std.log.err("AssetManifest: unknown asset id '{s}'", .{id});
             return error.UnknownAsset;
         };
-        return std.fs.path.joinZ(alloc, &.{ self.root_dir, def.path });
+        return std.fs.path.joinZ(alloc, &.{ self.rootDir, def.path });
     }
 
     fn parseKind(s: []const u8) ?AssetKind {

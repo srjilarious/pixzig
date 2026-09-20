@@ -114,7 +114,7 @@ seq_play(h)
 
 ## Console Integration
 
-`console2` provides an in-game Lua console backed by a `ScriptEngine`. See `examples/console2_ex.zig`.
+`console` provides an in-game Lua console backed by a `ScriptEngine`. See `examples/console_ex.zig`.
 
 ## Tips
 

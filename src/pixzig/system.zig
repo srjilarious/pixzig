@@ -46,7 +46,7 @@ fn nativeLog(
             "\x1b[2m{d:0>2}:{d:0>2}:{d:0>2}.{d:0>3}\x1b[0m " ++
                 level_color ++ level_char ++ "\x1b[0m " ++
                 scope_prefix,
-            .{ lt.hour, lt.minute, lt.second, lt.ms_part },
+            .{ lt.hour, lt.minute, lt.second, lt.msPart },
         ) catch return;
         stderr.file_writer.interface.print(format ++ "\x1b[0m\n", args) catch return;
     }

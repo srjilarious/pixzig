@@ -60,11 +60,11 @@ pub fn rendererDefaultFontAtlasResizeTest(io: std.Io, alloc: std.mem.Allocator) 
     defer r.deinit();
 
     const fa = r.defaultFontAtlas() orelse return error.NoDefaultFont;
-    try testz.expectEqual(fa.font_size, @as(f32, 18.0));
+    try testz.expectEqual(fa.fontSize, @as(f32, 18.0));
 
     try fa.setFontSize(36.0);
     // Same atlas object the renderer draws from picks up the new size.
-    try testz.expectEqual(r.defaultFontAtlas().?.font_size, @as(f32, 36.0));
+    try testz.expectEqual(r.defaultFontAtlas().?.fontSize, @as(f32, 36.0));
 }
 
 pub fn rendererDefaultFontAtlasNullWithoutFontTest(io: std.Io, alloc: std.mem.Allocator) !void {
@@ -81,6 +81,40 @@ pub fn rendererDefaultFontAtlasNullWithoutFontTest(io: std.Io, alloc: std.mem.Al
     try testz.expectTrue(r.defaultFontAtlas() == null);
 }
 
+pub fn rendererWarnsOnceWithNoFontTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = glCtx();
+
+    const Rndr = pixzig.renderer.Renderer(.{ .textRendering = true });
+    var rm = pixzig.resources.ResourceManager.init(alloc);
+    defer rm.deinit();
+
+    var r = try Rndr.init(alloc, &rm, &test_viewport, .{ .font = .none });
+    defer r.deinit();
+
+    try testz.expectTrue(!r.impl.text.warnedNoFont);
+
+    // Every text call with no font draws nothing, but only the first one
+    // logs -- otherwise a game missing its font floods the log every frame.
+    r.begin(.logical);
+    const drawn = r.drawString("hello", .{ .x = 0, .y = 0 });
+    try testz.expectEqual(drawn.x, 0);
+    try testz.expectEqual(drawn.y, 0);
+    try testz.expectTrue(r.impl.text.warnedNoFont);
+    _ = r.drawScaledString("hello", .{ .x = 0, .y = 0 }, 2.0);
+    _ = r.drawStringColored("hello", .{ .x = 0, .y = 0 }, .{ .r = 1, .g = 1, .b = 1, .a = 1 });
+    _ = r.drawClippedString("hello", .{ .x = 0, .y = 0 }, .{ .l = 0, .t = 0, .r = 10, .b = 10 });
+    r.end();
+    try testz.expectTrue(r.impl.text.warnedNoFont);
+
+    // Setting a font arms the warning again for the next font-less stretch.
+    try r.setDefaultFont(&rm, blk: {
+        _ = try rm.loadFontFromTtfFile("late", "assets/Roboto-Medium.ttf", 16.0);
+        break :blk "late";
+    });
+    try testz.expectTrue(!r.impl.text.warnedNoFont);
+}
+
 pub fn rendererLoadsEmbeddedFontByDefaultTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     _ = glCtx();
@@ -94,7 +128,7 @@ pub fn rendererLoadsEmbeddedFontByDefaultTest(io: std.Io, alloc: std.mem.Allocat
     defer r.deinit();
 
     const fa = r.defaultFontAtlas() orelse return error.NoDefaultFont;
-    try testz.expectEqual(fa.font_size, @as(f32, 20.0));
+    try testz.expectEqual(fa.fontSize, @as(f32, 20.0));
     try testz.expectTrue(fa.getChar('A') != null);
 }
 
@@ -115,7 +149,7 @@ pub fn rendererLoadsFontFromDataTest(io: std.Io, alloc: std.mem.Allocator) !void
     defer r.deinit();
 
     const fa = r.defaultFontAtlas() orelse return error.NoDefaultFont;
-    try testz.expectEqual(fa.font_size, @as(f32, 24.0));
+    try testz.expectEqual(fa.fontSize, @as(f32, 24.0));
     try testz.expectTrue(fa.getChar('A') != null);
 }
 
@@ -126,7 +160,7 @@ pub fn spriteBatchSmokeTest(io: std.Io, alloc: std.mem.Allocator) !void {
     var shader = try ctx.makeManagedShader(alloc);
     defer shader.deinit();
 
-    var batch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &shader);
+    var batch = try pixzig.renderer.SpriteBatchQueue.init(alloc, shader.get().?);
     defer batch.deinit();
 
     const mvp = zmath.identity();
@@ -143,7 +177,7 @@ pub fn spriteBatchSnapsSpriteToWholePixelsTest(io: std.Io, alloc: std.mem.Alloca
     var tex = try ctx.makeDummyManagedTexture(alloc);
     defer tex.deinit();
 
-    var batch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &shader);
+    var batch = try pixzig.renderer.SpriteBatchQueue.init(alloc, shader.get().?);
     defer batch.deinit();
 
     var spr = pixzig.sprites.Sprite.create(tex.get().?);
@@ -177,7 +211,7 @@ pub fn rendererPassesInEveryProjectionTest(io: std.Io, alloc: std.mem.Allocator)
     var r = try Rndr.init(alloc, &rm, &test_viewport, .{});
     defer r.deinit();
 
-    const cam = pixzig.Camera2D.init(test_viewport.logical_size);
+    const cam = pixzig.Camera2D.init(test_viewport.logicalSize);
     const projections = [_]pixzig.renderer.Projection{
         .logical,
         .screen,
@@ -213,7 +247,7 @@ pub fn tiledReloadAddsLayerTest(io: std.Io, alloc: std.mem.Allocator) !void {
     const layer1 = try makeLayer(alloc);
     try map1.layers.append(alloc, layer1);
 
-    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, &shader, tex.get().?);
+    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, shader.get().?, tex.get().?);
     defer renderer.deinit();
 
     try testz.expectEqual(renderer.entries.len, 1);
@@ -244,7 +278,7 @@ pub fn tiledReloadRemovesLayerTest(io: std.Io, alloc: std.mem.Allocator) !void {
     try map1.layers.append(alloc, try makeLayer(alloc));
     try map1.layers.append(alloc, try makeLayer(alloc));
 
-    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, &shader, tex.get().?);
+    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, shader.get().?, tex.get().?);
     defer renderer.deinit();
 
     try testz.expectEqual(renderer.entries.len, 2);
@@ -268,13 +302,13 @@ pub fn tiledReloadZOrderTest(io: std.Io, alloc: std.mem.Allocator) !void {
     var tex = try ctx.makeDummyManagedTexture(alloc);
     defer tex.deinit();
 
-    // Initial map: both layers at z=0, order by layer_index.
+    // Initial map: both layers at z=0, order by layerIndex.
     var map1 = try TileMap.init(alloc);
     defer map1.deinit();
     try map1.layers.append(alloc, try makeLayer(alloc));
     try map1.layers.append(alloc, try makeLayer(alloc));
 
-    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, &shader, tex.get().?);
+    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, shader.get().?, tex.get().?);
     defer renderer.deinit();
 
     // Reload: layer 0 gets z=1, layer 1 stays z=0.
@@ -295,6 +329,6 @@ pub fn tiledReloadZOrderTest(io: std.Io, alloc: std.mem.Allocator) !void {
     try testz.expectEqual(renderer.entries[0].z, @as(f32, 0.0));
     try testz.expectEqual(renderer.entries[1].z, @as(f32, 1.0));
     // Verify original layer indices are tracked correctly.
-    try testz.expectEqual(renderer.entries[0].layer_index, @as(usize, 1));
-    try testz.expectEqual(renderer.entries[1].layer_index, @as(usize, 0));
+    try testz.expectEqual(renderer.entries[0].layerIndex, @as(usize, 1));
+    try testz.expectEqual(renderer.entries[1].layerIndex, @as(usize, 0));
 }

@@ -18,19 +18,19 @@ pub const Camera2D = struct {
     pos: Vec2F = .{ .x = 0, .y = 0 },
     zoom: f32 = 1.0,
     rotation: f32 = 0.0,
-    logical_size: Vec2I,
+    logicalSize: Vec2I,
     bounds: ?RectF = null,
 
-    pub fn init(logical_size: Vec2I) Camera2D {
-        return .{ .logical_size = logical_size };
+    pub fn init(logicalSize: Vec2I) Camera2D {
+        return .{ .logicalSize = logicalSize };
     }
 
     /// Returns a matrix mapping world coordinates to NDC via the given viewport.
     /// Transform order: translate world so pos lands at origin, scale by zoom,
     /// rotate, translate to logical center, then apply viewport projection.
     pub fn matrix(self: *const Camera2D, viewport: *const Viewport) zmath.Mat {
-        const lw: f32 = @floatFromInt(self.logical_size.x);
-        const lh: f32 = @floatFromInt(self.logical_size.y);
+        const lw: f32 = @floatFromInt(self.logicalSize.x);
+        const lh: f32 = @floatFromInt(self.logicalSize.y);
         const cx = lw / 2.0;
         const cy = lh / 2.0;
         const z = self.zoom;
@@ -47,8 +47,8 @@ pub const Camera2D = struct {
     /// World-space rectangle currently visible through this camera.
     /// Reflects the clamped position when bounds are set.
     pub fn viewRect(self: *const Camera2D) RectF {
-        const lw: f32 = @floatFromInt(self.logical_size.x);
-        const lh: f32 = @floatFromInt(self.logical_size.y);
+        const lw: f32 = @floatFromInt(self.logicalSize.x);
+        const lh: f32 = @floatFromInt(self.logicalSize.y);
         const half_w = lw / (2.0 * self.zoom);
         const half_h = lh / (2.0 * self.zoom);
         const p = self.clampedPos();
@@ -62,8 +62,8 @@ pub const Camera2D = struct {
 
     /// Converts a world coordinate to logical viewport space.
     pub fn worldToLogical(self: *const Camera2D, world: Vec2F) Vec2F {
-        const lw: f32 = @floatFromInt(self.logical_size.x);
-        const lh: f32 = @floatFromInt(self.logical_size.y);
+        const lw: f32 = @floatFromInt(self.logicalSize.x);
+        const lh: f32 = @floatFromInt(self.logicalSize.y);
         const p = self.clampedPos();
         return .{
             .x = (world.x - p.x) * self.zoom + lw / 2.0,
@@ -73,8 +73,8 @@ pub const Camera2D = struct {
 
     /// Converts a logical viewport coordinate to world space.
     pub fn logicalToWorld(self: *const Camera2D, logical: Vec2F) Vec2F {
-        const lw: f32 = @floatFromInt(self.logical_size.x);
-        const lh: f32 = @floatFromInt(self.logical_size.y);
+        const lw: f32 = @floatFromInt(self.logicalSize.x);
+        const lh: f32 = @floatFromInt(self.logicalSize.y);
         const p = self.clampedPos();
         return .{
             .x = (logical.x - lw / 2.0) / self.zoom + p.x,
@@ -89,8 +89,8 @@ pub const Camera2D = struct {
         var p = self.pos;
         const b = self.bounds orelse return p;
 
-        const lw: f32 = @floatFromInt(self.logical_size.x);
-        const lh: f32 = @floatFromInt(self.logical_size.y);
+        const lw: f32 = @floatFromInt(self.logicalSize.x);
+        const lh: f32 = @floatFromInt(self.logicalSize.y);
         const half_w = lw / (2.0 * self.zoom);
         const half_h = lh / (2.0 * self.zoom);
         const bw = b.width();

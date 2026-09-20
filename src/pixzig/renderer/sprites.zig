@@ -18,7 +18,7 @@ pub const Sprite = struct {
     /// The sprite's own reference to its texture, retained by `create` and
     /// released by `deinit()`.
     texture: *TextureHandle,
-    src_coords: RectF,
+    srcCoords: RectF,
     /// On-screen rectangle. Kept in sync by `setPos`/`setPosF`/`setSize`/
     /// `setScale`/`setOrigin`; if you write it directly, `size` will no
     /// longer match.
@@ -26,7 +26,7 @@ pub const Sprite = struct {
     /// Current on-screen size (the width/height of `dest`).
     size: Vec2F,
     /// Size of the texture frame at creation. `setScale` scales from this.
-    base_size: Vec2F,
+    baseSize: Vec2F,
     /// Pivot point in the texture frame's own (unscaled) pixels, relative to
     /// its top-left corner. `setPos` places this point, and `setSize`/
     /// `setScale` grow the sprite around it. Defaults to the top-left
@@ -47,10 +47,10 @@ pub const Sprite = struct {
         const size = tex.val.size.asVec2F();
         return Sprite{
             .texture = tex.retain(),
-            .src_coords = tex.val.src,
+            .srcCoords = tex.val.src,
             .dest = .{ .l = 0, .t = 0, .r = size.x, .b = size.y },
             .size = size,
-            .base_size = size,
+            .baseSize = size,
             .flip = .none,
             .rotate = .none,
         };
@@ -63,8 +63,8 @@ pub const Sprite = struct {
     }
 
     /// Switches the texture the sprite draws from, retaining `tex` and
-    /// releasing the previous one. Size, position, and `src_coords` are left
-    /// alone; set `src_coords` (or call `setSrcRect`) to match the new frame.
+    /// releasing the previous one. Size, position, and `srcCoords` are left
+    /// alone; set `srcCoords` (or call `setSrcRect`) to match the new frame.
     pub fn setTexture(self: *Sprite, tex: *TextureHandle) void {
         if (tex == self.texture) return;
         const old = self.texture;
@@ -100,17 +100,17 @@ pub const Sprite = struct {
         self.setPosF(p.x, p.y);
     }
 
-    /// Scales relative to `base_size` (the texture frame at creation),
+    /// Scales relative to `baseSize` (the texture frame at creation),
     /// around the origin. `setScale(1, 1)` restores the original size.
     pub fn setScale(self: *Sprite, sx: f32, sy: f32) void {
-        self.setSize(self.base_size.x * sx, self.base_size.y * sy);
+        self.setSize(self.baseSize.x * sx, self.baseSize.y * sy);
     }
 
-    /// The current scale relative to `base_size`.
+    /// The current scale relative to `baseSize`.
     pub fn scale(self: *const Sprite) Vec2F {
         return .{
-            .x = if (self.base_size.x != 0) self.size.x / self.base_size.x else 1,
-            .y = if (self.base_size.y != 0) self.size.y / self.base_size.y else 1,
+            .x = if (self.baseSize.x != 0) self.size.x / self.baseSize.x else 1,
+            .y = if (self.baseSize.y != 0) self.size.y / self.baseSize.y else 1,
         };
     }
 
@@ -126,7 +126,7 @@ pub const Sprite = struct {
     /// Sets the pivot as a fraction of the frame size: (0, 0) is top-left,
     /// (0.5, 0.5) the center, (0.5, 1) bottom-center.
     pub fn setOriginNormalized(self: *Sprite, nx: f32, ny: f32) void {
-        self.setOrigin(nx * self.base_size.x, ny * self.base_size.y);
+        self.setOrigin(nx * self.baseSize.x, ny * self.baseSize.y);
     }
 
     /// Shorthand for `setOriginNormalized(0.5, 0.5)`.
@@ -138,7 +138,7 @@ pub const Sprite = struct {
     /// relative to the texture frame's top-left corner. Does not resize the
     /// sprite; call `setSize` too if the on-screen size should follow.
     pub fn setSrcRect(self: *Sprite, px: RectI) void {
-        self.src_coords = pixelsToUv(&self.texture.val, px);
+        self.srcCoords = pixelsToUv(&self.texture.val, px);
     }
 
     /// The origin in on-screen pixels (frame pixels times the current scale).
@@ -177,7 +177,7 @@ pub const Frame = struct {
     flip: Flip,
 
     /// Points `spr` at this frame: switches its texture if the frame lives
-    /// on a different one, and sets `src_coords` with the combined flip.
+    /// on a different one, and sets `srcCoords` with the combined flip.
     pub fn apply(self: *Frame, spr: *Sprite, extraFlip: Flip) void {
         spr.setTexture(self.tex);
         const src = self.tex.val.src;
@@ -212,15 +212,15 @@ pub const Frame = struct {
         };
 
         switch (flip) {
-            .none => spr.src_coords = src,
+            .none => spr.srcCoords = src,
             .horz => {
-                spr.src_coords = .{ .l = src.r, .t = src.t, .r = src.l, .b = src.b };
+                spr.srcCoords = .{ .l = src.r, .t = src.t, .r = src.l, .b = src.b };
             },
             .vert => {
-                spr.src_coords = .{ .l = src.l, .t = src.b, .r = src.r, .b = src.t };
+                spr.srcCoords = .{ .l = src.l, .t = src.b, .r = src.r, .b = src.t };
             },
             .both => {
-                spr.src_coords = .{ .l = src.r, .t = src.b, .r = src.l, .b = src.t };
+                spr.srcCoords = .{ .l = src.r, .t = src.b, .r = src.l, .b = src.t };
             },
         }
     }

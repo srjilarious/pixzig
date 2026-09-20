@@ -1,5 +1,6 @@
 const std = @import("std");
 const ziglua = @import("ziglua");
+const paths = @import("./paths.zig");
 
 const Lua = ziglua.Lua;
 
@@ -12,13 +13,16 @@ pub const LuaFunc = fn (*Lua) i32;
 /// Owns the underlying `*Lua`; call `deinit()` to close it.
 pub const ScriptEngine = struct {
     lua: *Lua,
+    /// Kept for resolving script paths in `runScript`; the Lua state has its
+    /// own copy for its internal allocations.
+    alloc: std.mem.Allocator,
 
     /// Creates a new Lua state and opens the standard libraries (string,
     /// table, math, etc).
     pub fn init(allocator: std.mem.Allocator) !ScriptEngine {
         var lua = try Lua.init(allocator);
         lua.openLibs();
-        return .{ .lua = lua };
+        return .{ .lua = lua, .alloc = allocator };
     }
 
     pub fn deinit(self: *ScriptEngine) void {
@@ -58,10 +62,14 @@ pub const ScriptEngine = struct {
         };
     }
 
-    /// Runs a Lua file from disk. Raises the same errors as `run()` on
-    /// syntax or runtime failure.
+    /// Runs a Lua file from disk. A relative path is resolved against the
+    /// executable's own directory (see `paths`), so a packaged game finds
+    /// its scripts wherever it is launched from. Raises the same errors as
+    /// `run()` on syntax or runtime failure.
     pub fn runScript(self: *ScriptEngine, file: [:0]const u8) !void {
-        try self.lua.doFile(file);
+        const resolved = try paths.resolveZ(self.alloc, file);
+        defer self.alloc.free(resolved);
+        try self.lua.doFile(resolved);
     }
 
     /// Reads the global Lua table named `globalName` into a Zig struct `T`.

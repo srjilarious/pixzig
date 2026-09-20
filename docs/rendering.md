@@ -181,7 +181,7 @@ const appRunner = try AppRunner.init("My Game", alloc, .{
     .renderInitOpts = .{ .font = .{ .path = .{
         .face = "assets/AmigaTopaz.ttf",
         .size = 18.0,
-        .face_index = 0, // face inside a .ttc collection; 0 for a plain file
+        .faceIndex = 0, // face inside a .ttc collection; 0 for a plain file
     } } },
 });
 ```
@@ -194,7 +194,7 @@ const appRunner = try AppRunner.init("My Game", alloc, .{
 - `.id` -- a font already loaded elsewhere (e.g. a manifest boot group).
 - `.none` -- start with no default font, for a game that only draws bitmap fonts or sets its font later with `renderer.setDefaultFont`.
 
-Draw with `drawString`, `drawStringColored`, or `drawScaledString` between `begin` and `end`. Add extra coverage for codepoints the primary face lacks with `eng.renderer.addDefaultFontFallback(&eng.resources, path, face_index)`.
+Draw with `drawString`, `drawStringColored`, or `drawScaledString` between `begin` and `end`. Add extra coverage for codepoints the primary face lacks with `eng.renderer.addDefaultFontFallback(&eng.resources, path, faceIndex)`.
 
 ### Changing font size at runtime
 
@@ -205,8 +205,8 @@ pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
     const kb = &eng.inputs.keyboard;
     if (kb.ctrl()) {
         if (eng.defaultFontAtlas()) |fa| {
-            if (kb.pressed(.minus)) fa.setFontSize(@max(8, fa.font_size - 2)) catch {};
-            if (kb.pressed(.equal)) fa.setFontSize(@min(72, fa.font_size + 2)) catch {}; // Shift+= is '+'
+            if (kb.pressed(.minus)) fa.setFontSize(@max(8, fa.fontSize - 2)) catch {};
+            if (kb.pressed(.equal)) fa.setFontSize(@min(72, fa.fontSize + 2)) catch {}; // Shift+= is '+'
             if (kb.pressed(.zero))  fa.setFontSize(20) catch {};
         }
     }
@@ -225,7 +225,7 @@ pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
 Shape rendering must be enabled at compile time:
 
 ```zig
-const AppRunner = pixzig.PixzigAppRunner(App, .{
+const AppRunner = pixzig.AppRunner(App, .{
     .rendererOpts = .{ .shapeRendering = true },
 });
 ```

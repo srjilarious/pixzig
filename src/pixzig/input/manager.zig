@@ -35,10 +35,10 @@ pub const InputOptions = struct {
 /// Owns and updates all input subsystems for a single player session.
 /// Keyboard is always present.  Mouse and gamepads are activated via the
 /// `opts` passed to `init()` and updated based on the runtime flags stored
-/// in `mouse_enabled` and `num_gamepads`.
+/// in `mouseEnabled` and `numGamepads`.
 pub const InputManager = struct {
-    mouse_enabled: bool,
-    num_gamepads: u8,
+    mouseEnabled: bool,
+    numGamepads: u8,
     keyboard: Keyboard,
     mouse: Mouse,
     gamepads: [MaxGamepads]Gamepad,
@@ -48,8 +48,8 @@ pub const InputManager = struct {
     pub fn init(opts: InputOptions) Self {
         const n = @min(opts.numGamepads, MaxGamepads);
         var result: Self = .{
-            .mouse_enabled = opts.mouse,
-            .num_gamepads = n,
+            .mouseEnabled = opts.mouse,
+            .numGamepads = n,
             .keyboard = Keyboard.init(),
             .mouse = Mouse.init(),
             .gamepads = undefined,
@@ -62,13 +62,13 @@ pub const InputManager = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        for (0..self.num_gamepads) |i| {
+        for (0..self.numGamepads) |i| {
             self.gamepads[i].deinit();
         }
     }
 
     /// Routes one SDL event into the subsystem it belongs to. Called from
-    /// `PixzigEngine.pollEvents` for every event that isn't a window-level
+    /// `Engine.pollEvents` for every event that isn't a window-level
     /// one the engine handles itself.
     ///
     /// SDL is polled, so the engine can hand events straight to whichever
@@ -100,7 +100,7 @@ pub const InputManager = struct {
                 }
             },
             sdl.SDL_EVENT_MOUSE_MOTION => {
-                if (self.mouse_enabled) {
+                if (self.mouseEnabled) {
                     self.mouse.curr_mut().addRawMotion(
                         event.motion.x,
                         event.motion.y,
@@ -110,7 +110,7 @@ pub const InputManager = struct {
                 }
             },
             sdl.SDL_EVENT_MOUSE_BUTTON_DOWN, sdl.SDL_EVENT_MOUSE_BUTTON_UP => {
-                if (!self.mouse_enabled) return;
+                if (!self.mouseEnabled) return;
                 var state = self.mouse.curr_mut();
                 state.setRawPos(event.button.x, event.button.y);
                 if (keys.fromSdlMouseButton(event.button.button)) |btn| {
@@ -118,7 +118,7 @@ pub const InputManager = struct {
                 }
             },
             sdl.SDL_EVENT_MOUSE_WHEEL => {
-                if (!self.mouse_enabled) return;
+                if (!self.mouseEnabled) return;
                 var dx = event.wheel.x;
                 var dy = event.wheel.y;
                 if (event.wheel.direction == sdl.SDL_MOUSEWHEEL_FLIPPED) {
@@ -126,8 +126,8 @@ pub const InputManager = struct {
                     dy = -dy;
                 }
                 var state = self.mouse.curr_mut();
-                state.scroll_delta.x += dx;
-                state.scroll_delta.y += dy;
+                state.scrollDelta.x += dx;
+                state.scrollDelta.y += dy;
             },
             else => {},
         }
@@ -137,25 +137,25 @@ pub const InputManager = struct {
     /// event pump has run and before `app.update()`, and pair it with
     /// `finishTick()` after.
     ///
-    /// `scale_factor` is `WindowState.scale_factor` (framebuffer/window
+    /// `scaleFactor` is `WindowState.scaleFactor` (framebuffer/window
     /// ratio).  `viewport` is used to map the cursor position into logical
     /// game coordinates for `mouse.pos()`.
     pub fn update(
         self: *Self,
-        scale_factor: Vec2F,
+        scaleFactor: Vec2F,
         viewport: *const windowing.Viewport,
     ) void {
         _ = self.keyboard.update();
 
-        if (self.mouse_enabled) {
+        if (self.mouseEnabled) {
             const raw = self.mouse.rawPos();
-            const fb = Vec2F{ .x = raw.x * scale_factor.x, .y = raw.y * scale_factor.y };
-            self.mouse.curr_mut().fb_pos = fb;
-            self.mouse.curr_mut().logical_pos =
+            const fb = Vec2F{ .x = raw.x * scaleFactor.x, .y = raw.y * scaleFactor.y };
+            self.mouse.curr_mut().fbPos = fb;
+            self.mouse.curr_mut().logicalPos =
                 viewport.framebufferToLogical(fb) orelse Vec2F{ .x = -1, .y = -1 };
         }
 
-        for (0..self.num_gamepads) |i| {
+        for (0..self.numGamepads) |i| {
             _ = self.gamepads[i].update();
         }
     }
@@ -165,7 +165,7 @@ pub const InputManager = struct {
     /// measured against it.
     pub fn finishTick(self: *Self) void {
         self.keyboard.finishTick();
-        if (self.mouse_enabled) self.mouse.finishTick();
+        if (self.mouseEnabled) self.mouse.finishTick();
     }
 
     /// Drops all key and button state. The engine calls this on window

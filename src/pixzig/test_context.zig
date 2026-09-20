@@ -40,7 +40,7 @@ var g_instance: ?GlTestContext = null;
 /// from any test module that needs GL access.
 pub const GlTestContext = struct {
     window: *sdl.SDL_Window,
-    gl_context: sdl.SDL_GLContext,
+    glContext: sdl.SDL_GLContext,
 
     const Self = @This();
 
@@ -73,18 +73,18 @@ pub const GlTestContext = struct {
             return sdlError(error.SdlCreateWindowFailed);
         errdefer sdl.SDL_DestroyWindow(window);
 
-        const gl_context = sdl.SDL_GL_CreateContext(window) orelse return sdlError(error.SdlCreateContextFailed);
-        errdefer _ = sdl.SDL_GL_DestroyContext(gl_context);
+        const glContext = sdl.SDL_GL_CreateContext(window) orelse return sdlError(error.SdlCreateContextFailed);
+        errdefer _ = sdl.SDL_GL_DestroyContext(glContext);
 
-        if (!sdl.SDL_GL_MakeCurrent(window, gl_context)) return sdlError(error.SdlMakeCurrentFailed);
+        if (!sdl.SDL_GL_MakeCurrent(window, glContext)) return sdlError(error.SdlMakeCurrentFailed);
         try zopengl.loadCoreProfile(glProcAddress, 4, 5);
 
-        return .{ .window = window, .gl_context = gl_context };
+        return .{ .window = window, .glContext = glContext };
     }
 
     pub fn deinit(self: *Self) void {
         _ = sdl.SDL_GL_MakeCurrent(self.window, null);
-        _ = sdl.SDL_GL_DestroyContext(self.gl_context);
+        _ = sdl.SDL_GL_DestroyContext(self.glContext);
         sdl.SDL_DestroyWindow(self.window);
         sdl.SDL_Quit();
     }

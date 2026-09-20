@@ -2,6 +2,7 @@
 //! loading and playing sounds.
 const std = @import("std");
 const zaudio = @import("zaudio");
+const paths = @import("./paths.zig");
 
 /// The default maximum number of concurrent instances of a sound that can be
 /// played.
@@ -62,13 +63,14 @@ pub const AudioEngine = struct {
     }
 
     /// Loads a sound from a file and associates it with the given name. The
-    /// sound can then be played using playSound.
+    /// sound can then be played using playSound. A relative path is resolved
+    /// against the executable's own directory (see `paths`).
     pub fn loadSound(self: *AudioEngine, name: []const u8, path: []const u8) !void {
         if (self.sounds.get(name) != null) {
             return error.SoundAlreadyExists;
         }
 
-        const pathZ = try std.mem.concatWithSentinel(self.allocator, u8, &.{path}, 0);
+        const pathZ = try paths.resolveZ(self.allocator, path);
         defer self.allocator.free(pathZ);
 
         const sound = try self.engine.createSoundFromFile(pathZ, .{});
@@ -120,13 +122,13 @@ pub const AudioEngine = struct {
     }
 };
 
-/// Stand-in for `AudioEngine` used as `PixzigEngine.audio` when
+/// Stand-in for `AudioEngine` used as `Engine.audio` when
 /// `AudioOptions.enabled` is false. Every method is a compile error naming
 /// the flag, so using audio without enabling it fails at build time instead
 /// of touching an uninitialized engine.
 pub const DisabledAudioEngine = struct {
     fn disabled(comptime method: []const u8) noreturn {
-        @compileError("audio." ++ method ++ " requires AudioOptions.enabled = true (set PixzigEngineOptions.audioOpts.enabled)");
+        @compileError("audio." ++ method ++ " requires AudioOptions.enabled = true (set EngineOptions.audioOpts.enabled)");
     }
 
     pub fn loadSound(self: *DisabledAudioEngine, name: []const u8, path: []const u8) !void {

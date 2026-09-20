@@ -4,14 +4,20 @@ Pixzig loads Tiled `.tmx` maps and offers a few different renderers for drawing 
 
 ## Loading a Map
 
-Maps load through `ResourceManager` like other assets, then are acquired as a ref-counted handle:
+Maps load through `ResourceManager` like other assets. `loadTileMap` returns a
+borrowed handle you never release; `acquireTileMap` (or `getTileMap` later on)
+gives you a ref-counted one to hold onto:
 
 ```zig
-try eng.resources.loadTileMap("level1a", "assets/level1a.tmx");
+_ = try eng.resources.loadTileMap("level1a", "assets/level1a.tmx");
 const map = try eng.resources.acquireTileMap("level1a");
 // ...
 map.release(); // in deinit
 ```
+
+A relative path like `assets/level1a.tmx` resolves against the executable's
+own directory, not the current working directory -- see
+[Asset Manifest](assets.md#asset-paths).
 
 ## Choosing a Renderer
 
@@ -95,7 +101,7 @@ grid.draw(mvp);
 
 - **Layer data encoding:** CSV only. Base64 and compressed (zlib/gzip) tile data are rejected with `error.UnsupportedLayerEncoding`.
 - **Multiple tilesets / `firstgid`:** supported for the simple case of one tileset per layer. GID-to-tileset resolution picks the tileset with the highest `firstgid <= gid`, but does not validate that the GID is still within that tileset's tile count or before the next tileset's `firstgid` — a corrupt or out-of-range GID can silently resolve to the wrong tile.
-- **Layer properties:** loaded into `TileLayer.properties`, including the `z`/`parallax_x`/`parallax_y` properties `ChunkedTiledRenderer` reads.
+- **Layer properties:** loaded into `TileLayer.properties`, including the `z`/`parallaxX`/`parallaxY` properties `ChunkedTiledRenderer` reads.
 
 ### Not Supported
 

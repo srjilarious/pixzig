@@ -12,9 +12,9 @@ const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
 
 const math = @import("zmath");
-const EngOptions = pixzig.PixzigEngineOptions;
+const EngOptions = pixzig.EngineOptions;
 const FpsCounter = pixzig.utils.FpsCounter;
-const PixzigEngine = pixzig.PixzigEngine;
+const Engine = pixzig.Engine;
 
 const Color8 = pixzig.Color8;
 const CharToColor = pixzig.textures.CharToColor;
@@ -91,7 +91,7 @@ const BaseX: i32 = 100;
 const BaseY: i32 = 40;
 
 
-const AppRunner =  pixzig.PixzigAppRunner(Natetris, .{});
+const AppRunner =  pixzig.AppRunner(Natetris, .{});
 
 pub const Natetris = struct {
     alloc: std.mem.Allocator,

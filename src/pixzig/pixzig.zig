@@ -1,21 +1,20 @@
 //! The top-level Pixzig module.  This is the main entry point for users of
 //! the engine, and it re-exports all the main components of the engine, such
 //! as the renderer, audio engine, resource manager, etc.  It also defines the
-//! main application runner structure `PixzigAppRunner` and the core engine
-//! structure `PixzigEngine`.  The `PixzigAppRunner` is the recommended way
-//! to set up and run a Pixzig application, as it handles the main loop and
-//! resource cleanup for both desktop and web builds properly.  The
-//! `PixzigEngine` provides access to the various subsystems of the engine
-//! and is passed to the application update and render functions each frame.
+//! main application runner structure `AppRunner` and the core engine structure
+//! `Engine`.  The `AppRunner` is the recommended way to set up and run a Pixzig
+//! application, as it handles the main loop and resource cleanup for both
+//! desktop and web builds properly.  The `Engine` provides access to the
+//! various subsystems of the engine and is passed to the application update
+//! and render functions each frame.
 //!
-//! The `PixzigEngineOptions` and `PixzigEngineInitOptions` structures allow
-//! configuring the engine at compile time and runtime, respectively, so that
-//! unused engine *code paths* (e.g. the audio update loop, gamepad polling)
-//! can be stripped out by the compiler and the engine can be tailored to the
-//! needs of the application. This does not change which native dependencies
-//! get linked: `build.zig` always links SDL3, OpenGL, flecs, zaudio/miniaudio,
-//! Lua, XML, and STB TrueType into every engine build regardless of
-//! `PixzigEngineOptions`.
+//! The `EngineOptions` and `EngineInitOptions` structures allow configuring
+//! the engine at compile time and runtime, respectively, so that unused engine
+//! *code paths* (e.g. the audio update loop, gamepad polling) can be stripped
+//! out by the compiler and the engine can be tailored to the needs of the
+//! application. This does not change which native dependencies get linked:
+//! `build.zig` always links SDL3, OpenGL, flecs, zaudio/miniaudio, Lua, XML,
+//! and STB TrueType into every engine build regardless of `EngineOptions`.
 const std = @import("std");
 const builtin = @import("builtin");
 pub const stbi = @import("zstbi");
@@ -51,7 +50,6 @@ pub const tile = @import("./tile.zig");
 pub const gamestate = @import("./gamestate.zig");
 pub const scripting = @import("./scripting.zig");
 pub const console = @import("./console.zig");
-pub const console2 = @import("./console2.zig");
 pub const imgui = @import("./imgui.zig");
 pub const collision = @import("./collision.zig");
 pub const a_star = @import("./a_star.zig");
@@ -81,18 +79,42 @@ pub const Camera2D = camera.Camera2D;
 pub const camera3d = @import("./camera3d.zig");
 pub const Camera3D = camera3d.Camera3D;
 
+// Sprites and the frame-animation types that go with them. `pixzig.sprites`
+// still holds the full module; these are the nouns a game names directly.
+pub const Sprite = sprites.Sprite;
+pub const Flip = sprites.Flip;
+pub const Frame = sprites.Frame;
+pub const FrameSequence = sprites.FrameSequence;
+pub const FrameSequenceManager = sprites.FrameSequenceManager;
+pub const AnimPlayMode = sprites.AnimPlayMode;
+pub const Actor = sprites.Actor;
+pub const ActorState = sprites.ActorState;
+
 pub const Texture = textures.Texture;
 pub const TextureImage = textures.TextureImage;
 
+pub const ResourceManager = resources.ResourceManager;
 pub const TextureHandle = resources.TextureHandle;
 pub const ShaderHandle = resources.ShaderHandle;
 pub const FontAtlasHandle = resources.FontAtlasHandle;
 pub const TileMapHandle = resources.TileMapHandle;
-pub const ManagedShader = resources.ManagedShader;
-pub const ManagedFont = resources.ManagedFont;
-pub const ManagedTileMap = resources.ManagedTileMap;
 
-const ResourceManager = resources.ResourceManager;
+// `Renderer` itself is reached as `AppRunner.Engine.Renderer` (it is
+// generic over `RendererOptions`), so only its plain option/value types are
+// re-exported here.
+pub const RendererOptions = renderer.RendererOptions;
+pub const RendererInitOpts = renderer.RendererInitOpts;
+pub const Projection = renderer.Projection;
+pub const FontSource = renderer.FontSource;
+pub const FontAtlas = renderer.FontAtlas;
+
+pub const TileMap = tile.TileMap;
+pub const TileLayer = tile.TileLayer;
+pub const ChunkedTiledRenderer = tile.ChunkedTiledRenderer;
+
+pub const ActionMap = input.ActionMap;
+pub const ScriptEngine = scripting.ScriptEngine;
+pub const AudioOptions = audio.AudioOptions;
 
 pub const Vec2I = common.Vec2I;
 pub const Vec2F = common.Vec2F;
@@ -109,9 +131,9 @@ pub const Color8 = common.Color8;
 /// dependencies themselves (SDL3, OpenGL, flecs, zaudio/miniaudio, Lua, XML,
 /// STB TrueType) are always linked in by `build.zig`, so disabling a feature
 /// here does not shrink the set of linked libraries.
-pub const PixzigEngineOptions = struct {
+pub const EngineOptions = struct {
     /// Whether the default pixzig icon should be set, can be changed with
-    /// PixzigEngine.setIcon
+    /// Engine.setIcon
     defaultIcon: bool = true,
 
     /// The update time frequency, defaults to 120 Hz.
@@ -143,19 +165,19 @@ pub const PixzigEngineOptions = struct {
 /// Runtime initialization options for the Pixzig Engine.  These options are
 /// provided when initializing the engine and can be used to configure things
 /// like fullscreen mode, window size, etc.  These options are separate from
-/// the compile-time `PixzigEngineOptions` since they may need to be
+/// the compile-time `EngineOptions` since they may need to be
 /// determined at runtime (e.g. based on user input or platform capabilities)
 /// rather than at compile time.
-pub const PixzigEngineInitOptions = struct {
+pub const EngineInitOptions = struct {
     fullscreen: bool = false,
     windowSize: Vec2I = .{ .x = 800, .y = 480 },
     resizable: bool = true,
     /// Logical game resolution. When null, logical size tracks the framebuffer,
-    /// so `PixzigEngine.projection()` maps one unit to one framebuffer pixel.
+    /// so `Engine.projection()` maps one unit to one framebuffer pixel.
     logicalSize: ?Vec2I = null,
     scalePolicy: windowing.ScalePolicy = .fit,
     /// Whether vsync is enabled on init. Change it later with
-    /// `PixzigEngine.enableVSync`, e.g. from a settings menu.
+    /// `Engine.enableVSync`, e.g. from a settings menu.
     vsync: bool = true,
     renderInitOpts: renderer.RendererInitOpts = .{},
 };
@@ -168,21 +190,24 @@ var g_EmscriptenAppRef: ?*anyopaque = null;
 
 /// The main application looping handling structure.  This is the preferred way of setting up
 /// and using Pixzig.  You provide the application data structure and engine initialization
-/// options, and the PixzigAppRunner will handle the rest, including setting up the main loop and
+/// options, and the `AppRunner` will handle the rest, including setting up the main loop and
 /// cleaning up resources on exit.
 ///
 /// The application data structure should contain the game state and implement the update and
 /// render functions that will be called each frame.  Those functions should have the signatures:
 ///
 /// ```zig
-///     fn update(self: *AppData, eng: *PixzigEngine, deltaTimeMs: f64) bool
-///     fn render(self: *AppData, eng: *PixzigEngine) void
+///     fn update(self: *AppData, eng: *Engine, deltaTimeMs: f64) bool
+///     fn render(self: *AppData, eng: *Engine) void
 /// ```
-pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOptions) type {
+pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
+    // Bound outside the struct below so the struct's own `Engine` decl can
+    // carry the engine type without shadowing the `Engine` function itself.
+    const EngineType = Engine(engOpts);
     const AppStruct = struct {
-        pub const Engine = PixzigEngine(engOpts);
+        pub const Engine = EngineType;
 
-        engine: *Engine,
+        engine: *EngineType,
         alloc: std.mem.Allocator,
         lag: f64 = 0,
         currTime: f64 = 0,
@@ -193,12 +218,12 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
         pub fn init(
             title: [:0]const u8,
             alloc: std.mem.Allocator,
-            engInitOpts: PixzigEngineInitOptions,
+            engInitOpts: EngineInitOptions,
         ) !*Self {
             var appRunner = try alloc.create(Self);
             errdefer alloc.destroy(appRunner);
 
-            appRunner.engine = try Engine.init(title, alloc, engInitOpts);
+            appRunner.engine = try EngineType.init(title, alloc, engInitOpts);
             appRunner.alloc = alloc;
             appRunner.currTime = platform.timeMs();
             return appRunner;
@@ -229,7 +254,7 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
                 self.lag -= UpdateStepMs;
 
                 self.engine.inputs.update(
-                    self.engine.window_state.scale_factor,
+                    self.engine.windowState.scaleFactor,
                     &self.engine.viewport,
                 );
                 self.engine.resources.checkHotReload();
@@ -283,13 +308,12 @@ pub fn PixzigAppRunner(comptime AppData: type, comptime engOpts: PixzigEngineOpt
 /// components.  The `engOpts` allow configuring the engine at comptime so that unused features can
 /// be stripped out by the compiler. For example, if audio is not needed, setting `audioOpts.enabled`
 /// to false will prevent the audio engine and related code from being included in the final binary.
-pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
+pub fn Engine(comptime engOpts: EngineOptions) type {
     return struct {
         window: *platform.Window,
-        options: PixzigEngineInitOptions,
-        scaleFactor: f32,
+        options: EngineInitOptions,
         allocator: std.mem.Allocator,
-        window_state: windowing.WindowState,
+        windowState: windowing.WindowState,
         viewport: windowing.Viewport,
         resources: ResourceManager,
         inputs: Inputs,
@@ -307,7 +331,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         /// window and rendering context, loads the OpenGL profile, and sets up the default
         /// projection matrix. The engine will be configured based on the provided `engInitOpts`
         /// and `engOpts` parameters.
-        pub fn init(title: [:0]const u8, allocator: std.mem.Allocator, options: PixzigEngineInitOptions) !*Self {
+        pub fn init(title: [:0]const u8, allocator: std.mem.Allocator, options: EngineInitOptions) !*Self {
             const gl_major, const gl_minor = try platform.initVideo();
             errdefer platform.quit();
 
@@ -317,7 +341,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 .size = options.windowSize,
                 .resizable = options.resizable,
                 .fullscreen = options.fullscreen,
-                .text_input = engOpts.inputOpts.textInput,
+                .textInput = engOpts.inputOpts.textInput,
             });
             errdefer window.destroy();
 
@@ -341,23 +365,23 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             // because getContentScale() can disagree with the actual framebuffer
             // dimensions on Wayland with fractional scaling, causing a viewport gap.
             var ws = windowing.WindowState.init(window);
-            const logical_size = options.logicalSize orelse ws.framebuffer_size;
+            const logicalSize = options.logicalSize orelse ws.framebufferSize;
 
             // For integer_fit and integer_dpi_fit, snap the window size once at
-            // startup so the framebuffer is an exact integer multiple of logical_size,
+            // startup so the framebuffer is an exact integer multiple of logicalSize,
             // eliminating the black border that arises from fractional DPI remainders.
             if (options.logicalSize != null) {
                 switch (options.scalePolicy) {
                     .integer_fit => {
-                        const fb_w: f32 = @floatFromInt(ws.framebuffer_size.x);
-                        const fb_h: f32 = @floatFromInt(ws.framebuffer_size.y);
-                        const log_w: f32 = @floatFromInt(logical_size.x);
-                        const log_h: f32 = @floatFromInt(logical_size.y);
+                        const fb_w: f32 = @floatFromInt(ws.framebufferSize.x);
+                        const fb_h: f32 = @floatFromInt(ws.framebufferSize.y);
+                        const log_w: f32 = @floatFromInt(logicalSize.x);
+                        const log_h: f32 = @floatFromInt(logicalSize.y);
                         const sx: i32 = @intFromFloat(fb_w / log_w);
                         const sy: i32 = @intFromFloat(fb_h / log_h);
                         const s: f32 = @floatFromInt(@max(1, @min(sx, sy)));
-                        const new_w: i32 = @intFromFloat(@round(log_w * s / ws.content_scale.x));
-                        const new_h: i32 = @intFromFloat(@round(log_h * s / ws.content_scale.y));
+                        const new_w: i32 = @intFromFloat(@round(log_w * s / ws.contentScale.x));
+                        const new_h: i32 = @intFromFloat(@round(log_h * s / ws.contentScale.y));
                         window.setSize(new_w, new_h);
                         ws.refresh(window);
                     },
@@ -365,9 +389,7 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 }
             }
 
-            const scaleFactor = @max(ws.scale_factor.x, ws.scale_factor.y);
-
-            const vp = windowing.Viewport.init(logical_size, ws.framebuffer_size, options.scalePolicy);
+            const vp = windowing.Viewport.init(logicalSize, ws.framebufferSize, options.scalePolicy);
 
             // Apply the GL viewport; `projection()` derives its matrix from it.
             vp.apply();
@@ -382,9 +404,8 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
             eng.* = .{
                 .window = window,
                 .options = options,
-                .scaleFactor = scaleFactor,
                 .allocator = allocator,
-                .window_state = ws,
+                .windowState = ws,
                 .viewport = vp,
                 .resources = ResourceManager.init(allocator),
                 .inputs = input.InputManager.init(engOpts.inputOpts),
@@ -493,11 +514,11 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 switch (event.type) {
                     sdl.SDL_EVENT_QUIT,
                     sdl.SDL_EVENT_WINDOW_CLOSE_REQUESTED,
-                    => self.window.close_requested = true,
+                    => self.window.closeRequested = true,
                     sdl.SDL_EVENT_WINDOW_RESIZED,
                     sdl.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED,
                     sdl.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED,
-                    => self.window_state.resized = true,
+                    => self.windowState.resized = true,
                     // Event-driven key state latches, so anything held when
                     // the window loses focus would otherwise stay down.
                     sdl.SDL_EVENT_WINDOW_FOCUS_LOST => self.inputs.clear(),
@@ -519,26 +540,22 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         /// recorded by the event pump. Rebuilds the viewport and updates
         /// the viewport when the framebuffer has changed.
         pub fn refreshWindowState(self: *Self) void {
-            if (!self.window_state.resized) return;
-            self.window_state.resized = false;
-            self.window_state.refresh(self.window);
+            if (!self.windowState.resized) return;
+            self.windowState.resized = false;
+            self.windowState.refresh(self.window);
 
             if (self.options.logicalSize == null) {
-                self.viewport.logical_size = self.window_state.framebuffer_size;
+                self.viewport.logicalSize = self.windowState.framebufferSize;
             }
-            const fbsz = self.window_state.framebuffer_size;
+            const fbsz = self.windowState.framebufferSize;
             self.viewport.updateFramebufferSize(fbsz);
 
-            // Make sure any out-of-viewport portions are cleared black for letterboxing.
-            // Clear whole framebuffer first. This creates the bars.
-            //gl.scissor(0, 0, fbsz.x, fbsz.y);
-
+            // Clear the whole framebuffer, letterbox bars included, before
+            // restoring the viewport's own scissor rect.
             gl.disable(gl.SCISSOR_TEST);
             self.renderer.clear(0, 0, 0, 255);
 
             self.viewport.apply();
-
-            self.scaleFactor = @max(self.window_state.scale_factor.x, self.window_state.scale_factor.y);
         }
 
         /// Projection matrix for the logical game coordinate space.
@@ -553,8 +570,8 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         /// Use this for UI or debug overlays that should be positioned in screen
         /// pixels rather than logical game coordinates.
         pub fn screenProjection(self: *const Self) zmath.Mat {
-            const fw: f32 = @floatFromInt(self.window_state.framebuffer_size.x);
-            const fh: f32 = @floatFromInt(self.window_state.framebuffer_size.y);
+            const fw: f32 = @floatFromInt(self.windowState.framebufferSize.x);
+            const fh: f32 = @floatFromInt(self.windowState.framebufferSize.y);
             return zmath.orthographicOffCenterLhGl(0, fw, 0, fh, -0.1, 1000);
         }
 
@@ -562,8 +579,8 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
         /// accounting for DPI scale.
         pub fn windowToFramebuffer(self: *const Self, pos: Vec2F) Vec2F {
             return .{
-                .x = pos.x * self.window_state.scale_factor.x,
-                .y = pos.y * self.window_state.scale_factor.y,
+                .x = pos.x * self.windowState.scaleFactor.x,
+                .y = pos.y * self.windowState.scaleFactor.y,
             };
         }
 
@@ -575,8 +592,8 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
 
         /// Captures the current framebuffer at logical resolution and writes it to a PNG file at `path`.
         pub fn captureScreenshot(self: *const Self, alloc: std.mem.Allocator, path: []const u8) !void {
-            const fb_w: usize = @intCast(self.window_state.framebuffer_size.x);
-            const fb_h: usize = @intCast(self.window_state.framebuffer_size.y);
+            const fb_w: usize = @intCast(self.windowState.framebufferSize.x);
+            const fb_h: usize = @intCast(self.windowState.framebufferSize.y);
             const fb_row = fb_w * 4;
 
             const pixels = try alloc.alloc(u8, fb_h * fb_row);
@@ -608,8 +625,8 @@ pub fn PixzigEngine(comptime engOpts: PixzigEngineOptions) type {
                 .is_hdr = false,
             };
 
-            const log_w: u32 = @intCast(self.viewport.logical_size.x);
-            const log_h: u32 = @intCast(self.viewport.logical_size.y);
+            const log_w: u32 = @intCast(self.viewport.logicalSize.x);
+            const log_h: u32 = @intCast(self.viewport.logicalSize.y);
 
             // Only resize if logical size differs from framebuffer size (e.g. HiDPI).
             const out_img = if (log_w != fb_img.width or log_h != fb_img.height) blk: {

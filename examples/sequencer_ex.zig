@@ -16,7 +16,7 @@ const Vec2F = pixzig.common.Vec2F;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.AppRunner(App, .{});
 
 // Maps a 0-1 color channel to the 0-255 range `renderer.clear` takes.
 fn unit8(v: f32) u8 {

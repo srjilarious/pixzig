@@ -5,14 +5,14 @@ const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
 const Delay = pixzig.utils.Delay;
 
-const EngOptions = pixzig.PixzigEngineOptions;
+const EngOptions = pixzig.EngineOptions;
 const FpsCounter = pixzig.utils.FpsCounter;
 
 // Sets up the panic handler and log handler depending on the OS target.
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.AppRunner(App, .{});
 
 pub const App = struct {
     pixBuff: pixzig.pixel_buffer.PixelBuffer,

@@ -70,12 +70,12 @@ pub const FontSource = union(enum) {
     /// build picked another `default_font`. With `default_font = .none`
     /// nothing is embedded and the renderer starts without a font.
     embedded: struct { size: f32 = 20.0 },
-    /// `face` is the font file path; `face_index` selects a face inside a
+    /// `face` is the font file path; `faceIndex` selects a face inside a
     /// `.ttc` collection (0 for a plain font file).
-    path: struct { face: [:0]const u8, size: f32 = 20.0, face_index: i32 = 0 },
+    path: struct { face: [:0]const u8, size: f32 = 20.0, faceIndex: i32 = 0 },
     /// Raw TTF/OTF bytes, e.g. the game's own `@embedFile`. The atlas keeps
     /// its own copy, so `bytes` only has to live through init.
-    data: struct { bytes: []const u8, size: f32 = 20.0, face_index: i32 = 0 },
+    data: struct { bytes: []const u8, size: f32 = 20.0, faceIndex: i32 = 0 },
     /// A font already loaded into the ResourceManager (e.g. a manifest boot group).
     id: []const u8,
     /// Start without a default font.
@@ -121,7 +121,7 @@ pub fn Renderer(opts: RendererOptions) type {
         inline fn requireFlag(comptime method: []const u8, comptime flag: []const u8) void {
             if (comptime !@field(opts, flag)) {
                 @compileError("Renderer." ++ method ++ " requires RendererOptions." ++ flag ++
-                    " = true (set PixzigEngineOptions.rendererOpts." ++ flag ++ ")");
+                    " = true (set EngineOptions.rendererOpts." ++ flag ++ ")");
             }
         }
 
@@ -203,23 +203,19 @@ pub fn Renderer(opts: RendererOptions) type {
                 switch (initOpts.font) {
                     .embedded => |e| {
                         if (embedded_default_font) |bytes| {
-                            try resMgr.loadFontFromTtfData(DefaultFontName, bytes, 0, e.size);
-                            try rend.text.setFont(resMgr.fonts.get(DefaultFontName).?);
+                            try rend.text.setFont(try resMgr.loadFontFromTtfData(DefaultFontName, bytes, 0, e.size));
                         } else if (builtin.mode == .debug) {
                             std.log.warn("The build embedded no default font (default_font = .none). Text rendering will not work until a FontAtlas is set.", .{});
                         }
                     },
                     .path => |p| {
-                        try resMgr.loadFontFromTtfFileIndexed(DefaultFontName, p.face, p.face_index, p.size);
-                        try rend.text.setFont(resMgr.fonts.get(DefaultFontName).?);
+                        try rend.text.setFont(try resMgr.loadFontFromTtfFileIndexed(DefaultFontName, p.face, p.faceIndex, p.size));
                     },
                     .data => |d| {
-                        try resMgr.loadFontFromTtfData(DefaultFontName, d.bytes, d.face_index, d.size);
-                        try rend.text.setFont(resMgr.fonts.get(DefaultFontName).?);
+                        try rend.text.setFont(try resMgr.loadFontFromTtfData(DefaultFontName, d.bytes, d.faceIndex, d.size));
                     },
                     .id => |id| {
-                        const font = resMgr.fonts.get(id) orelse return error.NoFontWithThatName;
-                        try rend.text.setFont(font);
+                        try rend.text.setFont(try resMgr.getFontAtlas(id));
                     },
                     .none => {},
                 }
@@ -254,8 +250,7 @@ pub fn Renderer(opts: RendererOptions) type {
         /// Useful when the font is loaded post-init (e.g. via a manifest boot group).
         pub fn setDefaultFont(self: *Self, resMgr: *ResourceManager, id: []const u8) !void {
             requireFlag("setDefaultFont", "textRendering");
-            const font = resMgr.fonts.get(id) orelse return error.NoFontWithThatName;
-            try self.impl.text.setFont(font);
+            try self.impl.text.setFont(try resMgr.getFontAtlas(id));
         }
 
         /// Appends a fallback face to the renderer's default font (the one
@@ -294,8 +289,8 @@ pub fn Renderer(opts: RendererOptions) type {
             const mvp = switch (projection) {
                 .logical => self.viewport.projection(),
                 .screen => blk: {
-                    const fw: f32 = @floatFromInt(self.viewport.framebuffer_size.x);
-                    const fh: f32 = @floatFromInt(self.viewport.framebuffer_size.y);
+                    const fw: f32 = @floatFromInt(self.viewport.framebufferSize.x);
+                    const fh: f32 = @floatFromInt(self.viewport.framebufferSize.y);
                     break :blk zmath.orthographicOffCenterLhGl(0, fw, 0, fh, -0.1, 1000);
                 },
                 .camera => |cam| cam.matrix(self.viewport),
@@ -365,8 +360,8 @@ pub fn Renderer(opts: RendererOptions) type {
             };
 
             const vp = self.viewport;
-            const logical_w: f32 = @floatFromInt(vp.logical_size.x);
-            const logical_h: f32 = @floatFromInt(vp.logical_size.y);
+            const logical_w: f32 = @floatFromInt(vp.logicalSize.x);
+            const logical_h: f32 = @floatFromInt(vp.logicalSize.y);
             const l = std.math.clamp(r.l, 0.0, logical_w);
             const t = std.math.clamp(r.t, 0.0, logical_h);
             const right = std.math.clamp(r.r, l, logical_w);
@@ -380,7 +375,7 @@ pub fn Renderer(opts: RendererOptions) type {
             gl.enable(gl.SCISSOR_TEST);
             gl.scissor(
                 left_px,
-                vp.framebuffer_size.y - bottom_px,
+                vp.framebufferSize.y - bottom_px,
                 @max(0, right_px - left_px),
                 @max(0, bottom_px - top_px),
             );

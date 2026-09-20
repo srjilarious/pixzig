@@ -9,7 +9,7 @@ const shaders = pixzig.shaders;
 const Shader = shaders.Shader;
 
 const math = @import("zmath");
-const EngOptions = pixzig.PixzigEngineOptions;
+const EngOptions = pixzig.EngineOptions;
 
 const tile = pixzig.tile;
 const Flip = pixzig.sprites.Flip;
@@ -23,7 +23,7 @@ const GridRenderer = tile.GridRenderer;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.AppRunner(App, .{});
 
 pub const App = struct {
     alloc: std.mem.Allocator,
@@ -31,10 +31,10 @@ pub const App = struct {
     grid: GridRenderer,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
-        const colorPool = eng.resources.shaders.get(shaders.ColorShader) orelse return error.ColorShaderNotLoaded;
+        const colorShader = try eng.resources.getShader(shaders.ColorShader);
         const grid = try GridRenderer.init(
             alloc,
-            colorPool,
+            colorShader,
             .{ .x = 20, .y = 12 },
             .{ .x = 32, .y = 32 },
             1,

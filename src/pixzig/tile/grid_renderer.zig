@@ -8,7 +8,7 @@ const quad_batch = @import("../renderer/quad_batch.zig");
 const Vec2I = common.Vec2I;
 const RectF = common.RectF;
 const Color = common.Color;
-const ManagedShader = resources.ManagedShader;
+const ShaderHandle = resources.ShaderHandle;
 
 const Inner = quad_batch.StaticQuadBatch(.{ .posDim = 2, .colorDim = 4 });
 
@@ -22,7 +22,7 @@ pub const GridRenderer = struct {
 
     pub fn init(
         alloc: std.mem.Allocator,
-        shader: *ManagedShader,
+        shader: *ShaderHandle,
         mapSize: Vec2I,
         tileSize: Vec2I,
         borderSize: usize,

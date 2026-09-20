@@ -53,7 +53,7 @@ which is correct for every layout without either of these.
 
 ## Event Flow
 
-`PixzigEngine.pollEvents` drains the platform event queue, handles
+`Engine.pollEvents` drains the platform event queue, handles
 window-level events itself, and hands device events to
 `InputManager.handleEvent`.
 
@@ -68,7 +68,7 @@ Two consequences:
 The tick has two halves. `inputs.update()` opens it, latching typed text and
 mapping the cursor into logical coordinates. `inputs.finishTick()` closes
 it, rolling the current state into the previous one so `pressed` /
-`released` are edges against exactly one tick. `PixzigAppRunner` does both
+`released` are edges against exactly one tick. `AppRunner` does both
 around `app.update()`. A caller driving the loop by hand -- the Python
 bindings, for instance -- must call both; `pz_finish_tick` is the C entry
 point.
@@ -89,14 +89,14 @@ where the caret is. Otherwise the candidate window sits at the window origin
 and the user types into an apparently dead window until the commit lands.
 Note that `setTextInputArea` takes **window** coordinates, so a caret rect
 measured in framebuffer pixels must be divided by
-`window_state.scale_factor` first.
+`windowState.scaleFactor` first.
 
 ## HiDPI
 
 Windows request high pixel density framebuffers, so on a 2x display
-`framebuffer_size` genuinely differs from `window_size` and
-`window_state.scale_factor` is the ratio between them. Prefer
-`scale_factor` for coordinate math: the display content scale can disagree
+`framebufferSize` genuinely differs from `windowSize` and
+`windowState.scaleFactor` is the ratio between them. Prefer
+`scaleFactor` for coordinate math: the display content scale can disagree
 with the actual framebuffer ratio under Wayland fractional scaling.
 Anything handed back *to* the platform in window units -- `window.setSize`,
 `window.setTextInputArea` -- has to be divided down by it.

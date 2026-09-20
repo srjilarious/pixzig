@@ -17,14 +17,14 @@ const AssetManifest = pixzig.AssetManifest;
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.AppRunner(App, .{});
 
 pub const App = struct {
     alloc: std.mem.Allocator,
     eng: *AppRunner.Engine,
     manifest: AssetManifest,
-    group_loaded: bool,
-    sprite_tex: ?*pixzig.TextureHandle,
+    groupLoaded: bool,
+    spriteTex: ?*pixzig.TextureHandle,
     spr: Sprite,
     /// World position tracked separately from sprite.dest (which is pixels).
     pos: Vec2F,
@@ -40,10 +40,10 @@ pub const App = struct {
 
         try manifest.loadGroup("game");
 
-        const sprite_tex = eng.resources.getTexture("player_right_1") catch null;
+        const spriteTex = eng.resources.getTexture("player_right_1") catch null;
 
         const init_pos = Vec2F{ .x = 100, .y = 100 };
-        var spr = Sprite.create(sprite_tex.?);
+        var spr = Sprite.create(spriteTex.?);
         spr.setPos(@intFromFloat(init_pos.x), @intFromFloat(init_pos.y));
 
         const app = try alloc.create(App);
@@ -51,8 +51,8 @@ pub const App = struct {
             .alloc = alloc,
             .eng = eng,
             .manifest = manifest,
-            .group_loaded = true,
-            .sprite_tex = sprite_tex,
+            .groupLoaded = true,
+            .spriteTex = spriteTex,
             .spr = spr,
             .pos = init_pos,
             .vel = .{ .x = 60, .y = 45 },
@@ -62,7 +62,7 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        if (self.sprite_tex != null) self.spr.deinit();
+        if (self.spriteTex != null) self.spr.deinit();
         self.manifest.deinit();
         self.alloc.destroy(self);
     }
@@ -75,38 +75,38 @@ pub const App = struct {
         if (eng.inputs.keyboard.pressed(.escape)) return false;
 
         if (eng.inputs.keyboard.pressed(.u)) {
-            if (self.group_loaded) {
+            if (self.groupLoaded) {
                 std.log.info("Unloading 'game' group", .{});
-                if (self.sprite_tex != null) {
+                if (self.spriteTex != null) {
                     self.spr.deinit();
-                    self.sprite_tex = null;
+                    self.spriteTex = null;
                 }
                 self.manifest.unloadGroup("game");
-                self.group_loaded = false;
+                self.groupLoaded = false;
             } else {
                 std.log.info("Reloading 'game' group", .{});
                 self.manifest.loadGroup("game") catch |err| {
                     std.log.err("Failed to reload group: {}", .{err});
                     return true;
                 };
-                self.group_loaded = true;
-                self.sprite_tex = eng.resources.getTexture("player_right_1") catch null;
+                self.groupLoaded = true;
+                self.spriteTex = eng.resources.getTexture("player_right_1") catch null;
 
-                if (self.sprite_tex) |tex| {
+                if (self.spriteTex) |tex| {
                     self.spr = Sprite.create(tex);
                     self.spr.setPos(@intFromFloat(self.pos.x), @intFromFloat(self.pos.y));
                 }
             }
         }
 
-        if (!self.group_loaded) return true;
+        if (!self.groupLoaded) return true;
 
         const dt: f32 = @floatCast(delta / 1000.0);
         self.pos.x += self.vel.x * dt;
         self.pos.y += self.vel.y * dt;
 
-        const fb_w: f32 = @floatFromInt(eng.window_state.framebuffer_size.x);
-        const fb_h: f32 = @floatFromInt(eng.window_state.framebuffer_size.y);
+        const fb_w: f32 = @floatFromInt(eng.windowState.framebufferSize.x);
+        const fb_h: f32 = @floatFromInt(eng.windowState.framebufferSize.y);
 
         if (self.pos.x < 0) {
             self.pos.x = 0;
@@ -133,7 +133,7 @@ pub const App = struct {
         eng.renderer.clear(13, 13, 38, 255);
         self.fps.renderTick();
 
-        if (!self.group_loaded) return;
+        if (!self.groupLoaded) return;
 
         eng.renderer.begin(.logical);
         eng.renderer.drawSprite(&self.spr);

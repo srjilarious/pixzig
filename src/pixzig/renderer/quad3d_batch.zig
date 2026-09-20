@@ -52,12 +52,12 @@ pub const Quad3DBatchQueue = struct {
     /// objects needed, and loading (or reusing) the quad3d shader via the
     /// resource manager.
     pub fn init(alloc: std.mem.Allocator, resMgr: *ResourceManager) !Quad3DBatchQueue {
-        const shader_managed = try resMgr.loadShader(
+        const shader = try resMgr.loadShader(
             shaders.Quad3DShader,
             &shaders.Quad3DVertexShader,
             &shaders.TexPixelShader,
         );
-        return .{ .inner = try Dynamic.init(alloc, shader_managed, MaxQuads) };
+        return .{ .inner = try Dynamic.init(alloc, shader, MaxQuads) };
     }
 
     /// Cleans up the OpenGL objects associated with the Quad3DBatchQueue and
@@ -120,12 +120,12 @@ pub const Quad3DBatch = struct {
     /// reusing) the quad3d shader via the resource manager. No quad data is
     /// uploaded yet; call beginBuild/addQuad/endBuild before drawing.
     pub fn init(alloc: std.mem.Allocator, resMgr: *ResourceManager) !Quad3DBatch {
-        const shader_managed = try resMgr.loadShader(
+        const shader = try resMgr.loadShader(
             shaders.Quad3DShader,
             &shaders.Quad3DVertexShader,
             &shaders.TexPixelShader,
         );
-        return .{ .inner = try Static.init(alloc, shader_managed) };
+        return .{ .inner = try Static.init(alloc, shader) };
     }
 
     /// Cleans up the OpenGL objects and any CPU-side scratch buffers.

@@ -6,7 +6,6 @@ const textures = @import("./textures.zig");
 const resources = @import("../resources.zig");
 
 const Texture = textures.Texture;
-const ManagedShader = resources.ManagedShader;
 const ShaderHandle = resources.ShaderHandle;
 
 /// Comptime shape of a `QuadBatch`'s vertex data: how many floats make up a
@@ -88,8 +87,8 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
 
         /// Initializes the batch, allocating CPU scratch buffers and GPU
         /// objects for up to `maxQuads` quads at once.
-        pub fn init(alloc: std.mem.Allocator, shader: *ManagedShader, maxQuads: usize) !Self {
-            const handle = shader.acquire() orelse return error.NoShaderInPool;
+        pub fn init(alloc: std.mem.Allocator, shader: *ShaderHandle, maxQuads: usize) !Self {
+            const handle = shader.retain();
             errdefer handle.release();
 
             var batch = Self{
@@ -194,8 +193,8 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
         /// toggling between alpha and RGB pixel shaders). Releases the
         /// current handle, acquires from `newShader`, and re-caches
         /// uniform/attribute locations.
-        pub fn swapShader(self: *Self, newShader: *ManagedShader) !void {
-            const new_handle = newShader.acquire() orelse return error.NoShaderInPool;
+        pub fn swapShader(self: *Self, newShader: *ShaderHandle) !void {
+            const new_handle = newShader.retain();
             self.shader.release();
             self.shader = new_handle;
             self.cacheShaderLocations();
@@ -397,8 +396,8 @@ pub fn StaticQuadBatch(comptime layout: BatchLayout) type {
 
         /// Initializes the batch, creating its GL objects. No quad data is
         /// uploaded yet; call beginBuild/addQuad/endBuild before drawing.
-        pub fn init(alloc: std.mem.Allocator, shader: *ManagedShader) !Self {
-            const handle = shader.acquire() orelse return error.NoShaderInPool;
+        pub fn init(alloc: std.mem.Allocator, shader: *ShaderHandle) !Self {
+            const handle = shader.retain();
             errdefer handle.release();
 
             var batch = Self{

@@ -5,7 +5,7 @@ const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
 
-const EngOptions = pixzig.PixzigEngineOptions;
+const EngOptions = pixzig.EngineOptions;
 
 const tile = pixzig.tile;
 const Flip = pixzig.sprites.Flip;
@@ -18,7 +18,7 @@ pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
 const manifest_options = @import("manifest_options");
-const AppRunner = pixzig.PixzigAppRunner(App, .{
+const AppRunner = pixzig.AppRunner(App, .{
     .manifestOpts = manifest_options,
 });
 
@@ -64,9 +64,9 @@ pub const App = struct {
                 const min_pt: f32 = 8;
                 const max_pt: f32 = 72;
                 const target: ?f32 = if (kb.pressed(.minus) or kb.pressed(.kp_subtract))
-                    std.math.clamp(fa.font_size - 2, min_pt, max_pt)
+                    std.math.clamp(fa.fontSize - 2, min_pt, max_pt)
                 else if (kb.pressed(.equal) or kb.pressed(.kp_add))
-                    std.math.clamp(fa.font_size + 2, min_pt, max_pt)
+                    std.math.clamp(fa.fontSize + 2, min_pt, max_pt)
                 else if (kb.pressed(.zero) or kb.pressed(.kp_0))
                     default_font_size
                 else
@@ -87,7 +87,7 @@ pub const App = struct {
         eng.renderer.begin(.logical);
 
         var buf: [80]u8 = undefined;
-        const pt = if (eng.defaultFontAtlas()) |fa| fa.font_size else 0;
+        const pt = if (eng.defaultFontAtlas()) |fa| fa.fontSize else 0;
         const hud = std.fmt.bufPrint(&buf, "Ctrl+- / Ctrl++ : font size {d:.0}px  (Ctrl+0 resets)", .{pt}) catch "";
         _ = eng.renderer.drawString(hud, .{ .x = 20, .y = 360 });
 

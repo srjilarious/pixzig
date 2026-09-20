@@ -16,9 +16,9 @@ const FileEntry = struct {
 pub const FileWatcher = struct {
     alloc: std.mem.Allocator,
     fd: i32,
-    next_id: WatchId,
+    nextId: WatchId,
     entries: std.ArrayList(FileEntry),
-    dir_to_wd: std.StringHashMap(i32),
+    dirToWd: std.StringHashMap(i32),
 
     const Self = @This();
 
@@ -32,9 +32,9 @@ pub const FileWatcher = struct {
         return .{
             .alloc = alloc,
             .fd = fd,
-            .next_id = 0,
+            .nextId = 0,
             .entries = .empty,
-            .dir_to_wd = std.StringHashMap(i32).init(alloc),
+            .dirToWd = std.StringHashMap(i32).init(alloc),
         };
     }
 
@@ -42,9 +42,9 @@ pub const FileWatcher = struct {
         for (self.entries.items) |e| self.alloc.free(e.filename);
         self.entries.deinit(self.alloc);
 
-        var it = self.dir_to_wd.iterator();
+        var it = self.dirToWd.iterator();
         while (it.next()) |e| self.alloc.free(e.key_ptr.*);
-        self.dir_to_wd.deinit();
+        self.dirToWd.deinit();
 
         if (comptime builtin.os.tag == .linux) {
             if (self.fd >= 0) _ = linux.close(self.fd);
@@ -58,7 +58,7 @@ pub const FileWatcher = struct {
         const dir = std.fs.path.dirname(path) orelse ".";
         const filename = std.fs.path.basename(path);
 
-        const wd: i32 = if (self.dir_to_wd.get(dir)) |w| w else blk: {
+        const wd: i32 = if (self.dirToWd.get(dir)) |w| w else blk: {
             const new_wd: i32 = if (comptime builtin.os.tag == .linux) blk2: {
                 const dir_z = try std.mem.concatWithSentinel(self.alloc, u8, &.{dir}, 0);
                 defer self.alloc.free(dir_z);
@@ -73,12 +73,12 @@ pub const FileWatcher = struct {
 
             const owned_dir = try self.alloc.dupe(u8, dir);
             errdefer self.alloc.free(owned_dir);
-            try self.dir_to_wd.put(owned_dir, new_wd);
+            try self.dirToWd.put(owned_dir, new_wd);
             break :blk new_wd;
         };
 
-        const id = self.next_id;
-        self.next_id += 1;
+        const id = self.nextId;
+        self.nextId += 1;
 
         const owned_filename = try self.alloc.dupe(u8, filename);
         errdefer self.alloc.free(owned_filename);

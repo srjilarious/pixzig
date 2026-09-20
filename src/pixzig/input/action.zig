@@ -486,11 +486,11 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
             switch (source) {
                 .key => |k| return inputs.keyboard.down(k),
                 .mouse_button => |m| {
-                    if (!inputs.mouse_enabled) return false;
+                    if (!inputs.mouseEnabled) return false;
                     return inputs.mouse.down(m);
                 },
                 .gamepad_button => |btn| {
-                    if (inputs.num_gamepads == 0) return false;
+                    if (inputs.numGamepads == 0) return false;
                     return inputs.gamepads[0].down(btn);
                 },
             }
@@ -537,13 +537,13 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
                         }
                     },
                     .gamepad_axis => |ga| {
-                        if (inputs.num_gamepads > 0) {
+                        if (inputs.numGamepads > 0) {
                             val = inputs.gamepads[0].axis(ga.axis);
                             if (@abs(val) < ga.deadzone) val = 0;
                         }
                     },
                     .mouse_axis => |ma| {
-                        if (inputs.mouse_enabled) {
+                        if (inputs.mouseEnabled) {
                             const motion = inputs.mouse.delta();
                             const delta: f32 = switch (ma.axis) {
                                 .x => motion.x,

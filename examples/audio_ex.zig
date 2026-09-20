@@ -7,14 +7,14 @@ const Delay = pixzig.utils.Delay;
 const zaudio = pixzig.zaudio;
 
 const math = pixzig.zmath;
-const EngOptions = pixzig.PixzigEngineOptions;
+const EngOptions = pixzig.EngineOptions;
 const FpsCounter = pixzig.utils.FpsCounter;
 
 // Sets up the panic handler and log handler depending on the OS target.
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{ .audioOpts = .{ .enabled = true } });
+const AppRunner = pixzig.AppRunner(App, .{ .audioOpts = .{ .enabled = true } });
 
 pub const App = struct {
     alloc: std.mem.Allocator,

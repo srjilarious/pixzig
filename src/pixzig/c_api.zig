@@ -1,17 +1,17 @@
 //! Flat C ABI surface for pixzig, built as `libpixzig_ffi` (see the
 //! `python-ffi` build step). Freezes a single, non-generic
-//! `PixzigEngineOptions` instantiation so the engine's comptime-generic
+//! `EngineOptions` instantiation so the engine's comptime-generic
 //! API can be called from a C ABI. Python (or any other C-caller) owns the
 //! game loop and drives it by calling the frame-stepping functions below in
 //! sequence; nothing here calls back into the caller.
 const std = @import("std");
 const pixzig = @import("pixzig");
 
-const FfiOpts = pixzig.PixzigEngineOptions{
+const FfiOpts = pixzig.EngineOptions{
     .inputOpts = .{ .mouse = true, .numGamepads = pixzig.input.MaxGamepads, .textInput = true },
     .audioOpts = .{ .enabled = true },
 };
-const Engine = pixzig.PixzigEngine(FfiOpts);
+const Engine = pixzig.Engine(FfiOpts);
 
 const Flip = pixzig.sprites.Flip;
 const Rotate = pixzig.common.Rotate;
@@ -57,34 +57,34 @@ const PzSprite = struct {
     /// standalone sprite. Views aren't in the sprite registry and are
     /// freed with their actor.
     owner: ?*PzActor = null,
-    registry_index: usize,
+    registryIndex: usize,
 };
 
 const PzActor = struct {
     eng: *PzEngine,
     actor: pixzig.sprites.Actor,
     /// Borrowed view of `actor.sprite`, handed out by pz_actor_sprite.
-    sprite_view: PzSprite,
-    registry_index: usize,
+    spriteView: PzSprite,
+    registryIndex: usize,
 };
 
 const PzCamera = struct {
     eng: *PzEngine,
     camera: pixzig.Camera2D,
-    registry_index: usize,
+    registryIndex: usize,
 };
 
 const PzTilemapRenderer = struct {
     eng: *PzEngine,
     map: *pixzig.TileMapHandle,
     renderer: pixzig.tile.ChunkedTiledRenderer,
-    registry_index: usize,
+    registryIndex: usize,
 };
 
 const PzAssetManifest = struct {
     eng: *PzEngine,
     manifest: pixzig.AssetManifest,
-    registry_index: usize,
+    registryIndex: usize,
 };
 
 // ---------------------------------------------------------------------------
@@ -125,21 +125,21 @@ fn ffiAxis(slot: i32) ?FfiAxis {
 const PzActionMap = struct {
     eng: *PzEngine,
     map: *FfiActionMap,
-    registry_index: usize,
+    registryIndex: usize,
 };
 
 /// Appends `wrapper` to `list` and records its index for O(1) removal later.
 fn registryAdd(comptime T: type, list: *std.ArrayList(*T), alloc: std.mem.Allocator, wrapper: *T) !void {
-    wrapper.registry_index = list.items.len;
+    wrapper.registryIndex = list.items.len;
     try list.append(alloc, wrapper);
 }
 
 /// Swap-removes `wrapper` from `list` in O(1), fixing up the moved entry's
 /// stored index.
 fn registryRemove(comptime T: type, list: *std.ArrayList(*T), wrapper: *T) void {
-    _ = list.swapRemove(wrapper.registry_index);
-    if (wrapper.registry_index < list.items.len) {
-        list.items[wrapper.registry_index].registry_index = wrapper.registry_index;
+    _ = list.swapRemove(wrapper.registryIndex);
+    if (wrapper.registryIndex < list.items.len) {
+        list.items[wrapper.registryIndex].registryIndex = wrapper.registryIndex;
     }
 }
 
@@ -148,9 +148,9 @@ const PzEngine = struct {
     alloc: std.mem.Allocator,
     sprites: std.ArrayList(*PzSprite),
     cameras: std.ArrayList(*PzCamera),
-    tilemap_renderers: std.ArrayList(*PzTilemapRenderer),
+    tilemapRenderers: std.ArrayList(*PzTilemapRenderer),
     manifests: std.ArrayList(*PzAssetManifest),
-    action_maps: std.ArrayList(*PzActionMap),
+    actionMaps: std.ArrayList(*PzActionMap),
     actors: std.ArrayList(*PzActor),
     /// Shared frame-sequence/actor-state store, created on the first
     /// `pz_anim_*` call. Referenced by every `Actor`'s states, so it is torn
@@ -209,9 +209,9 @@ export fn pz_init(title: [*:0]const u8, width: i32, height: i32) callconv(.c) ?*
         .alloc = alloc,
         .sprites = .empty,
         .cameras = .empty,
-        .tilemap_renderers = .empty,
+        .tilemapRenderers = .empty,
         .manifests = .empty,
-        .action_maps = .empty,
+        .actionMaps = .empty,
         .actors = .empty,
         .anim = null,
     };
@@ -230,12 +230,12 @@ export fn pz_deinit(eng: *PzEngine) callconv(.c) void {
     }
     eng.cameras.deinit(eng.alloc);
 
-    for (eng.tilemap_renderers.items) |tr| {
+    for (eng.tilemapRenderers.items) |tr| {
         tr.renderer.deinit();
         tr.map.release();
         eng.alloc.destroy(tr);
     }
-    eng.tilemap_renderers.deinit(eng.alloc);
+    eng.tilemapRenderers.deinit(eng.alloc);
 
     for (eng.manifests.items) |m| {
         m.manifest.deinit();
@@ -243,11 +243,11 @@ export fn pz_deinit(eng: *PzEngine) callconv(.c) void {
     }
     eng.manifests.deinit(eng.alloc);
 
-    for (eng.action_maps.items) |am| {
+    for (eng.actionMaps.items) |am| {
         am.map.deinit();
         eng.alloc.destroy(am);
     }
-    eng.action_maps.deinit(eng.alloc);
+    eng.actionMaps.deinit(eng.alloc);
 
     // Actors first: their states reference sequences owned by `anim`.
     for (eng.actors.items) |ac| {
@@ -262,7 +262,7 @@ export fn pz_deinit(eng: *PzEngine) callconv(.c) void {
 }
 
 // ---------------------------------------------------------------------------
-// Frame stepping. Mirrors PixzigAppRunner.gameLoopCore, split into calls the
+// Frame stepping. Mirrors AppRunner.gameLoopCore, split into calls the
 // caller's own loop invokes directly instead of one fixed-timestep Zig loop.
 // ---------------------------------------------------------------------------
 
@@ -276,7 +276,7 @@ export fn pz_poll_events(eng: *PzEngine) callconv(.c) void {
 }
 
 export fn pz_update_input(eng: *PzEngine) callconv(.c) void {
-    eng.engine.inputs.update(eng.engine.window_state.scale_factor, &eng.engine.viewport);
+    eng.engine.inputs.update(eng.engine.windowState.scaleFactor, &eng.engine.viewport);
     eng.engine.resources.checkHotReload();
 }
 
@@ -405,7 +405,7 @@ export fn pz_texture_sub(eng: *PzEngine, base_name: [*:0]const u8, new_name: [*:
 }
 
 export fn pz_load_font(eng: *PzEngine, name: [*:0]const u8, ttf_path: [*:0]const u8, size: f32) callconv(.c) i32 {
-    eng.engine.resources.loadFontFromTtfFile(std.mem.span(name), std.mem.span(ttf_path), size) catch |err| {
+    _ = eng.engine.resources.loadFontFromTtfFile(std.mem.span(name), std.mem.span(ttf_path), size) catch |err| {
         setLastErrorErr(err);
         return -1;
     };
@@ -436,7 +436,7 @@ fn pzSpriteCreateImpl(eng: *PzEngine, texture_name: []const u8) !*PzSprite {
         .eng = eng,
         .sprite = &wrapper.storage,
         .storage = sprite,
-        .registry_index = undefined,
+        .registryIndex = undefined,
     };
     try registryAdd(PzSprite, &eng.sprites, eng.alloc, wrapper);
     return wrapper;
@@ -537,8 +537,8 @@ export fn pz_camera_create(eng: *PzEngine) callconv(.c) ?*PzCamera {
     };
     wrapper.* = .{
         .eng = eng,
-        .camera = pixzig.Camera2D.init(eng.engine.viewport.logical_size),
-        .registry_index = undefined,
+        .camera = pixzig.Camera2D.init(eng.engine.viewport.logicalSize),
+        .registryIndex = undefined,
     };
     registryAdd(PzCamera, &eng.cameras, eng.alloc, wrapper) catch |err| {
         eng.alloc.destroy(wrapper);
@@ -585,7 +585,7 @@ export fn pz_camera_clear_bounds(cam: *PzCamera) callconv(.c) void {
 // ---------------------------------------------------------------------------
 
 export fn pz_load_tilemap(eng: *PzEngine, name: [*:0]const u8, path: [*:0]const u8) callconv(.c) i32 {
-    eng.engine.resources.loadTileMap(std.mem.span(name), std.mem.span(path)) catch |err| {
+    _ = eng.engine.resources.loadTileMap(std.mem.span(name), std.mem.span(path)) catch |err| {
         setLastErrorErr(err);
         return -1;
     };
@@ -605,8 +605,8 @@ fn pzTilemapRendererCreateImpl(eng: *PzEngine, map_name: []const u8, texture_nam
     const wrapper = try eng.alloc.create(PzTilemapRenderer);
     errdefer eng.alloc.destroy(wrapper);
 
-    wrapper.* = .{ .eng = eng, .map = map, .renderer = renderer, .registry_index = undefined };
-    try registryAdd(PzTilemapRenderer, &eng.tilemap_renderers, eng.alloc, wrapper);
+    wrapper.* = .{ .eng = eng, .map = map, .renderer = renderer, .registryIndex = undefined };
+    try registryAdd(PzTilemapRenderer, &eng.tilemapRenderers, eng.alloc, wrapper);
     return wrapper;
 }
 
@@ -620,18 +620,18 @@ export fn pz_tilemap_renderer_create(eng: *PzEngine, map_name: [*:0]const u8, te
 export fn pz_tilemap_renderer_destroy(tr: *PzTilemapRenderer) callconv(.c) void {
     tr.renderer.deinit();
     tr.map.release();
-    registryRemove(PzTilemapRenderer, &tr.eng.tilemap_renderers, tr);
+    registryRemove(PzTilemapRenderer, &tr.eng.tilemapRenderers, tr);
     tr.eng.alloc.destroy(tr);
 }
 
-export fn pz_tilemap_pixel_size(tr: *PzTilemapRenderer, layer_index: i32, out_w: *f32, out_h: *f32) callconv(.c) void {
-    if (layer_index < 0 or @as(usize, @intCast(layer_index)) >= tr.map.val.layers.items.len) {
+export fn pz_tilemap_pixel_size(tr: *PzTilemapRenderer, layerIndex: i32, out_w: *f32, out_h: *f32) callconv(.c) void {
+    if (layerIndex < 0 or @as(usize, @intCast(layerIndex)) >= tr.map.val.layers.items.len) {
         setLastErrorMsg("invalid layer index");
         out_w.* = 0;
         out_h.* = 0;
         return;
     }
-    const layer = &tr.map.val.layers.items[@intCast(layer_index)];
+    const layer = &tr.map.val.layers.items[@intCast(layerIndex)];
     out_w.* = @floatFromInt(layer.size.x * layer.tileSize.x);
     out_h.* = @floatFromInt(layer.size.y * layer.tileSize.y);
 }
@@ -665,7 +665,7 @@ fn pzManifestLoadImpl(eng: *PzEngine, path: []const u8) !*PzAssetManifest {
     const wrapper = try eng.alloc.create(PzAssetManifest);
     errdefer eng.alloc.destroy(wrapper);
 
-    wrapper.* = .{ .eng = eng, .manifest = manifest, .registry_index = undefined };
+    wrapper.* = .{ .eng = eng, .manifest = manifest, .registryIndex = undefined };
     try registryAdd(PzAssetManifest, &eng.manifests, eng.alloc, wrapper);
     return wrapper;
 }
@@ -719,8 +719,8 @@ fn pzActionMapCreateImpl(eng: *PzEngine) !*PzActionMap {
     const wrapper = try eng.alloc.create(PzActionMap);
     errdefer eng.alloc.destroy(wrapper);
 
-    wrapper.* = .{ .eng = eng, .map = map, .registry_index = undefined };
-    try registryAdd(PzActionMap, &eng.action_maps, eng.alloc, wrapper);
+    wrapper.* = .{ .eng = eng, .map = map, .registryIndex = undefined };
+    try registryAdd(PzActionMap, &eng.actionMaps, eng.alloc, wrapper);
     return wrapper;
 }
 
@@ -733,7 +733,7 @@ export fn pz_action_map_create(eng: *PzEngine) callconv(.c) ?*PzActionMap {
 
 export fn pz_action_map_destroy(am: *PzActionMap) callconv(.c) void {
     am.map.deinit();
-    registryRemove(PzActionMap, &am.eng.action_maps, am);
+    registryRemove(PzActionMap, &am.eng.actionMaps, am);
     am.eng.alloc.destroy(am);
 }
 
@@ -957,9 +957,9 @@ export fn pz_anim_new_sequence(eng: *PzEngine, seq_name: [*:0]const u8, loop: bo
     return 0;
 }
 
-/// Appends a frame (a loaded texture shown for `frame_ms`) to a sequence made
+/// Appends a frame (a loaded texture shown for `frameMs`) to a sequence made
 /// by pz_anim_new_sequence. `flip`: 0=none, 1=horz, 2=vert, 3=both.
-export fn pz_anim_seq_add_frame(eng: *PzEngine, seq_name: [*:0]const u8, texture_name: [*:0]const u8, frame_ms: f64, flip: c_int) callconv(.c) i32 {
+export fn pz_anim_seq_add_frame(eng: *PzEngine, seq_name: [*:0]const u8, texture_name: [*:0]const u8, frameMs: f64, flip: c_int) callconv(.c) i32 {
     const mgr = animMgr(eng) catch |err| {
         setLastErrorErr(err);
         return -1;
@@ -972,7 +972,7 @@ export fn pz_anim_seq_add_frame(eng: *PzEngine, seq_name: [*:0]const u8, texture
         setLastErrorErr(err);
         return -1;
     };
-    seq.frames.append(mgr.alloc, .{ .tex = tex, .frameTimeMs = frame_ms, .flip = flipFromInt(flip) }) catch |err| {
+    seq.frames.append(mgr.alloc, .{ .tex = tex, .frameTimeMs = frameMs, .flip = flipFromInt(flip) }) catch |err| {
         tex.release();
         setLastErrorErr(err);
         return -1;
@@ -1010,12 +1010,12 @@ fn pzActorCreateImpl(eng: *PzEngine, texture_name: []const u8) !*PzActor {
     const wrapper = try eng.alloc.create(PzActor);
     errdefer eng.alloc.destroy(wrapper);
 
-    wrapper.* = .{ .eng = eng, .actor = actor, .sprite_view = undefined, .registry_index = undefined };
-    wrapper.sprite_view = .{
+    wrapper.* = .{ .eng = eng, .actor = actor, .spriteView = undefined, .registryIndex = undefined };
+    wrapper.spriteView = .{
         .eng = eng,
         .sprite = &wrapper.actor.sprite,
         .owner = wrapper,
-        .registry_index = undefined,
+        .registryIndex = undefined,
     };
     try registryAdd(PzActor, &eng.actors, eng.alloc, wrapper);
     return wrapper;
@@ -1056,7 +1056,7 @@ export fn pz_actor_add_state(ac: *PzActor, state_name: [*:0]const u8) callconv(.
 /// The actor's own sprite, as a view usable with every `pz_sprite_*` call.
 /// Valid until pz_actor_destroy; pz_sprite_destroy on it is a no-op.
 export fn pz_actor_sprite(ac: *PzActor) callconv(.c) *PzSprite {
-    return &ac.sprite_view;
+    return &ac.spriteView;
 }
 
 /// Switches the actor to `state_name` and applies that state's first frame to
@@ -1075,24 +1075,24 @@ export fn pz_actor_update(ac: *PzActor, dt_ms: f64) callconv(.c) void {
 // ---------------------------------------------------------------------------
 
 export fn pz_window_size(eng: *PzEngine, out_w: *i32, out_h: *i32) callconv(.c) void {
-    out_w.* = eng.engine.window_state.window_size.x;
-    out_h.* = eng.engine.window_state.window_size.y;
+    out_w.* = eng.engine.windowState.windowSize.x;
+    out_h.* = eng.engine.windowState.windowSize.y;
 }
 
 export fn pz_framebuffer_size(eng: *PzEngine, out_w: *i32, out_h: *i32) callconv(.c) void {
-    out_w.* = eng.engine.window_state.framebuffer_size.x;
-    out_h.* = eng.engine.window_state.framebuffer_size.y;
+    out_w.* = eng.engine.windowState.framebufferSize.x;
+    out_h.* = eng.engine.windowState.framebufferSize.y;
 }
 
 export fn pz_logical_size(eng: *PzEngine, out_w: *i32, out_h: *i32) callconv(.c) void {
-    out_w.* = eng.engine.viewport.logical_size.x;
-    out_h.* = eng.engine.viewport.logical_size.y;
+    out_w.* = eng.engine.viewport.logicalSize.x;
+    out_h.* = eng.engine.viewport.logicalSize.y;
 }
 
 /// Framebuffer-pixels-per-window-coordinate (the larger axis). 1.0 on a
 /// non-HiDPI display, 2.0 on a typical retina display.
 export fn pz_window_scale_factor(eng: *PzEngine) callconv(.c) f32 {
-    return @max(eng.engine.window_state.scale_factor.x, eng.engine.window_state.scale_factor.y);
+    return @max(eng.engine.windowState.scaleFactor.x, eng.engine.windowState.scaleFactor.y);
 }
 
 export fn pz_window_set_title(eng: *PzEngine, title: [*:0]const u8) callconv(.c) void {
@@ -1124,8 +1124,8 @@ export fn pz_window_is_fullscreen(eng: *PzEngine) callconv(.c) bool {
 // ---------------------------------------------------------------------------
 
 fn fbToWindow(eng: *PzEngine, fb: pixzig.Vec2F) pixzig.Vec2F {
-    const sx = eng.engine.window_state.scale_factor.x;
-    const sy = eng.engine.window_state.scale_factor.y;
+    const sx = eng.engine.windowState.scaleFactor.x;
+    const sy = eng.engine.windowState.scaleFactor.y;
     return .{
         .x = if (sx > 0) fb.x / sx else fb.x,
         .y = if (sy > 0) fb.y / sy else fb.y,
@@ -1246,7 +1246,7 @@ export fn pz_key_super(eng: *PzEngine) callconv(.c) bool {
 
 // ---------------------------------------------------------------------------
 // Tilemap runtime access. All functions take a *PzTilemapRenderer (the
-// handle from pz_tilemap_renderer_create) and a raw `layer_index` /
+// handle from pz_tilemap_renderer_create) and a raw `layerIndex` /
 // `group_index` into the loaded map's layer / object-group lists -- the same
 // index convention pz_tilemap_pixel_size already uses. Tile values are
 // tileset indices (0-based), -1 meaning "no tile".
@@ -1276,9 +1276,9 @@ fn tmCopyZ(buf: []u8, s: []const u8) [*:0]const u8 {
     return @ptrCast(buf.ptr);
 }
 
-fn tmLayer(tr: *PzTilemapRenderer, layer_index: i32) ?*pixzig.tile.TileLayer {
-    if (layer_index < 0) return null;
-    return tr.map.val.layerByIndex(@intCast(layer_index));
+fn tmLayer(tr: *PzTilemapRenderer, layerIndex: i32) ?*pixzig.tile.TileLayer {
+    if (layerIndex < 0) return null;
+    return tr.map.val.layerByIndex(@intCast(layerIndex));
 }
 
 fn tmGroup(tr: *PzTilemapRenderer, group_index: i32) ?*pixzig.tile.ObjectGroup {
@@ -1310,8 +1310,8 @@ export fn pz_tilemap_layer_index(tr: *PzTilemapRenderer, name: [*:0]const u8) ca
 }
 
 /// Layer dimensions in tiles. Writes (0, 0) for an out-of-range index.
-export fn pz_tilemap_layer_size(tr: *PzTilemapRenderer, layer_index: i32, out_w: *i32, out_h: *i32) callconv(.c) void {
-    const layer = tmLayer(tr, layer_index) orelse {
+export fn pz_tilemap_layer_size(tr: *PzTilemapRenderer, layerIndex: i32, out_w: *i32, out_h: *i32) callconv(.c) void {
+    const layer = tmLayer(tr, layerIndex) orelse {
         out_w.* = 0;
         out_h.* = 0;
         return;
@@ -1321,8 +1321,8 @@ export fn pz_tilemap_layer_size(tr: *PzTilemapRenderer, layer_index: i32, out_w:
 }
 
 /// A layer's per-tile size in pixels. Writes (0, 0) for an out-of-range index.
-export fn pz_tilemap_tile_size(tr: *PzTilemapRenderer, layer_index: i32, out_w: *i32, out_h: *i32) callconv(.c) void {
-    const layer = tmLayer(tr, layer_index) orelse {
+export fn pz_tilemap_tile_size(tr: *PzTilemapRenderer, layerIndex: i32, out_w: *i32, out_h: *i32) callconv(.c) void {
+    const layer = tmLayer(tr, layerIndex) orelse {
         out_w.* = 0;
         out_h.* = 0;
         return;
@@ -1333,16 +1333,16 @@ export fn pz_tilemap_tile_size(tr: *PzTilemapRenderer, layer_index: i32, out_w: 
 
 /// Tileset index at tile coords (tx, ty). -1 for an empty cell, an
 /// out-of-bounds coord, or an out-of-range layer.
-export fn pz_tilemap_get_tile(tr: *PzTilemapRenderer, layer_index: i32, tx: i32, ty: i32) callconv(.c) i32 {
-    const layer = tmLayer(tr, layer_index) orelse return -1;
+export fn pz_tilemap_get_tile(tr: *PzTilemapRenderer, layerIndex: i32, tx: i32, ty: i32) callconv(.c) i32 {
+    const layer = tmLayer(tr, layerIndex) orelse return -1;
     return layer.tileData(tx, ty);
 }
 
 /// Sets the tileset index at (tx, ty). Out-of-bounds coords are ignored.
 /// Call pz_tilemap_refresh afterwards (once, after a batch of edits) to make
 /// the change visible.
-export fn pz_tilemap_set_tile(tr: *PzTilemapRenderer, layer_index: i32, tx: i32, ty: i32, value: i32) callconv(.c) void {
-    const layer = tmLayer(tr, layer_index) orelse return;
+export fn pz_tilemap_set_tile(tr: *PzTilemapRenderer, layerIndex: i32, tx: i32, ty: i32, value: i32) callconv(.c) void {
+    const layer = tmLayer(tr, layerIndex) orelse return;
     layer.setTileData(tx, ty, value);
 }
 
@@ -1354,25 +1354,25 @@ export fn pz_tilemap_refresh(tr: *PzTilemapRenderer) callconv(.c) void {
 
 /// The engine collision/behaviour bitmask for the tile at (tx, ty), or 0
 /// when the cell is empty, out of bounds, or the layer has no tileset.
-export fn pz_tilemap_tile_flags(tr: *PzTilemapRenderer, layer_index: i32, tx: i32, ty: i32) callconv(.c) i32 {
-    const layer = tmLayer(tr, layer_index) orelse return 0;
+export fn pz_tilemap_tile_flags(tr: *PzTilemapRenderer, layerIndex: i32, tx: i32, ty: i32) callconv(.c) i32 {
+    const layer = tmLayer(tr, layerIndex) orelse return 0;
     const t = layer.tile(tx, ty) orelse return 0;
     return @intCast(t.core);
 }
 
 /// True when the tile at (tx, ty) blocks movement on every side
 /// (`blocks all`).
-export fn pz_tilemap_tile_blocked(tr: *PzTilemapRenderer, layer_index: i32, tx: i32, ty: i32) callconv(.c) bool {
-    const layer = tmLayer(tr, layer_index) orelse return false;
+export fn pz_tilemap_tile_blocked(tr: *PzTilemapRenderer, layerIndex: i32, tx: i32, ty: i32) callconv(.c) bool {
+    const layer = tmLayer(tr, layerIndex) orelse return false;
     const t = layer.tile(tx, ty) orelse return false;
     return (t.core & pixzig.tile.BlocksAll) != 0;
 }
 
 /// A custom string property on the tileset tile at (tx, ty), or "" when the
 /// tile or property is absent. Returned pointer is reused each call.
-export fn pz_tilemap_tile_prop(tr: *PzTilemapRenderer, layer_index: i32, tx: i32, ty: i32, name: [*:0]const u8) callconv(.c) [*:0]const u8 {
+export fn pz_tilemap_tile_prop(tr: *PzTilemapRenderer, layerIndex: i32, tx: i32, ty: i32, name: [*:0]const u8) callconv(.c) [*:0]const u8 {
     const empty: [*:0]const u8 = "";
-    const layer = tmLayer(tr, layer_index) orelse return empty;
+    const layer = tmLayer(tr, layerIndex) orelse return empty;
     const t = layer.tile(tx, ty) orelse return empty;
     const v = tmPropValue(t.properties, std.mem.span(name)) orelse return empty;
     return tmCopyZ(&g_tm_str_a, v);
@@ -1381,8 +1381,8 @@ export fn pz_tilemap_tile_prop(tr: *PzTilemapRenderer, layer_index: i32, tx: i32
 /// Tile coords covering world-pixel (wx, wy) in the given layer's tile grid.
 /// World pixels are the tilemap's own space (origin at the map's top-left),
 /// the space the renderer draws in.
-export fn pz_tilemap_world_to_tile(tr: *PzTilemapRenderer, layer_index: i32, wx: f32, wy: f32, out_tx: *i32, out_ty: *i32) callconv(.c) void {
-    const layer = tmLayer(tr, layer_index) orelse {
+export fn pz_tilemap_world_to_tile(tr: *PzTilemapRenderer, layerIndex: i32, wx: f32, wy: f32, out_tx: *i32, out_ty: *i32) callconv(.c) void {
+    const layer = tmLayer(tr, layerIndex) orelse {
         out_tx.* = 0;
         out_ty.* = 0;
         return;
@@ -1394,8 +1394,8 @@ export fn pz_tilemap_world_to_tile(tr: *PzTilemapRenderer, layer_index: i32, wx:
 }
 
 /// World-pixel position of the top-left corner of tile (tx, ty).
-export fn pz_tilemap_tile_to_world(tr: *PzTilemapRenderer, layer_index: i32, tx: i32, ty: i32, out_x: *f32, out_y: *f32) callconv(.c) void {
-    const layer = tmLayer(tr, layer_index) orelse {
+export fn pz_tilemap_tile_to_world(tr: *PzTilemapRenderer, layerIndex: i32, tx: i32, ty: i32, out_x: *f32, out_y: *f32) callconv(.c) void {
+    const layer = tmLayer(tr, layerIndex) orelse {
         out_x.* = 0;
         out_y.* = 0;
         return;

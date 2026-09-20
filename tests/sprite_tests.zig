@@ -249,11 +249,11 @@ pub fn actorOwnsSpriteAndAppliesFramesTest(io: std.Io, alloc: std.mem.Allocator)
     _ = try actor.addState(&.{ .name = "walk", .sequence = &seq }, .{});
     try testz.expectEqual(actor.sprite.texture, f2);
     try testz.expectEqual(start.refCount, 0);
-    try testz.expectEqual(actor.sprite.src_coords.l, f2.val.src.l);
+    try testz.expectEqual(actor.sprite.srcCoords.l, f2.val.src.l);
 
     actor.update(150);
     try testz.expectEqual(actor.sprite.texture, f3);
-    try testz.expectEqual(actor.sprite.src_coords.l, f3.val.src.l);
+    try testz.expectEqual(actor.sprite.srcCoords.l, f3.val.src.l);
 
     // deinit releases the sprite's reference too.
     const seqRefs = f3.refCount;
@@ -279,8 +279,8 @@ pub fn actorSetStateAppliesFirstFrameTest(io: std.Io, alloc: std.mem.Allocator) 
     const f2 = try tm.getTexture("player_right_2");
     try testz.expectEqual(actor.sprite.texture, f2);
     // Horizontal flip swaps l and r.
-    try testz.expectEqual(actor.sprite.src_coords.l, f2.val.src.r);
-    try testz.expectEqual(actor.sprite.src_coords.r, f2.val.src.l);
+    try testz.expectEqual(actor.sprite.srcCoords.l, f2.val.src.r);
+    try testz.expectEqual(actor.sprite.srcCoords.r, f2.val.src.l);
 }
 
 pub fn spriteSetSrcRectIsPixelsWithinFrameTest(io: std.Io, alloc: std.mem.Allocator) !void {
@@ -293,7 +293,7 @@ pub fn spriteSetSrcRectIsPixelsWithinFrameTest(io: std.Io, alloc: std.mem.Alloca
 
     // player_right_3 starts at image pixel 16; its (2,0)-(6,8) is image (18,0)-(22,8).
     spr.setSrcRect(RectI.init(2, 0, 4, 8));
-    try testz.expectEqual(spr.src_coords.l, 18.0 / 128.0);
-    try testz.expectEqual(spr.src_coords.r, 22.0 / 128.0);
-    try testz.expectEqual(spr.src_coords.b, 8.0 / 128.0);
+    try testz.expectEqual(spr.srcCoords.l, 18.0 / 128.0);
+    try testz.expectEqual(spr.srcCoords.r, 22.0 / 128.0);
+    try testz.expectEqual(spr.srcCoords.b, 8.0 / 128.0);
 }

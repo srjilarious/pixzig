@@ -13,7 +13,7 @@ pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
 const manifest_options = @import("manifest_options");
-const AppRunner = pixzig.PixzigAppRunner(App, .{
+const AppRunner = pixzig.AppRunner(App, .{
     // The console reads typed characters through Keyboard.text(), which
     // needs the OS text-input machinery armed.
     .inputOpts = .{ .mouse = true, .textInput = true },
@@ -34,7 +34,7 @@ pub const App = struct {
 
         const script = try alloc.create(scripting.ScriptEngine);
         script.* = try scripting.ScriptEngine.init(alloc);
-        const console_size = eng.viewport.logical_size.asVec2U();
+        const console_size = eng.viewport.logicalSize.asVec2U();
         app.* = .{
             .alloc = alloc,
             .script = script,

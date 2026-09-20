@@ -4,7 +4,9 @@ Subclass it, override `update` and `render`, and call `run()`. The fixed-
 timestep loop below mirrors pixzig's own `PixzigAppRunner.gameLoopCore`
 (src/pixzig/pixzig.zig), just owned by Python instead of Zig.
 """
+import atexit
 import ctypes
+import functools
 import os
 import time
 import weakref
@@ -23,6 +25,13 @@ from .tilemap import TileMapRenderer
 from .window import Window
 
 
+def _close_at_exit(app_ref):
+    """atexit backstop: shut an app down that was built but never run."""
+    app = app_ref()
+    if app is not None:
+        app.close()
+
+
 class PixzigApp:
     def __init__(
         self,
@@ -36,6 +45,24 @@ class PixzigApp:
         if not eng:
             raise _n.PixzigError(_n.last_error())
         self._eng = eng
+        # Every handle-owning wrapper handed out (sprites, actors, cameras,
+        # ...). `pz_deinit` frees their native objects, so `close()` marks
+        # them destroyed on the way out; a later `sprite.destroy()` is then a
+        # no-op and other calls raise instead of touching freed memory.
+        self._handles = weakref.WeakSet()
+        # A subclass __init__ that raises after this point -- a missing
+        # texture, say -- never reaches run(), so without these nothing would
+        # ever call pz_deinit: the window would stay open and the native
+        # engine would leak for the rest of the process. `__del__` covers the
+        # usual case (the half-built app is collected as the exception
+        # unwinds, which closes it right away, so a retry can create a new
+        # engine); this atexit hook is the backstop for an app something
+        # still holds a reference to. Registered before any other setup so it
+        # covers the whole constructor. Prefer
+        # `with PixzigApp(...) as app:`, which closes at the end of the block.
+        self._atexit_hook = functools.partial(_close_at_exit, weakref.ref(self))
+        atexit.register(self._atexit_hook)
+
         self._update_step_ms = 1000.0 / update_hz
         # Cap on how much time one frame catches up on; the rest is dropped
         # so a hitch or debugger pause slows the game instead of stalling it.
@@ -43,11 +70,6 @@ class PixzigApp:
         self._lag = 0.0
         self._curr_time = time.perf_counter() * 1000.0
         self._running = True
-        # Every handle-owning wrapper handed out (sprites, actors, cameras,
-        # ...). `pz_deinit` frees their native objects, so `run()` marks them
-        # destroyed on the way out; a later `sprite.destroy()` is then a no-op
-        # and other calls raise instead of touching freed memory.
-        self._handles = weakref.WeakSet()
 
         self.keyboard = Keyboard(eng)
         self.mouse = Mouse(eng)
@@ -66,7 +88,12 @@ class PixzigApp:
     # --- Resources -----------------------------------------------------
 
     def load_texture(self, name: str, path: str) -> None:
-        _n.check(_n.pz_load_texture(self._eng, name.encode("utf-8"), path.encode("utf-8")) == 0)
+        # The engine resolves a relative path against the executable's own
+        # directory, which under Python is the interpreter's install dir.
+        # Resolve against the cwd here instead, the convention the Python
+        # bindings have always used.
+        abs_path = os.path.abspath(path)
+        _n.check(_n.pz_load_texture(self._eng, name.encode("utf-8"), abs_path.encode("utf-8")) == 0)
 
     def create_subtexture(self, base_name: str, new_name: str, x: int, y: int, w: int, h: int) -> None:
         _n.check(
@@ -83,7 +110,9 @@ class PixzigApp:
         return self._track(Sprite(handle))
 
     def load_tilemap(self, name: str, path: str) -> None:
-        _n.check(_n.pz_load_tilemap(self._eng, name.encode("utf-8"), path.encode("utf-8")) == 0)
+        # cwd-relative, as with `load_texture`.
+        abs_path = os.path.abspath(path)
+        _n.check(_n.pz_load_tilemap(self._eng, name.encode("utf-8"), abs_path.encode("utf-8")) == 0)
 
     def create_tilemap_renderer(self, map_name: str, texture_name: str) -> TileMapRenderer:
         handle = _n.pz_tilemap_renderer_create(self._eng, map_name.encode("utf-8"), texture_name.encode("utf-8"))
@@ -97,7 +126,7 @@ class PixzigApp:
         # packaged Zig build that's the game, but under Python it would be
         # the Python interpreter's install directory. Resolve to an absolute
         # path against the current working directory here instead, matching
-        # the cwd-relative convention load_texture/load_tilemap already use.
+        # the cwd-relative convention load_texture/load_tilemap use.
         abs_path = os.path.abspath(path)
         handle = _n.pz_manifest_load(self._eng, abs_path.encode("utf-8"))
         if not handle:
@@ -232,6 +261,45 @@ class PixzigApp:
     def quit(self) -> None:
         self._running = False
 
+    def close(self) -> None:
+        """Shuts the engine down and frees every native handle this app
+        handed out. Idempotent: calling it again, or after `run()` has
+        returned, does nothing.
+
+        Called for you by `run()`, by `with PixzigApp(...) as app:`, and --
+        as a backstop -- when the app is garbage collected or the
+        interpreter exits."""
+        # getattr guards the case where pz_init itself failed, so __del__
+        # runs against an object whose attributes were never assigned.
+        hook = getattr(self, "_atexit_hook", None)
+        if hook is not None:
+            atexit.unregister(hook)
+            self._atexit_hook = None
+        if getattr(self, "_eng", None) is None:
+            return
+        for wrapper in list(self._handles):
+            wrapper._destroyed = True
+        self._handles.clear()
+        _n.pz_deinit(self._eng)
+        self._eng = None
+
+    def __enter__(self) -> "PixzigApp":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        self.close()
+        return False
+
+    def __del__(self):
+        # Runs when a never-run app is collected, e.g. while an exception
+        # raised by a subclass __init__ unwinds. Everything here is
+        # best-effort: during interpreter shutdown the module globals it
+        # needs may already be gone.
+        try:
+            self.close()
+        except Exception:
+            pass
+
     def run(self) -> None:
         if self._eng is None:
             raise _n.PixzigError("run() called after the app has already shut down")
@@ -264,8 +332,4 @@ class PixzigApp:
                 self.render()
                 _n.pz_swap_buffers(self._eng)
         finally:
-            for wrapper in list(self._handles):
-                wrapper._destroyed = True
-            self._handles.clear()
-            _n.pz_deinit(self._eng)
-            self._eng = None
+            self.close()

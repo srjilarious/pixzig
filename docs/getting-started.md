@@ -2,7 +2,7 @@
 
 ![Pixzig Logo](assets/pixzig.png)
 
-Pixzig is a Zig 2D game engine with a fixed-timestep [game loop](sym:PixzigAppRunner), OpenGL [rendering](sym:Renderer), flecs ECS, [Lua scripting](sym:ScriptEngine), [audio](mod:audio), [input](mod:input), and [sequences](sym:SequencePlayer).
+Pixzig is a Zig 2D game engine with a fixed-timestep [game loop](sym:AppRunner), OpenGL [rendering](sym:Renderer), flecs ECS, [Lua scripting](sym:ScriptEngine), [audio](mod:audio), [input](mod:input), and [sequences](sym:SequencePlayer).
 
 ## Adding Pixzig to Your Project
 
@@ -69,7 +69,7 @@ const pixzig = @import("pixzig");
 pub const panic = pixzig.system.panic;
 pub const std_options = pixzig.system.std_options;
 
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.AppRunner(App, .{});
 
 pub const App = struct {
     alloc: std.mem.Allocator,

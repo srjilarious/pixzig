@@ -18,7 +18,7 @@ const Color = pixzig.common.Color;
 const Delay = pixzig.utils.Delay;
 
 const math = @import("zmath");
-const EngOptions = pixzig.PixzigEngineOptions;
+const EngOptions = pixzig.EngineOptions;
 const FpsCounter = pixzig.utils.FpsCounter;
 
 //* ---
@@ -32,7 +32,7 @@ pub const std_options = pixzig.system.std_options;
 //* on our App struct.  It also provides the Engine to those functions,
 //* which has references to the renderer, input, and other systems that
 //* we can use in our game logic and rendering.
-const AppRunner = pixzig.PixzigAppRunner(App, .{});
+const AppRunner = pixzig.AppRunner(App, .{});
 
 //* This is the definition of the application that will be run by the `AppRunner`.
 //* It has an `update` and `render` function that will be called by the `AppRunner`.

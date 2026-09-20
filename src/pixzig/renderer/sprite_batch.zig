@@ -12,7 +12,7 @@ const quad_batch = @import("./quad_batch.zig");
 const RectF = common.RectF;
 const Rotate = common.Rotate;
 const Texture = textures.Texture;
-const ManagedShader = resources.ManagedShader;
+const ShaderHandle = resources.ShaderHandle;
 
 const Inner = quad_batch.QuadBatch(.{ .posDim = 2, .texDim = 2 });
 
@@ -28,13 +28,13 @@ pub const SpriteBatchQueue = struct {
 
     /// Initializes the SpriteBatchQueue with the default `C.MaxSprites`
     /// quad capacity. Use `initCapacity` to size it explicitly.
-    pub fn init(alloc: std.mem.Allocator, shader: *ManagedShader) !SpriteBatchQueue {
+    pub fn init(alloc: std.mem.Allocator, shader: *ShaderHandle) !SpriteBatchQueue {
         return initCapacity(alloc, shader, C.MaxSprites);
     }
 
     /// Like `init`, but caps the batch at `maxQuads` queued quads before it
     /// auto-flushes. Sizes the CPU scratch buffers and GPU VBOs up front.
-    pub fn initCapacity(alloc: std.mem.Allocator, shader: *ManagedShader, maxQuads: usize) !SpriteBatchQueue {
+    pub fn initCapacity(alloc: std.mem.Allocator, shader: *ShaderHandle, maxQuads: usize) !SpriteBatchQueue {
         return .{ .inner = try Inner.init(alloc, shader, maxQuads) };
     }
 
@@ -46,7 +46,7 @@ pub const SpriteBatchQueue = struct {
     /// Swap to a different shader entirely (e.g. text renderer toggling
     /// between alpha and RGB pixel shaders). Releases the current handle,
     /// acquires from `newShader`, and re-caches uniform/attribute locations.
-    pub fn swapShader(self: *SpriteBatchQueue, newShader: *ManagedShader) !void {
+    pub fn swapShader(self: *SpriteBatchQueue, newShader: *ShaderHandle) !void {
         try self.inner.swapShader(newShader);
     }
 
@@ -63,7 +63,7 @@ pub const SpriteBatchQueue = struct {
         const l = @round(d.l);
         const t = @round(d.t);
         const snapped: RectF = .{ .l = l, .t = t, .r = l + (d.r - d.l), .b = t + (d.b - d.t) };
-        self.draw(&sprite.texture.val, snapped, sprite.src_coords, sprite.rotate);
+        self.draw(&sprite.texture.val, snapped, sprite.srcCoords, sprite.rotate);
     }
 
     /// Sets the colour that subsequently queued sprites are multiplied by.

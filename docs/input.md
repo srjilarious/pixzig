@@ -1,6 +1,6 @@
 # Input
 
-`PixzigAppRunner` updates `eng.inputs` before each call to `App.update`. Use an `ActionMap` for game controls. Read `eng.inputs` directly for text entry, pointer position, or device-specific behavior.
+`AppRunner` updates `eng.inputs` before each call to `App.update`. Use an `ActionMap` for game controls. Read `eng.inputs` directly for text entry, pointer position, or device-specific behavior.
 
 ## Action Maps
 
@@ -117,7 +117,7 @@ const turn = eng.inputs.mouse.delta().x * sensitivity;
 Configure the number of tracked gamepads in the runner options:
 
 ```zig
-const AppRunner = pixzig.PixzigAppRunner(App, .{
+const AppRunner = pixzig.AppRunner(App, .{
     .inputOpts = .{ .numGamepads = 1 },
 });
 ```

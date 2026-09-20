@@ -9,7 +9,6 @@ const resources = @import("../resources.zig");
 const tilemap = @import("./tilemap.zig");
 
 const RectF = common.RectF;
-const ManagedShader = resources.ManagedShader;
 const ShaderHandle = resources.ShaderHandle;
 const TextureHandle = resources.TextureHandle;
 const TileSet = tilemap.TileSet;
@@ -27,15 +26,15 @@ const MaxIndicesPerChunk = MaxTilesPerChunk * 6; // 6144 u16 indices
 /// A single shared scratch buffer in ChunkedTiledLayerRenderer is used for builds.
 const TileChunk = struct {
     vao: u32,
-    vbo_coords: u32,
-    vbo_texcoords: u32,
+    vboCoords: u32,
+    vboTexcoords: u32,
     ibo: u32,
-    num_indices: usize,
+    numIndices: usize,
     dirty: bool,
-    origin_x: u32, // tile-space top-left corner of this chunk
-    origin_y: u32,
-    tile_w: u32, // actual tile count (≤ ChunkTiles; may be less at map edges)
-    tile_h: u32,
+    originX: u32, // tile-space top-left corner of this chunk
+    originY: u32,
+    tileW: u32, // actual tile count (≤ ChunkTiles; may be less at map edges)
+    tileH: u32,
 };
 
 /// Renders a TileLayer split into fixed-size chunks.
@@ -52,19 +51,19 @@ const TileChunk = struct {
 pub const ChunkedTiledLayerRenderer = struct {
     alloc: std.mem.Allocator,
     chunks: []TileChunk,
-    chunks_wide: u32,
-    chunks_tall: u32,
+    chunksWide: u32,
+    chunksTall: u32,
     /// Refcounted shader handle. Refreshed in `render` when dirty.
     shader: *ShaderHandle,
     /// Refcounted texture handle. Refreshed in `render` when dirty.
     texture: *TextureHandle,
-    attr_coord: c_uint,
-    attr_texcoord: c_uint,
-    uniform_mvp: c_int,
+    attrCoord: c_uint,
+    attrTexcoord: c_uint,
+    uniformMvp: c_int,
     // One shared scratch buffer; reused for every chunk build.
-    scratch_verts: []f32,
-    scratch_texcoords: []f32,
-    scratch_indices: []u16,
+    scratchVerts: []f32,
+    scratchTexcoords: []f32,
+    scratchIndices: []u16,
 
     const Self = @This();
 
@@ -73,11 +72,11 @@ pub const ChunkedTiledLayerRenderer = struct {
     /// is read lazily on the first render() call (all chunks start dirty=true).
     pub fn init(
         alloc: std.mem.Allocator,
-        shader: *ManagedShader,
+        shader: *ShaderHandle,
         texture: *TextureHandle,
         layer: *const TileLayer,
     ) !Self {
-        const shader_handle = shader.acquire() orelse return error.NoShaderInPool;
+        const shader_handle = shader.retain();
         errdefer shader_handle.release();
         const texture_handle = texture.retain();
         errdefer texture_handle.release();
@@ -85,35 +84,35 @@ pub const ChunkedTiledLayerRenderer = struct {
         const map_w: u32 = @intCast(layer.size.x);
         const map_h: u32 = @intCast(layer.size.y);
 
-        const chunks_wide = (map_w + ChunkTiles - 1) / ChunkTiles;
-        const chunks_tall = (map_h + ChunkTiles - 1) / ChunkTiles;
-        const num_chunks = chunks_wide * chunks_tall;
+        const chunksWide = (map_w + ChunkTiles - 1) / ChunkTiles;
+        const chunksTall = (map_h + ChunkTiles - 1) / ChunkTiles;
+        const num_chunks = chunksWide * chunksTall;
 
         const chunks = try alloc.alloc(TileChunk, num_chunks);
         errdefer alloc.free(chunks);
 
-        for (0..chunks_tall) |cy| {
-            for (0..chunks_wide) |cx| {
-                const idx = cy * chunks_wide + cx;
-                const origin_x: u32 = @intCast(cx * ChunkTiles);
-                const origin_y: u32 = @intCast(cy * ChunkTiles);
+        for (0..chunksTall) |cy| {
+            for (0..chunksWide) |cx| {
+                const idx = cy * chunksWide + cx;
+                const originX: u32 = @intCast(cx * ChunkTiles);
+                const originY: u32 = @intCast(cy * ChunkTiles);
 
                 var chunk = TileChunk{
                     .vao = 0,
-                    .vbo_coords = 0,
-                    .vbo_texcoords = 0,
+                    .vboCoords = 0,
+                    .vboTexcoords = 0,
                     .ibo = 0,
-                    .num_indices = 0,
+                    .numIndices = 0,
                     .dirty = true,
-                    .origin_x = origin_x,
-                    .origin_y = origin_y,
-                    .tile_w = @min(ChunkTiles, map_w - origin_x),
-                    .tile_h = @min(ChunkTiles, map_h - origin_y),
+                    .originX = originX,
+                    .originY = originY,
+                    .tileW = @min(ChunkTiles, map_w - originX),
+                    .tileH = @min(ChunkTiles, map_h - originY),
                 };
 
                 gl.genVertexArrays(1, &chunk.vao);
-                gl.genBuffers(1, &chunk.vbo_coords);
-                gl.genBuffers(1, &chunk.vbo_texcoords);
+                gl.genBuffers(1, &chunk.vboCoords);
+                gl.genBuffers(1, &chunk.vboTexcoords);
                 gl.genBuffers(1, &chunk.ibo);
 
                 chunks[idx] = chunk;
@@ -121,17 +120,17 @@ pub const ChunkedTiledLayerRenderer = struct {
         }
         errdefer for (chunks) |*c| {
             gl.deleteVertexArrays(1, &c.vao);
-            gl.deleteBuffers(1, &c.vbo_coords);
-            gl.deleteBuffers(1, &c.vbo_texcoords);
+            gl.deleteBuffers(1, &c.vboCoords);
+            gl.deleteBuffers(1, &c.vboTexcoords);
             gl.deleteBuffers(1, &c.ibo);
         };
 
-        const scratch_verts = try alloc.alloc(f32, MaxFloatsPerChunk);
-        errdefer alloc.free(scratch_verts);
-        const scratch_texcoords = try alloc.alloc(f32, MaxFloatsPerChunk);
-        errdefer alloc.free(scratch_texcoords);
-        const scratch_indices = try alloc.alloc(u16, MaxIndicesPerChunk);
-        errdefer alloc.free(scratch_indices);
+        const scratchVerts = try alloc.alloc(f32, MaxFloatsPerChunk);
+        errdefer alloc.free(scratchVerts);
+        const scratchTexcoords = try alloc.alloc(f32, MaxFloatsPerChunk);
+        errdefer alloc.free(scratchTexcoords);
+        const scratchIndices = try alloc.alloc(u16, MaxIndicesPerChunk);
+        errdefer alloc.free(scratchIndices);
 
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -140,16 +139,16 @@ pub const ChunkedTiledLayerRenderer = struct {
         return .{
             .alloc = alloc,
             .chunks = chunks,
-            .chunks_wide = chunks_wide,
-            .chunks_tall = chunks_tall,
+            .chunksWide = chunksWide,
+            .chunksTall = chunksTall,
             .shader = shader_handle,
             .texture = texture_handle,
-            .attr_coord = @intCast(gl.getAttribLocation(shader_handle.val.program, "coord3d")),
-            .attr_texcoord = @intCast(gl.getAttribLocation(shader_handle.val.program, "texcoord")),
-            .uniform_mvp = @intCast(gl.getUniformLocation(shader_handle.val.program, "projectionMatrix")),
-            .scratch_verts = scratch_verts,
-            .scratch_texcoords = scratch_texcoords,
-            .scratch_indices = scratch_indices,
+            .attrCoord = @intCast(gl.getAttribLocation(shader_handle.val.program, "coord3d")),
+            .attrTexcoord = @intCast(gl.getAttribLocation(shader_handle.val.program, "texcoord")),
+            .uniformMvp = @intCast(gl.getUniformLocation(shader_handle.val.program, "projectionMatrix")),
+            .scratchVerts = scratchVerts,
+            .scratchTexcoords = scratchTexcoords,
+            .scratchIndices = scratchIndices,
         };
     }
 
@@ -158,22 +157,22 @@ pub const ChunkedTiledLayerRenderer = struct {
         self.shader.release();
         for (self.chunks) |*chunk| {
             gl.deleteVertexArrays(1, &chunk.vao);
-            gl.deleteBuffers(1, &chunk.vbo_coords);
-            gl.deleteBuffers(1, &chunk.vbo_texcoords);
+            gl.deleteBuffers(1, &chunk.vboCoords);
+            gl.deleteBuffers(1, &chunk.vboTexcoords);
             gl.deleteBuffers(1, &chunk.ibo);
         }
         self.alloc.free(self.chunks);
-        self.alloc.free(self.scratch_verts);
-        self.alloc.free(self.scratch_texcoords);
-        self.alloc.free(self.scratch_indices);
+        self.alloc.free(self.scratchVerts);
+        self.alloc.free(self.scratchTexcoords);
+        self.alloc.free(self.scratchIndices);
     }
 
     fn refreshShader(self: *Self) void {
         if (!self.shader.dirty) return;
         self.shader = self.shader.reacquire();
-        self.attr_coord = @intCast(gl.getAttribLocation(self.shader.val.program, "coord3d"));
-        self.attr_texcoord = @intCast(gl.getAttribLocation(self.shader.val.program, "texcoord"));
-        self.uniform_mvp = @intCast(gl.getUniformLocation(self.shader.val.program, "projectionMatrix"));
+        self.attrCoord = @intCast(gl.getAttribLocation(self.shader.val.program, "coord3d"));
+        self.attrTexcoord = @intCast(gl.getAttribLocation(self.shader.val.program, "texcoord"));
+        self.uniformMvp = @intCast(gl.getUniformLocation(self.shader.val.program, "projectionMatrix"));
         // Chunk VAOs bake in attrib pointer setup; rebuild them so they use the
         // new attribute locations from the reloaded shader.
         self.markAllDirty();
@@ -208,8 +207,8 @@ pub const ChunkedTiledLayerRenderer = struct {
         const uy: u32 = @intCast(y);
         const cx = ux / ChunkTiles;
         const cy = uy / ChunkTiles;
-        if (cx >= self.chunks_wide or cy >= self.chunks_tall) return;
-        self.chunks[cy * self.chunks_wide + cx].dirty = true;
+        if (cx >= self.chunksWide or cy >= self.chunksTall) return;
+        self.chunks[cy * self.chunksWide + cx].dirty = true;
     }
 
     /// Render all chunks that intersect `viewport` (world-space rectangle).
@@ -231,7 +230,7 @@ pub const ChunkedTiledLayerRenderer = struct {
         const th_f: f32 = @floatFromInt(layer.tileSize.y);
 
         gl.useProgram(self.shader.val.program);
-        gl.uniformMatrix4fv(self.uniform_mvp, 1, gl.FALSE, @ptrCast(&mvp_arr[0]));
+        gl.uniformMatrix4fv(self.uniformMvp, 1, gl.FALSE, @ptrCast(&mvp_arr[0]));
 
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, self.texture.val.texture);
@@ -239,10 +238,10 @@ pub const ChunkedTiledLayerRenderer = struct {
 
         for (self.chunks) |*chunk| {
             // --- Viewport culling ---
-            const cl: f32 = @as(f32, @floatFromInt(chunk.origin_x)) * tw_f;
-            const ct: f32 = @as(f32, @floatFromInt(chunk.origin_y)) * th_f;
-            const cr: f32 = @as(f32, @floatFromInt(chunk.origin_x + chunk.tile_w)) * tw_f;
-            const cb: f32 = @as(f32, @floatFromInt(chunk.origin_y + chunk.tile_h)) * th_f;
+            const cl: f32 = @as(f32, @floatFromInt(chunk.originX)) * tw_f;
+            const ct: f32 = @as(f32, @floatFromInt(chunk.originY)) * th_f;
+            const cr: f32 = @as(f32, @floatFromInt(chunk.originX + chunk.tileW)) * tw_f;
+            const cb: f32 = @as(f32, @floatFromInt(chunk.originY + chunk.tileH)) * th_f;
             if (cl >= viewport.r or cr <= viewport.l or
                 ct >= viewport.b or cb <= viewport.t) continue;
 
@@ -252,7 +251,7 @@ pub const ChunkedTiledLayerRenderer = struct {
                 chunk.dirty = false;
             }
 
-            if (chunk.num_indices == 0) continue;
+            if (chunk.numIndices == 0) continue;
 
             drawChunk(self, chunk);
         }
@@ -283,15 +282,15 @@ pub const ChunkedTiledLayerRenderer = struct {
         tileset: *const TileSet,
         layer: *const TileLayer,
     ) void {
-        var vi: usize = 0; // float index into scratch_verts / scratch_texcoords
-        var ii: usize = 0; // index into scratch_indices
+        var vi: usize = 0; // float index into scratchVerts / scratchTexcoords
+        var ii: usize = 0; // index into scratchIndices
 
         const ts = layer.tileSize;
 
-        for (0..chunk.tile_h) |dy| {
-            for (0..chunk.tile_w) |dx| {
-                const tx: i32 = @intCast(chunk.origin_x + dx);
-                const ty: i32 = @intCast(chunk.origin_y + dy);
+        for (0..chunk.tileH) |dy| {
+            for (0..chunk.tileW) |dx| {
+                const tx: i32 = @intCast(chunk.originX + dx);
+                const ty: i32 = @intCast(chunk.originY + dy);
                 const tv = layer.tileData(tx, ty);
                 if (tv < 0) continue; // air — skip
 
@@ -302,44 +301,44 @@ pub const ChunkedTiledLayerRenderer = struct {
                 const yf1: f32 = @floatFromInt((ty + 1) * ts.y);
 
                 // Vertex 0: top-left
-                self.scratch_verts[vi + 0] = xf - 0.01;
-                self.scratch_verts[vi + 1] = yf - 0.01;
-                self.scratch_texcoords[vi + 0] = uv.l;
-                self.scratch_texcoords[vi + 1] = uv.t;
+                self.scratchVerts[vi + 0] = xf - 0.01;
+                self.scratchVerts[vi + 1] = yf - 0.01;
+                self.scratchTexcoords[vi + 0] = uv.l;
+                self.scratchTexcoords[vi + 1] = uv.t;
 
                 // Vertex 1: top-right
-                self.scratch_verts[vi + 2] = xf1 + 0.01;
-                self.scratch_verts[vi + 3] = yf - 0.01;
-                self.scratch_texcoords[vi + 2] = uv.r;
-                self.scratch_texcoords[vi + 3] = uv.t;
+                self.scratchVerts[vi + 2] = xf1 + 0.01;
+                self.scratchVerts[vi + 3] = yf - 0.01;
+                self.scratchTexcoords[vi + 2] = uv.r;
+                self.scratchTexcoords[vi + 3] = uv.t;
 
                 // Vertex 2: bottom-right
-                self.scratch_verts[vi + 4] = xf1 + 0.01;
-                self.scratch_verts[vi + 5] = yf1 + 0.01;
-                self.scratch_texcoords[vi + 4] = uv.r;
-                self.scratch_texcoords[vi + 5] = uv.b;
+                self.scratchVerts[vi + 4] = xf1 + 0.01;
+                self.scratchVerts[vi + 5] = yf1 + 0.01;
+                self.scratchTexcoords[vi + 4] = uv.r;
+                self.scratchTexcoords[vi + 5] = uv.b;
 
                 // Vertex 3: bottom-left
-                self.scratch_verts[vi + 6] = xf - 0.01;
-                self.scratch_verts[vi + 7] = yf1 + 0.01;
-                self.scratch_texcoords[vi + 6] = uv.l;
-                self.scratch_texcoords[vi + 7] = uv.b;
+                self.scratchVerts[vi + 6] = xf - 0.01;
+                self.scratchVerts[vi + 7] = yf1 + 0.01;
+                self.scratchTexcoords[vi + 6] = uv.l;
+                self.scratchTexcoords[vi + 7] = uv.b;
 
                 // Two triangles: (0,1,3) and (1,2,3)
                 const base: u16 = @intCast(vi / 2);
-                self.scratch_indices[ii + 0] = base;
-                self.scratch_indices[ii + 1] = base + 1;
-                self.scratch_indices[ii + 2] = base + 3;
-                self.scratch_indices[ii + 3] = base + 1;
-                self.scratch_indices[ii + 4] = base + 2;
-                self.scratch_indices[ii + 5] = base + 3;
+                self.scratchIndices[ii + 0] = base;
+                self.scratchIndices[ii + 1] = base + 1;
+                self.scratchIndices[ii + 2] = base + 3;
+                self.scratchIndices[ii + 3] = base + 1;
+                self.scratchIndices[ii + 4] = base + 2;
+                self.scratchIndices[ii + 5] = base + 3;
 
                 vi += 8;
                 ii += 6;
             }
         }
 
-        chunk.num_indices = ii;
+        chunk.numIndices = ii;
         if (ii == 0) return; // Empty chunk (all air) — nothing to upload.
 
         const sz_verts: isize = @intCast(vi * @sizeOf(f32));
@@ -350,18 +349,18 @@ pub const ChunkedTiledLayerRenderer = struct {
         // so drawChunk only needs to bind the VAO and call drawElements.
         gl.bindVertexArray(chunk.vao);
 
-        gl.enableVertexAttribArray(self.attr_coord);
-        gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vbo_coords);
-        gl.bufferData(gl.ARRAY_BUFFER, sz_verts, &self.scratch_verts[0], gl.DYNAMIC_DRAW);
-        gl.vertexAttribPointer(self.attr_coord, 2, gl.FLOAT, gl.FALSE, 0, null);
+        gl.enableVertexAttribArray(self.attrCoord);
+        gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vboCoords);
+        gl.bufferData(gl.ARRAY_BUFFER, sz_verts, &self.scratchVerts[0], gl.DYNAMIC_DRAW);
+        gl.vertexAttribPointer(self.attrCoord, 2, gl.FLOAT, gl.FALSE, 0, null);
 
-        gl.enableVertexAttribArray(self.attr_texcoord);
-        gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vbo_texcoords);
-        gl.bufferData(gl.ARRAY_BUFFER, sz_verts, &self.scratch_texcoords[0], gl.DYNAMIC_DRAW);
-        gl.vertexAttribPointer(self.attr_texcoord, 2, gl.FLOAT, gl.FALSE, 0, null);
+        gl.enableVertexAttribArray(self.attrTexcoord);
+        gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vboTexcoords);
+        gl.bufferData(gl.ARRAY_BUFFER, sz_verts, &self.scratchTexcoords[0], gl.DYNAMIC_DRAW);
+        gl.vertexAttribPointer(self.attrTexcoord, 2, gl.FLOAT, gl.FALSE, 0, null);
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.ibo);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, sz_inds, &self.scratch_indices[0], gl.DYNAMIC_DRAW);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, sz_inds, &self.scratchIndices[0], gl.DYNAMIC_DRAW);
 
         gl.bindVertexArray(0);
         gl.bindBuffer(gl.ARRAY_BUFFER, 0);
@@ -370,7 +369,7 @@ pub const ChunkedTiledLayerRenderer = struct {
     fn drawChunk(self: *const Self, chunk: *const TileChunk) void {
         _ = self;
         gl.bindVertexArray(chunk.vao);
-        gl.drawElements(gl.TRIANGLES, @intCast(chunk.num_indices), gl.UNSIGNED_SHORT, null);
+        gl.drawElements(gl.TRIANGLES, @intCast(chunk.numIndices), gl.UNSIGNED_SHORT, null);
         gl.bindVertexArray(0);
     }
 };

@@ -23,7 +23,7 @@ pub const KeyboardState = struct {
     /// The same keys resolved through the active OS layout, so on AZERTY
     /// the key that reports `.q` in `keys` reports `.a` here. Read through
     /// `Keyboard.layoutDown` / `layoutPressed` when the keycap matters.
-    layout_keys: std.StaticBitSet(NumKeys),
+    layoutKeys: std.StaticBitSet(NumKeys),
     /// Modifier state as reported by SDL's key events, or null before any
     /// key event has been seen. SDL derives these bits from OS keymap
     /// state, so they reflect OS-level remaps (for example CapsLock
@@ -31,14 +31,14 @@ pub const KeyboardState = struct {
     /// remapped CapsLock key still reports as `.caps_lock`, never
     /// `.left_control`. When present, `modifiers()` ORs this with the
     /// physical-key reading so either source can satisfy a modifier query.
-    mods_override: ?KeyModifier,
+    modsOverride: ?KeyModifier,
 
     /// Initializes a new KeyboardState with all keys up.
     pub fn init() KeyboardState {
         return .{
             .keys = std.StaticBitSet(NumKeys).empty,
-            .layout_keys = std.StaticBitSet(NumKeys).empty,
-            .mods_override = null,
+            .layoutKeys = std.StaticBitSet(NumKeys).empty,
+            .modsOverride = null,
         };
     }
 
@@ -60,12 +60,12 @@ pub const KeyboardState = struct {
     /// Returns true if the key carrying this identity on the active
     /// layout's keycaps is currently down.
     pub fn layoutDown(self: *const KeyboardState, key: Key) bool {
-        return self.layout_keys.isSet(keys.keyIndex(key));
+        return self.layoutKeys.isSet(keys.keyIndex(key));
     }
 
     /// Returns true if the provided layout-key index is currently down.
     pub fn layoutDownIdx(self: *const KeyboardState, keyIdx: usize) bool {
-        return self.layout_keys.isSet(keyIdx);
+        return self.layoutKeys.isSet(keyIdx);
     }
 
     /// Sets the provided key to the given value (true for down, false for
@@ -87,17 +87,17 @@ pub const KeyboardState = struct {
     /// Sets the layout-resolved identity of a key that went down or up.
     pub fn setLayout(self: *KeyboardState, key: Key, val: bool) void {
         if (val) {
-            self.layout_keys.set(keys.keyIndex(key));
+            self.layoutKeys.set(keys.keyIndex(key));
         } else {
-            self.layout_keys.unset(keys.keyIndex(key));
+            self.layoutKeys.unset(keys.keyIndex(key));
         }
     }
 
     /// Clears the keyboard state by setting all keys to up.
     pub fn clear(self: *KeyboardState) void {
         self.keys.setRangeValue(.{ .start = 0, .end = NumKeys }, false);
-        self.layout_keys.setRangeValue(.{ .start = 0, .end = NumKeys }, false);
-        self.mods_override = null;
+        self.layoutKeys.setRangeValue(.{ .start = 0, .end = NumKeys }, false);
+        self.modsOverride = null;
     }
 
     /// Returns a KeyModifier struct representing the state of the modifier
@@ -106,7 +106,7 @@ pub const KeyboardState = struct {
     /// is down and sets the corresponding field in the KeyModifier struct
     /// accordingly.
     ///
-    /// When `mods_override` is set (an SDL key event has been seen), its
+    /// When `modsOverride` is set (an SDL key event has been seen), its
     /// bits are OR-ed in so a modifier the OS produces from a remapped
     /// physical key (e.g. CapsLock acting as Control) is also reported,
     /// even though that physical key reports as something else.
@@ -117,7 +117,7 @@ pub const KeyboardState = struct {
             .shift = self.down(.left_shift) or self.down(.right_shift),
             .super = self.down(.left_super) or self.down(.right_super),
         };
-        if (self.mods_override) |o| {
+        if (self.modsOverride) |o| {
             m.alt = m.alt or o.alt;
             m.ctrl = m.ctrl or o.ctrl;
             m.shift = m.shift or o.shift;
@@ -339,7 +339,7 @@ pub const Keyboard = struct {
     /// from events since the last call. Returns whether any key is down.
     pub fn update(self: *Keyboard) bool {
         var curr = self.currKeys_mut();
-        curr.mods_override = self.cbMods;
+        curr.modsOverride = self.cbMods;
         self.latchText();
         return curr.keys.count() > 0;
     }

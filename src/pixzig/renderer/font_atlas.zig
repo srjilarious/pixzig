@@ -26,7 +26,7 @@ pub const Character = struct {
     /// Top-left pixel position of the glyph inside the atlas. Stable across
     /// grows (a grow copies existing rows into a wider buffer without
     /// moving them), so it is the source of truth `coords` is rebuilt from.
-    atlas_pos: Vec2I = .{ .x = 0, .y = 0 },
+    atlasPos: Vec2I = .{ .x = 0, .y = 0 },
 };
 
 /// Font metrics scaled to a target pixel size, without packing any glyphs
@@ -39,7 +39,7 @@ pub const FontMetrics = struct {
     advance: i32,
     /// ascent - descent + line_gap: the font's recommended line-to-line
     /// spacing, i.e. the terminal cell height.
-    line_height: i32,
+    lineHeight: i32,
     /// Ascent alone, for baseline placement.
     ascent: i32,
 };
@@ -69,7 +69,7 @@ fn measureFontData(fontData: []const u8, faceIndex: i32, fontSize: f32) !FontMet
 
     return .{
         .advance = scaled(advance, scale),
-        .line_height = scaled(ascent - descent + line_gap, scale),
+        .lineHeight = scaled(ascent - descent + line_gap, scale),
         .ascent = scaled(ascent, scale),
     };
 }
@@ -95,16 +95,16 @@ pub fn measureFontFile(fontPath: []const u8, fontSize: f32, alloc: std.mem.Alloc
 /// buffer and a stb_truetype handle scaled to the atlas pixel size.
 pub const FontFace = struct {
     data: []u8,
-    owns_data: bool,
+    ownsData: bool,
     info: stb_tt.c.stbtt_fontinfo,
-    /// stb pixel-height scale for the atlas's `font_size`.
+    /// stb pixel-height scale for the atlas's `fontSize`.
     scale: f32,
 
-    /// `data` must outlive the face unless `owns_data` is true (then the
-    /// face frees it in `deinit`). `face_index` selects a face inside a
+    /// `data` must outlive the face unless `ownsData` is true (then the
+    /// face frees it in `deinit`). `faceIndex` selects a face inside a
     /// TrueType/OpenType collection (`.ttc`); use 0 for a plain font file.
-    pub fn init(data: []u8, owns_data: bool, face_index: i32, font_size: f32) !FontFace {
-        const offset = stb_tt.c.stbtt_GetFontOffsetForIndex(data.ptr, face_index);
+    pub fn init(data: []u8, ownsData: bool, faceIndex: i32, fontSize: f32) !FontFace {
+        const offset = stb_tt.c.stbtt_GetFontOffsetForIndex(data.ptr, faceIndex);
         if (offset < 0) return error.InvalidFontIndex;
 
         var info: stb_tt.c.stbtt_fontinfo = undefined;
@@ -112,14 +112,14 @@ pub const FontFace = struct {
 
         return .{
             .data = data,
-            .owns_data = owns_data,
+            .ownsData = ownsData,
             .info = info,
-            .scale = stb_tt.c.stbtt_ScaleForPixelHeight(&info, font_size),
+            .scale = stb_tt.c.stbtt_ScaleForPixelHeight(&info, fontSize),
         };
     }
 
     pub fn deinit(self: *FontFace, alloc: std.mem.Allocator) void {
-        if (self.owns_data) alloc.free(self.data);
+        if (self.ownsData) alloc.free(self.data);
     }
 
     /// stb glyph index for `cp`, or 0 when this face has no glyph for it.
@@ -180,7 +180,7 @@ pub const FontAtlas = struct {
     chars: std.AutoHashMap(u32, Character),
     /// 256-codepoint blocks already rasterized (key = codepoint >> 8). A
     /// block is packed in full the first time any codepoint in it is used.
-    loaded_blocks: std.AutoHashMap(u32, void),
+    loadedBlocks: std.AutoHashMap(u32, void),
     /// Ordered faces: index 0 is the primary, the rest are fallbacks tried
     /// in order for codepoints the primary lacks. Empty for a bitmap font.
     faces: std.ArrayListUnmanaged(FontFace),
@@ -197,15 +197,15 @@ pub const FontAtlas = struct {
     dim: i32,
     /// Shelf packer cursor: next free x on the current shelf, that shelf's
     /// top y, and the tallest cell placed on the current shelf so far.
-    pack_x: i32,
-    pack_y: i32,
-    shelf_h: i32,
+    packX: i32,
+    packY: i32,
+    shelfH: i32,
     /// `pixels` has changed since the last GL upload.
     dirty: bool,
     /// The atlas texture grew since the last upload -- every glyph's
     /// `coords` was re-normalized, so a caller with quads already queued
     /// against the old texture must flush them before `commitTexture`.
-    grew_since_upload: bool,
+    grewSinceUpload: bool,
 
     texture: Texture,
     /// Running max glyph height over everything packed so far. Used by the
@@ -221,7 +221,7 @@ pub const FontAtlas = struct {
     ascent: i32,
     isAlpha: bool,
 
-    font_size: f32,
+    fontSize: f32,
     alloc: std.mem.Allocator,
 
     const initial_dim: i32 = 1024;
@@ -274,7 +274,7 @@ pub const FontAtlas = struct {
         if (!self.dirty) return;
         self.uploadTexture();
         self.dirty = false;
-        self.grew_since_upload = false;
+        self.grewSinceUpload = false;
     }
 
     /// Loads every block `text` needs and uploads the texture. Returns true
@@ -283,13 +283,13 @@ pub const FontAtlas = struct {
     /// queued against the current texture.
     pub fn ensureBlocksForText(self: *FontAtlas, text: []const u8) bool {
         self.loadBlocksForText(text);
-        const grew = self.grew_since_upload;
+        const grew = self.grewSinceUpload;
         self.commitTexture();
         return grew;
     }
 
     fn ensureBlock(self: *FontAtlas, block: u32) !void {
-        if (self.loaded_blocks.contains(block)) return;
+        if (self.loadedBlocks.contains(block)) return;
 
         const base: u32 = block << 8;
         var off: u32 = 0;
@@ -298,7 +298,7 @@ pub const FontAtlas = struct {
             if (self.chars.contains(cp)) continue;
             try self.loadGlyph(cp);
         }
-        try self.loaded_blocks.put(block, {});
+        try self.loadedBlocks.put(block, {});
     }
 
     fn loadGlyph(self: *FontAtlas, cp: u32) !void {
@@ -343,7 +343,7 @@ pub const FontAtlas = struct {
             .size = .{ .x = gw, .y = gh },
             .bearing = .{ .x = @intCast(x0), .y = @intCast(-y0) },
             .advance = adv_px,
-            .atlas_pos = pos,
+            .atlasPos = pos,
         });
         self.maxY = @max(self.maxY, @as(i32, @intCast(-y0)));
     }
@@ -376,18 +376,18 @@ pub const FontAtlas = struct {
         const ph = h + glyph_padding;
 
         while (true) {
-            if (self.pack_x + pw <= self.dim and self.pack_y + ph <= self.dim) {
-                const slot = Vec2I{ .x = self.pack_x, .y = self.pack_y };
-                self.pack_x += pw;
-                if (ph > self.shelf_h) self.shelf_h = ph;
+            if (self.packX + pw <= self.dim and self.packY + ph <= self.dim) {
+                const slot = Vec2I{ .x = self.packX, .y = self.packY };
+                self.packX += pw;
+                if (ph > self.shelfH) self.shelfH = ph;
                 return slot;
             }
 
             // Wrap to a fresh shelf if we're not already at one.
-            if (self.pack_x != 0 and pw <= self.dim and self.pack_y + self.shelf_h + ph <= self.dim) {
-                self.pack_y += self.shelf_h;
-                self.pack_x = 0;
-                self.shelf_h = 0;
+            if (self.packX != 0 and pw <= self.dim and self.packY + self.shelfH + ph <= self.dim) {
+                self.packY += self.shelfH;
+                self.packX = 0;
+                self.shelfH = 0;
                 continue;
             }
 
@@ -397,7 +397,7 @@ pub const FontAtlas = struct {
 
     /// Doubles the atlas edge, copies the existing bitmap into the wider
     /// buffer at the same pixel offsets, and re-normalizes every glyph's
-    /// UVs. Existing `atlas_pos` values stay valid. Returns false at
+    /// UVs. Existing `atlasPos` values stay valid. Returns false at
     /// `max_dim`. Normally driven automatically by `packRect`; exposed for
     /// callers that want to pre-size the atlas (and for tests).
     pub fn grow(self: *FontAtlas) bool {
@@ -421,11 +421,11 @@ pub const FontAtlas = struct {
 
         var it = self.chars.valueIterator();
         while (it.next()) |ch| {
-            ch.coords = RectF.fromCoords(ch.atlas_pos.x, ch.atlas_pos.y, ch.size.x, ch.size.y, new_dim, new_dim);
+            ch.coords = RectF.fromCoords(ch.atlasPos.x, ch.atlasPos.y, ch.size.x, ch.size.y, new_dim, new_dim);
         }
         self.notdef.coords = RectF.fromCoords(
-            self.notdef.atlas_pos.x,
-            self.notdef.atlas_pos.y,
+            self.notdef.atlasPos.x,
+            self.notdef.atlasPos.y,
             self.notdef.size.x,
             self.notdef.size.y,
             new_dim,
@@ -433,7 +433,7 @@ pub const FontAtlas = struct {
         );
 
         self.dirty = true;
-        self.grew_since_upload = true;
+        self.grewSinceUpload = true;
         return true;
     }
 
@@ -441,11 +441,11 @@ pub const FontAtlas = struct {
     // Construction
     // -----------------------------------------------------------------------
 
-    fn initFromOwnedData(data: []u8, face_index: i32, fontSize: f32, alloc: std.mem.Allocator) !FontAtlas {
+    fn initFromOwnedData(data: []u8, faceIndex: i32, fontSize: f32, alloc: std.mem.Allocator) !FontAtlas {
         var faces: std.ArrayListUnmanaged(FontFace) = .empty;
         errdefer faces.deinit(alloc);
 
-        const first = try FontFace.init(data, true, face_index, fontSize);
+        const first = try FontFace.init(data, true, faceIndex, fontSize);
         try faces.append(alloc, first);
 
         var ascent: c_int = 0;
@@ -469,7 +469,7 @@ pub const FontAtlas = struct {
 
         var self = FontAtlas{
             .chars = std.AutoHashMap(u32, Character).init(alloc),
-            .loaded_blocks = std.AutoHashMap(u32, void).init(alloc),
+            .loadedBlocks = std.AutoHashMap(u32, void).init(alloc),
             .faces = faces,
             .notdef = .{
                 .coords = .{ .l = 0, .t = 0, .r = 0, .b = 0 },
@@ -479,11 +479,11 @@ pub const FontAtlas = struct {
             },
             .pixels = pixels,
             .dim = initial_dim,
-            .pack_x = 0,
-            .pack_y = 0,
-            .shelf_h = 0,
+            .packX = 0,
+            .packY = 0,
+            .shelfH = 0,
             .dirty = false,
-            .grew_since_upload = false,
+            .grewSinceUpload = false,
             .texture = .{
                 .texture = char_tex,
                 .size = .{ .x = @intCast(initial_dim), .y = @intCast(initial_dim) },
@@ -492,12 +492,12 @@ pub const FontAtlas = struct {
             .maxY = 0,
             .ascent = scaled_ascent,
             .isAlpha = true,
-            .font_size = fontSize,
+            .fontSize = fontSize,
             .alloc = alloc,
         };
         errdefer {
             self.chars.deinit();
-            self.loaded_blocks.deinit();
+            self.loadedBlocks.deinit();
         }
 
         self.buildNotdef();
@@ -507,7 +507,7 @@ pub const FontAtlas = struct {
 
         self.uploadTexture();
         self.dirty = false;
-        self.grew_since_upload = false;
+        self.grewSinceUpload = false;
         return self;
     }
 
@@ -523,7 +523,7 @@ pub const FontAtlas = struct {
         return initFromOwnedData(owned, faceIndex, fontSize, alloc);
     }
 
-    /// Loads a TTF/OTF (or a `.ttc` collection face) from disk. `face_index`
+    /// Loads a TTF/OTF (or a `.ttc` collection face) from disk. `faceIndex`
     /// is 0 for a plain font file.
     pub fn initFromTtfFileIndexed(fontPath: []const u8, faceIndex: i32, fontSize: f32, alloc: std.mem.Allocator) !FontAtlas {
         const io = std.Io.Threaded.global_single_threaded.io();
@@ -550,11 +550,11 @@ pub const FontAtlas = struct {
     pub fn addFallbackFaceFromData(self: *FontAtlas, fontData: []const u8, faceIndex: i32) !void {
         const owned = try self.alloc.dupe(u8, fontData);
         errdefer self.alloc.free(owned);
-        const face = try FontFace.init(owned, true, faceIndex, self.font_size);
+        const face = try FontFace.init(owned, true, faceIndex, self.fontSize);
         try self.faces.append(self.alloc, face);
         // Drop the block memo so blocks re-scan; `ensureBlock` skips
         // codepoints already in `chars`, so only the gaps get filled.
-        self.loaded_blocks.clearRetainingCapacity();
+        self.loadedBlocks.clearRetainingCapacity();
     }
 
     /// Appends a fallback face read from a font/collection file. `faceIndex`
@@ -576,7 +576,7 @@ pub const FontAtlas = struct {
     ///
     /// Returns `error.NotAScalableFont` for a bitmap-font atlas (it has no
     /// TrueType faces to rescale). On an allocation failure partway through
-    /// the repack, `font_size` is already updated and the base set may be
+    /// the repack, `fontSize` is already updated and the base set may be
     /// only partly packed; `getChar` finishes it lazily on next use.
     pub fn setFontSize(self: *FontAtlas, size_px: f32) !void {
         if (self.faces.items.len == 0) return error.NotAScalableFont;
@@ -584,7 +584,7 @@ pub const FontAtlas = struct {
         for (self.faces.items) |*f| {
             f.scale = stb_tt.c.stbtt_ScaleForPixelHeight(&f.info, size_px);
         }
-        self.font_size = size_px;
+        self.fontSize = size_px;
 
         // Re-measure the baseline for the new pixel size before any glyph
         // is packed -- it comes from the face's vmetrics, not from glyphs.
@@ -598,7 +598,7 @@ pub const FontAtlas = struct {
 
         // Drop every packed glyph and rewind the shelf packer.
         self.chars.clearRetainingCapacity();
-        self.loaded_blocks.clearRetainingCapacity();
+        self.loadedBlocks.clearRetainingCapacity();
 
         // Undo any earlier grow so the repack starts from the base square.
         if (self.dim != initial_dim) {
@@ -609,9 +609,9 @@ pub const FontAtlas = struct {
         }
         @memset(self.pixels, 0);
 
-        self.pack_x = 0;
-        self.pack_y = 0;
-        self.shelf_h = 0;
+        self.packX = 0;
+        self.packY = 0;
+        self.shelfH = 0;
         self.maxY = 0;
         self.notdef = .{
             .coords = .{ .l = 0, .t = 0, .r = 0, .b = 0 },
@@ -627,7 +627,7 @@ pub const FontAtlas = struct {
 
         self.uploadTexture();
         self.dirty = false;
-        self.grew_since_upload = false;
+        self.grewSinceUpload = false;
     }
 
     /// Rasterizes the primary face's `.notdef` (glyph index 0) into the
@@ -659,7 +659,7 @@ pub const FontAtlas = struct {
                     .size = .{ .x = gw, .y = gh },
                     .bearing = .{ .x = @intCast(x0), .y = @intCast(-y0) },
                     .advance = if (adv_px > 0) adv_px else gw,
-                    .atlas_pos = pos,
+                    .atlasPos = pos,
                 };
                 self.maxY = @max(self.maxY, @as(i32, @intCast(-y0)));
                 return;
@@ -672,7 +672,7 @@ pub const FontAtlas = struct {
     /// Draws a hollow rectangle into the atlas for use as `notdef` when the
     /// font has no `.notdef` outline of its own.
     fn synthesizeNotdef(self: *FontAtlas, adv_hint: i32) void {
-        const h: i32 = @max(4, @as(i32, @intFromFloat(self.font_size * 0.62)));
+        const h: i32 = @max(4, @as(i32, @intFromFloat(self.fontSize * 0.62)));
         const w: i32 = @max(3, if (adv_hint > 0) adv_hint - 2 else @divTrunc(h * 3, 5));
         const pos = self.packRect(w, h) orelse {
             self.notdef = .{
@@ -700,7 +700,7 @@ pub const FontAtlas = struct {
             .size = .{ .x = w, .y = h },
             .bearing = .{ .x = 1, .y = h },
             .advance = if (adv_hint > 0) adv_hint else w + 2,
-            .atlas_pos = pos,
+            .atlasPos = pos,
         };
         self.maxY = @max(self.maxY, h);
     }
@@ -796,7 +796,7 @@ pub const FontAtlas = struct {
 
         return .{
             .chars = charsMap,
-            .loaded_blocks = std.AutoHashMap(u32, void).init(alloc),
+            .loadedBlocks = std.AutoHashMap(u32, void).init(alloc),
             .faces = .empty,
             // No faces -> no real notdef; advance 0 + size 0 makes
             // `getChar` return null for a missing codepoint, exactly as the
@@ -809,11 +809,11 @@ pub const FontAtlas = struct {
             },
             .pixels = &[_]u8{},
             .dim = 0,
-            .pack_x = 0,
-            .pack_y = 0,
-            .shelf_h = 0,
+            .packX = 0,
+            .packY = 0,
+            .shelfH = 0,
             .dirty = false,
-            .grew_since_upload = false,
+            .grewSinceUpload = false,
             .texture = Texture{
                 .texture = charTex,
                 .size = Vec2U{ .x = @as(u32, image.width), .y = @as(u32, image.height) },
@@ -824,7 +824,7 @@ pub const FontAtlas = struct {
             // tallest cell exactly as before, so the baseline is `maxY`.
             .ascent = maxY,
             .isAlpha = false,
-            .font_size = 0,
+            .fontSize = 0,
             .alloc = alloc,
         };
     }
@@ -832,7 +832,7 @@ pub const FontAtlas = struct {
     pub fn deinit(self: *FontAtlas) void {
         gl.deleteTextures(1, &self.texture.texture);
         self.chars.deinit();
-        self.loaded_blocks.deinit();
+        self.loadedBlocks.deinit();
         for (self.faces.items) |*f| f.deinit(self.alloc);
         self.faces.deinit(self.alloc);
         if (self.pixels.len > 0) self.alloc.free(self.pixels);

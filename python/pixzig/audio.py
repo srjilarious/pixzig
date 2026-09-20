@@ -10,6 +10,8 @@ engine's per-sound cap.
 Paths are resolved against the current working directory, the same as
 `PixzigApp.load_texture`.
 """
+import os
+
 from . import _native as _n
 
 
@@ -18,7 +20,11 @@ class Audio:
         self._eng = eng
 
     def load(self, name: str, path: str) -> None:
-        _n.check(_n.pz_audio_load(self._eng, name.encode("utf-8"), path.encode("utf-8")) == 0)
+        # The engine resolves a relative path against the executable's own
+        # directory, which under Python is the interpreter's install dir.
+        # Resolve against the cwd here instead, matching `load_texture`.
+        abs_path = os.path.abspath(path)
+        _n.check(_n.pz_audio_load(self._eng, name.encode("utf-8"), abs_path.encode("utf-8")) == 0)
 
     def play(self, name: str) -> None:
         _n.check(_n.pz_audio_play(self._eng, name.encode("utf-8")) == 0)

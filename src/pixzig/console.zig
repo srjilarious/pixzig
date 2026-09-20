@@ -66,10 +66,10 @@ pub const Console = struct {
         const console: *Console = try alloc.create(Console);
         errdefer alloc.destroy(console);
 
-        const input_len = @max(1, opts.inputBufferLen);
-        const input_buffer = try alloc.allocSentinel(u8, input_len, 0);
+        const inputLen = @max(1, opts.inputBufferLen);
+        const input_buffer = try alloc.allocSentinel(u8, inputLen, 0);
         errdefer alloc.free(input_buffer);
-        const stored_command_buffer = try alloc.allocSentinel(u8, input_len, 0);
+        const stored_command_buffer = try alloc.allocSentinel(u8, inputLen, 0);
         errdefer alloc.free(stored_command_buffer);
 
         const right: f32 = @floatFromInt(opts.displaySize.x - @as(usize, @intCast(opts.offs.x)));
@@ -290,10 +290,10 @@ pub const Console = struct {
         return true;
     }
 
-    fn scrollToBottomForArea(self: *Console, ui: anytype, area_height: f32) void {
+    fn scrollToBottomForArea(self: *Console, ui: anytype, areaHeight: f32) void {
         const line_h: f32 = @floatFromInt(ui.renderer.lineHeight() orelse 16);
         const pad_y: f32 = @floatFromInt(ui.style.padding.y);
-        const usable_h = @max(0.0, area_height - pad_y * 2.0);
+        const usable_h = @max(0.0, areaHeight - pad_y * 2.0);
         const visible: usize = @max(1, @as(usize, @intFromFloat(@floor(usable_h / line_h))));
         self.lineOffs = if (self.logBuffer.items.len > visible)
             self.logBuffer.items.len - visible
@@ -319,9 +319,9 @@ pub const Console = struct {
             self.shouldFocus = false;
         }
 
-        const input_h: f32 = @floatFromInt(ui.style.input_height);
-        const item_spacing: f32 = @floatFromInt(ui.style.item_spacing);
-        const log_h = @max(input_h, ui.remainingHeight() - input_h - item_spacing);
+        const input_h: f32 = @floatFromInt(ui.style.inputHeight);
+        const itemSpacing: f32 = @floatFromInt(ui.style.itemSpacing);
+        const log_h = @max(input_h, ui.remainingHeight() - input_h - itemSpacing);
 
         if (self.scrollToBottom) {
             self.scrollToBottomForArea(ui, log_h);
@@ -331,13 +331,13 @@ pub const Console = struct {
         ui.textArea(LogId, self.logBuffer.items, &self.lineOffs, log_h);
 
         const input_res = ui.inputTextEx(InputId, self.inputBuffer, &self.inputMax, .{
-            .submit_on_enter = true,
-            .history_keys = true,
+            .submitOnEnter = true,
+            .historyKeys = true,
         });
 
-        if (input_res.history_prev) {
+        if (input_res.historyPrev) {
             if (self.historyPrev()) ui.setInputCursor(InputId, self.inputMax);
-        } else if (input_res.history_next) {
+        } else if (input_res.historyNext) {
             if (self.historyNext()) ui.setInputCursor(InputId, self.inputMax);
         }
 
