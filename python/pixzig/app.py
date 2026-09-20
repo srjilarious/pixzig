@@ -1,13 +1,12 @@
-"""PixzigApp: the base class for a pixzig game written in Python.
+"""App: the base class for a pixzig game written in Python.
 
 Subclass it, override `update` and `render`, and call `run()`. The fixed-
-timestep loop below mirrors pixzig's own `PixzigAppRunner.gameLoopCore`
+timestep loop below mirrors pixzig's own `AppRunner.gameLoopCore`
 (src/pixzig/pixzig.zig), just owned by Python instead of Zig.
 """
 import atexit
 import ctypes
 import functools
-import os
 import time
 import weakref
 
@@ -18,11 +17,12 @@ from .audio import Audio
 from .camera import Camera
 from .input import Gamepad, Keyboard, Mouse
 from .manifest import AssetManifest
+from .paths import AssetPaths
 from .shapes import Shapes
 from .sprite import Flip, Sprite
 from .text import Text
 from .tilemap import TileMapRenderer
-from .window import Window
+from .window import ScalePolicy, Window
 
 
 def _close_at_exit(app_ref):
@@ -32,7 +32,45 @@ def _close_at_exit(app_ref):
         app.close()
 
 
-class PixzigApp:
+def _clear_rgba(color):
+    """Splits an (r, g, b) or (r, g, b, a) 0-255 tuple into four ints, the
+    form `pz_render_clear` takes."""
+    if len(color) == 3:
+        r, g, b = color
+        a = 255
+    else:
+        r, g, b, a = color
+    return int(r), int(g), int(b), int(a)
+
+
+class App:
+    """A pixzig game. Subclass, override `update`/`render`, call `run()`.
+
+    The window arguments mirror `EngineInitOptions` on the Zig side:
+
+    * `width`/`height` -- the OS window, in window coordinates.
+    * `logical_size` -- a fixed (width, height) game resolution that draw
+      calls address, scaled to the window by `scale_policy`. Leave it None
+      and logical space tracks the framebuffer, so one unit is one pixel.
+    * `scale_policy` -- one of `ScalePolicy`; only meaningful together with
+      `logical_size`. Pixel art usually wants `ScalePolicy.INTEGER_FIT`,
+      which scales by whole multiples so pixels stay square and crisp.
+    * `scale_factor` -- the constant scale for `ScalePolicy.FIXED`.
+    * `asset_root` -- the directory relative asset paths resolve against.
+      Defaults to the main script's directory; see `pixzig.paths`.
+
+    A 320x240 game upscaled to a 960x720 window, with sound:
+
+        class MyGame(App):
+            def __init__(self):
+                super().__init__(
+                    "My Game", 960, 720,
+                    logical_size=(320, 240),
+                    scale_policy=ScalePolicy.INTEGER_FIT,
+                )
+                self.clear_color = (24, 24, 32)
+    """
+
     def __init__(
         self,
         title: str,
@@ -40,11 +78,38 @@ class PixzigApp:
         height: int = 480,
         update_hz: float = 120.0,
         max_lag_ms: float = 250.0,
+        logical_size=None,
+        scale_policy: int = ScalePolicy.FIT,
+        scale_factor: float = 1.0,
+        fullscreen: bool = False,
+        resizable: bool = True,
+        vsync: bool = True,
+        asset_root: str = None,
     ):
-        eng = _n.pz_init(title.encode("utf-8"), int(width), int(height))
+        # Where relative asset paths resolve from. Set up before the engine
+        # so it's there for a subclass that loads during its own __init__.
+        self._paths = AssetPaths(asset_root)
+
+        logical_w, logical_h = logical_size if logical_size is not None else (0, 0)
+        opts = _n.PzInitOptions(
+            title=title.encode("utf-8"),
+            width=int(width),
+            height=int(height),
+            logical_width=int(logical_w),
+            logical_height=int(logical_h),
+            scale_policy=int(scale_policy),
+            scale_factor=float(scale_factor),
+            fullscreen=bool(fullscreen),
+            resizable=bool(resizable),
+            vsync=bool(vsync),
+        )
+        eng = _n.pz_init(ctypes.byref(opts))
         if not eng:
-            raise _n.PixzigError(_n.last_error())
+            raise _n.Error(_n.last_error())
         self._eng = eng
+        # What `run()` clears the screen to each frame, as an (r, g, b) or
+        # (r, g, b, a) tuple of 0-255 components. Assign any time.
+        self.clear_color = (0, 0, 0)
         # Every handle-owning wrapper handed out (sprites, actors, cameras,
         # ...). `pz_deinit` frees their native objects, so `close()` marks
         # them destroyed on the way out; a later `sprite.destroy()` is then a
@@ -59,7 +124,7 @@ class PixzigApp:
         # engine); this atexit hook is the backstop for an app something
         # still holds a reference to. Registered before any other setup so it
         # covers the whole constructor. Prefer
-        # `with PixzigApp(...) as app:`, which closes at the end of the block.
+        # `with App(...) as app:`, which closes at the end of the block.
         self._atexit_hook = functools.partial(_close_at_exit, weakref.ref(self))
         atexit.register(self._atexit_hook)
 
@@ -74,26 +139,39 @@ class PixzigApp:
         self.keyboard = Keyboard(eng)
         self.mouse = Mouse(eng)
         self.shapes = Shapes(eng)
-        self.text = Text(eng)
-        self.audio = Audio(eng)
+        self.text = Text(eng, self._paths)
+        self.audio = Audio(eng, self._paths)
         self.window = Window(eng)
 
     def _track(self, wrapper):
         self._handles.add(wrapper)
         return wrapper
 
+    @property
+    def asset_root(self) -> str:
+        """The directory relative asset paths resolve against. Defaults to
+        the main script's directory; assign to point somewhere else (a
+        packaged install, a mod directory). Applies to every later load,
+        including through `app.audio` and `app.text`."""
+        return self._paths.root
+
+    @asset_root.setter
+    def asset_root(self, root: str) -> None:
+        self._paths.root = root
+
     def gamepad(self, index: int) -> Gamepad:
         return Gamepad(self._eng, index)
 
     # --- Resources -----------------------------------------------------
 
+    # Every loader below takes a path relative to `asset_root` (the main
+    # script's directory by default) and hands the engine an absolute one.
+    # The engine would otherwise resolve a relative path against the running
+    # executable's directory, which under Python is wherever the interpreter
+    # is installed. Absolute paths pass through untouched. See `pixzig.paths`.
+
     def load_texture(self, name: str, path: str) -> None:
-        # The engine resolves a relative path against the executable's own
-        # directory, which under Python is the interpreter's install dir.
-        # Resolve against the cwd here instead, the convention the Python
-        # bindings have always used.
-        abs_path = os.path.abspath(path)
-        _n.check(_n.pz_load_texture(self._eng, name.encode("utf-8"), abs_path.encode("utf-8")) == 0)
+        _n.check(_n.pz_load_texture(self._eng, name.encode("utf-8"), self._paths.encode(path)) == 0)
 
     def create_subtexture(self, base_name: str, new_name: str, x: int, y: int, w: int, h: int) -> None:
         _n.check(
@@ -106,31 +184,25 @@ class PixzigApp:
     def load_sprite(self, texture_name: str) -> Sprite:
         handle = _n.pz_sprite_create(self._eng, texture_name.encode("utf-8"))
         if not handle:
-            raise _n.PixzigError(_n.last_error())
+            raise _n.Error(_n.last_error())
         return self._track(Sprite(handle))
 
     def load_tilemap(self, name: str, path: str) -> None:
-        # cwd-relative, as with `load_texture`.
-        abs_path = os.path.abspath(path)
-        _n.check(_n.pz_load_tilemap(self._eng, name.encode("utf-8"), abs_path.encode("utf-8")) == 0)
+        _n.check(_n.pz_load_tilemap(self._eng, name.encode("utf-8"), self._paths.encode(path)) == 0)
 
     def create_tilemap_renderer(self, map_name: str, texture_name: str) -> TileMapRenderer:
         handle = _n.pz_tilemap_renderer_create(self._eng, map_name.encode("utf-8"), texture_name.encode("utf-8"))
         if not handle:
-            raise _n.PixzigError(_n.last_error())
+            raise _n.Error(_n.last_error())
         return self._track(TileMapRenderer(handle))
 
     def load_manifest(self, path: str) -> AssetManifest:
-        # A relative path is resolved (by AssetManifest.loadFromFile, Zig
-        # side) against the running executable's own directory -- for a
-        # packaged Zig build that's the game, but under Python it would be
-        # the Python interpreter's install directory. Resolve to an absolute
-        # path against the current working directory here instead, matching
-        # the cwd-relative convention load_texture/load_tilemap use.
-        abs_path = os.path.abspath(path)
-        handle = _n.pz_manifest_load(self._eng, abs_path.encode("utf-8"))
+        # Note this resolves the manifest file itself. The asset paths
+        # *inside* it are resolved by the engine, against the manifest's own
+        # `root` plus the build's asset base.
+        handle = _n.pz_manifest_load(self._eng, self._paths.encode(path))
         if not handle:
-            raise _n.PixzigError(_n.last_error())
+            raise _n.Error(_n.last_error())
         return self._track(AssetManifest(handle))
 
     # --- Sprite animation -----------------------------------------------
@@ -141,7 +213,7 @@ class PixzigApp:
     def load_anim_file(self, path: str) -> None:
         """Loads a JSON frame-sequence + actor-state file into the shared
         animation library. Frame textures must already be loaded."""
-        _n.check(_n.pz_anim_load_file(self._eng, os.path.abspath(path).encode("utf-8")) == 0)
+        _n.check(_n.pz_anim_load_file(self._eng, self._paths.encode(path)) == 0)
 
     def create_sequence(self, name: str, loop: bool = True) -> None:
         """Registers an empty frame sequence; add frames with `add_frame`."""
@@ -170,7 +242,7 @@ class PixzigApp:
         texture `texture_name`."""
         handle = _n.pz_actor_create(self._eng, texture_name.encode("utf-8"))
         if not handle:
-            raise _n.PixzigError(_n.last_error())
+            raise _n.Error(_n.last_error())
         return self._track(Actor(handle))
 
     # --- Action mapping ---------------------------------------------------
@@ -178,7 +250,7 @@ class PixzigApp:
     def create_action_map(self) -> ActionMap:
         handle = _n.pz_action_map_create(self._eng)
         if not handle:
-            raise _n.PixzigError(_n.last_error())
+            raise _n.Error(_n.last_error())
         return self._track(ActionMap(handle))
 
     # --- Camera ----------------------------------------------------------
@@ -186,7 +258,7 @@ class PixzigApp:
     def create_camera(self) -> Camera:
         handle = _n.pz_camera_create(self._eng)
         if not handle:
-            raise _n.PixzigError(_n.last_error())
+            raise _n.Error(_n.last_error())
         return self._track(Camera(handle))
 
     # --- Coordinate transforms -----------------------------------------
@@ -247,10 +319,10 @@ class PixzigApp:
 
     # --- Overridable hooks -----------------------------------------------
 
-    def update(self, dt_ms: float):
-        """Called at a fixed timestep. Return False (or call `quit()`) to
-        quit; returning None, i.e. no return statement, keeps running."""
-        return None
+    def update(self, dt_ms: float) -> None:
+        """Called at a fixed timestep (`update_hz`). Call `self.quit()` to
+        end the game; the return value is ignored."""
+        pass
 
     def render(self) -> None:
         """Called once per displayed frame, after the screen is cleared."""
@@ -259,6 +331,8 @@ class PixzigApp:
     # --- Loop --------------------------------------------------------------
 
     def quit(self) -> None:
+        """Ends the game after the current tick. The only way to quit from
+        `update` -- the return value isn't looked at."""
         self._running = False
 
     def close(self) -> None:
@@ -266,7 +340,7 @@ class PixzigApp:
         handed out. Idempotent: calling it again, or after `run()` has
         returned, does nothing.
 
-        Called for you by `run()`, by `with PixzigApp(...) as app:`, and --
+        Called for you by `run()`, by `with App(...) as app:`, and --
         as a backstop -- when the app is garbage collected or the
         interpreter exits."""
         # getattr guards the case where pz_init itself failed, so __del__
@@ -283,7 +357,7 @@ class PixzigApp:
         _n.pz_deinit(self._eng)
         self._eng = None
 
-    def __enter__(self) -> "PixzigApp":
+    def __enter__(self) -> "App":
         return self
 
     def __exit__(self, exc_type, exc, tb) -> bool:
@@ -302,7 +376,7 @@ class PixzigApp:
 
     def run(self) -> None:
         if self._eng is None:
-            raise _n.PixzigError("run() called after the app has already shut down")
+            raise _n.Error("run() called after the app has already shut down")
         # Time spent before run() (a subclass __init__ loading assets) is not
         # game time, so start the clock fresh.
         self._curr_time = time.perf_counter() * 1000.0
@@ -315,20 +389,21 @@ class PixzigApp:
 
                 _n.pz_poll_events(self._eng)
 
-                while self._lag > self._update_step_ms:
+                while self._lag > self._update_step_ms and self._running:
                     self._lag -= self._update_step_ms
                     _n.pz_update_input(self._eng)
-                    result = self.update(self._update_step_ms)
+                    self.update(self._update_step_ms)
                     # Closes the input tick: without it, key_pressed() would
                     # keep reporting the same press on every later tick.
                     _n.pz_finish_tick(self._eng)
-                    # Only an explicit False quits. A subclass `update` with
-                    # no return statement returns None, which must not end
-                    # the app on its first frame.
-                    if result is False:
-                        return
 
-                _n.pz_render_clear(self._eng, 0, 0, 0, 255)
+                # An update that called quit() ends the game right there,
+                # without drawing a frame of the state it just abandoned.
+                if not self._running:
+                    break
+
+                r, g, b, a = _clear_rgba(self.clear_color)
+                _n.pz_render_clear(self._eng, r, g, b, a)
                 self.render()
                 _n.pz_swap_buffers(self._eng)
         finally:

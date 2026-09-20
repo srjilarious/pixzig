@@ -1,4 +1,4 @@
-"""Asset manifests. Load via `PixzigApp.load_manifest(path)`.
+"""Asset manifests. Load via `App.load_manifest(path)`.
 
 A manifest is a JSON file describing named assets (textures, atlases, fonts,
 tilemaps) grouped into named groups, e.g.:
@@ -16,7 +16,7 @@ tilemaps) grouped into named groups, e.g.:
 A group named "boot" is loaded automatically as soon as the manifest is
 opened. Loading a group registers its assets in the engine's resource
 manager under their manifest id, so they're then usable directly by id with
-`PixzigApp.load_sprite`, `PixzigApp.create_tilemap_renderer`, and
+`App.load_sprite`, `App.create_tilemap_renderer`, and
 `Text.set_font` -- no separate step needed to "get" an asset out of the
 manifest.
 """
@@ -30,7 +30,7 @@ class AssetManifest:
 
     def _check_alive(self) -> None:
         if self._destroyed:
-            raise _n.PixzigError("asset manifest already destroyed (or the app has shut down)")
+            raise _n.Error("asset manifest already destroyed (or the app has shut down)")
 
     def load_group(self, name: str) -> None:
         self._check_alive()

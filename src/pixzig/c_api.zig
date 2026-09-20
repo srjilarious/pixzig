@@ -188,7 +188,42 @@ export fn pz_last_error() callconv(.c) [*:0]const u8 {
 // Lifecycle
 // ---------------------------------------------------------------------------
 
-export fn pz_init(title: [*:0]const u8, width: i32, height: i32) callconv(.c) ?*PzEngine {
+/// Mirror of `EngineInitOptions` for C callers. Laid out `extern` so Python
+/// can fill it with a `ctypes.Structure`; every field is required, so the
+/// defaults that apply are the caller's own (see `pixzig.App`).
+pub const PzInitOptions = extern struct {
+    title: [*:0]const u8,
+    /// OS window size, in window coordinates.
+    width: i32,
+    height: i32,
+    /// Fixed logical (game) resolution. Either one zero or less means "track
+    /// the framebuffer", i.e. `EngineInitOptions.logicalSize = null`.
+    logicalWidth: i32,
+    logicalHeight: i32,
+    /// `ScalePolicy` tag: 0 stretch, 1 fit, 2 fill, 3 integer_fit,
+    /// 4 integer_fill, 5 fixed. Anything else falls back to `fit`.
+    scalePolicy: i32,
+    /// The scale used when `scalePolicy` is 5 (fixed); ignored otherwise.
+    scaleFactor: f32,
+    fullscreen: bool,
+    resizable: bool,
+    vsync: bool,
+};
+
+/// Maps `PzInitOptions.scalePolicy` (plus its `scaleFactor`) onto the
+/// `ScalePolicy` union, matching the declaration order in `window.zig`.
+fn scalePolicyFromInt(v: i32, scale: f32) pixzig.ScalePolicy {
+    return switch (v) {
+        0 => .stretch,
+        2 => .fill,
+        3 => .integer_fit,
+        4 => .integer_fill,
+        5 => .{ .fixed = scale },
+        else => .fit,
+    };
+}
+
+export fn pz_init(opts: *const PzInitOptions) callconv(.c) ?*PzEngine {
     const alloc = std.heap.c_allocator;
 
     const pz = alloc.create(PzEngine) catch |err| {
@@ -196,8 +231,20 @@ export fn pz_init(title: [*:0]const u8, width: i32, height: i32) callconv(.c) ?*
         return null;
     };
 
-    const engine = Engine.init(std.mem.span(title), alloc, .{
-        .windowSize = .{ .x = width, .y = height },
+    // A zero logical size means the caller wants logical space to track the
+    // framebuffer, which the engine spells as a null `logicalSize`.
+    const logicalSize: ?pixzig.Vec2I = if (opts.logicalWidth > 0 and opts.logicalHeight > 0)
+        .{ .x = opts.logicalWidth, .y = opts.logicalHeight }
+    else
+        null;
+
+    const engine = Engine.init(std.mem.span(opts.title), alloc, .{
+        .windowSize = .{ .x = opts.width, .y = opts.height },
+        .logicalSize = logicalSize,
+        .scalePolicy = scalePolicyFromInt(opts.scalePolicy, opts.scaleFactor),
+        .fullscreen = opts.fullscreen,
+        .resizable = opts.resizable,
+        .vsync = opts.vsync,
     }) catch |err| {
         setLastErrorErr(err);
         alloc.destroy(pz);
@@ -887,8 +934,39 @@ export fn pz_draw_rect(eng: *PzEngine, x: f32, y: f32, w: f32, h: f32, r: f32, g
     eng.engine.renderer.drawRect(dest, .{ .r = r, .g = g, .b = b, .a = a }, line_width);
 }
 
+/// Like pz_draw_rect, but the outline sits `line_width` pixels *outside*
+/// the given rect instead of inside it.
+export fn pz_draw_enclosing_rect(eng: *PzEngine, x: f32, y: f32, w: f32, h: f32, r: f32, g: f32, b: f32, a: f32, line_width: u8) callconv(.c) void {
+    const dest = pixzig.RectF{ .l = x, .t = y, .r = x + w, .b = y + h };
+    eng.engine.renderer.drawEnclosingRect(dest, .{ .r = r, .g = g, .b = b, .a = a }, line_width);
+}
+
 export fn pz_draw_string(eng: *PzEngine, text: [*:0]const u8, x: i32, y: i32) callconv(.c) void {
     _ = eng.engine.renderer.drawString(std.mem.span(text), .{ .x = x, .y = y });
+}
+
+/// Draws `text` with every glyph tinted by a 0-1 RGBA color. Expects a TTF
+/// (alpha-mask) font atlas; see `TextRenderer.drawStringColored`.
+export fn pz_draw_string_colored(eng: *PzEngine, text: [*:0]const u8, x: i32, y: i32, r: f32, g: f32, b: f32, a: f32) callconv(.c) void {
+    _ = eng.engine.renderer.drawStringColored(std.mem.span(text), .{ .x = x, .y = y }, .{ .r = r, .g = g, .b = b, .a = a });
+}
+
+/// Draws `text` scaled uniformly about its top-left position.
+export fn pz_draw_string_scaled(eng: *PzEngine, text: [*:0]const u8, x: i32, y: i32, scale: f32) callconv(.c) void {
+    _ = eng.engine.renderer.drawScaledString(std.mem.span(text), .{ .x = x, .y = y }, scale);
+}
+
+/// Measures `text` in the default font without drawing it. Reports (0, 0)
+/// when no font is set.
+export fn pz_measure_string(eng: *PzEngine, text: [*:0]const u8, out_w: *i32, out_h: *i32) callconv(.c) void {
+    const size = eng.engine.renderer.measureString(std.mem.span(text));
+    out_w.* = size.x;
+    out_h.* = size.y;
+}
+
+/// The default font's line height in pixels, or -1 when no font is set.
+export fn pz_font_line_height(eng: *PzEngine) callconv(.c) i32 {
+    return eng.engine.renderer.lineHeight() orelse -1;
 }
 
 // ---------------------------------------------------------------------------
@@ -1113,6 +1191,12 @@ export fn pz_window_set_fullscreen(eng: *PzEngine, enabled: bool) callconv(.c) i
 
 export fn pz_window_is_fullscreen(eng: *PzEngine) callconv(.c) bool {
     return eng.engine.window.isFullscreen();
+}
+
+/// Turns vsync on or off on the live graphics context, e.g. from a settings
+/// menu. The starting value comes from `PzInitOptions.vsync`.
+export fn pz_window_set_vsync(eng: *PzEngine, enabled: bool) callconv(.c) void {
+    eng.engine.enableVSync(enabled);
 }
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-"""Window and viewport state. Access via `PixzigApp.window`.
+"""Window and viewport state. Access via `App.window`.
 
 Coordinate spaces:
   * **window**   - OS window coordinates, what the mouse reports.
@@ -9,6 +9,29 @@ Coordinate spaces:
 import ctypes
 
 from . import _native as _n
+
+
+class ScalePolicy:
+    """How the logical game resolution maps onto the framebuffer. Pass one
+    to `App(..., scale_policy=...)` alongside a `logical_size`; it has no
+    effect without one, since logical space then *is* the framebuffer.
+
+    Mirrors `ScalePolicy` in src/pixzig/window.zig -- the values are the
+    union's declaration order and cross the FFI as plain ints.
+    """
+
+    #: Fills the framebuffer, ignoring aspect ratio.
+    STRETCH = 0
+    #: Scales uniformly to fit entirely, letterboxing/pillarboxing the rest.
+    FIT = 1
+    #: Scales uniformly to cover the framebuffer, cropping the overflow.
+    FILL = 2
+    #: `FIT` rounded down to a whole multiple -- what pixel art wants.
+    INTEGER_FIT = 3
+    #: `FILL` rounded up to a whole multiple.
+    INTEGER_FILL = 4
+    #: A constant scale, taken from `App(..., scale_factor=...)`.
+    FIXED = 5
 
 
 def _pair_i(fn, eng):
@@ -55,3 +78,10 @@ class Window:
     @fullscreen.setter
     def fullscreen(self, enabled: bool) -> None:
         _n.check(_n.pz_window_set_fullscreen(self._eng, bool(enabled)) == 0)
+
+    def set_vsync(self, enabled: bool) -> None:
+        """Turns vsync on or off on the live graphics context, e.g. from a
+        settings menu. The starting value comes from `App(..., vsync=...)`.
+        There is no getter: the driver may refuse, so what was asked for
+        isn't necessarily what's in effect."""
+        _n.pz_window_set_vsync(self._eng, bool(enabled))

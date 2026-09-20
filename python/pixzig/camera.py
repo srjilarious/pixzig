@@ -1,4 +1,4 @@
-"""2D camera. Create via `PixzigApp.create_camera()`."""
+"""2D camera. Create via `App.create_camera()`."""
 import ctypes
 
 from . import _native as _n
@@ -11,7 +11,7 @@ class Camera:
 
     def _check_alive(self) -> None:
         if self._destroyed:
-            raise _n.PixzigError("camera already destroyed (or the app has shut down)")
+            raise _n.Error("camera already destroyed (or the app has shut down)")
 
     def set_pos(self, x: float, y: float) -> None:
         self._check_alive()

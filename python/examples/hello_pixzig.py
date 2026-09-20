@@ -1,5 +1,6 @@
 """Minimal pixzig-from-Python example: two moving sprites, some shapes, and
-text. Run from the pixzig repo root, since asset paths are relative to it:
+text. Relative asset paths resolve against the main script's directory, so
+this runs from any working directory:
 
     zig build python-ffi
     python python/examples/hello_pixzig.py
@@ -10,12 +11,18 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from pixzig import Key, PixzigApp
+from pixzig import App, Key
+
+# The examples share the repo's top-level assets/ directory, two levels up
+# from this script. Pointing `asset_root` there lets every load below use a
+# short path, and keeps them working whatever directory you launch from.
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
-class HelloApp(PixzigApp):
+class HelloApp(App):
     def __init__(self):
-        super().__init__("Hello Pixzig", width=800, height=480)
+        super().__init__("Hello Pixzig", width=800, height=480, asset_root=REPO_ROOT)
+        self.clear_color = (18, 18, 28)
 
         self.load_texture("pac", "assets/pac-tiles.png")
         self.text.load_font("roboto", "assets/Roboto-Medium.ttf", 24)
@@ -27,9 +34,10 @@ class HelloApp(PixzigApp):
         self.orbiter = self.load_sprite("pac")
         self.orbit_angle = 0.0
 
-    def update(self, dt_ms: float) -> bool:
+    def update(self, dt_ms: float) -> None:
         if self.keyboard.down(Key.ESCAPE):
-            return False
+            self.quit()
+            return
 
         speed = 0.2 * dt_ms
         if self.keyboard.down(Key.LEFT) or self.keyboard.down(Key.A):
@@ -48,13 +56,16 @@ class HelloApp(PixzigApp):
         orbit_y = self.player_pos[1] + 80.0 * math.sin(self.orbit_angle)
         self.orbiter.set_pos(orbit_x, orbit_y)
 
-        return True
-
     def render(self) -> None:
         self.render_begin()
-        self.shapes.filled_rect(20, 20, 260, 60, (40, 40, 80))
-        self.shapes.rect(20, 20, 260, 60, (255, 255, 255), line_width=2)
-        self.text.draw("Hello from Python!", 30, 35)
+
+        # Size the banner to the text rather than guessing at 260x60.
+        greeting = "Hello from Python!"
+        text_w, _ = self.text.measure(greeting)
+        line_h = self.text.line_height() or 24
+        self.shapes.filled_rect(20, 20, text_w + 20, line_h + 20, (40, 40, 80))
+        self.shapes.rect(20, 20, text_w + 20, line_h + 20, (255, 255, 255), line_width=2)
+        self.text.draw_colored(greeting, 30, 30, (255, 220, 120))
 
         self.player.draw()
         self.orbiter.draw()

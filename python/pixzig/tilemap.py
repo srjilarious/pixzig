@@ -1,6 +1,6 @@
 """Tiled map loading, chunked rendering, and runtime access. Load a map with
-`PixzigApp.load_tilemap(name, path)`, then create a renderer for it with
-`PixzigApp.create_tilemap_renderer(map_name, texture_name)`.
+`App.load_tilemap(name, path)`, then create a renderer for it with
+`App.create_tilemap_renderer(map_name, texture_name)`.
 
 Beyond rendering, `TileMapRenderer` exposes the loaded map data: read/write
 tiles by tile coordinate, query per-tile collision flags, convert between
@@ -56,7 +56,7 @@ class TileMapRenderer:
 
     def _check_alive(self) -> None:
         if self._destroyed:
-            raise _n.PixzigError("tilemap renderer already destroyed (or the app has shut down)")
+            raise _n.Error("tilemap renderer already destroyed (or the app has shut down)")
 
     # --- Rendering -------------------------------------------------------
 

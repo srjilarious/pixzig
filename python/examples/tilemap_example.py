@@ -2,7 +2,7 @@
 a camera around it with the arrow keys, world-space rendering interleaved
 with the tile layers exactly as `examples/tile_load_ex.zig` does natively.
 
-Run from the pixzig repo root, since asset paths are relative to it:
+Run it from any working directory:
 
     zig build python-ffi
     python python/examples/tilemap_example.py
@@ -12,12 +12,16 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from pixzig import Key, PixzigApp
+from pixzig import App, Key
+
+# Assets live in the repo's top-level assets/ directory, two levels up from
+# this script; see hello_pixzig.py.
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
-class TilemapApp(PixzigApp):
+class TilemapApp(App):
     def __init__(self):
-        super().__init__("Tilemap Example", width=800, height=480)
+        super().__init__("Tilemap Example", width=800, height=480, asset_root=REPO_ROOT)
 
         self.load_texture("tiles", "assets/mario_grassish2.png")
         self.load_tilemap("level1a", "assets/level1a.tmx")
@@ -30,9 +34,10 @@ class TilemapApp(PixzigApp):
         self.guy_pos = [64.0, 64.0]
         self.camera.set_pos(*self.guy_pos)
 
-    def update(self, dt_ms: float) -> bool:
+    def update(self, dt_ms: float) -> None:
         if self.keyboard.pressed(Key.ESCAPE):
-            return False
+            self.quit()
+            return
 
         if self.map_renderer.check_reload():
             w, h = self.map_renderer.pixel_size(1)
@@ -49,7 +54,6 @@ class TilemapApp(PixzigApp):
             self.guy_pos[1] += speed
 
         self.camera.set_pos(*self.guy_pos)
-        return True
 
     def render(self) -> None:
         self.render_begin(self.camera)

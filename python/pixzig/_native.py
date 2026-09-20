@@ -9,7 +9,7 @@ import os
 import sys
 
 
-class PixzigError(Exception):
+class Error(Exception):
     """Raised when a pixzig engine call fails."""
 
 
@@ -89,6 +89,26 @@ class _PzActor(ctypes.Structure):
 PzActorPtr = ctypes.POINTER(_PzActor)
 
 
+class PzInitOptions(ctypes.Structure):
+    """Mirror of `PzInitOptions` in src/pixzig/c_api.zig. Every field is
+    required; `App.__init__` supplies the defaults."""
+
+    _fields_ = [
+        ("title", ctypes.c_char_p),
+        ("width", ctypes.c_int32),
+        ("height", ctypes.c_int32),
+        # Both zero means "logical space tracks the framebuffer".
+        ("logical_width", ctypes.c_int32),
+        ("logical_height", ctypes.c_int32),
+        # A ScalePolicy value; see pixzig.constants.ScalePolicy.
+        ("scale_policy", ctypes.c_int32),
+        ("scale_factor", ctypes.c_float),
+        ("fullscreen", ctypes.c_bool),
+        ("resizable", ctypes.c_bool),
+        ("vsync", ctypes.c_bool),
+    ]
+
+
 def _sig(name, argtypes, restype):
     fn = getattr(_lib, name)
     fn.argtypes = argtypes
@@ -102,9 +122,9 @@ def last_error() -> str:
 
 
 def check(ok: bool) -> None:
-    """Raises PixzigError with the engine's last error message if `ok` is falsy."""
+    """Raises Error with the engine's last error message if `ok` is falsy."""
     if not ok:
-        raise PixzigError(last_error())
+        raise Error(last_error())
 
 
 c_float = ctypes.c_float
@@ -118,7 +138,7 @@ _fp = ctypes.POINTER(c_float)
 
 # --- Lifecycle ---------------------------------------------------------
 pz_last_error = _sig("pz_last_error", [], c_char_p)
-pz_init = _sig("pz_init", [c_char_p, c_int32, c_int32], PzEnginePtr)
+pz_init = _sig("pz_init", [ctypes.POINTER(PzInitOptions)], PzEnginePtr)
 pz_deinit = _sig("pz_deinit", [PzEnginePtr], None)
 
 # --- Frame stepping ------------------------------------------------------
@@ -322,7 +342,22 @@ pz_draw_rect = _sig(
     [PzEnginePtr, c_float, c_float, c_float, c_float, c_float, c_float, c_float, c_float, c_uint8],
     None,
 )
+pz_draw_enclosing_rect = _sig(
+    "pz_draw_enclosing_rect",
+    [PzEnginePtr, c_float, c_float, c_float, c_float, c_float, c_float, c_float, c_float, c_uint8],
+    None,
+)
 pz_draw_string = _sig("pz_draw_string", [PzEnginePtr, c_char_p, c_int32, c_int32], None)
+pz_draw_string_colored = _sig(
+    "pz_draw_string_colored",
+    [PzEnginePtr, c_char_p, c_int32, c_int32, c_float, c_float, c_float, c_float],
+    None,
+)
+pz_draw_string_scaled = _sig(
+    "pz_draw_string_scaled", [PzEnginePtr, c_char_p, c_int32, c_int32, c_float], None
+)
+pz_measure_string = _sig("pz_measure_string", [PzEnginePtr, c_char_p, _ip, _ip], None)
+pz_font_line_height = _sig("pz_font_line_height", [PzEnginePtr], c_int32)
 
 # --- Window / viewport -------------------------------------------------
 pz_window_size = _sig("pz_window_size", [PzEnginePtr, _ip, _ip], None)
@@ -333,6 +368,7 @@ pz_window_set_title = _sig("pz_window_set_title", [PzEnginePtr, c_char_p], None)
 pz_window_set_size = _sig("pz_window_set_size", [PzEnginePtr, c_int32, c_int32], None)
 pz_window_set_fullscreen = _sig("pz_window_set_fullscreen", [PzEnginePtr, c_bool], c_int32)
 pz_window_is_fullscreen = _sig("pz_window_is_fullscreen", [PzEnginePtr], c_bool)
+pz_window_set_vsync = _sig("pz_window_set_vsync", [PzEnginePtr, c_bool], None)
 
 # --- Coordinate transforms -------------------------------------------------
 pz_screen_to_logical = _sig("pz_screen_to_logical", [PzEnginePtr, c_float, c_float, _fp, _fp], c_bool)

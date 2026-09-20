@@ -2,7 +2,7 @@
 axis to A/D, then reflects the live state as an on-screen rectangle and
 text so you can confirm bindings actually respond to real input.
 
-Run from the pixzig repo root:
+Run it from any working directory:
 
     zig build python-ffi
     python python/examples/action_map_example.py
@@ -12,12 +12,16 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from pixzig import GamepadButton, Key, PixzigApp
+from pixzig import App, GamepadButton, Key
+
+# Assets live in the repo's top-level assets/ directory, two levels up from
+# this script; see hello_pixzig.py.
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
-class ActionMapApp(PixzigApp):
+class ActionMapApp(App):
     def __init__(self):
-        super().__init__("Action Map Example", width=800, height=480)
+        super().__init__("Action Map Example", width=800, height=480, asset_root=REPO_ROOT)
 
         self.text.load_font("roboto", "assets/Roboto-Medium.ttf", 24)
         self.text.set_font("roboto")
@@ -29,14 +33,14 @@ class ActionMapApp(PixzigApp):
 
         self.box_x = 380.0
 
-    def update(self, dt_ms: float) -> bool:
+    def update(self, dt_ms: float) -> None:
         if self.keyboard.pressed(Key.ESCAPE):
-            return False
+            self.quit()
+            return
 
         self.actions.update()
         self.box_x += self.actions.axis("move_x") * 0.3 * dt_ms
         self.box_x = max(0.0, min(760.0, self.box_x))
-        return True
 
     def render(self) -> None:
         self.render_begin()

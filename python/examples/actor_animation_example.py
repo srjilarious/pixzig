@@ -3,7 +3,7 @@ frame sequences and named states, then let an Actor drive a Sprite through
 them from the arrow keys. "walk_left" reuses the right-facing sequence with
 a horizontal flip. Mirrors examples/actor_ex.zig, driven from Python.
 
-Run from the pixzig repo root, since asset paths are relative to it:
+Run it from any working directory:
 
     zig build python-ffi
     python python/examples/actor_animation_example.py
@@ -13,7 +13,11 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from pixzig import Flip, Key, PixzigApp
+from pixzig import App, Flip, Key
+
+# Assets live in the repo's top-level assets/ directory, two levels up from
+# this script; see hello_pixzig.py.
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 # name -> (x, y, w, h) inside pac-tiles.png
 FRAMES = {
@@ -28,9 +32,9 @@ FRAMES = {
 FRAME_MS = 120.0
 
 
-class ActorAnimationApp(PixzigApp):
+class ActorAnimationApp(App):
     def __init__(self):
-        super().__init__("Actor Animation Example", width=640, height=480)
+        super().__init__("Actor Animation Example", width=640, height=480, asset_root=REPO_ROOT)
 
         self.text.load_font("roboto", "assets/Roboto-Medium.ttf", 20)
         self.text.set_font("roboto")
@@ -63,9 +67,10 @@ class ActorAnimationApp(PixzigApp):
         self.facing = "right"
         self.actor.set_state(self.facing)
 
-    def update(self, dt_ms: float) -> bool:
+    def update(self, dt_ms: float) -> None:
         if self.keyboard.pressed(Key.ESCAPE):
-            return False
+            self.quit()
+            return
 
         speed = 0.12 * dt_ms
         dx = dy = 0.0
@@ -89,7 +94,6 @@ class ActorAnimationApp(PixzigApp):
         self.pos[0] += dx
         self.pos[1] += dy
         self.sprite.set_pos(*map(int, self.pos))
-        return True
 
     def render(self) -> None:
         self.render_begin()

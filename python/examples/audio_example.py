@@ -2,7 +2,7 @@
 keyboard. Holding a key spins up overlapping voices up to the engine's
 per-sound cap, so you can hear several lasers at once.
 
-Run from the pixzig repo root, since asset paths are relative to it:
+Run it from any working directory:
 
     zig build python-ffi
     python python/examples/audio_example.py
@@ -12,12 +12,16 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from pixzig import Key, PixzigApp
+from pixzig import App, Key
+
+# Assets live in the repo's top-level assets/ directory, two levels up from
+# this script; see hello_pixzig.py.
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
-class AudioApp(PixzigApp):
+class AudioApp(App):
     def __init__(self):
-        super().__init__("Audio Example", width=640, height=360)
+        super().__init__("Audio Example", width=640, height=360, asset_root=REPO_ROOT)
 
         self.text.load_font("roboto", "assets/Roboto-Medium.ttf", 24)
         self.text.set_font("roboto")
@@ -28,9 +32,10 @@ class AudioApp(PixzigApp):
         self.last = "(nothing yet)"
         self.flash = 0.0
 
-    def update(self, dt_ms: float) -> bool:
+    def update(self, dt_ms: float) -> None:
         if self.keyboard.pressed(Key.ESCAPE):
-            return False
+            self.quit()
+            return
 
         if self.keyboard.pressed(Key.SPACE):
             self.audio.play("laser")
@@ -42,7 +47,6 @@ class AudioApp(PixzigApp):
             self.flash = 200.0
 
         self.flash = max(0.0, self.flash - dt_ms)
-        return True
 
     def render(self) -> None:
         self.render_begin()

@@ -105,6 +105,13 @@ pub fn rendererWarnsOnceWithNoFontTest(io: std.Io, alloc: std.mem.Allocator) !vo
     _ = r.drawStringColored("hello", .{ .x = 0, .y = 0 }, .{ .r = 1, .g = 1, .b = 1, .a = 1 });
     _ = r.drawClippedString("hello", .{ .x = 0, .y = 0 }, .{ .l = 0, .t = 0, .r = 10, .b = 10 });
     r.end();
+
+    // Measuring with no font reports nothing rather than panicking -- it's
+    // reachable from Python (`app.text.measure`), where a panic would take
+    // the whole interpreter down.
+    const measured = r.measureString("hello");
+    try testz.expectEqual(measured.x, 0);
+    try testz.expectEqual(measured.y, 0);
     try testz.expectTrue(r.impl.text.warnedNoFont);
 
     // Setting a font arms the warning again for the next font-less stretch.

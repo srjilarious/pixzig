@@ -1,4 +1,4 @@
-"""Sprites. Create via `PixzigApp.load_sprite(texture_name)`."""
+"""Sprites. Create via `App.load_sprite(texture_name)`."""
 import ctypes
 from enum import IntEnum
 
@@ -36,7 +36,7 @@ class Sprite:
 
     def _check_alive(self) -> None:
         if self._destroyed or (self._owner is not None and self._owner._destroyed):
-            raise _n.PixzigError("sprite already destroyed (or the app has shut down)")
+            raise _n.Error("sprite already destroyed (or the app has shut down)")
 
     def set_pos(self, x: float, y: float) -> None:
         """Moves the sprite's origin (top-left corner unless `set_origin` was

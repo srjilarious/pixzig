@@ -1,6 +1,6 @@
 """Action mapping: bind named actions/axes to physical inputs, then query
 them by name instead of checking raw keyboard/mouse/gamepad state directly.
-Create via `PixzigApp.create_action_map()`.
+Create via `App.create_action_map()`.
 
     actions = app.create_action_map()
     actions.bind_key("jump", Key.SPACE)
@@ -29,14 +29,14 @@ class ActionMap:
 
     def _check_alive(self) -> None:
         if self._destroyed:
-            raise _n.PixzigError("action map already destroyed (or the app has shut down)")
+            raise _n.Error("action map already destroyed (or the app has shut down)")
 
     def _slot_for_bind(self, slots: dict, name: str, max_slots: int, kind: str) -> int:
         slot = slots.get(name)
         if slot is not None:
             return slot
         if len(slots) >= max_slots:
-            raise _n.PixzigError(f"too many {kind}s bound (max {max_slots})")
+            raise _n.Error(f"too many {kind}s bound (max {max_slots})")
         slot = len(slots)
         slots[name] = slot
         return slot
@@ -44,7 +44,7 @@ class ActionMap:
     def _slot_for_query(self, slots: dict, name: str, kind: str) -> int:
         slot = slots.get(name)
         if slot is None:
-            raise _n.PixzigError(f"unknown {kind} '{name}' -- bind it before querying")
+            raise _n.Error(f"unknown {kind} '{name}' -- bind it before querying")
         return slot
 
     # --- Binding -----------------------------------------------------------

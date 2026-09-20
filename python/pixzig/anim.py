@@ -3,9 +3,8 @@
 An `Actor` owns a `Sprite` (`actor.sprite`) and drives it through named
 *states* (e.g. "walk_left", "idle"), each state playing a *frame sequence*. Frame sequences and states
 live in one shared library owned by the app; build it either from a JSON
-file (`PixzigApp.load_anim_file`) or programmatically
-(`PixzigApp.create_sequence` / `add_frame` / `add_anim_state`), then attach
-states to individual actors.
+file (`App.load_anim_file`) or programmatically (`App.create_sequence` /
+`add_frame` / `add_anim_state`), then attach states to individual actors.
 
     app.load_texture("hero", "assets/hero.png")
     for i in range(4):
@@ -41,7 +40,7 @@ class Actor:
 
     def _check_alive(self) -> None:
         if self._destroyed:
-            raise _n.PixzigError("actor already destroyed (or the app has shut down)")
+            raise _n.Error("actor already destroyed (or the app has shut down)")
 
     def add_state(self, name: str) -> None:
         """Copies a state registered on the app (by name) into this actor.

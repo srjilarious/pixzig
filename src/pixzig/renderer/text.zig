@@ -371,6 +371,11 @@ pub const TextRenderer = struct {
         var width: i32 = 0;
         var height: i32 = 0;
 
+        if (self.font == null) {
+            self.warnNoFont();
+            return .{ .x = 0, .y = 0 };
+        }
+
         // Pack any not-yet-loaded blocks so their advances are known. No
         // quads are queued here, so a grow needs no batch flush.
         _ = self.font.?.val.ensureBlocksForText(text);

@@ -7,7 +7,7 @@ edits.
   * Left click paints tile 0 under the cursor, right click erases it, then
     `refresh()` makes the change show up.
 
-Run from the pixzig repo root, since asset paths are relative to it:
+Run it from any working directory:
 
     zig build python-ffi
     python python/examples/tilemap_runtime_example.py
@@ -17,14 +17,18 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from pixzig import Key, MouseButton, PixzigApp
+from pixzig import App, Key, MouseButton
 
 SOLID_LAYER = "main_layer"
 
+# Assets live in the repo's top-level assets/ directory, two levels up from
+# this script; see hello_pixzig.py.
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
-class TilemapRuntimeApp(PixzigApp):
+
+class TilemapRuntimeApp(App):
     def __init__(self):
-        super().__init__("Tilemap Runtime Example", width=800, height=480)
+        super().__init__("Tilemap Runtime Example", width=800, height=480, asset_root=REPO_ROOT)
 
         self.text.load_font("roboto", "assets/Roboto-Medium.ttf", 18)
         self.text.set_font("roboto")
@@ -55,9 +59,10 @@ class TilemapRuntimeApp(PixzigApp):
         tx, ty = self.map.world_to_tile(self.solid, px, py)
         return self.map.is_blocked(self.solid, tx, ty)
 
-    def update(self, dt_ms: float) -> bool:
+    def update(self, dt_ms: float) -> None:
         if self.keyboard.pressed(Key.ESCAPE):
-            return False
+            self.quit()
+            return
 
         speed = 0.15 * dt_ms
         dx = (self.keyboard.down(Key.RIGHT) - self.keyboard.down(Key.LEFT)) * speed
@@ -83,7 +88,6 @@ class TilemapRuntimeApp(PixzigApp):
                 self.map.set_tile(self.solid, tx, ty, -1)
                 self.map.refresh()
                 self.painted = f"erased tile at ({tx}, {ty})"
-        return True
 
     def render(self) -> None:
         self.render_begin(self.camera)
