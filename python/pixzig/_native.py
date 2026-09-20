@@ -100,7 +100,7 @@ class PzInitOptions(ctypes.Structure):
         # Both zero means "logical space tracks the framebuffer".
         ("logical_width", ctypes.c_int32),
         ("logical_height", ctypes.c_int32),
-        # A ScalePolicy value; see pixzig.constants.ScalePolicy.
+        # A ScalePolicy value; see pixzig.window.ScalePolicy.
         ("scale_policy", ctypes.c_int32),
         ("scale_factor", ctypes.c_float),
         ("fullscreen", ctypes.c_bool),
