@@ -5,11 +5,6 @@ const Lua = ziglua.Lua;
 const pixzig = @import("pixzig");
 const scripting = pixzig.scripting;
 const console = pixzig.console;
-
-// Sets up the panic handler and log handler depending on the OS target.
-pub const panic = pixzig.system.panic;
-pub const std_options = pixzig.system.std_options;
-
 fn myFunc(lua: *Lua) i32 {
     _ = lua;
     std.log.info("Test function called.\n", .{});

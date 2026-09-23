@@ -6,10 +6,6 @@ const pixzig = @import("pixzig");
 const RectF = pixzig.RectF;
 const Color8 = pixzig.Color8;
 const CharToColor = pixzig.textures.CharToColor;
-
-pub const panic = pixzig.system.panic;
-pub const std_options = pixzig.system.std_options;
-
 const AppRunner = pixzig.AppRunner(App, .{});
 
 pub const App = struct {

@@ -13,17 +13,11 @@
 
 const std = @import("std");
 const pixzig = @import("pixzig");
-const zmath = pixzig.zmath;
 const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
-const Color = pixzig.common.Color;
 
 const input = pixzig.input;
 const imgui = pixzig.imgui;
-
-pub const panic = pixzig.system.panic;
-pub const std_options = pixzig.system.std_options;
-
 const manifest_options = @import("manifest_options");
 const AppRunner = pixzig.AppRunner(App, .{
     // textInput arms the OS text-input machinery, which is what makes
@@ -33,7 +27,6 @@ const AppRunner = pixzig.AppRunner(App, .{
 });
 const UiContext = imgui.UiContext(AppRunner.Engine);
 
-const MaxLogLines = 200;
 const InputBufLen = 128;
 const SpriteNames = [_][]const u8{
     "player_idle_0",

@@ -7,16 +7,11 @@
 const std = @import("std");
 const pixzig = @import("pixzig");
 const manifest_options = @import("manifest_options");
-const zmath = pixzig.zmath;
 
 const Vec2F = pixzig.common.Vec2F;
 const Sprite = pixzig.sprites.Sprite;
 const FpsCounter = pixzig.utils.FpsCounter;
 const AssetManifest = pixzig.AssetManifest;
-
-pub const panic = pixzig.system.panic;
-pub const std_options = pixzig.system.std_options;
-
 const AppRunner = pixzig.AppRunner(App, .{});
 
 pub const App = struct {

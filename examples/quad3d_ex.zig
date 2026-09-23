@@ -2,20 +2,13 @@
 const std = @import("std");
 const pixzig = @import("pixzig");
 const zmath = pixzig.zmath;
-const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Vec3F = pixzig.common.Vec3F;
 
-const EngOptions = pixzig.EngineOptions;
 const Quad3DBatchQueue = pixzig.quad3d.Quad3DBatchQueue;
 const Quad3DBatch = pixzig.quad3d.Quad3DBatch;
 const Camera3D = pixzig.Camera3D;
 //* ---
-
-//* -- collapsed: Panic, logging and AppRunner definition--
-pub const panic = pixzig.system.panic;
-pub const std_options = pixzig.system.std_options;
-
 const AppRunner = pixzig.AppRunner(App, .{});
 //* ---
 

@@ -1,25 +1,13 @@
 const std = @import("std");
 
 const pixzig = @import("pixzig");
-const zmath = pixzig.zmath;
 const flecs = pixzig.flecs;
-const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
 
-const EngOptions = pixzig.EngineOptions;
-
-const tile = pixzig.tile;
-const Flip = pixzig.sprites.Flip;
-const Frame = pixzig.sprites.Frame;
 const Vec2F = pixzig.common.Vec2F;
 const FpsCounter = pixzig.utils.FpsCounter;
 const Sprite = pixzig.sprites.Sprite;
-
-// Sets up the panic handler and log handler depending on the OS target.
-pub const panic = pixzig.system.panic;
-pub const std_options = pixzig.system.std_options;
-
 pub const Player = struct { alive: bool };
 pub const DebugOutline = struct { color: Color };
 

@@ -51,12 +51,23 @@ pub fn build(b: *std.Build) void {
 }
 ```
 
-`BuildGameOptions` also takes two optional fields:
+`BuildGameOptions` also takes these optional fields:
 
 - `default_font` -- the font embedded in the executable as the renderer's default. It is pixzig's bundled Karla-Regular (`.karla`) unless you pass `.{ .path = b.path("assets/MyFont.ttf") }` to embed your own font instead, or `.none` to embed no font. Every game in one `build.zig` shares the engine module, so they must all use the same `default_font`.
 - `package` -- copy assets next to the executable. When null, the `-Dpackage` build option decides.
+- `wrap_root` -- defaults to `true`. `buildGame` generates a tiny executable root module that installs pixzig's panic and log handlers, then calls your module's `main`. Set `.wrap_root = false` if your own root module deliberately provides `panic`, `std_options`, or other root-only declarations.
 
 `manifestFromDef` defines assets inline; use `manifestFromFile(b, "assets/manifest.json")` instead if the manifest lives as a separate JSON file. See [Asset Manifest](assets.html) for the full manifest format and runtime loading options.
+
+Because `wrap_root` is on by default, game source files do not need to define
+`pub const panic = pixzig.system.panic` or
+`pub const std_options = pixzig.system.std_options`. The generated root wrapper
+handles that for native and Emscripten builds, while your module stays focused
+on its `main`, app type, and game code. The wrapper supports either
+`pub fn main() !void` or `pub fn main(init: std.process.Init) !void`.
+When adding game-specific imports or options, add them to the module you pass as
+`.root_module` (`exe_mod` above); with wrapping enabled, the returned compile
+step's root module is the generated wrapper.
 
 ## A Minimal Example
 
@@ -65,9 +76,6 @@ This application opens a window and exits when Escape is pressed:
 ```zig
 const std = @import("std");
 const pixzig = @import("pixzig");
-
-pub const panic = pixzig.system.panic;
-pub const std_options = pixzig.system.std_options;
 
 const AppRunner = pixzig.AppRunner(App, .{});
 

@@ -181,7 +181,8 @@ pub const ManifestHandle = struct {
     /// If empty, the entire assets directory is preloaded.
     emcc_files: []const []const u8 = &.{},
 
-    /// Wire the manifest into `exe`.
+    /// Wire the manifest into `exe`, adding the generated `manifest_options`
+    /// import to the executable's root module.
     ///
     /// **Dev mode** (`is_package == false`):
     ///   - File-based: `manifest_path` = absolute path, assets read from source tree.
@@ -195,6 +196,19 @@ pub const ManifestHandle = struct {
     pub fn addTo(
         self: ManifestHandle,
         exe: *std.Build.Step.Compile,
+        is_package: bool,
+        src_assets_dir: []const u8,
+    ) void {
+        self.addToModule(exe, exe.root_module, is_package, src_assets_dir);
+    }
+
+    /// Wire the manifest into `exe`, adding the generated `manifest_options`
+    /// import to `mod`. This is useful when the executable root is a generated
+    /// wrapper and the caller's game module still imports `manifest_options`.
+    pub fn addToModule(
+        self: ManifestHandle,
+        exe: *std.Build.Step.Compile,
+        mod: *std.Build.Module,
         is_package: bool,
         src_assets_dir: []const u8,
     ) void {
@@ -253,7 +267,7 @@ pub const ManifestHandle = struct {
             opts.addOption([]const u8, "manifest_base_dir", "");
         }
 
-        exe.root_module.addOptions("manifest_options", opts);
+        mod.addOptions("manifest_options", opts);
     }
 
     /// Wire the manifest into a web (Emscripten) `exe`. Assets are preloaded
@@ -262,7 +276,18 @@ pub const ManifestHandle = struct {
     /// the host build root. A file-based manifest outside `assets/` is
     /// preloaded here as well.
     pub fn addToWeb(self: ManifestHandle, exe: *std.Build.Step.Compile, emcc_command: *std.Build.Step.Run) void {
+        self.addToWebModule(exe, exe.root_module, emcc_command);
+    }
+
+    /// Web variant of `addToModule`.
+    pub fn addToWebModule(
+        self: ManifestHandle,
+        exe: *std.Build.Step.Compile,
+        mod: *std.Build.Module,
+        emcc_command: *std.Build.Step.Run,
+    ) void {
         const b = self.b;
+        _ = exe;
         const opts = b.addOptions();
 
         if (self.file_rel_path) |rel| {
@@ -278,7 +303,7 @@ pub const ManifestHandle = struct {
             opts.addOption([]const u8, "manifest_base_dir", "/");
         }
 
-        exe.root_module.addOptions("manifest_options", opts);
+        mod.addOptions("manifest_options", opts);
     }
 };
 
@@ -608,6 +633,7 @@ pub fn build(b: *std.Build) void {
                 exe_mod,
                 manifest,
                 is_package,
+                true,
             );
 
             for (example_info.extraMods) |em| {
@@ -640,7 +666,7 @@ pub fn build(b: *std.Build) void {
                 .target = target,
                 .optimize = optimize,
             });
-            const spack = buildExample(b, target, optimize, engDat.engine_lib, engDat.pixeng_mod, "spack", spack_mod, manifestFromDef(b, .{}), is_package);
+            const spack = buildExample(b, target, optimize, engDat.engine_lib, engDat.pixeng_mod, "spack", spack_mod, manifestFromDef(b, .{}), is_package, false);
             const zargs = b.dependency("zargunaught", .{});
             spack.root_module.addImport("zargunaught", zargs.module("zargunaught"));
 
@@ -897,6 +923,11 @@ pub const BuildGameOptions = struct {
     /// Package assets next to the executable. Null reads the `-Dpackage`
     /// build option instead.
     package: ?bool = null,
+    /// Generate a tiny executable root module that installs Pixzig's panic
+    /// and log handlers, then delegates to `root_module.main`. Leave this on
+    /// unless your root module deliberately provides its own `panic` or
+    /// `std_options`.
+    wrap_root: bool = true,
 };
 
 const karla_path = "src/pixzig/assets/Karla-Regular.ttf";
@@ -993,7 +1024,58 @@ pub fn buildGame(b: *std.Build, opts: BuildGameOptions) *std.Build.Step.Compile 
         assetBaseModule(b, devAssetBase(b, opts.target, is_package)),
     );
 
-    return buildExample(b, opts.target, opts.optimize, engine_lib, engine_mod, opts.name, opts.root_module, opts.manifest, is_package);
+    return buildExample(b, opts.target, opts.optimize, engine_lib, engine_mod, opts.name, opts.root_module, opts.manifest, is_package, opts.wrap_root);
+}
+
+fn wrappedRootModule(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    pixeng_mod: *std.Build.Module,
+    game_mod: *std.Build.Module,
+    name: []const u8,
+) *std.Build.Module {
+    const files = b.addWriteFiles();
+    const root = files.add(b.fmt("{s}_pixzig_root.zig", .{name}),
+        \\const std = @import("std");
+        \\const pixzig = @import("pixzig");
+        \\const game = @import("pixzig_game");
+        \\
+        \\pub const panic = pixzig.system.panic;
+        \\pub const std_options = pixzig.system.std_options;
+        \\
+        \\pub fn main(init: std.process.Init) !void {
+        \\    const main_info = @typeInfo(@TypeOf(game.main)).@"fn";
+        \\    if (main_info.param_types.len > 1) {
+        \\        @compileError("pixzig root wrapper supports game.main() or game.main(std.process.Init)");
+        \\    }
+        \\    const Return = main_info.return_type orelse
+        \\        @compileError("pixzig root wrapper does not support noreturn game.main");
+        \\    if (main_info.param_types.len == 0) {
+        \\        switch (@typeInfo(Return)) {
+        \\            .error_union => try game.main(),
+        \\            .void => game.main(),
+        \\            else => @compileError("pixzig root wrapper supports game.main returning void or !void"),
+        \\        }
+        \\    } else {
+        \\        switch (@typeInfo(Return)) {
+        \\            .error_union => try game.main(init),
+        \\            .void => game.main(init),
+        \\            else => @compileError("pixzig root wrapper supports game.main returning void or !void"),
+        \\        }
+        \\    }
+        \\}
+        \\
+    );
+
+    const root_mod = b.createModule(.{
+        .root_source_file = root,
+        .target = target,
+        .optimize = optimize,
+    });
+    root_mod.addImport("pixzig", pixeng_mod);
+    root_mod.addImport("pixzig_game", game_mod);
+    return root_mod;
 }
 
 pub fn buildExample(
@@ -1006,24 +1088,28 @@ pub fn buildExample(
     exe_mod: *std.Build.Module,
     manifest: ManifestHandle,
     is_package: bool,
+    wrap_root: bool,
 ) *std.Build.Step.Compile {
+    exe_mod.addImport("pixzig", pixeng_mod);
+    const root_mod = if (wrap_root)
+        wrappedRootModule(b, target, optimize, pixeng_mod, exe_mod, name)
+    else
+        exe_mod;
+
     const exe = blk: {
         if (target.result.os.tag == .emscripten) {
             break :blk b.addLibrary(.{
                 .name = name,
-                .root_module = exe_mod,
+                .root_module = root_mod,
                 .linkage = .static,
             });
         } else {
             break :blk b.addExecutable(.{
                 .name = name,
-                .root_module = exe_mod,
+                .root_module = root_mod,
             });
         }
     };
-
-    // Add the engine module
-    exe.root_module.addImport("pixzig", pixeng_mod);
 
     // Handle platform-specific linking
     switch (target.result.os.tag) {
@@ -1075,7 +1161,7 @@ pub fn buildExample(
             } else {
                 emcc_command.addArgs(&[_][]const u8{ "--preload-file", b.fmt("{s}@/{s}", .{ assets_dir, assets_dir }) });
             }
-            manifest.addToWeb(exe, emcc_command);
+            manifest.addToWebModule(exe, exe_mod, emcc_command);
 
             emcc_command.addFileArg(exe.getEmittedBin());
             if (engine_lib) |lib| {
@@ -1107,7 +1193,7 @@ pub fn buildExample(
             const out_path = b.pathJoin(&.{ "bin", name });
 
             // Wire the manifest (dev: embed JSON/path; package: copy assets + install manifest).
-            manifest.addTo(exe, is_package, assets_dir);
+            manifest.addToModule(exe, exe_mod, is_package, assets_dir);
 
             const install_ex = b.addInstallArtifact(exe, .{ .dest_dir = .{ .override = .{ .custom = out_path } } });
 

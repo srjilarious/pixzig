@@ -1,8 +1,6 @@
 //* This is a basic example of an application using the Pixzig engine.
 //*
-//* It shows how to set things up so that the panic handler and logging work
-//* correctly on both desktop and web targets, and how to use an AppRunner to
-//* run the game loop.
+//* It shows how to use an AppRunner to run the game loop.
 //*
 //* The App struct has an `update` and `render` function that will be called
 //* by AppRunner, and in this example we just print out the FPS and some
@@ -12,21 +10,11 @@
 //* -- collapsed: Imports --
 const std = @import("std");
 const pixzig = @import("pixzig");
-const RectF = pixzig.common.RectF;
-const RectI = pixzig.common.RectI;
-const Color = pixzig.common.Color;
 const Delay = pixzig.utils.Delay;
 
-const math = @import("zmath");
-const EngOptions = pixzig.EngineOptions;
 const FpsCounter = pixzig.utils.FpsCounter;
 
 //* ---
-
-//* Sets up the panic handler and log handler depending on the OS target.
-pub const panic = pixzig.system.panic;
-pub const std_options = pixzig.system.std_options;
-
 //* Defines the application runner that will run our App.  The AppRunner
 //* provides the game loop and calls the `update` and `render` functions
 //* on our App struct.  It also provides the Engine to those functions,

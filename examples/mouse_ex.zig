@@ -1,20 +1,10 @@
 const std = @import("std");
 
 const pixzig = @import("pixzig");
-const RectF = pixzig.common.RectF;
 const RectI = pixzig.common.RectI;
-const Color = pixzig.common.Color;
 
-const GameStateMgr = pixzig.gamestate.GameStateMgr;
-
-const math = @import("zmath");
-const EngOptions = pixzig.EngineOptions;
 const FpsCounter = pixzig.utils.FpsCounter;
 const Engine = pixzig.Engine;
-
-pub const panic = pixzig.system.panic;
-pub const std_options = pixzig.system.std_options;
-
 const AppRunner = pixzig.AppRunner(App, .{ .inputOpts = .{ .mouse = true } });
 
 pub const App = struct {

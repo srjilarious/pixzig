@@ -2,28 +2,18 @@
 // Natetris: A tetris clone for Nate.
 
 const std = @import("std");
-const builtin = @import("builtin");
 
 const pixzig = @import("pixzig");
 const gl = pixzig.gl;
 const zmath = pixzig.zmath;
 const RectF = pixzig.common.RectF;
-const RectI = pixzig.common.RectI;
-const Color = pixzig.common.Color;
 
-const math = @import("zmath");
-const EngOptions = pixzig.EngineOptions;
 const FpsCounter = pixzig.utils.FpsCounter;
 const Engine = pixzig.Engine;
 
 const Color8 = pixzig.Color8;
 const CharToColor = pixzig.textures.CharToColor;
 const Vec2I = pixzig.common.Vec2I;
-
-// Sets up the panic handler and log handler depending on the OS target.
-pub const panic = pixzig.system.panic;
-pub const std_options = pixzig.system.std_options;
-
 const ShapeWidth = 5;
 const ShapeHeight = 5;
 

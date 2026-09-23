@@ -7,15 +7,10 @@ const scripting = pixzig.scripting;
 const Frame = pixzig.sprites.Frame;
 const FrameSequence = pixzig.sprites.FrameSequence;
 const FrameSequenceManager = pixzig.sprites.FrameSequenceManager;
-const ActorState = pixzig.sprites.ActorState;
 const Sprite = pixzig.sprites.Sprite;
 const Actor = pixzig.sprites.Actor;
 const FpsCounter = pixzig.utils.FpsCounter;
 const Vec2F = pixzig.common.Vec2F;
-
-pub const panic = pixzig.system.panic;
-pub const std_options = pixzig.system.std_options;
-
 const AppRunner = pixzig.AppRunner(App, .{});
 
 // Maps a 0-1 color channel to the 0-255 range `renderer.clear` takes.

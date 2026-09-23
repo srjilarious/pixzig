@@ -2,17 +2,10 @@ const std = @import("std");
 const pixzig = @import("pixzig");
 const gl = pixzig.gl;
 const RectF = pixzig.common.RectF;
-const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
 const shaders = pixzig.shaders;
-const Shader = shaders.Shader;
-
-const EngOptions = pixzig.EngineOptions;
 
 const tile = pixzig.tile;
-const Flip = pixzig.sprites.Flip;
-const Frame = pixzig.sprites.Frame;
-const Vec2F = pixzig.common.Vec2F;
 const Vec2U = pixzig.common.Vec2U;
 const Vec2I = pixzig.common.Vec2I;
 const FpsCounter = pixzig.utils.FpsCounter;
@@ -20,7 +13,6 @@ const FpsCounter = pixzig.utils.FpsCounter;
 const GridRenderer = tile.GridRenderer;
 const CharToColor = pixzig.textures.CharToColor;
 const Color8 = pixzig.Color8;
-const Texture = pixzig.textures.Texture;
 
 const Path = pixzig.a_star.Path;
 const AStarPathFinder = pixzig.a_star.AStarPathFinder;
@@ -38,11 +30,6 @@ const BasicTileMapPathChecker = pixzig.a_star.BasicTileMapPathChecker;
 
 const MapWidth = 24;
 const MapHeight = 18;
-
-// Sets up the panic handler and log handler depending on the OS target.
-pub const panic = pixzig.system.panic;
-pub const std_options = pixzig.system.std_options;
-
 const AppRunner = pixzig.AppRunner(App, .{});
 
 pub const App = struct {

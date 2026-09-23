@@ -2,12 +2,7 @@ const std = @import("std");
 const pixzig = @import("pixzig");
 const Delay = pixzig.utils.Delay;
 
-const math = @import("zmath");
 const FpsCounter = pixzig.utils.FpsCounter;
-
-pub const panic = pixzig.system.panic;
-pub const std_options = pixzig.system.std_options;
-
 const AppRunner = pixzig.AppRunner(App, .{ .inputOpts = .{ .numGamepads = 1 } });
 
 // Colors cycled by gamepad buttons.

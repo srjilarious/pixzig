@@ -1,19 +1,9 @@
 const std = @import("std");
 const pixzig = @import("pixzig");
-const RectF = pixzig.common.RectF;
-const RectI = pixzig.common.RectI;
-const Color = pixzig.common.Color;
 const Delay = pixzig.utils.Delay;
 const zaudio = pixzig.zaudio;
 
-const math = pixzig.zmath;
-const EngOptions = pixzig.EngineOptions;
 const FpsCounter = pixzig.utils.FpsCounter;
-
-// Sets up the panic handler and log handler depending on the OS target.
-pub const panic = pixzig.system.panic;
-pub const std_options = pixzig.system.std_options;
-
 const AppRunner = pixzig.AppRunner(App, .{ .audioOpts = .{ .enabled = true } });
 
 pub const App = struct {

@@ -1,15 +1,8 @@
 const std = @import("std");
 const pixzig = @import("pixzig");
-const zmath = pixzig.zmath;
-const RectF = pixzig.common.RectF;
-const RectI = pixzig.common.RectI;
-const Color = pixzig.common.Color;
-const Delay = pixzig.utils.Delay;
 
 const GameStateMgr = pixzig.gamestate.GameStateMgr;
 
-const math = @import("zmath");
-const EngOptions = pixzig.EngineOptions;
 const FpsCounter = pixzig.utils.FpsCounter;
 
 const States = enum {

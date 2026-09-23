@@ -7,11 +7,6 @@ const FpsCounter = pixzig.utils.FpsCounter;
 const imgui = pixzig.imgui;
 const scripting = pixzig.scripting;
 const console = pixzig.console;
-
-// Sets up the panic handler and log handler depending on the OS target.
-pub const panic = pixzig.system.panic;
-pub const std_options = pixzig.system.std_options;
-
 const manifest_options = @import("manifest_options");
 const AppRunner = pixzig.AppRunner(App, .{
     // The console reads typed characters through Keyboard.text(), which
@@ -89,7 +84,7 @@ pub const App = struct {
 
 pub fn main(init: std.process.Init) !void {
     const appRunner = try AppRunner.init("Pixzig: Console Test Example.", init.gpa, .{
-        .renderInitOpts = .{ .font = .{ .id = "Roboto-Medium" } },
+        //.renderInitOpts = .{ .font = .{ .id = "Roboto-Medium" } },
     });
     defer appRunner.deinit();
 

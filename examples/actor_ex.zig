@@ -1,25 +1,13 @@
 const std = @import("std");
 const pixzig = @import("pixzig");
-const zmath = pixzig.zmath;
-const shaders = pixzig.shaders;
-const stbi = @import("zstbi");
 
-const SpriteBatchQueue = pixzig.renderer.SpriteBatchQueue;
-const RectF = pixzig.common.RectF;
-const Flip = pixzig.sprites.Flip;
 const Frame = pixzig.sprites.Frame;
 const FrameSequence = pixzig.sprites.FrameSequence;
 const FrameSequenceManager = pixzig.sprites.FrameSequenceManager;
-const ActorState = pixzig.sprites.ActorState;
 
 const FpsCounter = pixzig.utils.FpsCounter;
 const Sprite = pixzig.sprites.Sprite;
 const Actor = pixzig.sprites.Actor;
-
-// Sets up the panic handler and log handler depending on the OS target.
-pub const panic = pixzig.system.panic;
-pub const std_options = pixzig.system.std_options;
-
 const AppRunner = pixzig.AppRunner(App, .{});
 
 pub const App = struct {

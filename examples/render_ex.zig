@@ -1,27 +1,13 @@
 //* -- collapsed: Imports --
 const std = @import("std");
 const pixzig = @import("pixzig");
-const zmath = pixzig.zmath;
 const RectF = pixzig.common.RectF;
-const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
 
-const EngOptions = pixzig.EngineOptions;
-
-const tile = pixzig.tile;
-const Flip = pixzig.sprites.Flip;
-const Frame = pixzig.sprites.Frame;
-const Vec2F = pixzig.common.Vec2F;
 const FpsCounter = pixzig.utils.FpsCounter;
 //* ---
 
-//* -- collapsed: Panic, logging and AppRunner definition--
-//* Sets up the panic handler and log handler depending on the OS target.
-pub const panic = pixzig.system.panic;
-pub const std_options = pixzig.system.std_options;
-
 const AppRunner = pixzig.AppRunner(App, .{});
-//* ---
 
 //* For this application, we load a texture and define some coordinates to
 //* use for drawing sprites and shapes.
