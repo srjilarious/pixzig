@@ -295,8 +295,6 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
                 web.setMainLoop(mainLoop, null, false);
             } else {
                 self.gameLoop(app);
-                app.deinit();
-                self.deinit();
             }
         }
     };

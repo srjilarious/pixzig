@@ -79,12 +79,11 @@ pub const App = struct {
 };
 
 pub fn main(init: std.process.Init) !void {
-    std.log.info("Pixzig Grid Render Example", .{});
-
     const appRunner = try AppRunner.init("Pixzig: Grid Render Example.", init.gpa, .{});
+    defer appRunner.deinit();
 
-    std.log.info("Initializing app.", .{});
     const app: *App = try App.init(init.gpa, appRunner.engine);
+    defer app.deinit();
 
     appRunner.run(app);
 }

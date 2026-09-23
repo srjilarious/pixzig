@@ -154,12 +154,11 @@ pub const App = struct {
 };
 
 pub fn main(init: std.process.Init) !void {
-    std.log.info("Pixzig Tilemap Example", .{});
-
     const appRunner = try AppRunner.init("Pixzig: Tilemap Example.", init.gpa, .{ .vsync = false });
+    defer appRunner.deinit();
 
-    std.log.info("Initializing app.", .{});
     const app: *App = try App.init(init.gpa, appRunner.engine);
+    defer app.deinit();
 
     appRunner.run(app);
 }

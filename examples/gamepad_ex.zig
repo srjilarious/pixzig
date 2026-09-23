@@ -91,10 +91,11 @@ pub const App = struct {
 };
 
 pub fn main(init: std.process.Init) !void {
-    std.log.info("Pixzig Gamepad Example", .{});
-
     const appRunner = try AppRunner.init("Pixzig: Gamepad Example", init.gpa, .{});
+    defer appRunner.deinit();
+
     var app = App.init();
+    defer app.deinit();
 
     appRunner.run(&app);
 }

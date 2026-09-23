@@ -88,14 +88,13 @@ pub const App = struct {
 };
 
 pub fn main(init: std.process.Init) !void {
-    std.log.info("Pixzig Console Test Example", .{});
-
     const appRunner = try AppRunner.init("Pixzig: Console Test Example.", init.gpa, .{
         .renderInitOpts = .{ .font = .{ .id = "Roboto-Medium" } },
     });
+    defer appRunner.deinit();
 
-    std.log.info("Initializing app.\n", .{});
     const app: *App = try App.init(init.gpa, appRunner.engine);
+    defer app.deinit();
 
     appRunner.run(app);
 }

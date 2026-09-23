@@ -272,7 +272,6 @@ pub const App = struct {
 };
 
 pub fn main(init: std.process.Init) !void {
-    std.log.info("Pixzig IMGUI Test", .{});
     const appRunner = try AppRunner.init(
         "Pixzig: IMGUI Test",
         init.gpa,
@@ -282,6 +281,10 @@ pub fn main(init: std.process.Init) !void {
             .renderInitOpts = .{ .font = .{ .id = "Roboto-Medium" } },
         },
     );
+    defer appRunner.deinit();
+
     const app = try App.init(init.gpa, appRunner.engine);
+    defer app.deinit();
+
     appRunner.run(app);
 }

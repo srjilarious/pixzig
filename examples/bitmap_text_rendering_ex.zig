@@ -83,12 +83,19 @@ pub const App = struct {
 pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig Bitmap Font Text Rendering Example", .{});
 
-    const appRunner = try AppRunner.init("Pixzig Bitmap FontText Rendering Example.", init.gpa, .{
-        .logicalSize = .{ .x = 266, .y = 160 },
-        // App.init swaps in the bitmap font, so skip loading the embedded one.
-        .renderInitOpts = .{ .font = .none },
-    });
+    const appRunner = try AppRunner.init(
+        "Pixzig Bitmap FontText Rendering Example.",
+        init.gpa,
+        .{
+            .logicalSize = .{ .x = 266, .y = 160 },
+            // App.init swaps in the bitmap font, so skip loading the embedded one.
+            .renderInitOpts = .{ .font = .none },
+        },
+    );
+    defer appRunner.deinit();
+
     const app = try App.init(init.gpa, appRunner.engine);
+    defer app.deinit();
 
     appRunner.run(app);
 }

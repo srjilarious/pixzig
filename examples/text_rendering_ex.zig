@@ -103,7 +103,6 @@ pub const App = struct {
 };
 
 pub fn main(init: std.process.Init) !void {
-    std.log.info("Pixzig Test Rendering Example", .{});
     // A path-based default font (rather than a manifest `id`) so this demo
     // owns the file the atlas is repacked from at runtime.
     const appRunner = try AppRunner.init("Pixzig Text Rendering Example.", init.gpa, .{
@@ -112,7 +111,10 @@ pub fn main(init: std.process.Init) !void {
             .size = default_font_size,
         } } },
     });
+    defer appRunner.deinit();
+
     const app = try App.init(init.gpa, appRunner.engine);
+    defer app.deinit();
 
     appRunner.run(app);
 }

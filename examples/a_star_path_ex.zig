@@ -411,6 +411,10 @@ pub fn main(init: std.process.Init) !void {
     std.log.info("Pixzig A* path example!", .{});
 
     const appRunner = try AppRunner.init("Pixzig A* Path Example.", init.gpa, .{ .logicalSize = .{ .x = 160, .y = 96 } });
+    defer appRunner.deinit();
+
     const app = try App.init(init.gpa, appRunner.engine);
+    defer app.deinit();
+
     appRunner.run(app);
 }

@@ -477,14 +477,12 @@ pub const Natetris = struct {
 };
 
 pub fn main() !void {
-    std.log.info("Starting Natetris", .{});
-
     const alloc = std.heap.c_allocator;
     const appRunner = try AppRunner.init("Natetris", alloc, .{});
+    defer appRunner.deinit();
 
-    std.log.info("Initializing app.\n", .{});
     const app = try Natetris.init(alloc, appRunner.engine);
+    defer app.deinit();
 
-    appRunner.engine.enableVSync(false);
     appRunner.run(app);
 }

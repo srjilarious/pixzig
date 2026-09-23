@@ -241,10 +241,13 @@ pub const App = struct {
 };
 
 pub fn main(init: std.process.Init) !void {
-    std.log.info("Pixzig Sequencer Example", .{});
     const appRunner = try AppRunner.init("Pixzig Sequencer Example", init.gpa, .{
         .logicalSize = .{ .x = 160, .y = 120 },
     });
+    defer appRunner.deinit();
+
     const app = try App.init(init.gpa, appRunner.engine);
+    defer app.deinit();
+
     appRunner.run(app);
 }

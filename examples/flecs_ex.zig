@@ -221,11 +221,11 @@ pub const App = struct {
 };
 
 pub fn main(init: std.process.Init) !void {
-    std.log.info("Pixzig: Flecs Example", .{});
-
     const appRunner = try AppRunner.init("Pixzig: Flecs Example.", init.gpa, .{});
+    defer appRunner.deinit();
 
-    std.log.info("Initializing app.\n", .{});
     const app: *App = try App.init(init.gpa, appRunner.engine);
+    defer app.deinit();
+
     appRunner.run(app);
 }

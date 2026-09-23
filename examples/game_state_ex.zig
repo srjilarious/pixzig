@@ -108,17 +108,16 @@ pub const App = struct {
 };
 
 pub fn main(init: std.process.Init) !void {
-    std.log.info("Pixzig Game State example.", .{});
-
     const appRunner = try AppRunner.init("Pixzig: Game State Example", init.gpa, .{});
-
-    std.log.debug("Initializing app.", .{});
+    defer appRunner.deinit();
 
     var StateAInst = StateA{};
     var ParamStateInst = ParamState{};
     var statesArr = [_]*anyopaque{ &StateAInst, &ParamStateInst };
     const states: []*anyopaque = statesArr[0..2];
+
     const app = try App.init(init.gpa, states);
+    defer app.deinit();
 
     appRunner.run(app);
 }

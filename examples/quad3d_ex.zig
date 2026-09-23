@@ -165,10 +165,11 @@ pub const App = struct {
 
 //* -- collapsed: Main function --
 pub fn main(init: std.process.Init) !void {
-    std.log.info("Pixzig Quad3D Example", .{});
-
     const appRunner = try AppRunner.init("Pixzig Quad3D Example.", init.gpa, .{});
+    defer appRunner.deinit();
+
     const app = try App.init(init.gpa, appRunner.engine);
+    defer app.deinit();
 
     appRunner.run(app);
 }

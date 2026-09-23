@@ -263,12 +263,11 @@ pub const App = struct {
 
 
 pub fn main(init: std.process.Init) !void {
-    std.log.info("Pixzig Tile Collision Example", .{});
-
     const appRunner = try AppRunner.init("Pixzig: Tile Collision Example.", init.gpa, .{});
-
-    std.log.info("Initializing app.", .{});
+    defer appRunner.deinit();
+    
     const app: *App = try App.init(init.gpa, appRunner.engine);
+    defer app.deinit();
 
     appRunner.run(app);
 }

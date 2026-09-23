@@ -62,12 +62,13 @@ pub const App = struct {
 };
 
 pub fn main(init: std.process.Init) !void {
-    std.log.info("Pixzig Pixel Buffer Example", .{});
-
     const appRunner = try AppRunner.init("Pixzig Pixel Buffer Example.", init.gpa, .{
         .windowSize = .{ .x = 800, .y = 600 },
     });
+    defer appRunner.deinit();
+
     var app = try App.init(init.gpa, appRunner.engine);
+    defer app.deinit();
 
     appRunner.run(&app);
 }

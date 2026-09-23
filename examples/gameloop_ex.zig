@@ -87,10 +87,11 @@ pub const App = struct {
 //* It hands over control of the gameloop to AppRunner so that both desktop
 //* and web builds can use the same main function.
 pub fn main(init: std.process.Init) !void {
-    std.log.info("Pixzig Game Loop Example", .{});
-
     const appRunner = try AppRunner.init("Pixzig Game Loop Example.", init.gpa, .{});
+    defer appRunner.deinit();
+
     var app = App.init(123);
+    defer app.deinit();
 
     appRunner.run(&app);
 }
