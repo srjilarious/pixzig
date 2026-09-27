@@ -55,8 +55,9 @@ pub const ChunkedTiledLayerRenderer = struct {
     chunksTall: u32,
     /// Refcounted shader handle. Refreshed in `render` when dirty.
     shader: *ShaderHandle,
-    /// Refcounted texture handle. Refreshed in `render` when dirty.
-    texture: *TextureHandle,
+    /// Refcounted texture handle. Refreshed in `render` when dirty. Null for
+    /// a layer with no tileset to draw from, which never renders anything.
+    texture: ?*TextureHandle,
     attrCoord: c_uint,
     attrTexcoord: c_uint,
     uniformMvp: c_int,
@@ -73,13 +74,13 @@ pub const ChunkedTiledLayerRenderer = struct {
     pub fn init(
         alloc: std.mem.Allocator,
         shader: *ShaderHandle,
-        texture: *TextureHandle,
+        texture: ?*TextureHandle,
         layer: *const TileLayer,
     ) !Self {
         const shader_handle = shader.retain();
         errdefer shader_handle.release();
-        const texture_handle = texture.retain();
-        errdefer texture_handle.release();
+        const texture_handle = if (texture) |t| t.retain() else null;
+        errdefer if (texture_handle) |t| t.release();
 
         const map_w: u32 = @intCast(layer.size.x);
         const map_h: u32 = @intCast(layer.size.y);
@@ -153,7 +154,7 @@ pub const ChunkedTiledLayerRenderer = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.texture.release();
+        if (self.texture) |t| t.release();
         self.shader.release();
         for (self.chunks) |*chunk| {
             gl.deleteVertexArrays(1, &chunk.vao);
@@ -179,8 +180,9 @@ pub const ChunkedTiledLayerRenderer = struct {
     }
 
     fn refreshTexture(self: *Self) void {
-        if (!self.texture.dirty) return;
-        self.texture = self.texture.reacquire();
+        const texture = self.texture orelse return;
+        if (!texture.dirty) return;
+        self.texture = texture.reacquire();
     }
 
     pub fn markAllDirty(self: *Self) void {
@@ -223,6 +225,7 @@ pub const ChunkedTiledLayerRenderer = struct {
         self.refreshShader();
         self.refreshTexture();
 
+        const texture = self.texture orelse return;
         const tileset = layer.tileset orelse return;
 
         const mvp_arr = zmath.matToArr(mvp);
@@ -233,7 +236,7 @@ pub const ChunkedTiledLayerRenderer = struct {
         gl.uniformMatrix4fv(self.uniformMvp, 1, gl.FALSE, @ptrCast(&mvp_arr[0]));
 
         gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, self.texture.val.texture);
+        gl.bindTexture(gl.TEXTURE_2D, texture.val.texture);
         gl.uniform1i(gl.getUniformLocation(self.shader.val.program, "tex"), 0);
 
         for (self.chunks) |*chunk| {

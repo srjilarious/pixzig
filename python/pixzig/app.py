@@ -190,8 +190,14 @@ class App:
     def load_tilemap(self, name: str, path: str) -> None:
         _n.check(_n.pz_load_tilemap(self._eng, name.encode("utf-8"), self._paths.encode(path)) == 0)
 
-    def create_tilemap_renderer(self, map_name: str, texture_name: str) -> TileMapRenderer:
-        handle = _n.pz_tilemap_renderer_create(self._eng, map_name.encode("utf-8"), texture_name.encode("utf-8"))
+    def create_tilemap_renderer(self, map_name: str) -> TileMapRenderer:
+        """Build a renderer for a map loaded with `load_tilemap`.
+
+        The tileset texture comes from the `<image source>` in the .tmx, so
+        there is nothing else to pass in. A texture already loaded under that
+        image's base name (`tiles` for `art/tiles.png`) is reused.
+        """
+        handle = _n.pz_tilemap_renderer_create(self._eng, map_name.encode("utf-8"))
         if not handle:
             raise _n.Error(_n.last_error())
         return self._track(TileMapRenderer(handle))

@@ -34,11 +34,21 @@ pub const BlocksAll = tilemap.BlocksAll;
 pub const Kills = tilemap.Kills;
 pub const UserPropsStart = tilemap.UserPropsStart;
 
-pub const TiledLayerRenderer = @import("./tile/tilemap_renderer.zig").TiledLayerRenderer;
+/// The renderer for a Tiled map: built from a map name, resolves its own
+/// shader and tileset textures. See `docs/tile-rendering.md`.
+pub const TileMapRenderer = @import("./tile/tilemap_renderer.zig").TileMapRenderer;
+
+/// Debug grid lines over a map area. Not a tile renderer -- it draws cell
+/// borders for a given map/tile size and never reads a `TileMap`.
 pub const GridRenderer = @import("./tile/grid_renderer.zig").GridRenderer;
 
-pub const ChunkedTiledLayerRenderer = @import("./tile/chunked_tile_renderer.zig").ChunkedTiledLayerRenderer;
-pub const ChunkedTiledRenderer = @import("./tile/chunked_tiled_renderer.zig").ChunkedTiledRenderer;
+/// Renderers on their way out. They still work, but `TileMapRenderer` is the
+/// one to build new code against.
+pub const deprecated = struct {
+    /// One full-map vertex buffer per layer, with `u16` indices, so it
+    /// overflows on large maps. Superseded by `TileMapRenderer`, which chunks.
+    pub const TiledLayerRenderer = @import("./tile/tiled_layer_renderer.zig").TiledLayerRenderer;
+};
 
 pub const Mover = @import("./tile/tile_mover.zig").Mover;
 

@@ -33,9 +33,8 @@ class TilemapRuntimeApp(App):
         self.text.load_font("roboto", "assets/Roboto-Medium.ttf", 18)
         self.text.set_font("roboto")
 
-        self.load_texture("tiles", "assets/mario_grassish2.png")
         self.load_tilemap("level1a", "assets/level1a.tmx")
-        self.map = self.create_tilemap_renderer("level1a", "tiles")
+        self.map = self.create_tilemap_renderer("level1a")
 
         self.solid = self.map.layer_index(SOLID_LAYER)
         self.tw, self.th = self.map.tile_size(self.solid)

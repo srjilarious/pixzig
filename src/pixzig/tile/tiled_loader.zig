@@ -81,7 +81,14 @@ pub const TiledMapXmlLoader = struct {
         std.log.debug("Loaded tile map file contents.", .{});
         const doc = try xml.parse(alloc, fileContents);
         defer doc.deinit();
-        return initFromElement(doc.root, alloc);
+
+        var map = try initFromElement(doc.root, alloc);
+        errdefer map.deinit();
+
+        // Tileset image paths in a .tmx are relative to the .tmx itself, so
+        // the renderer needs to know where the file came from.
+        try map.setSourcePath(filename);
+        return map;
     }
 
     /// Initializes a tile map from the root XML element of a Tiled map file.
@@ -305,6 +312,11 @@ pub const TiledMapXmlLoader = struct {
                 tileset.tiles.items[tileId] = newTile;
             } else if (std.mem.eql(u8, child.tag, "image")) {
                 tileset.textureSize = .{ .x = try std.fmt.parseInt(i32, child.getAttribute("width").?, 0), .y = try std.fmt.parseInt(i32, child.getAttribute("height").?, 0) };
+                if (child.getAttribute("source")) |src| {
+                    tileset.imageSource = try alloc.dupe(u8, src);
+                } else {
+                    std.log.warn("Tileset '{?s}' has an <image> with no source; its texture can't be resolved from the map", .{tileset.name});
+                }
             } else {
                 std.log.err("Unhandled tileset child: {s}\n", .{child.tag});
             }

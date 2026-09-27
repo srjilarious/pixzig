@@ -1,397 +1,319 @@
 const std = @import("std");
-const stbi = @import("zstbi");
-const gl = @import("zopengl").bindings;
 const zmath = @import("zmath");
-const xml = @import("xml");
 
 const common = @import("../common.zig");
-const textures = @import("../renderer/textures.zig");
-const shaders = @import("../renderer/shaders.zig");
 const resources = @import("../resources.zig");
+const shaders = @import("../renderer/shaders.zig");
+const camera_mod = @import("../camera.zig");
+const window_mod = @import("../window.zig");
 const tilemap = @import("./tilemap.zig");
+const ChunkedTiledLayerRenderer = @import("./chunked_tile_renderer.zig").ChunkedTiledLayerRenderer;
 
-const Vec2I = common.Vec2I;
-const Vec2U = common.Vec2U;
 const RectF = common.RectF;
-const Color = common.Color;
+const ResourceManager = resources.ResourceManager;
 const ShaderHandle = resources.ShaderHandle;
-const TextureHandle = resources.TextureHandle;
-
-const TileLayer = tilemap.TileLayer;
+const TileMapHandle = resources.TileMapHandle;
 const TileMap = tilemap.TileMap;
-const TileSet = tilemap.TileSet;
-const TileIndexMap = @import("./tile_index_map.zig").TileIndexMap;
+const Camera2D = camera_mod.Camera2D;
+const Viewport = window_mod.Viewport;
 
-pub const TiledLayerRenderer = struct {
-    mapSize: Vec2U = undefined,
-    /// Refcounted shader handle. Refreshed in `draw` when dirty.
-    shader: *ShaderHandle,
-    /// Refcounted texture handle. Refreshed in `draw` when dirty.
-    texture: *TextureHandle,
-    vao: u32 = 0,
-    vboVertices: u32 = 0,
-    vboTexCoords: u32 = 0,
-    vboIndices: u32 = 0,
-    vertices: []f32 = undefined,
-    texCoords: []f32 = undefined,
-    indices: []u16 = undefined,
-    cpuBuffersInitialized: bool = false,
+const LayerEntry = struct {
+    renderer: ChunkedTiledLayerRenderer,
+    parallaxX: f32,
+    parallaxY: f32,
+    layerIndex: usize,
+    /// Draw order depth. Layers are rendered lowest-z-first. Set via the
+    /// `z` float custom property on the layer in Tiled; defaults to 0.
+    z: f32,
+};
+
+fn entryLessThan(_: void, a: LayerEntry, b: LayerEntry) bool {
+    if (a.z != b.z) return a.z < b.z;
+    return a.layerIndex < b.layerIndex;
+}
+
+/// Renders every tile layer of a map registered with the `ResourceManager`,
+/// one chunked layer renderer per layer.
+///
+/// The renderer is built from a map *name*, and works the rest out itself: it
+/// acquires the tilemap handle, borrows the built-in texture shader, and
+/// resolves each layer's tileset image (the `<image source>` in the .tmx) to a
+/// texture via `ResourceManager.tilesetTexture`. Nothing else needs passing in,
+/// and the render calls take only a camera and a viewport.
+///
+/// Per-layer properties read from Tiled custom properties:
+///   `z`          - draw order depth (f32, default 0.0); lower renders first
+///   `parallax_x` - horizontal scroll factor (f32, default 1.0)
+///   `parallax_y` - vertical scroll factor   (f32, default 1.0)
+///
+/// Entries are sorted by z ascending and stay in that order.
+///
+/// Hot-reload is handled here: every render call first picks up a reloaded
+/// .tmx and rebuilds its layers. Call `sync` directly when something outside
+/// the renderer (camera bounds, spawn points) is derived from the map too.
+pub const TileMapRenderer = struct {
     alloc: std.mem.Allocator,
-    attrCoord: c_uint = 0,
-    attrTexCoord: c_uint = 0,
-    uniformMVP: c_int = 0,
-    numActualIndices: usize = 0,
-    numBuffVals: usize = 0,
-    tileIndexMap: TileIndexMap,
+    /// Where new layer textures come from, including after a reload.
+    resources: *ResourceManager,
+    /// Our own reference to the map, released in `deinit`. Re-acquired by
+    /// `sync` when the .tmx is hot-reloaded.
+    map: *TileMapHandle,
+    entries: []LayerEntry,
+    /// Our own reference, so `reload` can still build renderers for newly
+    /// added layers. Released in `deinit`.
+    shader: *ShaderHandle,
 
-    pub fn init(
-        alloc: std.mem.Allocator,
-        shader: *ShaderHandle,
-        texture: *TextureHandle,
-    ) !TiledLayerRenderer {
-        const shader_handle = shader.retain();
-        errdefer shader_handle.release();
-        const texture_handle = texture.retain();
-        errdefer texture_handle.release();
+    const Self = @This();
 
-        var tr = TiledLayerRenderer{
-            .shader = shader_handle,
-            .texture = texture_handle,
-            .alloc = alloc,
-            .tileIndexMap = TileIndexMap.init(alloc),
-        };
+    /// Builds a renderer for the tilemap registered as `mapName` (by
+    /// `loadTileMap` or `addTileMap`).
+    pub fn init(alloc: std.mem.Allocator, res: *ResourceManager, mapName: []const u8) !Self {
+        const map = try res.acquireTileMap(mapName);
+        errdefer map.release();
 
-        gl.genVertexArrays(1, &tr.vao);
+        const shader = try res.getShader(shaders.TextureShader);
 
-        gl.genBuffers(1, &tr.vboVertices);
-        gl.genBuffers(1, &tr.vboTexCoords);
-        gl.genBuffers(1, &tr.vboIndices);
-
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-        gl.enable(gl.TEXTURE_2D);
-
-        tr.cacheShaderLocations();
-
-        return tr;
-    }
-
-    pub fn deinit(self: *TiledLayerRenderer) void {
-        self.texture.release();
-        self.shader.release();
-        gl.deleteVertexArrays(1, &self.vao);
-        gl.deleteBuffers(1, &self.vboVertices);
-        gl.deleteBuffers(1, &self.vboTexCoords);
-        gl.deleteBuffers(1, &self.vboIndices);
-        if (self.cpuBuffersInitialized) {
-            self.alloc.free(self.vertices);
-            self.alloc.free(self.texCoords);
-            self.alloc.free(self.indices);
-        }
-        self.tileIndexMap.deinit();
-    }
-
-    fn cacheShaderLocations(self: *TiledLayerRenderer) void {
-        self.attrCoord = @intCast(gl.getAttribLocation(self.shader.val.program, "coord3d"));
-        self.attrTexCoord = @intCast(gl.getAttribLocation(self.shader.val.program, "texcoord"));
-        self.uniformMVP = @intCast(gl.getUniformLocation(self.shader.val.program, "projectionMatrix"));
-    }
-
-    fn refreshShader(self: *TiledLayerRenderer) void {
-        if (!self.shader.dirty) return;
-        self.shader = self.shader.reacquire();
-        self.cacheShaderLocations();
-    }
-
-    fn refreshTexture(self: *TiledLayerRenderer) void {
-        if (!self.texture.dirty) return;
-        self.texture = self.texture.reacquire();
-    }
-
-    fn tileCoords(idx: i32, tileset: *TileSet) RectF {
-        const i: i32 = @intCast(idx);
-        if (idx < 0) {
-            return .{
-                .l = 0.99,
-                .t = 0.99,
-                .r = 0.99,
-                .b = 0.99,
-            };
-        }
-
-        const tu: f32 = @as(f32, @floatFromInt(@rem(i, tileset.columns)));
-        const tv: f32 = @as(f32, @floatFromInt(@divTrunc(i, tileset.columns)));
-        const tsx: f32 = @floatFromInt(tileset.tileSize.x);
-        const tsy: f32 = @floatFromInt(tileset.tileSize.y);
-        const txw: f32 = @floatFromInt(tileset.textureSize.x);
-        const txh: f32 = @floatFromInt(tileset.textureSize.y);
-        const l = (tu * tsx) / txw;
-        const t = (tv * tsy) / txh;
-        return .{
-            .l = l,
-            .t = t,
-            .r = l + tsx / txw,
-            .b = t + tsy / txh,
-        };
-    }
-
-    fn dump(self: *TiledLayerRenderer) void {
-        std.log.debug("*****************\n", .{});
-
-        std.log.debug("### tileIndexMap:\n", .{});
-        for (self.tileIndexMap.arr.items, 0..) |kv, idx| {
-            std.log.debug("[{}] tIdx={}, bIdx={}\n", .{ idx, kv.tileIdx, kv.bufferIdx });
-            var vIdx = (kv.bufferIdx) * 8;
-            var iIdx = (kv.bufferIdx) * 6;
-
-            std.log.debug("Vertices: \n", .{});
-            for (0..4) |_| {
-                std.log.debug("({}, {}) ", .{ @as(i32, @intFromFloat(self.vertices[vIdx])), @as(i32, @intFromFloat(self.vertices[vIdx + 1])) });
-                vIdx += 2;
-            }
-            std.log.debug("\n", .{});
-
-            std.log.debug("Indices: \n", .{});
-            for (0..2) |_| {
-                std.log.debug("({}, {}, {}) ", .{ self.indices[iIdx], self.indices[iIdx + 1], self.indices[iIdx + 2] });
-                iIdx += 3;
-            }
-            std.log.debug("\n\n", .{});
-        }
-
-        std.log.debug("*****************\n", .{});
-    }
-
-    pub fn tileChanged(self: *TiledLayerRenderer, tileset: *TileSet, tiles: *TileLayer, loc: Vec2I, tile: i32) !void {
-        const layerWidth: usize = @intCast(tiles.size.x);
-        const layerHeight: usize = @intCast(tiles.size.y);
-        if (loc.x < 0 or loc.x >= layerWidth) return;
-        if (loc.y < 0 or loc.y >= layerHeight) return;
-
-        const tileIdx: usize = @intCast(loc.y * @as(i32, @intCast(layerWidth)) + loc.x);
-
-        // Check for a tile add/change
-        if (tile >= 0) {
-            // if location exists in map
-            if (self.tileIndexMap.getBuffIndex(tileIdx)) |buffIdx| {
-                // Update buffer data
-                const vertIdx = buffIdx * 8;
-                const indicesIdx = buffIdx * 6;
-                self.setTileRenderData(loc, vertIdx, indicesIdx, tiles.tileSize, tile, tileset);
-            }
-            // if location no in map
-            else {
-                // Add to end of buffer
-                const vertIdx = self.numBuffVals * 8;
-                const indicesIdx = self.numBuffVals * 6;
-                self.setTileRenderData(loc, vertIdx, indicesIdx, tiles.tileSize, tile, tileset);
-
-                _ = try self.tileIndexMap.put(tileIdx, self.numBuffVals);
-
-                self.numBuffVals += 1;
-                self.numActualIndices += 6;
-            }
-        }
-        // A tile is being removed.
-        else {
-            //std.debug.print("Removing block at {}, {}\n", .{ loc.x, loc.y });
-
-            // Find the bufferIndex if location exists in map
-            if (self.tileIndexMap.getBuffIndex(tileIdx)) |buffIdx| {
-                const lastBuffIdx = self.numBuffVals - 1;
-
-                // If buffIdx is the last, simply stop drawing its indices
-                if (buffIdx == lastBuffIdx) {
-                    const rem = self.tileIndexMap.removeByTileIndex(tileIdx);
-                    std.debug.assert(rem);
-                    self.numBuffVals -= 1;
-                    self.numActualIndices -= 6;
-                }
-                // Otherwise, the block to remove is somewhere in the middle,
-                // so swap the last block with it updating our map indices.
-                else {
-                    // Update buffer data
-                    const destVertIdx = buffIdx * 8;
-
-                    const srcVertIdx = (lastBuffIdx) * 8;
-                    const lastK = self.tileIndexMap.getTileIndex(lastBuffIdx).?;
-
-                    // Copy from the end into the slot we want to erase
-                    // Note we don't want to change the indices, since we're moving the vertex data
-                    // the indices in that slot should stay the same.
-                    @memcpy(self.vertices[destVertIdx .. destVertIdx + 8], self.vertices[srcVertIdx .. srcVertIdx + 8]);
-                    @memcpy(self.texCoords[destVertIdx .. destVertIdx + 8], self.texCoords[srcVertIdx .. srcVertIdx + 8]);
-
-                    // Remove the bufferIndex of the removed item.
-                    _ = self.tileIndexMap.removeByTileIndex(tileIdx);
-                    _ = self.tileIndexMap.update(lastK, buffIdx);
-
-                    self.numBuffVals -= 1;
-                    self.numActualIndices -= 6;
-                }
-            } else {
-                std.log.err("No tile set in position!\n", .{});
-            }
-        }
-
-        // self.dump();
-    }
-
-    fn setTileRenderData(self: *TiledLayerRenderer, loc: Vec2I, vertIdx: usize, indicesIdx: usize, ts: Vec2I, tile: i32, tileset: *TileSet) void {
-        const uv = tileCoords(tile, tileset);
-        var idx = vertIdx;
-        const x = loc.x;
-        const y = loc.y;
-
-        // Coord 1
-        self.vertices[idx] = @as(f32, @floatFromInt(x * ts.x)) - 0.01;
-        self.vertices[idx + 1] = @as(f32, @floatFromInt(y * ts.y)) - 0.01;
-        self.texCoords[idx] = uv.l;
-        self.texCoords[idx + 1] = uv.t;
-        idx += 2;
-
-        // Coord 2
-        self.vertices[idx] = @as(f32, @floatFromInt((x + 1) * ts.x)) + 0.01;
-        self.vertices[idx + 1] = @as(f32, @floatFromInt(y * ts.y)) - 0.01;
-        self.texCoords[idx] = uv.r;
-        self.texCoords[idx + 1] = uv.t;
-        idx += 2;
-
-        // Coord 3
-        self.vertices[idx] = @as(f32, @floatFromInt((x + 1) * ts.x)) + 0.01;
-        self.vertices[idx + 1] = @as(f32, @floatFromInt((y + 1) * ts.y)) + 0.01;
-        self.texCoords[idx] = uv.r;
-        self.texCoords[idx + 1] = uv.b;
-        idx += 2;
-
-        // Coord 4
-        self.vertices[idx] = @as(f32, @floatFromInt(x * ts.x)) - 0.01;
-        self.vertices[idx + 1] = @as(f32, @floatFromInt((y + 1) * ts.y)) + 0.01;
-        self.texCoords[idx] = uv.l;
-        self.texCoords[idx + 1] = uv.b;
-        idx += 2;
-
-        // const baseIdx: u16 = 4 * @as(u16, @intCast(y*@as(i32, @intCast(layerWidth)) + x));
-        const baseIdx: u16 = @divTrunc(@as(u16, @intCast(idx - 8)), 2);
-        self.indices[indicesIdx] = baseIdx;
-        self.indices[indicesIdx + 1] = baseIdx + 1;
-        self.indices[indicesIdx + 2] = baseIdx + 3;
-        self.indices[indicesIdx + 3] = baseIdx + 1;
-        self.indices[indicesIdx + 4] = baseIdx + 2;
-        self.indices[indicesIdx + 5] = baseIdx + 3;
-    }
-
-    pub fn recreateVertices(self: *TiledLayerRenderer, tileset: *TileSet, tiles: *TileLayer) !void {
-
-        // const tw = tileset.tileSize.x;
-        // const th = tileset.tileSize.y;
-        const layerWidth: usize = @intCast(tiles.size.x);
-        const layerHeight: usize = @intCast(tiles.size.y);
-        self.mapSize = .{ .x = @intCast(layerWidth), .y = @intCast(layerHeight) };
-        const mapSize: i32 = @intCast(layerWidth * layerHeight);
-        _ = mapSize;
-        const numVerts: usize = @intCast(2 * 4 * layerWidth * layerHeight);
-        const numIndices: usize = @intCast(6 * layerWidth * layerHeight);
-
-        std.log.debug("Creating map render data: verts={}, texCoords={}, indices={}", .{ numVerts, numVerts, numIndices });
-
-        // Allocate new arrays first so a partial failure leaves the old ones intact.
-        const newVertices = try self.alloc.alloc(f32, numVerts);
-        errdefer self.alloc.free(newVertices);
-
-        const newTexCoords = try self.alloc.alloc(f32, numVerts);
-        errdefer self.alloc.free(newTexCoords);
-
-        const newIndices = try self.alloc.alloc(u16, numIndices);
-
-        // All allocations succeeded; free previous CPU arrays if they existed.
-        if (self.cpuBuffersInitialized) {
-            self.alloc.free(self.vertices);
-            self.alloc.free(self.texCoords);
-            self.alloc.free(self.indices);
-        }
-
-        self.vertices = newVertices;
-        self.texCoords = newTexCoords;
-        self.indices = newIndices;
-        self.cpuBuffersInitialized = true;
-
-        std.log.debug("Creating {} vertices\n", .{self.vertices.len});
-        self.tileIndexMap.clearRetainingCapacity();
+        const entries = try buildEntries(alloc, res, shader, &map.val);
         errdefer {
-            self.numActualIndices = 0;
-            self.numBuffVals = 0;
-            self.tileIndexMap.clearRetainingCapacity();
-        }
-        var buffIdx: usize = 0;
-        var idx: usize = 0;
-        var indicesIdx: usize = 0;
-        for (0..layerHeight) |yy| {
-            for (0..layerWidth) |xx| {
-                const y: i32 = @intCast(yy);
-                const x: i32 = @intCast(xx);
-                const tile = tiles.tileData(x, y);
-                if (tile < 0) continue;
-
-                // Keep a map of which tile index maps to what buffer index.
-                // This lets us handle adding/removing tiles dynamically.
-                const tileIdx = y * @as(i32, @intCast(layerWidth)) + x;
-                _ = try self.tileIndexMap.put(@intCast(tileIdx), buffIdx);
-                // std.debug.print("Placing tileIdx={} in buffIdx={}\n", .{tileIdx, buffIdx});
-                self.setTileRenderData(.{ .x = x, .y = y }, idx, indicesIdx, tileset.tileSize, tile, tileset);
-                idx += 8;
-                indicesIdx += 6;
-
-                // Since we skip empty tiles, keep track of which index in the buffer each drawn tile
-                // is going to map to.
-                buffIdx += 1;
-            }
+            for (entries) |*e| e.renderer.deinit();
+            alloc.free(entries);
         }
 
-        self.numActualIndices = indicesIdx;
-        self.numBuffVals = buffIdx;
-        std.log.info("TiledLayerRenderer.recreateVertices finished.", .{});
+        return .{
+            .alloc = alloc,
+            .resources = res,
+            .map = map,
+            .entries = entries,
+            .shader = shader.retain(),
+        };
     }
 
-    pub fn draw(self: *TiledLayerRenderer, tiles: *TileLayer, mvp: zmath.Mat) !void {
-        self.refreshShader();
-        self.refreshTexture();
+    pub fn deinit(self: *Self) void {
+        for (self.entries) |*e| e.renderer.deinit();
+        self.alloc.free(self.entries);
+        self.shader.release();
+        self.map.release();
+    }
 
-        const mvpArr = zmath.matToArr(mvp);
-        const layerWidth: usize = @intCast(tiles.size.x);
-        const layerHeight: usize = @intCast(tiles.size.y);
-        const mapSize: i32 = @intCast(layerWidth * layerHeight);
-        gl.useProgram(self.shader.val.program);
-        gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&mvpArr[0]));
+    /// The map this renderer draws. Valid until the next `sync`, which swaps
+    /// in the reloaded generation.
+    pub fn tileMap(self: *const Self) *TileMap {
+        return &self.map.val;
+    }
 
-        // Set 'tex' to use texture unit 0
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, self.texture.val.texture);
-        gl.uniform1i(gl.getUniformLocation(self.shader.val.program, "tex"), 0);
+    /// Picks up a hot-reloaded .tmx: re-acquires the map handle and rebuilds
+    /// every layer from it. Returns true when that happened, so a caller can
+    /// refresh whatever else it derived from the map (camera bounds, object
+    /// positions). Every render call does this first, so calling it is only
+    /// necessary for those extra derived values.
+    ///
+    /// A rebuild that fails is logged and leaves the previous layers drawing.
+    pub fn sync(self: *Self) bool {
+        if (!self.map.dirty) return false;
+        self.map = self.map.reacquire();
+        self.reload() catch |err| {
+            std.log.err("TileMapRenderer: could not rebuild after a map reload: {}", .{err});
+        };
+        return true;
+    }
 
-        gl.bindVertexArray(self.vao);
-        gl.enableVertexAttribArray(self.attrCoord);
+    /// Mark all chunks in all layers as dirty. Chunks rebuild lazily as they
+    /// come into view. Use rebuildAll for an immediate forced rebuild.
+    pub fn markAllDirty(self: *Self) void {
+        for (self.entries) |*e| e.renderer.markAllDirty();
+    }
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, self.vboVertices);
-        gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * mapSize), &self.vertices[0], gl.STATIC_DRAW);
-        gl.vertexAttribPointer(self.attrCoord, 2, // Num elems per vertex
-            gl.FLOAT, gl.FALSE, 0, // stride
-            null);
+    /// Immediately rebuild every chunk in every layer from the current map
+    /// data, regardless of viewport. Only safe when the map's layer count and
+    /// structure are unchanged -- use `reload` after a hot-reload that may
+    /// have added, removed, or reordered layers.
+    pub fn rebuildAll(self: *Self) void {
+        const map = &self.map.val;
+        for (self.entries) |*entry| {
+            const layer = map.layerByIndex(entry.layerIndex) orelse continue;
+            entry.renderer.rebuildAll(layer);
+        }
+    }
 
-        gl.enableVertexAttribArray(self.attrTexCoord);
-        gl.bindBuffer(gl.ARRAY_BUFFER, self.vboTexCoords);
-        gl.bufferData(gl.ARRAY_BUFFER, @intCast(2 * 4 * @sizeOf(f32) * mapSize), &self.texCoords[0], gl.STATIC_DRAW);
-        gl.vertexAttribPointer(self.attrTexCoord, 2, // Num elems per vertex
-            gl.FLOAT, gl.FALSE, 0, // stride
-            null);
+    /// Full rebuild: tears down all layer renderers and rebuilds them from the
+    /// current map state. Handles added layers, removed layers, a changed
+    /// tileset image, and changes to z or parallax properties. On error the
+    /// existing renderers are left intact.
+    pub fn reload(self: *Self) !void {
+        const map = &self.map.val;
 
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.vboIndices);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(@sizeOf(u16) * self.numActualIndices), &self.indices[0], gl.STATIC_DRAW);
+        const new_entries = try buildEntries(self.alloc, self.resources, self.shader, map);
+        errdefer {
+            for (new_entries) |*e| e.renderer.deinit();
+            self.alloc.free(new_entries);
+        }
 
-        gl.drawElements(gl.TRIANGLES, @intCast(self.numActualIndices), gl.UNSIGNED_SHORT, null);
-        gl.disableVertexAttribArray(self.attrCoord);
-        gl.disableVertexAttribArray(self.attrTexCoord);
+        for (new_entries) |*entry| {
+            const layer = map.layerByIndex(entry.layerIndex) orelse continue;
+            entry.renderer.rebuildAll(layer);
+        }
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, 0);
+        for (self.entries) |*e| e.renderer.deinit();
+        self.alloc.free(self.entries);
+        self.entries = new_entries;
+    }
+
+    /// Render all layers in ascending z order.
+    pub fn render(self: *Self, camera: *const Camera2D, viewport: *const Viewport) void {
+        _ = self.sync();
+        for (self.entries) |*entry| {
+            self.renderEntry(entry, camera, viewport);
+        }
+    }
+
+    /// Render a single layer by its original map index.
+    pub fn renderLayer(
+        self: *Self,
+        layerIndex: usize,
+        camera: *const Camera2D,
+        viewport: *const Viewport,
+    ) void {
+        _ = self.sync();
+        for (self.entries) |*entry| {
+            if (entry.layerIndex == layerIndex) {
+                self.renderEntry(entry, camera, viewport);
+                return;
+            }
+        }
+    }
+
+    /// Render a single layer by its name in Tiled. A name that matches no
+    /// layer draws nothing.
+    pub fn renderLayerNamed(
+        self: *Self,
+        name: []const u8,
+        camera: *const Camera2D,
+        viewport: *const Viewport,
+    ) void {
+        _ = self.sync();
+        const map = &self.map.val;
+        for (self.entries) |*entry| {
+            const layer = map.layerByIndex(entry.layerIndex) orelse continue;
+            const layerName = layer.name orelse continue;
+            if (std.mem.eql(u8, layerName, name)) {
+                self.renderEntry(entry, camera, viewport);
+                return;
+            }
+        }
+    }
+
+    /// Render all layers whose z is strictly less than `zThreshold`.
+    pub fn renderLayersBelow(
+        self: *Self,
+        zThreshold: f32,
+        camera: *const Camera2D,
+        viewport: *const Viewport,
+    ) void {
+        _ = self.sync();
+        for (self.entries) |*entry| {
+            if (entry.z >= zThreshold) break; // entries are sorted; can stop early
+            self.renderEntry(entry, camera, viewport);
+        }
+    }
+
+    /// Render all layers whose z is greater than or equal to `zThreshold`.
+    pub fn renderLayersAbove(
+        self: *Self,
+        zThreshold: f32,
+        camera: *const Camera2D,
+        viewport: *const Viewport,
+    ) void {
+        _ = self.sync();
+        for (self.entries) |*entry| {
+            if (entry.z >= zThreshold) {
+                self.renderEntry(entry, camera, viewport);
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+
+    /// Builds one layer renderer per layer in `map`, sorted into draw order.
+    /// Each layer draws from its own tileset's image, so a map with more than
+    /// one tileset renders correctly.
+    fn buildEntries(
+        alloc: std.mem.Allocator,
+        res: *ResourceManager,
+        shader: *ShaderHandle,
+        map: *const TileMap,
+    ) ![]LayerEntry {
+        const entries = try alloc.alloc(LayerEntry, map.layers.items.len);
+        errdefer alloc.free(entries);
+
+        var inited: usize = 0;
+        errdefer for (entries[0..inited]) |*e| e.renderer.deinit();
+
+        for (map.layers.items, 0..) |*layer, i| {
+            // A layer with no tileset has no tiles to draw; it gets a renderer
+            // with no texture, which renders nothing.
+            const texture = if (layer.tileset) |tileset|
+                try res.tilesetTexture(map, tileset)
+            else
+                null;
+
+            entries[i] = .{
+                .renderer = try ChunkedTiledLayerRenderer.init(alloc, shader, texture, layer),
+                .parallaxX = layer.floatPropWithDefault("parallax_x", 1.0),
+                .parallaxY = layer.floatPropWithDefault("parallax_y", 1.0),
+                .layerIndex = i,
+                .z = layer.floatPropWithDefault("z", 0.0),
+            };
+            inited += 1;
+        }
+
+        std.sort.block(LayerEntry, entries, {}, entryLessThan);
+        return entries;
+    }
+
+    fn renderEntry(
+        self: *Self,
+        entry: *LayerEntry,
+        camera: *const Camera2D,
+        viewport: *const Viewport,
+    ) void {
+        const layer = self.map.val.layerByIndex(entry.layerIndex) orelse return;
+        const mvp = layerMvp(camera, viewport, entry.parallaxX, entry.parallaxY);
+        const vp_rect = layerViewport(camera, entry.parallaxX, entry.parallaxY);
+        entry.renderer.render(layer, mvp, vp_rect);
+    }
+
+    /// Build a camera MVP with the translation scaled by (px, py). This gives
+    /// a parallax effect: a layer with px=0.5 scrolls at half the camera speed.
+    fn layerMvp(camera: *const Camera2D, vp: *const Viewport, px: f32, py: f32) zmath.Mat {
+        const view = camera.viewRect();
+        const cam_x = (view.l + view.r) * 0.5;
+        const cam_y = (view.t + view.b) * 0.5;
+        const lw: f32 = @floatFromInt(camera.logicalSize.x);
+        const lh: f32 = @floatFromInt(camera.logicalSize.y);
+        const z = camera.zoom;
+
+        const t_neg = zmath.translation(-cam_x * px, -cam_y * py, 0.0);
+        const t_scale = zmath.scaling(z, z, 1.0);
+        const t_rot = zmath.rotationZ(camera.rotation);
+        const t_center = zmath.translation(lw * 0.5, lh * 0.5, 0.0);
+        const cam_mat = zmath.mul(t_neg, zmath.mul(t_scale, zmath.mul(t_rot, t_center)));
+        return zmath.mul(cam_mat, vp.projection());
+    }
+
+    /// Compute the world-space culling rect for a parallax layer. The visible
+    /// half-extents are the same as the camera's, but the center is scaled by
+    /// the parallax factors.
+    fn layerViewport(camera: *const Camera2D, px: f32, py: f32) RectF {
+        const view = camera.viewRect();
+        const cam_x = (view.l + view.r) * 0.5;
+        const cam_y = (view.t + view.b) * 0.5;
+        const half_w = (view.r - view.l) * 0.5;
+        const half_h = (view.b - view.t) * 0.5;
+        return .{
+            .l = cam_x * px - half_w,
+            .t = cam_y * py - half_h,
+            .r = cam_x * px + half_w,
+            .b = cam_y * py + half_h,
+        };
     }
 };

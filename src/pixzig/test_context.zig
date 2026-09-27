@@ -8,6 +8,7 @@ const shaders_mod = @import("./renderer/shaders.zig");
 const textures_mod = @import("./renderer/textures.zig");
 const common = @import("./common.zig");
 
+const ResourceManager = resources.ResourceManager;
 const ManagedShader = resources.ManagedShader;
 const ManagedTexture = resources.ManagedTexture;
 const Shader = shaders_mod.Shader;
@@ -98,6 +99,20 @@ pub const GlTestContext = struct {
         var managed = ManagedShader.init(alloc, 1, "test", freeShaderImpl);
         try managed.add(shader);
         return managed;
+    }
+
+    /// Returns a ResourceManager with the built-in texture shader already
+    /// registered, which is what `TileMapRenderer` looks up by name. The
+    /// caller owns it and must call `deinit` after releasing every handle
+    /// taken from it.
+    pub fn makeResourceManager(_: *Self, alloc: std.mem.Allocator) !ResourceManager {
+        var res = ResourceManager.init(alloc);
+        errdefer res.deinit();
+
+        const vs_arr = [_]ShaderCode{shaders_mod.TexVertexShader};
+        const fs_arr = [_]ShaderCode{shaders_mod.TexPixelShader};
+        _ = try res.loadShader(shaders_mod.TextureShader, &vs_arr, &fs_arr);
+        return res;
     }
 
     /// Returns a ManagedTexture containing a dummy Texture with no real GL object.

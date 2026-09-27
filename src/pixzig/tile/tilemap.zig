@@ -182,6 +182,14 @@ pub const TileSet = struct {
     /// firstgid attribute; used to map layer GIDs to local tileset indices.
     firstgid: u32,
     name: ?[]const u8,
+    /// The `source` attribute of the tileset's `<image>` element, exactly as
+    /// the .tmx spells it (so usually relative to the .tmx file). This is how
+    /// `TileMapRenderer` finds the tileset's texture without being handed one.
+    ///
+    /// A map built in code rather than loaded from a .tmx can set this to the
+    /// name a texture was already loaded under (`"tiles"`), which is matched
+    /// before anything is read from disk. Owned by the tileset when non-null.
+    imageSource: ?[]const u8,
     alloc: std.mem.Allocator,
 
     pub fn init(alloc: std.mem.Allocator) !TileSet {
@@ -192,6 +200,7 @@ pub const TileSet = struct {
             .columns = 0,
             .firstgid = 1,
             .name = null,
+            .imageSource = null,
             .alloc = alloc,
         };
     }
@@ -208,6 +217,7 @@ pub const TileSet = struct {
             .columns = @divFloor(textureSize.x, tileSize.x),
             .firstgid = 1,
             .name = null,
+            .imageSource = null,
             .alloc = alloc,
         };
     }
@@ -215,6 +225,10 @@ pub const TileSet = struct {
     pub fn deinit(self: *TileSet) void {
         if (self.name != null) {
             self.alloc.free(self.name.?);
+        }
+
+        if (self.imageSource != null) {
+            self.alloc.free(self.imageSource.?);
         }
 
         for (0..self.tiles.items.len) |idx| {
@@ -511,12 +525,25 @@ pub const TileMap = struct {
     tilesets: std.ArrayList(TileSet),
     layers: std.ArrayList(TileLayer),
     objectGroups: std.ArrayList(ObjectGroup),
+    /// The .tmx file this map was loaded from, already resolved against the
+    /// asset base. Tileset image paths are relative to this file, so it is
+    /// what `TileMapRenderer` resolves them against. Null for a map built in
+    /// code; owned by the map when non-null.
+    sourcePath: ?[]const u8,
     alloc: std.mem.Allocator,
 
     /// Initializes an empty tile map with no tilesets, layers, or object
     /// groups.
     pub fn init(alloc: std.mem.Allocator) !TileMap {
-        return .{ .tilesets = .empty, .layers = .empty, .objectGroups = .empty, .alloc = alloc };
+        return .{ .tilesets = .empty, .layers = .empty, .objectGroups = .empty, .sourcePath = null, .alloc = alloc };
+    }
+
+    /// Records the file this map came from, replacing any previous value.
+    /// The map takes its own copy.
+    pub fn setSourcePath(self: *TileMap, path: []const u8) !void {
+        const copy = try self.alloc.dupe(u8, path);
+        if (self.sourcePath) |old| self.alloc.free(old);
+        self.sourcePath = copy;
     }
 
     /// Gets a pointer to the layer at the given index, or null if the index
@@ -577,5 +604,9 @@ pub const TileMap = struct {
         }
 
         self.objectGroups.deinit(self.alloc);
+
+        if (self.sourcePath) |path| {
+            self.alloc.free(path);
+        }
     }
 };

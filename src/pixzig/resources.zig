@@ -22,6 +22,7 @@ const SpackFile = textures.SpackFile;
 const FileWatcher = file_watcher_mod.FileWatcher;
 const WatchId = file_watcher_mod.WatchId;
 const TileMap = tilemap_mod.TileMap;
+const TileSet = tilemap_mod.TileSet;
 const TiledMapXmlLoader = tiled_loader_mod.TiledMapXmlLoader;
 
 const Vec2U = common.Vec2U;
@@ -1355,6 +1356,63 @@ pub const ResourceManager = struct {
         }
 
         return managed.get().?;
+    }
+
+    /// Registers a tilemap that was built in code rather than loaded from a
+    /// .tmx, under `name`. The manager takes ownership of `map`, so the
+    /// caller must not deinit it; as with `loadTileMap`, a second call with
+    /// the same name marks the prior generation dirty.
+    ///
+    /// Nothing is watched for changes -- there is no file behind it.
+    ///
+    /// Returns a borrowed handle (see `ResourceManager`).
+    pub fn addTileMap(self: *Self, name: []const u8, map: TileMap) !*TileMapHandle {
+        const managed = try self.getOrCreateTileMap(name);
+        try managed.add(map);
+        return managed.get().?;
+    }
+
+    /// Borrows the texture a tileset draws from, loading it on the first call
+    /// if nothing is registered under that name yet.
+    ///
+    /// The name is the base name of the tileset's `<image source>` -- the
+    /// tileset image `../art/tiles.png` is registered as `"tiles"` -- so a
+    /// texture the game loaded under that name is reused rather than loaded a
+    /// second time. Otherwise the path is read relative to `map.sourcePath`,
+    /// the .tmx the tileset came from.
+    ///
+    /// Returns a borrowed handle (see `ResourceManager`).
+    pub fn tilesetTexture(self: *Self, map: *const TileMap, tileset: *const TileSet) !*TextureHandle {
+        const source = tileset.imageSource orelse return error.TilesetHasNoImage;
+        const name = utils.baseNameFromPath(source);
+
+        if (self.atlas.contains(name)) return self.getTexture(name);
+
+        const image_path = try self.tilesetImagePath(map, source);
+        defer self.alloc.free(image_path);
+
+        return self.loadTexture(name, image_path);
+    }
+
+    /// Joins a tileset's `<image source>` onto the directory holding the .tmx
+    /// it came from. An absolute source, or a map with no file behind it, is
+    /// used as-is and so resolves against the asset base like any other path.
+    /// Caller owns the returned buffer.
+    fn tilesetImagePath(self: *Self, map: *const TileMap, source: []const u8) ![]u8 {
+        if (std.fs.path.isAbsolute(source)) return self.alloc.dupe(u8, source);
+
+        const map_path = map.sourcePath orelse return self.alloc.dupe(u8, source);
+        const dir = std.fs.path.dirname(map_path) orelse return self.alloc.dupe(u8, source);
+
+        // `loadTileMap` resolves against the asset base before loading, so an
+        // absolute map path is the normal case and `resolve` can fold away the
+        // `..` segments Tiled likes to emit. A relative one (Emscripten, where
+        // there is no base directory) must stay relative, so it is only
+        // joined.
+        if (std.fs.path.isAbsolute(dir)) {
+            return std.fs.path.resolve(self.alloc, &.{ dir, source });
+        }
+        return std.fs.path.join(self.alloc, &.{ dir, source });
     }
 
     /// Borrows the newest generation of the tilemap registered as `name`,

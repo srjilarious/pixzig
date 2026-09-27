@@ -76,9 +76,14 @@ const PzCamera = struct {
 
 const PzTilemapRenderer = struct {
     eng: *PzEngine,
-    map: *pixzig.TileMapHandle,
-    renderer: pixzig.tile.ChunkedTiledRenderer,
+    renderer: pixzig.tile.TileMapRenderer,
     registryIndex: usize,
+
+    /// The map the renderer owns. Re-read after every call that may have
+    /// picked up a hot-reload.
+    fn map(self: *PzTilemapRenderer) *pixzig.TileMap {
+        return self.renderer.tileMap();
+    }
 };
 
 const PzAssetManifest = struct {
@@ -279,7 +284,6 @@ export fn pz_deinit(eng: *PzEngine) callconv(.c) void {
 
     for (eng.tilemapRenderers.items) |tr| {
         tr.renderer.deinit();
-        tr.map.release();
         eng.alloc.destroy(tr);
     }
     eng.tilemapRenderers.deinit(eng.alloc);
@@ -639,26 +643,20 @@ export fn pz_load_tilemap(eng: *PzEngine, name: [*:0]const u8, path: [*:0]const 
     return 0;
 }
 
-fn pzTilemapRendererCreateImpl(eng: *PzEngine, map_name: []const u8, texture_name: []const u8) !*PzTilemapRenderer {
-    const map = try eng.engine.resources.acquireTileMap(map_name);
-    errdefer map.release();
-
-    const shader = try eng.engine.resources.getShader(pixzig.shaders.TextureShader);
-    const texture = try eng.engine.resources.getTexture(texture_name);
-
-    var renderer = try pixzig.tile.ChunkedTiledRenderer.init(eng.alloc, &map.val, shader, texture);
+fn pzTilemapRendererCreateImpl(eng: *PzEngine, map_name: []const u8) !*PzTilemapRenderer {
+    var renderer = try pixzig.tile.TileMapRenderer.init(eng.alloc, &eng.engine.resources, map_name);
     errdefer renderer.deinit();
 
     const wrapper = try eng.alloc.create(PzTilemapRenderer);
     errdefer eng.alloc.destroy(wrapper);
 
-    wrapper.* = .{ .eng = eng, .map = map, .renderer = renderer, .registryIndex = undefined };
+    wrapper.* = .{ .eng = eng, .renderer = renderer, .registryIndex = undefined };
     try registryAdd(PzTilemapRenderer, &eng.tilemapRenderers, eng.alloc, wrapper);
     return wrapper;
 }
 
-export fn pz_tilemap_renderer_create(eng: *PzEngine, map_name: [*:0]const u8, texture_name: [*:0]const u8) callconv(.c) ?*PzTilemapRenderer {
-    return pzTilemapRendererCreateImpl(eng, std.mem.span(map_name), std.mem.span(texture_name)) catch |err| {
+export fn pz_tilemap_renderer_create(eng: *PzEngine, map_name: [*:0]const u8) callconv(.c) ?*PzTilemapRenderer {
+    return pzTilemapRendererCreateImpl(eng, std.mem.span(map_name)) catch |err| {
         setLastErrorErr(err);
         return null;
     };
@@ -666,43 +664,36 @@ export fn pz_tilemap_renderer_create(eng: *PzEngine, map_name: [*:0]const u8, te
 
 export fn pz_tilemap_renderer_destroy(tr: *PzTilemapRenderer) callconv(.c) void {
     tr.renderer.deinit();
-    tr.map.release();
     registryRemove(PzTilemapRenderer, &tr.eng.tilemapRenderers, tr);
     tr.eng.alloc.destroy(tr);
 }
 
 export fn pz_tilemap_pixel_size(tr: *PzTilemapRenderer, layerIndex: i32, out_w: *f32, out_h: *f32) callconv(.c) void {
-    if (layerIndex < 0 or @as(usize, @intCast(layerIndex)) >= tr.map.val.layers.items.len) {
+    if (layerIndex < 0 or @as(usize, @intCast(layerIndex)) >= tr.map().layers.items.len) {
         setLastErrorMsg("invalid layer index");
         out_w.* = 0;
         out_h.* = 0;
         return;
     }
-    const layer = &tr.map.val.layers.items[@intCast(layerIndex)];
+    const layer = &tr.map().layers.items[@intCast(layerIndex)];
     out_w.* = @floatFromInt(layer.size.x * layer.tileSize.x);
     out_h.* = @floatFromInt(layer.size.y * layer.tileSize.y);
 }
 
 export fn pz_tilemap_render(tr: *PzTilemapRenderer, cam: *PzCamera) callconv(.c) void {
-    tr.renderer.render(&tr.map.val, &cam.camera, &tr.eng.engine.viewport);
+    tr.renderer.render(&cam.camera, &tr.eng.engine.viewport);
 }
 
 export fn pz_tilemap_render_below(tr: *PzTilemapRenderer, cam: *PzCamera, z: f32) callconv(.c) void {
-    tr.renderer.renderLayersBelow(z, &tr.map.val, &cam.camera, &tr.eng.engine.viewport);
+    tr.renderer.renderLayersBelow(z, &cam.camera, &tr.eng.engine.viewport);
 }
 
 export fn pz_tilemap_render_above(tr: *PzTilemapRenderer, cam: *PzCamera, z: f32) callconv(.c) void {
-    tr.renderer.renderLayersAbove(z, &tr.map.val, &cam.camera, &tr.eng.engine.viewport);
+    tr.renderer.renderLayersAbove(z, &cam.camera, &tr.eng.engine.viewport);
 }
 
 export fn pz_tilemap_check_reload(tr: *PzTilemapRenderer) callconv(.c) bool {
-    if (!tr.map.dirty) return false;
-    tr.map = tr.map.reacquire();
-    tr.renderer.reload(&tr.map.val) catch |err| {
-        setLastErrorErr(err);
-        return false;
-    };
-    return true;
+    return tr.renderer.sync();
 }
 
 fn pzManifestLoadImpl(eng: *PzEngine, path: []const u8) !*PzAssetManifest {
@@ -1362,12 +1353,12 @@ fn tmCopyZ(buf: []u8, s: []const u8) [*:0]const u8 {
 
 fn tmLayer(tr: *PzTilemapRenderer, layerIndex: i32) ?*pixzig.tile.TileLayer {
     if (layerIndex < 0) return null;
-    return tr.map.val.layerByIndex(@intCast(layerIndex));
+    return tr.map().layerByIndex(@intCast(layerIndex));
 }
 
 fn tmGroup(tr: *PzTilemapRenderer, group_index: i32) ?*pixzig.tile.ObjectGroup {
     if (group_index < 0) return null;
-    return tr.map.val.objectGroupByIndex(@intCast(group_index));
+    return tr.map().objectGroupByIndex(@intCast(group_index));
 }
 
 fn tmPropValue(props: ?std.ArrayList(pixzig.tile.Property), name: []const u8) ?[]const u8 {
@@ -1379,13 +1370,13 @@ fn tmPropValue(props: ?std.ArrayList(pixzig.tile.Property), name: []const u8) ?[
 }
 
 export fn pz_tilemap_layer_count(tr: *PzTilemapRenderer) callconv(.c) i32 {
-    return @intCast(tr.map.val.layers.items.len);
+    return @intCast(tr.map().layers.items.len);
 }
 
 /// Raw index of the first layer named `name`, or -1 if there is none.
 export fn pz_tilemap_layer_index(tr: *PzTilemapRenderer, name: [*:0]const u8) callconv(.c) i32 {
     const want = std.mem.span(name);
-    for (tr.map.val.layers.items, 0..) |layer, i| {
+    for (tr.map().layers.items, 0..) |layer, i| {
         if (layer.name) |n| {
             if (std.mem.eql(u8, n, want)) return @intCast(i);
         }
@@ -1489,13 +1480,13 @@ export fn pz_tilemap_tile_to_world(tr: *PzTilemapRenderer, layerIndex: i32, tx: 
 }
 
 export fn pz_tilemap_object_group_count(tr: *PzTilemapRenderer) callconv(.c) i32 {
-    return @intCast(tr.map.val.objectGroups.items.len);
+    return @intCast(tr.map().objectGroups.items.len);
 }
 
 /// Raw index of the first object group named `name`, or -1 if there is none.
 export fn pz_tilemap_object_group_index(tr: *PzTilemapRenderer, name: [*:0]const u8) callconv(.c) i32 {
     const want = std.mem.span(name);
-    for (tr.map.val.objectGroups.items, 0..) |group, i| {
+    for (tr.map().objectGroups.items, 0..) |group, i| {
         if (group.name) |n| {
             if (std.mem.eql(u8, n, want)) return @intCast(i);
         }

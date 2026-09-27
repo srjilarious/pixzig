@@ -23,9 +23,8 @@ class TilemapApp(App):
     def __init__(self):
         super().__init__("Tilemap Example", width=800, height=480, asset_root=REPO_ROOT)
 
-        self.load_texture("tiles", "assets/mario_grassish2.png")
         self.load_tilemap("level1a", "assets/level1a.tmx")
-        self.map_renderer = self.create_tilemap_renderer("level1a", "tiles")
+        self.map_renderer = self.create_tilemap_renderer("level1a")
 
         self.camera = self.create_camera()
         w, h = self.map_renderer.pixel_size(1)

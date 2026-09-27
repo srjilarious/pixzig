@@ -230,7 +230,7 @@ pz_camera_clear_bounds = _sig("pz_camera_clear_bounds", [PzCameraPtr], None)
 # --- Tilemap -----------------------------------------------------------
 pz_load_tilemap = _sig("pz_load_tilemap", [PzEnginePtr, c_char_p, c_char_p], c_int32)
 pz_tilemap_renderer_create = _sig(
-    "pz_tilemap_renderer_create", [PzEnginePtr, c_char_p, c_char_p], PzTilemapRendererPtr
+    "pz_tilemap_renderer_create", [PzEnginePtr, c_char_p], PzTilemapRendererPtr
 )
 pz_tilemap_renderer_destroy = _sig("pz_tilemap_renderer_destroy", [PzTilemapRendererPtr], None)
 pz_tilemap_pixel_size = _sig(

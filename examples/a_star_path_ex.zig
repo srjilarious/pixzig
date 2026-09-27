@@ -19,7 +19,7 @@ const AStarPathFinder = pixzig.a_star.AStarPathFinder;
 const TileLayer = pixzig.tile.TileLayer;
 const TileSet = pixzig.tile.TileSet;
 const Tile = pixzig.tile.Tile;
-const TiledLayerRenderer = pixzig.tile.TiledLayerRenderer;
+const TiledLayerRenderer = pixzig.tile.deprecated.TiledLayerRenderer;
 
 const NumTilesHorz = 4;
 const NumTilesVert = 4;
@@ -228,7 +228,7 @@ pub const App = struct {
 
         const tex_shader = try eng.resources.getShader(shaders.TextureShader);
         const a_star_tex = try eng.resources.getTexture("a_star");
-        app.pathLayerRenderer = try tile.TiledLayerRenderer.init(alloc, tex_shader, a_star_tex);
+        app.pathLayerRenderer = try tile.deprecated.TiledLayerRenderer.init(alloc, tex_shader, a_star_tex);
         // TODO: Change to pathLayer and make wall layer renderer.
         try app.pathLayerRenderer.recreateVertices(&app.tileSet, &app.layer);
 

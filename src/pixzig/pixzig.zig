@@ -110,7 +110,7 @@ pub const FontAtlas = renderer.FontAtlas;
 
 pub const TileMap = tile.TileMap;
 pub const TileLayer = tile.TileLayer;
-pub const ChunkedTiledRenderer = tile.ChunkedTiledRenderer;
+pub const TileMapRenderer = tile.TileMapRenderer;
 
 pub const ActionMap = input.ActionMap;
 pub const ScriptEngine = scripting.ScriptEngine;

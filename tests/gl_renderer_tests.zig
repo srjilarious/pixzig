@@ -7,7 +7,7 @@ const tile = pixzig.tile;
 const TileMap = tile.TileMap;
 const TileLayer = tile.TileLayer;
 const TileSet = tile.TileSet;
-const ChunkedTiledRenderer = tile.ChunkedTiledRenderer;
+const TileMapRenderer = tile.TileMapRenderer;
 const RectF = pixzig.RectF;
 const GlTestContext = pixzig.GlTestContext;
 
@@ -243,30 +243,28 @@ pub fn tiledReloadAddsLayerTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     const ctx = glCtx();
 
-    var shader = try ctx.makeManagedShader(alloc);
-    defer shader.deinit();
-    var tex = try ctx.makeDummyManagedTexture(alloc);
-    defer tex.deinit();
+    var res = try ctx.makeResourceManager(alloc);
+    defer res.deinit();
 
     // Start with one layer.
     var map1 = try TileMap.init(alloc);
-    defer map1.deinit();
-    const layer1 = try makeLayer(alloc);
-    try map1.layers.append(alloc, layer1);
+    errdefer map1.deinit();
+    try map1.layers.append(alloc, try makeLayer(alloc));
+    _ = try res.addTileMap("level", map1);
 
-    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, shader.get().?, tex.get().?);
+    var renderer = try TileMapRenderer.init(alloc, &res, "level");
     defer renderer.deinit();
 
     try testz.expectEqual(renderer.entries.len, 1);
 
-    // Reload with two layers.
+    // Re-registering the same name is what a hot-reload of the .tmx does.
     var map2 = try TileMap.init(alloc);
-    defer map2.deinit();
+    errdefer map2.deinit();
     try map2.layers.append(alloc, try makeLayer(alloc));
     try map2.layers.append(alloc, try makeLayer(alloc));
+    _ = try res.addTileMap("level", map2);
 
-    try renderer.reload(&map2);
-
+    try testz.expectTrue(renderer.sync());
     try testz.expectEqual(renderer.entries.len, 2);
 }
 
@@ -274,29 +272,28 @@ pub fn tiledReloadRemovesLayerTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     const ctx = glCtx();
 
-    var shader = try ctx.makeManagedShader(alloc);
-    defer shader.deinit();
-    var tex = try ctx.makeDummyManagedTexture(alloc);
-    defer tex.deinit();
+    var res = try ctx.makeResourceManager(alloc);
+    defer res.deinit();
 
     // Start with two layers.
     var map1 = try TileMap.init(alloc);
-    defer map1.deinit();
+    errdefer map1.deinit();
     try map1.layers.append(alloc, try makeLayer(alloc));
     try map1.layers.append(alloc, try makeLayer(alloc));
+    _ = try res.addTileMap("level", map1);
 
-    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, shader.get().?, tex.get().?);
+    var renderer = try TileMapRenderer.init(alloc, &res, "level");
     defer renderer.deinit();
 
     try testz.expectEqual(renderer.entries.len, 2);
 
     // Reload with one layer.
     var map2 = try TileMap.init(alloc);
-    defer map2.deinit();
+    errdefer map2.deinit();
     try map2.layers.append(alloc, try makeLayer(alloc));
+    _ = try res.addTileMap("level", map2);
 
-    try renderer.reload(&map2);
-
+    try testz.expectTrue(renderer.sync());
     try testz.expectEqual(renderer.entries.len, 1);
 }
 
@@ -304,32 +301,32 @@ pub fn tiledReloadZOrderTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     const ctx = glCtx();
 
-    var shader = try ctx.makeManagedShader(alloc);
-    defer shader.deinit();
-    var tex = try ctx.makeDummyManagedTexture(alloc);
-    defer tex.deinit();
+    var res = try ctx.makeResourceManager(alloc);
+    defer res.deinit();
 
     // Initial map: both layers at z=0, order by layerIndex.
     var map1 = try TileMap.init(alloc);
-    defer map1.deinit();
+    errdefer map1.deinit();
     try map1.layers.append(alloc, try makeLayer(alloc));
     try map1.layers.append(alloc, try makeLayer(alloc));
+    _ = try res.addTileMap("level", map1);
 
-    var renderer = try ChunkedTiledRenderer.init(alloc, &map1, shader.get().?, tex.get().?);
+    var renderer = try TileMapRenderer.init(alloc, &res, "level");
     defer renderer.deinit();
 
     // Reload: layer 0 gets z=1, layer 1 stays z=0.
     // After sort, layer 1 (z=0) should be first, layer 0 (z=1) second.
     var map2 = try TileMap.init(alloc);
-    defer map2.deinit();
+    errdefer map2.deinit();
     var la = try makeLayer(alloc);
     try addZProp(alloc, &la, 1.0);
     var lb = try makeLayer(alloc);
     try addZProp(alloc, &lb, 0.0);
     try map2.layers.append(alloc, la);
     try map2.layers.append(alloc, lb);
+    _ = try res.addTileMap("level", map2);
 
-    try renderer.reload(&map2);
+    try testz.expectTrue(renderer.sync());
 
     try testz.expectEqual(renderer.entries.len, 2);
     // entries are sorted ascending by z; entry[0] should have z=0, entry[1] z=1.
@@ -338,4 +335,50 @@ pub fn tiledReloadZOrderTest(io: std.Io, alloc: std.mem.Allocator) !void {
     // Verify original layer indices are tracked correctly.
     try testz.expectEqual(renderer.entries[0].layerIndex, @as(usize, 1));
     try testz.expectEqual(renderer.entries[1].layerIndex, @as(usize, 0));
+}
+
+/// A layer whose tileset names its image draws from the texture that image
+/// resolves to -- nothing is handed to the renderer but the map's name.
+pub fn tiledResolvesTilesetTextureTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    const ctx = glCtx();
+
+    var res = try ctx.makeResourceManager(alloc);
+    defer res.deinit();
+
+    // A texture already registered under the image's base name is reused
+    // rather than read off disk, which is what lets a map built in code name
+    // a texture the game loaded itself.
+    var pixels = [_]u8{ 255, 255, 255, 255 };
+    _ = try res.loadTextureFromBuffer("tiles", 1, 1, pixels[0..]);
+
+    var map = try TileMap.init(alloc);
+    errdefer map.deinit();
+
+    var tileset = try TileSet.initEmpty(alloc, .{ .x = 8, .y = 8 }, .{ .x = 32, .y = 32 }, 16);
+    tileset.imageSource = try alloc.dupe(u8, "art/tiles.png");
+    try map.tilesets.append(alloc, tileset);
+
+    var layer = try makeLayer(alloc);
+    layer.tileset = &map.tilesets.items[0];
+    try map.layers.append(alloc, layer);
+    _ = try res.addTileMap("level", map);
+
+    var renderer = try TileMapRenderer.init(alloc, &res, "level");
+    defer renderer.deinit();
+
+    const expected = try res.getTexture("tiles");
+    try testz.expectEqual(renderer.entries.len, 1);
+    try testz.expectEqual(renderer.entries[0].renderer.texture.?, expected);
+}
+
+/// A map name nothing was registered under is an error, not a silent no-op.
+pub fn tiledUnknownMapNameFailsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    const ctx = glCtx();
+
+    var res = try ctx.makeResourceManager(alloc);
+    defer res.deinit();
+
+    try testz.expectError(TileMapRenderer.init(alloc, &res, "nope"), error.NoTileMapWithThatName);
 }

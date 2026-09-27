@@ -159,6 +159,8 @@ pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
 
 `reacquire` atomically upgrades to the latest generation and releases the old handle. In release builds, `dirty` is always false and `reacquire` is a no-op. Until you reacquire, a stale handle keeps drawing the old image: atlas frames and subtextures hold a reference to their image, so a reload doesn't delete the GL texture out from under them.
 
+A `TileMapRenderer` does this for you: it holds the map handle itself and rebuilds its layers on the next render call after a reload (see [Tile Rendering](tile-rendering.md#hot-reload)).
+
 `reacquire` is for owned handles. A borrowed handle can't be reacquired (it holds no reference to hand back); call `getTexture(name)` again to pick up the new generation. In debug builds, superseded texture generations are kept until the resource manager deinits, so a borrowed handle you kept in a struct still points at valid (stale) data after a reload. Release builds reclaim an unreferenced older generation as soon as the same name is loaded again, so don't hold a borrowed handle across an explicit re-load there.
 
 When the resource manager deinits with a handle still referenced, the log names it, e.g. `Texture 'player_right_1' (generation 1): refCount = 1 on deinit`.

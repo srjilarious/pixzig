@@ -1,6 +1,7 @@
 """Tiled map loading, chunked rendering, and runtime access. Load a map with
 `App.load_tilemap(name, path)`, then create a renderer for it with
-`App.create_tilemap_renderer(map_name, texture_name)`.
+`App.create_tilemap_renderer(map_name)` -- the renderer finds the tileset
+image named in the .tmx itself.
 
 Beyond rendering, `TileMapRenderer` exposes the loaded map data: read/write
 tiles by tile coordinate, query per-tile collision flags, convert between
