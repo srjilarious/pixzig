@@ -60,6 +60,28 @@ pub const TexTintPixelShader: ShaderCode =
     \\}
 ;
 
+/// Replaces the sampled texel's colour with the uniform `tint` colour while
+/// keeping the texel's alpha, so a sprite draws as a solid silhouette of its
+/// own shape (the classic "hit flash"). `tint.a` is how much of the fill
+/// colour replaces the texel's rgb: 1 is a solid silhouette, 0 the plain
+/// sprite. Used by the renderer's fill sprite batch (see
+/// `Renderer.drawSpriteFilled`). The uniform keeps the `tint` name so the
+/// batch's existing `setTint` plumbing drives it.
+pub const TexFillPixelShader: ShaderCode =
+    \\#version 300 es
+    \\precision mediump float;
+    \\
+    \\in vec2 Texcoord;
+    \\uniform sampler2D tex;
+    \\uniform vec4 tint;
+    \\out vec4 fragColor;
+    \\
+    \\void main() {
+    \\    vec4 texel = texture(tex, Texcoord);
+    \\    fragColor = vec4(mix(texel.rgb, tint.rgb, tint.a), texel.a);
+    \\}
+;
+
 /// A 3d vertex shader for arbitrary world-space quads (walls, floors,
 /// ceilings), used by Quad3DBatchQueue. Multiplies a true 3d position by
 /// the projectionMatrix (expected to be a full view*projection matrix)
@@ -200,6 +222,10 @@ pub const TextureShader = "texture_shader";
 /// The name for the tinted texture shader (texel * uniform `tint`), used by
 /// the renderer's dedicated tinted sprite batch.
 pub const TintTextureShader = "tint_texture_shader";
+
+/// The name for the fill texture shader (texel rgb replaced by uniform
+/// `tint`, alpha kept), used by the renderer's fill sprite batch.
+pub const FillTextureShader = "fill_texture_shader";
 
 /// Our text/font shader.
 pub const FontShader = "font_shader";

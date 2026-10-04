@@ -24,7 +24,7 @@ pub fn render(self: *App, eng: *AppRunner.Engine) void {
 | `.{ .camera = &cam }` | World space seen through a `Camera2D`. |
 | `.{ .matrix = m }` | Your own model-view-projection matrix. |
 
-Draws appear in the order you submit them. Each kind of draw (plain sprites and textures, tinted sprites, shapes, text, colored text) queues into its own batch; switching to a different kind flushes the previous batch first, and `end` flushes whatever is left. Consecutive draws of the same kind and texture still go out as one GL call, so when order doesn't matter, grouping similar draws keeps the call count down.
+Draws appear in the order you submit them. Each kind of draw (plain sprites and textures, tinted sprites, filled sprites, shapes, text, colored text) queues into its own batch; switching to a different kind flushes the previous batch first, and `end` flushes whatever is left. Consecutive draws of the same kind and texture still go out as one GL call, so when order doesn't matter, grouping similar draws keeps the call count down.
 
 Sprites keep float positions so slow movement accumulates smoothly, but `drawSprite` snaps a sprite's top-left to a whole pixel, so a sprite between pixels never draws blurry. The other draw calls take integer positions (`drawString`) or whole-pixel rects.
 
@@ -83,6 +83,13 @@ eng.renderer.drawSprite(&self.spr); // uses the tinted batch when tint is set
 
 // During App.deinit:
 self.spr.deinit();
+```
+
+Set `fill` to draw the sprite as a flat silhouette of its own shape: the texture's rgb is replaced by the fill color (blended by `fill.a`, 1 = solid) while its alpha is kept. That's the classic hit flash. `fill` takes precedence over `tint`; `eng.renderer.drawSpriteFilled(&spr, color)` does the same for a single draw.
+
+```zig
+self.spr.fill = .{ .r = 1, .g = 1, .b = 1, .a = 1 }; // solid white silhouette
+self.spr.fill = null;                                 // back to normal
 ```
 
 `setPos`, `setPosF`, `setSize`, `setScale`, and `setOrigin` keep `dest` and `size` in sync; writing `dest` directly skips that. `setSrcRect(RectI)` draws a sub-region of the frame, in pixels. `setTexture(handle)` switches the texture (retaining the new one, releasing the old).

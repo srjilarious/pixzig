@@ -132,7 +132,7 @@ pub fn Renderer(opts: RendererOptions) type {
         viewport: *const Viewport,
 
         /// Which batch holds the queued-but-unflushed draws.
-        const BatchKind = enum { none, sprites, tinted, shapes, text, text_colored };
+        const BatchKind = enum { none, sprites, tinted, filled, shapes, text, text_colored };
 
         const Impl = struct {
             sprites: SpriteBatchQueue,
@@ -140,6 +140,9 @@ pub fn Renderer(opts: RendererOptions) type {
             /// `drawSpriteColored` so the plain sprite path stays on the
             /// untinted `TextureShader` program.
             tinted: SpriteBatchQueue,
+            /// Sprite batch bound to `FillTextureShader`, used by
+            /// `drawSpriteFilled` to draw sprites as solid silhouettes.
+            filled: SpriteBatchQueue,
 
             shapes: ShapeBatchQueue = undefined,
             text: TextRenderer = undefined,
@@ -168,11 +171,13 @@ pub fn Renderer(opts: RendererOptions) type {
             // reverse construction order.
             var spritesInit = false;
             var tintedInit = false;
+            var filledInit = false;
             var shapesInit = false;
             var textInit = false;
             errdefer {
                 if (textInit) rend.text.deinit();
                 if (shapesInit) rend.shapes.deinit();
+                if (filledInit) rend.filled.deinit();
                 if (tintedInit) rend.tinted.deinit();
                 if (spritesInit) rend.sprites.deinit();
             }
@@ -180,12 +185,15 @@ pub fn Renderer(opts: RendererOptions) type {
             std.log.info("Initializing shaders.", .{});
             const texShader = try resMgr.loadShader(shaders.TextureShader, &shaders.TexVertexShader, &shaders.TexPixelShader);
             const tintShader = try resMgr.loadShader(shaders.TintTextureShader, &shaders.TexVertexShader, &shaders.TexTintPixelShader);
+            const fillShader = try resMgr.loadShader(shaders.FillTextureShader, &shaders.TexVertexShader, &shaders.TexFillPixelShader);
 
             rend.active = .none;
             rend.sprites = try SpriteBatchQueue.initCapacity(alloc, texShader, opts.maxSprites);
             spritesInit = true;
             rend.tinted = try SpriteBatchQueue.initCapacity(alloc, tintShader, opts.maxSprites);
             tintedInit = true;
+            rend.filled = try SpriteBatchQueue.initCapacity(alloc, fillShader, opts.maxSprites);
+            filledInit = true;
 
             if (opts.shapeRendering) {
                 std.log.info("Setting up shaders for shape renderering.", .{});
@@ -244,6 +252,7 @@ pub fn Renderer(opts: RendererOptions) type {
             const impl = self.implMut();
             impl.sprites.deinit();
             impl.tinted.deinit();
+            impl.filled.deinit();
             if (opts.shapeRendering) {
                 impl.shapes.deinit();
             }
@@ -318,6 +327,7 @@ pub fn Renderer(opts: RendererOptions) type {
             impl.active = .none;
             impl.sprites.begin(mvp);
             impl.tinted.begin(mvp);
+            impl.filled.begin(mvp);
 
             if (opts.shapeRendering) {
                 impl.shapes.begin(mvp);
@@ -335,6 +345,7 @@ pub fn Renderer(opts: RendererOptions) type {
             const impl = self.implMut();
             impl.sprites.end();
             impl.tinted.end();
+            impl.filled.end();
 
             if (opts.shapeRendering) {
                 impl.shapes.end();
@@ -356,6 +367,7 @@ pub fn Renderer(opts: RendererOptions) type {
                 .none => {},
                 .sprites => impl.sprites.flush(),
                 .tinted => impl.tinted.flush(),
+                .filled => impl.filled.flush(),
                 .shapes => if (comptime opts.shapeRendering) impl.shapes.flush(),
                 .text, .text_colored => if (comptime opts.textRendering) impl.text.flush(),
             }
@@ -410,10 +422,15 @@ pub fn Renderer(opts: RendererOptions) type {
             gl.clear(gl.COLOR_BUFFER_BIT);
         }
 
-        /// Draws a `Sprite`. When `sprite.tint` is set this routes to the
-        /// tinted batch (see `drawSpriteColored`); otherwise it goes to the
-        /// plain sprite batch.
+        /// Draws a `Sprite`. When `sprite.fill` is set this routes to the
+        /// fill batch (see `drawSpriteFilled`); otherwise when `sprite.tint`
+        /// is set it routes to the tinted batch (see `drawSpriteColored`);
+        /// otherwise it goes to the plain sprite batch.
         pub fn drawSprite(self: *Self, sprite: *const Sprite) void {
+            if (sprite.fill) |color| {
+                self.drawSpriteFilled(sprite, color);
+                return;
+            }
             if (sprite.tint) |color| {
                 self.drawSpriteColored(sprite, color);
                 return;
@@ -431,6 +448,18 @@ pub fn Renderer(opts: RendererOptions) type {
             const impl = self.implMut();
             impl.tinted.setTint(color.r, color.g, color.b, color.a);
             impl.tinted.drawSprite(sprite);
+        }
+
+        /// Draws a `Sprite` as a silhouette: every texel's rgb is replaced
+        /// by `color.rgb` (blended by `color.a`, 1 = solid) while the
+        /// texture's own alpha is kept, so the sprite's shape is filled with
+        /// a flat colour. Handy for hit flashes. Submits to a separate batch
+        /// bound to `FillTextureShader`.
+        pub fn drawSpriteFilled(self: *Self, sprite: *const Sprite, color: Color) void {
+            self.use(.filled);
+            const impl = self.implMut();
+            impl.filled.setTint(color.r, color.g, color.b, color.a);
+            impl.filled.drawSprite(sprite);
         }
 
         /// Draws the `srcCoords` region (UVs of the underlying image) of

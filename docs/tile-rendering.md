@@ -91,6 +91,13 @@ if (mapRenderer.sync()) {
 
 `tileMap()` is the map the renderer currently holds; it is replaced by the reloaded generation on the next `sync`, so read it rather than caching it across frames. `rebuildAll()` forces an immediate rebuild of every chunk when you changed tile data yourself and the layer structure is unchanged.
 
+For a map the game edits as it runs (digging, placing blocks), call `tileChanged(layerIndex, x, y)` after each `TileLayer.setTileData`. It marks only the chunk holding that tile dirty, which rebuilds on its next render:
+
+```zig
+layer.setTileData(x, y, tileIdx);
+mapRenderer.tileChanged(0, x, y);
+```
+
 ### GridRenderer
 
 Draws debug grid lines sized to a map's dimensions; it does not read a `TileMap` at all:

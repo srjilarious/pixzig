@@ -37,6 +37,11 @@ pub const Sprite = struct {
     /// Colour multiplier. `Renderer.drawSprite` routes to the tinted batch
     /// when this is set, and to the plain (faster) batch when null.
     tint: ?Color = null,
+    /// Silhouette colour. When set, `Renderer.drawSprite` draws the sprite's
+    /// shape filled with this colour (alpha kept from the texture), with
+    /// `fill.a` blending between the sprite's own rgb (0) and a solid fill
+    /// (1). Takes precedence over `tint`. Null draws normally.
+    fill: ?Color = null,
 
     /// Builds a sprite the size of `tex`'s texture frame. The sprite retains
     /// its own reference to `tex` and releases it in `deinit()`, so `tex` may

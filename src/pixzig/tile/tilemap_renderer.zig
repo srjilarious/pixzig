@@ -117,6 +117,19 @@ pub const TileMapRenderer = struct {
         return true;
     }
 
+    /// Marks the chunk holding tile (x, y) of the layer at `layerIndex` dirty,
+    /// after the game changed that tile (e.g. with `TileLayer.setTileData`).
+    /// The chunk is rebuilt on its next render. An index that matches no
+    /// layer is ignored.
+    pub fn tileChanged(self: *Self, layerIndex: usize, x: i32, y: i32) void {
+        for (self.entries) |*entry| {
+            if (entry.layerIndex == layerIndex) {
+                entry.renderer.tileChanged(x, y);
+                return;
+            }
+        }
+    }
+
     /// Mark all chunks in all layers as dirty. Chunks rebuild lazily as they
     /// come into view. Use rebuildAll for an immediate forced rebuild.
     pub fn markAllDirty(self: *Self) void {

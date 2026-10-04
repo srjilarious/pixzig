@@ -40,6 +40,7 @@ pub const FpsCounter = struct {
     /// or not.
     pub fn renderTick(self: *FpsCounter) void {
         self.mFrames += 1;
+        self.mTotalFrames += 1;
     }
 
     /// Returns the current FPS value, which is the number of frames rendered
@@ -49,7 +50,8 @@ pub const FpsCounter = struct {
         return self.mFps;
     }
 
-    pub fn totalFrames(self: *FpsCounter) u32 {
+    /// Returns the number of frames rendered since init.
+    pub fn totalFrames(self: *FpsCounter) u64 {
         return self.mTotalFrames;
     }
 };
