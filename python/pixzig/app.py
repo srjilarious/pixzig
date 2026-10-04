@@ -300,8 +300,8 @@ class App:
     # --- Rendering ---------------------------------------------------------
     # `render()` must bracket its own drawing with `render_begin()`/`render_end()`
     # -- there's no implicit pass around it. Call `render_begin()` with no
-    # arguments for screen-space (UI) drawing, or `render_begin(camera)` for
-    # world-space drawing -- e.g. interleaved with
+    # arguments for logical-coordinate UI/HUD drawing, or `render_begin(camera)`
+    # for world-space drawing -- e.g. interleaved with
     # `TileMapRenderer.render_below`/`render_above`:
     #
     #   def render(self):

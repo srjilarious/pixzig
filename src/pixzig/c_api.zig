@@ -347,7 +347,7 @@ export fn pz_render_begin(eng: *PzEngine) callconv(.c) void {
 }
 
 /// Like pz_render_begin, but begins a world-space pass using the given
-/// camera's matrix instead of screen-space UI coordinates. Use this to draw
+/// camera's matrix instead of logical UI/HUD coordinates. Use this to draw
 /// sprites/shapes interleaved with tilemap layers (see pz_tilemap_render_*).
 export fn pz_render_begin_world(eng: *PzEngine, cam: *PzCamera) callconv(.c) void {
     eng.engine.renderer.begin(.{ .camera = &cam.camera });

@@ -4,7 +4,6 @@ const pixzig = @import("pixzig");
 const RectI = pixzig.common.RectI;
 
 const FpsCounter = pixzig.utils.FpsCounter;
-const Engine = pixzig.Engine;
 const AppRunner = pixzig.AppRunner(App, .{ .inputOpts = .{ .mouse = true } });
 
 pub const App = struct {

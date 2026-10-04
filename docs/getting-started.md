@@ -105,7 +105,10 @@ pub const App = struct {
 pub fn main() !void {
     const alloc = std.heap.c_allocator;
     const appRunner = try AppRunner.init("My Game", alloc, .{});
+    defer appRunner.deinit();
+
     const app = try App.init(alloc, appRunner.engine);
+    defer app.deinit();
 
     appRunner.run(app);
 }

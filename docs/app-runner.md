@@ -30,13 +30,17 @@ pub fn main() !void {
         .scalePolicy = .integer_fit,
         .fullscreen = false,
     });
+    defer appRunner.deinit();
+
     const app = try App.init(alloc, appRunner.engine);
+    defer app.deinit();
+
     appRunner.engine.enableVSync(false);
     appRunner.run(app);
 }
 ```
 
-[](sym:AppRunner.init) creates the window, loads OpenGL, and initializes engine systems. If audio is enabled it also initializes [](sym:AudioEngine). `appRunner.run(app)` calls `app.deinit()` and releases engine resources when the loop exits.
+[](sym:AppRunner.init) creates the window, loads OpenGL, and initializes engine systems. If audio is enabled it also initializes [](sym:AudioEngine). `appRunner.run(app)` owns the loop; use `defer app.deinit()` and `defer appRunner.deinit()` in `main` so app-owned resources and engine resources are released when the loop exits.
 
 ## The App Interface
 
@@ -81,8 +85,10 @@ A single frame catches up on at most `maxLagMs` (default 250 ms) of updates. Any
 lag = @min(lag + delta, maxLagMs);
 while (lag > UpdateStepMs) {
     lag -= UpdateStepMs;
-    eng.inputs.update(eng.window, eng.windowState.scaleFactor, &eng.viewport);
+    eng.inputs.update(eng.windowState.scaleFactor, &eng.viewport);
+    eng.resources.checkHotReload();
     if (!app.update(eng, UpdateStepMs)) return false;
+    eng.inputs.finishTick();
 }
 app.render(eng);
 window.swapBuffers();
@@ -94,6 +100,7 @@ For simple apps with no allocations, the app can live on the stack:
 
 ```zig
 var app = App.init(123);   // returns App, not *App
+defer app.deinit();
 appRunner.run(&app);
 ```
 

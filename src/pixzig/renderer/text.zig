@@ -307,7 +307,8 @@ pub const TextRenderer = struct {
         return drawSize;
     }
 
-    // Like drawString but clips character quads to `clip` in screen space.
+    // Like drawString but clips character quads to `clip` in the active
+    // draw coordinate space.
     // Partially-visible edge characters have their source UV rect trimmed to
     // match so no bleed from adjacent font glyphs appears.
     pub fn drawClippedString(self: *TextRenderer, text: []const u8, pos: Vec2I, clip: RectF) Vec2I {

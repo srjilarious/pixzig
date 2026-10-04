@@ -96,13 +96,17 @@ pub const App = struct {
 
 ```zig
 pub fn main() !void {
-    const appRunner = try AppRunner.init("State Test", std.heap.c_allocator, .{});
+    const alloc = std.heap.c_allocator;
+    const appRunner = try AppRunner.init("State Test", alloc, .{});
+    defer appRunner.deinit();
 
     var stateA = StateA{};
     var stateB = StateB{};
     var statesArr = [_]*anyopaque{ &stateA, &stateB };
 
-    const app = try App.init(std.heap.c_allocator, statesArr[0..]);
+    const app = try App.init(alloc, statesArr[0..]);
+    defer app.deinit();
+
     appRunner.run(app);
 }
 ```

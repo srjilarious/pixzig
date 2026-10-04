@@ -188,10 +188,12 @@ pub const web = if (builtin.os.tag == .emscripten) @import("./web.zig") else {};
 var g_EmscriptenRunnerRef: ?*anyopaque = null;
 var g_EmscriptenAppRef: ?*anyopaque = null;
 
-/// The main application looping handling structure.  This is the preferred way of setting up
-/// and using Pixzig.  You provide the application data structure and engine initialization
-/// options, and the `AppRunner` will handle the rest, including setting up the main loop and
-/// cleaning up resources on exit.
+/// The main application looping handling structure. This is the preferred way
+/// of setting up and using Pixzig. You provide the application data structure
+/// and engine initialization options, and the `AppRunner` handles window and
+/// engine setup, the fixed-step main loop, and the desktop/web loop boundary.
+/// Call `deinit` from your `main` after `run` returns to release engine-owned
+/// resources; your app remains responsible for its own `deinit`.
 ///
 /// The application data structure should contain the game state and implement the update and
 /// render functions that will be called each frame.  Those functions should have the signatures:
