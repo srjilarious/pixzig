@@ -27,6 +27,9 @@ const Tests = blk: {
 }, .{});
 };
 
+// testz's generated root module forwards this, keeping pixzig's log format.
+pub const std_options = pixzig.system.std_options;
+
 pub fn main(init: std.process.Init) !void {
     try pixzig.GlTestContext.initGlobal();
     defer pixzig.GlTestContext.deinitGlobal();

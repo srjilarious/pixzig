@@ -1,4 +1,5 @@
 const std = @import("std");
+const testz = @import("testz");
 const builtin = std.builtin;
 
 // Zig 0.17 dropped --sysroot access from build.zig; the emscripten
@@ -414,7 +415,6 @@ pub fn build(b: *std.Build) void {
         name: []const u8,
         path: []const u8,
         manifest_def: ManifestDef = .{},
-        extraMods: []const []const u8 = &.{},
         buildForWeb: bool = true,
     }{
         .{
@@ -592,18 +592,6 @@ pub fn build(b: *std.Build) void {
             },
             .buildForWeb = false,
         },
-        // Unit tests
-        .{
-            .name = "tests",
-            .path = "tests/main.zig",
-            .manifest_def = .{
-                .assets = &.{
-                    .{ .id = "Roboto-Medium", .kind = "font", .path = "Roboto-Medium.ttf", .font_size = 20.0 },
-                },
-            },
-            .extraMods = &.{"testz"},
-            .buildForWeb = false,
-        },
     };
 
     // Create a "build-all" option that builds everything
@@ -636,21 +624,6 @@ pub fn build(b: *std.Build) void {
                 true,
             );
 
-            for (example_info.extraMods) |em| {
-                // Forward the target/optimize through: testz builds tree-sitter
-                // C sources behind its `highlight_ansi` module, and without
-                // this they compile for the host and the cross-linker rejects
-                // the host object files ("lld-link: unknown file type").
-                const extraMod = b.dependency(em, .{ .target = target, .optimize = optimize });
-                exe_mod.addImport(em, extraMod.module(em));
-            }
-
-            // The unit tests reach past the engine's own input enums to
-            // check they map SDL's codes correctly. Examples deliberately
-            // get no such import: game code should never name SDL.
-            if (std.mem.eql(u8, example_info.name, "tests")) {
-                exe_mod.addImport("sdl3", sdlModule(b, target, optimize));
-            }
             const install_exe = b.addInstallArtifact(exe, .{
                 .dest_dir = .{
                     .override = .{ .custom = b.pathJoin(&.{ "bin", example_info.name }) },
@@ -660,6 +633,9 @@ pub fn build(b: *std.Build) void {
         }
 
         if (target.result.os.tag != .emscripten) {
+            const install_tests = buildTests(b, target, optimize, engDat.pixeng_mod, is_package);
+            build_all_step.dependOn(&install_tests.step);
+
             // Sprite packer tool
             const spack_mod = b.createModule(.{
                 .root_source_file = b.path("tools/spack/spack.zig"),
@@ -894,6 +870,67 @@ fn buildPythonFfi(
 
     const python_ffi_step = b.step("python-ffi", "Build the pixzig C FFI shared library for Python bindings");
     python_ffi_step.dependOn(&install_ffi.step);
+}
+
+/// Builds the desktop-only unit test runner. It skips `buildExample`'s
+/// pixzig root wrapper (whose panic and log handlers only differ from the
+/// defaults on emscripten) and uses testz's instead, which installs a panic
+/// handler that still prints while a test's output is being captured.
+/// tests/main.zig forwards `pixzig.system.std_options` itself.
+fn buildTests(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    pixeng_mod: *std.Build.Module,
+    is_package: bool,
+) *std.Build.Step.InstallArtifact {
+    const name = "tests";
+    const tests_mod = b.createModule(.{
+        .root_source_file = b.path("tests/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    tests_mod.addImport("pixzig", pixeng_mod);
+    // The unit tests reach past the engine's own input enums to check they
+    // map SDL's codes correctly. Examples deliberately get no such import:
+    // game code should never name SDL.
+    tests_mod.addImport("sdl3", sdlModule(b, target, optimize));
+
+    const tests_exe = testz.addTestExe(b, .{
+        .target = target,
+        .optimize = optimize,
+        // Forward the target/optimize through: testz builds tree-sitter C
+        // sources behind its `highlight_ansi` module, and without this they
+        // compile for the host and the cross-linker rejects the host object
+        // files ("lld-link: unknown file type").
+        .testz_dep = b.dependency("testz", .{ .target = target, .optimize = optimize }),
+        .name = name,
+        .root_module = tests_mod,
+    });
+
+    const manifest = manifestFromDef(b, .{
+        .assets = &.{
+            .{ .id = "Roboto-Medium", .kind = "font", .path = "Roboto-Medium.ttf", .font_size = 20.0 },
+        },
+    });
+    manifest.addToModule(tests_exe, tests_mod, is_package, assets_dir);
+
+    const out_path = b.pathJoin(&.{ "bin", name });
+    const install_tests = b.addInstallArtifact(tests_exe, .{ .dest_dir = .{ .override = .{ .custom = out_path } } });
+
+    const run_cmd = b.addRunArtifact(tests_exe);
+    if (is_package) {
+        run_cmd.setCwd(.{ .cwd_relative = b.pathJoin(&.{ "zig-out", out_path }) });
+    } else {
+        run_cmd.setCwd(b.path("."));
+    }
+    run_cmd.step.dependOn(&install_tests.step);
+    run_cmd.addPassthruArgs();
+
+    const run_step = b.step(name, "Run the unit tests");
+    run_step.dependOn(&run_cmd.step);
+
+    return install_tests;
 }
 
 /// Which font `buildGame` embeds into the game as the renderer's default.
