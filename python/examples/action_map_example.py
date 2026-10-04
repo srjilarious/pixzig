@@ -4,13 +4,10 @@ text so you can confirm bindings actually respond to real input.
 
 Run it from any working directory:
 
-    zig build python-ffi
-    python python/examples/action_map_example.py
+    just py_install
+    .venv/bin/python python/examples/action_map_example.py
 """
 import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from pixzig import App, GamepadButton, Key
 

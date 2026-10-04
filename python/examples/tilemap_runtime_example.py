@@ -9,13 +9,10 @@ edits.
 
 Run it from any working directory:
 
-    zig build python-ffi
-    python python/examples/tilemap_runtime_example.py
+    just py_install
+    .venv/bin/python python/examples/tilemap_runtime_example.py
 """
 import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from pixzig import App, Key, MouseButton
 

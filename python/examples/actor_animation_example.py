@@ -5,13 +5,10 @@ a horizontal flip. Mirrors examples/actor_ex.zig, driven from Python.
 
 Run it from any working directory:
 
-    zig build python-ffi
-    python python/examples/actor_animation_example.py
+    just py_install
+    .venv/bin/python python/examples/actor_animation_example.py
 """
 import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from pixzig import App, Flip, Key
 
