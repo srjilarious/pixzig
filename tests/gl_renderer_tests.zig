@@ -92,7 +92,7 @@ pub fn rendererWarnsOnceWithNoFontTest(io: std.Io, alloc: std.mem.Allocator) !vo
     var r = try Rndr.init(alloc, &rm, &test_viewport, .{ .font = .none });
     defer r.deinit();
 
-    try testz.expectTrue(!r.impl.text.warnedNoFont);
+    try testz.expectTrue(!r.testingNoFontWarningIssued());
 
     // Every text call with no font draws nothing, but only the first one
     // logs -- otherwise a game missing its font floods the log every frame.
@@ -100,7 +100,7 @@ pub fn rendererWarnsOnceWithNoFontTest(io: std.Io, alloc: std.mem.Allocator) !vo
     const drawn = r.drawString("hello", .{ .x = 0, .y = 0 });
     try testz.expectEqual(drawn.x, 0);
     try testz.expectEqual(drawn.y, 0);
-    try testz.expectTrue(r.impl.text.warnedNoFont);
+    try testz.expectTrue(r.testingNoFontWarningIssued());
     _ = r.drawScaledString("hello", .{ .x = 0, .y = 0 }, 2.0);
     _ = r.drawStringColored("hello", .{ .x = 0, .y = 0 }, .{ .r = 1, .g = 1, .b = 1, .a = 1 });
     _ = r.drawClippedString("hello", .{ .x = 0, .y = 0 }, .{ .l = 0, .t = 0, .r = 10, .b = 10 });
@@ -112,14 +112,14 @@ pub fn rendererWarnsOnceWithNoFontTest(io: std.Io, alloc: std.mem.Allocator) !vo
     const measured = r.measureString("hello");
     try testz.expectEqual(measured.x, 0);
     try testz.expectEqual(measured.y, 0);
-    try testz.expectTrue(r.impl.text.warnedNoFont);
+    try testz.expectTrue(r.testingNoFontWarningIssued());
 
     // Setting a font arms the warning again for the next font-less stretch.
     try r.setDefaultFont(&rm, blk: {
         _ = try rm.loadFontFromTtfFile("late", "assets/Roboto-Medium.ttf", 16.0);
         break :blk "late";
     });
-    try testz.expectTrue(!r.impl.text.warnedNoFont);
+    try testz.expectTrue(!r.testingNoFontWarningIssued());
 }
 
 pub fn rendererLoadsEmbeddedFontByDefaultTest(io: std.Io, alloc: std.mem.Allocator) !void {

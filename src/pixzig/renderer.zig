@@ -126,7 +126,7 @@ pub fn Renderer(opts: RendererOptions) type {
         }
 
         alloc: std.mem.Allocator,
-        impl: *Impl,
+        _impl: *align(@alignOf(Impl)) anyopaque,
         /// The engine's viewport, used to resolve `Projection` and clip
         /// rects. Owned by the engine, which outlives the renderer.
         viewport: *const Viewport,
@@ -150,6 +150,14 @@ pub fn Renderer(opts: RendererOptions) type {
         };
 
         const DefaultFontName = "__pixzig_default_font";
+
+        inline fn implMut(self: *Self) *Impl {
+            return @ptrCast(self._impl);
+        }
+
+        inline fn implConst(self: *const Self) *const Impl {
+            return @ptrCast(self._impl);
+        }
 
         pub fn init(alloc: std.mem.Allocator, resMgr: *ResourceManager, viewport: *const Viewport, initOpts: RendererInitOpts) !Self {
             var rend = try alloc.create(Impl);
@@ -229,28 +237,29 @@ pub fn Renderer(opts: RendererOptions) type {
             gl.enable(gl.BLEND);
             gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-            return .{ .alloc = alloc, .impl = rend, .viewport = viewport };
+            return .{ .alloc = alloc, ._impl = rend, .viewport = viewport };
         }
 
         pub fn deinit(self: *Self) void {
-            self.impl.sprites.deinit();
-            self.impl.tinted.deinit();
+            const impl = self.implMut();
+            impl.sprites.deinit();
+            impl.tinted.deinit();
             if (opts.shapeRendering) {
-                self.impl.shapes.deinit();
+                impl.shapes.deinit();
             }
 
             if (opts.textRendering) {
-                self.impl.text.deinit();
+                impl.text.deinit();
             }
 
-            self.alloc.destroy(self.impl);
+            self.alloc.destroy(impl);
         }
 
         /// Set the renderer's default font to an already-loaded font in `resMgr`.
         /// Useful when the font is loaded post-init (e.g. via a manifest boot group).
         pub fn setDefaultFont(self: *Self, resMgr: *ResourceManager, id: []const u8) !void {
             requireFlag("setDefaultFont", "textRendering");
-            try self.impl.text.setFont(try resMgr.getFontAtlas(id));
+            try self.implMut().text.setFont(try resMgr.getFontAtlas(id));
         }
 
         /// Appends a fallback face to the renderer's default font (the one
@@ -276,8 +285,16 @@ pub fn Renderer(opts: RendererOptions) type {
         /// is the caller's to apply.
         pub fn defaultFontAtlas(self: *Self) ?*FontAtlas {
             if (comptime !opts.textRendering) return null;
-            const handle = self.impl.text.font orelse return null;
+            const handle = self.implMut().text.font orelse return null;
             return &handle.val;
+        }
+
+        /// Testing hook for the renderer's one-shot "no default font" warning.
+        /// This is intentionally narrow: tests can assert the public warning
+        /// behavior without reaching into the renderer's private batching state.
+        pub fn testingNoFontWarningIssued(self: *const Self) bool {
+            requireFlag("testingNoFontWarningIssued", "textRendering");
+            return self.implConst().text.warnedNoFont;
         }
 
         /// Starts a pass: opens the sprite batches (plus shape/text batches
@@ -297,16 +314,17 @@ pub fn Renderer(opts: RendererOptions) type {
                 .matrix => |m| m,
             };
 
-            self.impl.active = .none;
-            self.impl.sprites.begin(mvp);
-            self.impl.tinted.begin(mvp);
+            const impl = self.implMut();
+            impl.active = .none;
+            impl.sprites.begin(mvp);
+            impl.tinted.begin(mvp);
 
             if (opts.shapeRendering) {
-                self.impl.shapes.begin(mvp);
+                impl.shapes.begin(mvp);
             }
 
             if (opts.textRendering) {
-                self.impl.text.begin(mvp);
+                impl.text.begin(mvp);
             }
         }
 
@@ -314,32 +332,34 @@ pub fn Renderer(opts: RendererOptions) type {
         /// active batch can hold draws at this point, so the others' `end`
         /// just closes them.
         pub fn end(self: *Self) void {
-            self.impl.sprites.end();
-            self.impl.tinted.end();
+            const impl = self.implMut();
+            impl.sprites.end();
+            impl.tinted.end();
 
             if (opts.shapeRendering) {
-                self.impl.shapes.end();
+                impl.shapes.end();
             }
 
             if (opts.textRendering) {
-                self.impl.text.end();
+                impl.text.end();
             }
-            self.impl.active = .none;
+            impl.active = .none;
         }
 
         /// Makes `kind` the batch receiving draws, flushing the previously
         /// active batch if it was a different one so earlier draws land
         /// underneath later ones.
         fn use(self: *Self, kind: BatchKind) void {
-            if (self.impl.active == kind) return;
-            switch (self.impl.active) {
+            const impl = self.implMut();
+            if (impl.active == kind) return;
+            switch (impl.active) {
                 .none => {},
-                .sprites => self.impl.sprites.flush(),
-                .tinted => self.impl.tinted.flush(),
-                .shapes => if (comptime opts.shapeRendering) self.impl.shapes.flush(),
-                .text, .text_colored => if (comptime opts.textRendering) self.impl.text.flush(),
+                .sprites => impl.sprites.flush(),
+                .tinted => impl.tinted.flush(),
+                .shapes => if (comptime opts.shapeRendering) impl.shapes.flush(),
+                .text, .text_colored => if (comptime opts.textRendering) impl.text.flush(),
             }
-            self.impl.active = kind;
+            impl.active = kind;
         }
 
         /// Flushes queued draws, so draws made before a GL state change
@@ -399,7 +419,7 @@ pub fn Renderer(opts: RendererOptions) type {
                 return;
             }
             self.use(.sprites);
-            self.impl.sprites.drawSprite(sprite);
+            self.implMut().sprites.drawSprite(sprite);
         }
 
         /// Draws a `Sprite` multiplied by `color` (a straight per-channel
@@ -408,15 +428,16 @@ pub fn Renderer(opts: RendererOptions) type {
         /// same-colour draws still coalesce into one GL call.
         pub fn drawSpriteColored(self: *Self, sprite: *const Sprite, color: Color) void {
             self.use(.tinted);
-            self.impl.tinted.setTint(color.r, color.g, color.b, color.a);
-            self.impl.tinted.drawSprite(sprite);
+            const impl = self.implMut();
+            impl.tinted.setTint(color.r, color.g, color.b, color.a);
+            impl.tinted.drawSprite(sprite);
         }
 
         /// Draws the `srcCoords` region (UVs of the underlying image) of
         /// `texture` into `dest`. Takes a borrowed or acquired handle alike.
         pub fn drawTexture(self: *Self, texture: *TextureHandle, dest: RectF, srcCoords: RectF) void {
             self.use(.sprites);
-            self.impl.sprites.draw(&texture.val, dest, srcCoords, .none);
+            self.implMut().sprites.draw(&texture.val, dest, srcCoords, .none);
         }
 
         /// Draws the whole texture (frame) at `pos`, scaled uniformly by `scale`.
@@ -425,7 +446,7 @@ pub fn Renderer(opts: RendererOptions) type {
             const tsx = @as(f32, @floatFromInt(tex.size.x)) * scale;
             const tsy = @as(f32, @floatFromInt(tex.size.y)) * scale;
             self.use(.sprites);
-            self.impl.sprites.draw(tex, RectF.fromPosSize(pos.x, pos.y, @intFromFloat(tsx), @intFromFloat(tsy)), tex.src, .none);
+            self.implMut().sprites.draw(tex, RectF.fromPosSize(pos.x, pos.y, @intFromFloat(tsx), @intFromFloat(tsy)), tex.src, .none);
         }
 
         /// Requires `RendererOptions.shapeRendering == true`; calling it with
@@ -433,14 +454,14 @@ pub fn Renderer(opts: RendererOptions) type {
         pub fn drawFilledRect(self: *Self, dest: RectF, color: Color) void {
             requireFlag("drawFilledRect", "shapeRendering");
             self.use(.shapes);
-            self.impl.shapes.drawFilledRect(dest, color);
+            self.implMut().shapes.drawFilledRect(dest, color);
         }
 
         /// Requires `RendererOptions.shapeRendering == true`; see `drawFilledRect()`.
         pub fn drawRect(self: *Self, dest: RectF, color: Color, lineWidth: u8) void {
             requireFlag("drawRect", "shapeRendering");
             self.use(.shapes);
-            self.impl.shapes.drawRect(dest, color, lineWidth);
+            self.implMut().shapes.drawRect(dest, color, lineWidth);
         }
 
         // This moves the outline of the rect to enclose the dest by lineWidth.
@@ -448,7 +469,7 @@ pub fn Renderer(opts: RendererOptions) type {
         pub fn drawEnclosingRect(self: *Self, dest: RectF, color: Color, lineWidth: u8) void {
             requireFlag("drawEnclosingRect", "shapeRendering");
             self.use(.shapes);
-            self.impl.shapes.drawEnclosingRect(dest, color, lineWidth);
+            self.implMut().shapes.drawEnclosingRect(dest, color, lineWidth);
         }
 
         /// Requires `RendererOptions.textRendering == true`; calling it with
@@ -457,14 +478,14 @@ pub fn Renderer(opts: RendererOptions) type {
         pub fn drawString(self: *Self, text: []const u8, pos: Vec2I) Vec2I {
             requireFlag("drawString", "textRendering");
             self.use(.text);
-            return self.impl.text.drawString(text, pos);
+            return self.implMut().text.drawString(text, pos);
         }
 
         /// Requires `RendererOptions.textRendering == true`; see `drawString()`.
         pub fn drawScaledString(self: *Self, text: []const u8, pos: Vec2I, scale: f32) Vec2I {
             requireFlag("drawScaledString", "textRendering");
             self.use(.text);
-            return self.impl.text.drawScaledString(text, pos, scale);
+            return self.implMut().text.drawScaledString(text, pos, scale);
         }
 
         /// Like `drawString`, but tints every glyph by `color` instead of
@@ -472,7 +493,7 @@ pub fn Renderer(opts: RendererOptions) type {
         pub fn drawStringColored(self: *Self, text: []const u8, pos: Vec2I, color: Color) Vec2I {
             requireFlag("drawStringColored", "textRendering");
             self.use(.text_colored);
-            return self.impl.text.drawStringColored(text, pos, color);
+            return self.implMut().text.drawStringColored(text, pos, color);
         }
 
         /// Like `drawString`, but only the parts of glyphs inside `clip` are
@@ -481,21 +502,21 @@ pub fn Renderer(opts: RendererOptions) type {
         pub fn drawClippedString(self: *Self, text: []const u8, pos: Vec2I, clip: RectF) Vec2I {
             requireFlag("drawClippedString", "textRendering");
             self.use(.text);
-            return self.impl.text.drawClippedString(text, pos, clip);
+            return self.implMut().text.drawClippedString(text, pos, clip);
         }
 
         /// The default font's line height in pixels, or null when no font is
         /// set. Requires `RendererOptions.textRendering == true`.
         pub fn lineHeight(self: *const Self) ?i32 {
             requireFlag("lineHeight", "textRendering");
-            const font = self.impl.text.font orelse return null;
+            const font = self.implConst().text.font orelse return null;
             return font.val.maxY;
         }
 
         /// Measures `text` without drawing it. Requires `RendererOptions.textRendering == true`.
         pub fn measureString(self: *Self, text: []const u8) Vec2I {
             requireFlag("measureString", "textRendering");
-            return self.impl.text.measureString(text);
+            return self.implMut().text.measureString(text);
         }
     };
 }
