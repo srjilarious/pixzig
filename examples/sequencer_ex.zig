@@ -125,7 +125,7 @@ pub const App = struct {
         _ = try actor.addState(&.{ .name = "left", .sequence = app.seqMgr.getSeq("player_right").?, .flip = .horz }, .{});
         _ = try actor.addState(&.{ .name = "down", .sequence = app.seqMgr.getSeq("player_down").?, .flip = .none }, .{});
         _ = try actor.addState(&.{ .name = "up", .sequence = app.seqMgr.getSeq("player_down").?, .flip = .vert }, .{});
-        actor.setState("right");
+        try actor.setState("right");
         flecs.set(app.world, app.entity, Actor, actor);
 
         // --- Set up scripting context and bind Lua functions ---

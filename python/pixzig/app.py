@@ -237,7 +237,10 @@ class App:
 
     def add_anim_state(self, name: str, sequence: str, next_state: str = None, flip: Flip = Flip.NONE) -> None:
         """Registers a named actor state that plays `sequence`. `flip` is
-        applied on top of each frame's own flip."""
+        applied on top of each frame's own flip. When a play-once sequence
+        (`create_sequence(..., loop=False)`) ends, the actor switches to
+        `next_state`, or holds the last frame if it's None. Looping
+        sequences ignore `next_state`."""
         ns = next_state.encode("utf-8") if next_state is not None else None
         _n.check(
             _n.pz_anim_add_state(self._eng, name.encode("utf-8"), sequence.encode("utf-8"), ns, int(flip)) == 0

@@ -120,7 +120,7 @@ _ = try self.hero.addState(seqMgr.getState("walk_right").?, .{}); // first state
 self.hero.sprite.setOriginNormalized(0.5, 1);
 
 // In update:
-self.hero.setState("walk_right"); // no-op if already in it; otherwise shows frame 0 now
+try self.hero.setState("walk_right"); // no-op if already in it; otherwise shows frame 0 now
 self.hero.update(delta);
 self.hero.sprite.setPosF(x, y);
 
@@ -132,6 +132,22 @@ self.hero.deinit();
 ```
 
 Frames may come from different textures; applying a frame switches the sprite's texture as needed.
+
+`setState` returns `error.UnknownActorState` for a name that was never added.
+
+#### Play-once states
+
+A sequence's `mode` is `.loop` (the default) or `.once`. A `.once` sequence plays through one time. When it ends, the actor switches to the state's `nextState`. With no `nextState`, it holds the last frame and `actor.finished()` returns true until the state changes. `.loop` sequences ignore `nextState`.
+
+```zig
+// "attack" plays once, then drops back to "idle".
+_ = try self.hero.addState(&.{ .name = "attack", .nextState = "idle", .sequence = attackSeq }, .{});
+
+// In update, when the attack button is pressed:
+try self.hero.setState("attack");
+```
+
+`setState` on the state the actor is already in is a no-op, even after a `.once` state has finished. To replay it, switch to another state first. In a sequence JSON file, set `"mode": "once"` on the sequence and `"nextStateName"` on the state.
 
 ### Subtextures
 

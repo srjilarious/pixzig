@@ -249,7 +249,9 @@ pub const SetActorStateStep = struct {
         _ = deltaMs;
         const self: *SetActorStateStep = @ptrCast(@alignCast(step.ptr));
         if (flecs.get_mut(self.world, self.entityId, Actor)) |actor| {
-            actor.setState(self.stateName);
+            actor.setState(self.stateName) catch |err| {
+                std.log.warn("SetActorStateStep: can't set state '{s}': {}", .{ self.stateName, err });
+            };
             flecs.modified(self.world, self.entityId, Actor);
         }
         step.done = true;

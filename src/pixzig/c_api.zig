@@ -1129,9 +1129,19 @@ export fn pz_actor_sprite(ac: *PzActor) callconv(.c) *PzSprite {
 }
 
 /// Switches the actor to `state_name` and applies that state's first frame to
-/// its sprite right away, so it updates even before the next tick.
-export fn pz_actor_set_state(ac: *PzActor, state_name: [*:0]const u8) callconv(.c) void {
-    ac.actor.setState(std.mem.span(state_name));
+/// its sprite right away, so it updates even before the next tick. Fails if
+/// the actor has no state with that name.
+export fn pz_actor_set_state(ac: *PzActor, state_name: [*:0]const u8) callconv(.c) i32 {
+    ac.actor.setState(std.mem.span(state_name)) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    return 0;
+}
+
+/// True once a play-once state with no next state has shown its last frame.
+export fn pz_actor_finished(ac: *PzActor) callconv(.c) bool {
+    return ac.actor.finished();
 }
 
 /// Advances the actor's animation by `dt_ms`, updating its sprite's frame.

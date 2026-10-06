@@ -235,6 +235,8 @@ pub const AnimPlayMode = enum { loop, once };
 
 pub const ActorState = struct {
     name: []const u8,
+    /// State to switch to when a `.once` sequence plays its last frame.
+    /// Ignored for `.loop` sequences. Null holds the last frame instead.
     nextState: ?[]const u8 = null,
     sequence: *const FrameSequence,
     flip: Flip = .none,
@@ -459,6 +461,9 @@ pub const Actor = struct {
     currState: ?*ActorState,
     currFrame: i32,
     currFrameTimeMs: f64,
+    /// Set when a `.once` state with no `nextState` has played its last
+    /// frame; the actor holds that frame until the state changes.
+    done: bool,
 
     /// Takes ownership of `sprite`; the actor releases it in `deinit`, so
     /// don't deinit it separately.
@@ -470,6 +475,7 @@ pub const Actor = struct {
             .currState = null,
             .currFrame = 0,
             .currFrameTimeMs = 0,
+            .done = false,
         };
     }
 
@@ -525,25 +531,32 @@ pub const Actor = struct {
     }
 
     /// Switches to the state named `name` and applies its first frame to the
-    /// sprite right away. No-op if already in that state or it isn't known.
-    pub fn setState(self: *Actor, name: []const u8) void {
+    /// sprite right away. No-op if already in that state, even when a `.once`
+    /// state has finished. Returns `error.UnknownActorState` if `name` was
+    /// never added.
+    pub fn setState(self: *Actor, name: []const u8) !void {
         // Don't reset the state if we're already on it.
         if (self.currState != null and std.mem.eql(u8, self.currState.?.name, name)) return;
 
-        if (self.states.getPtr(name)) |state| {
-            self.currState = state.*;
-            self.currFrame = 0;
-            self.currFrameTimeMs = 0;
-            self.applyCurrentFrame();
-        }
+        const state = self.states.get(name) orelse return error.UnknownActorState;
+        self.enterState(state);
+    }
+
+    /// True once a `.once` state with no `nextState` has played its last
+    /// frame. Cleared by switching states.
+    pub fn finished(self: *const Actor) bool {
+        return self.done;
     }
 
     /// Advances the current state's animation by `deltaMs`, applying the new
-    /// frame to the sprite whenever it changes.
+    /// frame to the sprite whenever it changes. A `.loop` sequence wraps to
+    /// its first frame; a `.once` sequence switches to the state's
+    /// `nextState`, or holds its last frame and sets `finished()`.
     pub fn update(self: *Actor, deltaMs: f64) void {
-        if (self.currState == null) return;
+        const state = self.currState orelse return;
+        if (self.done) return;
 
-        const currSeq = self.currState.?.sequence;
+        const currSeq = state.sequence;
         if (currSeq.frames.items.len == 0) return;
         const currFrame = &currSeq.frames.items[@intCast(self.currFrame)];
         self.currFrameTimeMs += deltaMs;
@@ -551,12 +564,40 @@ pub const Actor = struct {
             self.currFrameTimeMs -= currFrame.frameTimeMs;
             self.currFrame += 1;
             if (self.currFrame >= currSeq.frames.items.len) {
-                // TODO: Add in once behavior
-                self.currFrame = 0;
+                switch (currSeq.mode) {
+                    .loop => self.currFrame = 0,
+                    .once => {
+                        self.currFrame -= 1;
+                        self.finishOnce(state);
+                        return;
+                    },
+                }
             }
 
             self.applyCurrentFrame();
         }
+    }
+
+    /// A `.once` state just ran past its last frame: hand off to its
+    /// `nextState`, or hold the last frame if it has none (or it's unknown).
+    fn finishOnce(self: *Actor, state: *ActorState) void {
+        if (state.nextState) |nextName| {
+            if (self.states.get(nextName)) |next| {
+                self.enterState(next);
+                return;
+            }
+            std.log.warn("Actor state '{s}' has unknown nextState '{s}'; holding its last frame.", .{ state.name, nextName });
+        }
+        self.currFrameTimeMs = 0;
+        self.done = true;
+    }
+
+    fn enterState(self: *Actor, state: *ActorState) void {
+        self.currState = state;
+        self.currFrame = 0;
+        self.currFrameTimeMs = 0;
+        self.done = false;
+        self.applyCurrentFrame();
     }
 
     pub fn curr(self: *Actor) ?*Frame {

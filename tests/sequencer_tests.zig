@@ -213,7 +213,7 @@ pub fn setActorStateStepCompletesWithNoActorTest(io: std.Io, alloc: std.mem.Allo
 }
 
 // SetActorStateStep should complete in one tick when the entity has an Actor
-// component, even if the requested state is not registered (setState is a no-op).
+// component, even if the requested state is not registered (the error is logged).
 pub fn setActorStateStepCompletesWithActorTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     const world = makeWorld(.{Actor});

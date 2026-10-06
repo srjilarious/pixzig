@@ -49,9 +49,18 @@ class Actor:
         _n.check(_n.pz_actor_add_state(self._handle, name.encode("utf-8")) == 0)
 
     def set_state(self, name: str) -> None:
-        """Switches to `name` and applies its first frame to the sprite now."""
+        """Switches to `name` and applies its first frame to the sprite now.
+        A no-op if already in that state. Raises if the actor has no state
+        called `name`."""
         self._check_alive()
-        _n.pz_actor_set_state(self._handle, name.encode("utf-8"))
+        _n.check(_n.pz_actor_set_state(self._handle, name.encode("utf-8")) == 0)
+
+    @property
+    def finished(self) -> bool:
+        """True once a play-once state with no `next_state` has shown its
+        last frame (the actor holds it). Cleared by switching states."""
+        self._check_alive()
+        return bool(_n.pz_actor_finished(self._handle))
 
     def update(self, dt_ms: float) -> None:
         """Advances the animation by `dt_ms`, updating the sprite's frame."""

@@ -214,7 +214,8 @@ pz_actor_create = _sig("pz_actor_create", [PzEnginePtr, c_char_p], PzActorPtr)
 pz_actor_sprite = _sig("pz_actor_sprite", [PzActorPtr], PzSpritePtr)
 pz_actor_destroy = _sig("pz_actor_destroy", [PzActorPtr], None)
 pz_actor_add_state = _sig("pz_actor_add_state", [PzActorPtr, c_char_p], c_int32)
-pz_actor_set_state = _sig("pz_actor_set_state", [PzActorPtr, c_char_p], None)
+pz_actor_set_state = _sig("pz_actor_set_state", [PzActorPtr, c_char_p], c_int32)
+pz_actor_finished = _sig("pz_actor_finished", [PzActorPtr], c_bool)
 pz_actor_update = _sig("pz_actor_update", [PzActorPtr, ctypes.c_double], None)
 
 # --- Camera ----------------------------------------------------------------
