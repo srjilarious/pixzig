@@ -28,10 +28,10 @@ const Tests = blk: {
 };
 
 // testz's generated root module forwards this, keeping pixzig's log format.
-pub const std_options = pixzig.system.std_options;
+pub const std_options = pixzig.internal.system.std_options;
 
 pub fn main(init: std.process.Init) !void {
-    try pixzig.GlTestContext.initGlobal();
-    defer pixzig.GlTestContext.deinitGlobal();
+    try pixzig.internal.GlTestContext.initGlobal();
+    defer pixzig.internal.GlTestContext.deinitGlobal();
     try testz.testzRunner(Tests, init.minimal.args);
 }

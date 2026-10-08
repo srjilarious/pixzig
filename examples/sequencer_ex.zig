@@ -130,7 +130,7 @@ pub const App = struct {
 
         // --- Set up scripting context and bind Lua functions ---
         app.seqCtx = seq.SeqScriptingContext.init(alloc, app.world, &app.seqPlayer);
-        app.seqCtx.bindToLua(app.scriptEng.lua);
+        try app.seqCtx.bindToLua(&app.scriptEng);
 
         return app;
     }

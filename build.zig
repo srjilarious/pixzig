@@ -876,7 +876,7 @@ fn buildPythonFfi(
 /// pixzig root wrapper (whose panic and log handlers only differ from the
 /// defaults on emscripten) and uses testz's instead, which installs a panic
 /// handler that still prints while a test's output is being captured.
-/// tests/main.zig forwards `pixzig.system.std_options` itself.
+/// tests/main.zig forwards `pixzig.internal.system.std_options` itself.
 fn buildTests(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
@@ -1078,8 +1078,8 @@ fn wrappedRootModule(
         \\const pixzig = @import("pixzig");
         \\const game = @import("pixzig_game");
         \\
-        \\pub const panic = pixzig.system.panic;
-        \\pub const std_options = pixzig.system.std_options;
+        \\pub const panic = pixzig.internal.system.panic;
+        \\pub const std_options = pixzig.internal.system.std_options;
         \\
         \\pub fn main(init: std.process.Init) !void {
         \\    const main_info = @typeInfo(@TypeOf(game.main)).@"fn";

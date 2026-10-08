@@ -58,7 +58,7 @@ pub const App = struct {
     fps: FpsCounter,
     states: AppStateMgr,
 
-    pub fn init(alloc: std.mem.Allocator, appStates: []*anyopaque) !*App {
+    pub fn init(alloc: std.mem.Allocator, appStates: AppStateMgr.StatePtrs) !*App {
         const app = try alloc.create(App);
         app.* = .{
             .alloc = alloc,
@@ -104,12 +104,10 @@ pub fn main(init: std.process.Init) !void {
     const appRunner = try AppRunner.init("Pixzig: Game State Example", init.gpa, .{});
     defer appRunner.deinit();
 
-    var StateAInst = StateA{};
-    var ParamStateInst = ParamState{};
-    var statesArr = [_]*anyopaque{ &StateAInst, &ParamStateInst };
-    const states: []*anyopaque = statesArr[0..2];
+    var stateA = StateA{};
+    var paramState = ParamState{};
 
-    const app = try App.init(init.gpa, states);
+    const app = try App.init(init.gpa, .{ &stateA, &paramState });
     defer app.deinit();
 
     appRunner.run(app);

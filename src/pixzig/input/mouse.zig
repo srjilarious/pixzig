@@ -95,8 +95,8 @@ pub const Mouse = struct {
     /// consumed.
     pub fn finishTick(self: *Mouse) void {
         self.mouseBuffers[self.prevIdx] = self.mouseBuffers[self.currIdx];
-        self.curr_mut().rawDelta = .{ .x = 0, .y = 0 };
-        self.curr_mut().scrollDelta = .{ .x = 0, .y = 0 };
+        self.currPtr().rawDelta = .{ .x = 0, .y = 0 };
+        self.currPtr().scrollDelta = .{ .x = 0, .y = 0 };
     }
 
     /// Drops all button state, for window focus loss where the
@@ -110,7 +110,7 @@ pub const Mouse = struct {
         return &self.mouseBuffers[self.currIdx];
     }
 
-    pub fn curr_mut(self: *Mouse) *MouseState {
+    pub fn currPtr(self: *Mouse) *MouseState {
         return &self.mouseBuffers[self.currIdx];
     }
 

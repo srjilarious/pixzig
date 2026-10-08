@@ -36,7 +36,7 @@ const configLuaScript =
     \\    }
 ;
 
-pub fn structFromLuaLoading(io: std.Io, alloc: std.mem.Allocator) !void {
+pub fn structFromLuaLoadingTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     var eng = try ScriptEngine.init(alloc);
     defer eng.deinit();
@@ -170,4 +170,61 @@ pub fn registerFuncMultipleFunctionsTest(io: std.Io, alloc: std.mem.Allocator) !
     const val = try eng.lua.toInteger(-1);
     eng.lua.pop(1);
     try testz.expectEqual(val, 14);
+}
+
+// --- registerMethod / globals ---
+
+const Counter = struct {
+    total: i64 = 0,
+
+    fn luaAdd(self: *Counter, lua: *ziglua.Lua) i32 {
+        self.total += lua.toInteger(1) catch 0;
+        lua.pushInteger(self.total);
+        return 1;
+    }
+};
+
+// registerMethod hands each call its own context, so two registrations
+// with different contexts stay independent.
+pub fn registerMethodPassesContextTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var eng = try ScriptEngine.init(alloc);
+    defer eng.deinit();
+
+    var a = Counter{};
+    var b = Counter{};
+    try eng.registerMethod(Counter, &a, "add_a", Counter.luaAdd);
+    try eng.registerMethod(Counter, &b, "add_b", Counter.luaAdd);
+
+    try eng.run("add_a(2); r = add_a(3); add_b(10)");
+    try testz.expectEqual(a.total, 5);
+    try testz.expectEqual(b.total, 10);
+
+    _ = eng.getGlobal("r");
+    const val = try eng.lua.toInteger(-1);
+    eng.lua.pop(1);
+    try testz.expectEqual(val, 5);
+}
+
+// setGlobal/getGlobal take plain slices, so a name sliced out of a larger
+// buffer (no sentinel) still works.
+pub fn globalsTakeUnterminatedNamesTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var eng = try ScriptEngine.init(alloc);
+    defer eng.deinit();
+
+    const names = "speedlimit";
+    eng.lua.pushInteger(7);
+    eng.setGlobal(names[0..5]);
+
+    try eng.run("doubled = speed * 2");
+    try testz.expectEqual(eng.getGlobal("doubled"), .number);
+    const val = try eng.lua.toInteger(-1);
+    eng.lua.pop(1);
+    try testz.expectEqual(val, 14);
+
+    const code = "x = 1 -- trailing bytes";
+    try eng.run(code[0..5]);
+    try testz.expectEqual(eng.getGlobal("x"), .number);
+    eng.lua.pop(1);
 }

@@ -253,7 +253,7 @@ pub const Keyboard = struct {
     /// identity used by all the normal query methods; `layout` is the same
     /// key resolved through the OS layout.
     pub fn setKey(self: *Keyboard, physical: Key, layout: Key, isDown: bool) void {
-        var curr = self.currKeys_mut();
+        var curr = self.currKeysPtr();
         if (physical != .unknown) curr.set(physical, isDown);
         if (layout != .unknown) curr.setLayout(layout, isDown);
     }
@@ -325,7 +325,7 @@ pub const Keyboard = struct {
         return &self.keyBuffers[self.currIdx];
     }
 
-    pub fn currKeys_mut(self: *Keyboard) *KeyboardState {
+    pub fn currKeysPtr(self: *Keyboard) *KeyboardState {
         return &self.keyBuffers[self.currIdx];
     }
 
@@ -338,7 +338,7 @@ pub const Keyboard = struct {
     /// Begins a tick: latches typed text and the modifier bits collected
     /// from events since the last call. Returns whether any key is down.
     pub fn update(self: *Keyboard) bool {
-        var curr = self.currKeys_mut();
+        var curr = self.currKeysPtr();
         curr.modsOverride = self.cbMods;
         self.latchText();
         return curr.keys.count() > 0;

@@ -4,12 +4,25 @@
 
 ## ScriptEngine Basics
 
+The simplest setup lets the engine own the Lua state. Set `scripting` in the engine options and use `eng.scripts`:
+
+```zig
+const AppRunner = pixzig.AppRunner(App, .{ .scripting = true });
+
+// Anywhere you have the engine:
+try eng.scripts.runScript("assets/config.lua");
+```
+
+The engine creates it after the renderer and closes it on shutdown. You can still create one yourself, e.g. in tests or tools that don't start an engine:
+
 ```zig
 const scripting = pixzig.scripting;
 
 var eng = try scripting.ScriptEngine.init(allocator);
 defer eng.deinit();
 ```
+
+Every name and code string the API takes is a plain `[]const u8`.
 
 ### Running Code
 
@@ -49,6 +62,26 @@ try eng.registerFunc("double", myLuaFunc);
 
 The function signature is `fn(*ziglua.Lua) i32`. Arguments are read from the stack by index (1-based) using `lua.toInteger`, `lua.toNumber`, `lua.toString`, etc. Return values are pushed onto the stack; the return count is the i32.
 
+### Registering Methods with Context
+
+When the function needs your own state, use `registerMethod`. It stores the context pointer with the Lua function and passes it back on each call:
+
+```zig
+const Game = struct {
+    score: i64 = 0,
+
+    fn luaAddScore(self: *Game, lua: *ziglua.Lua) i32 {
+        self.score += lua.toInteger(1) catch 0;
+        return 0;
+    }
+};
+
+try eng.registerMethod(Game, &game, "add_score", Game.luaAddScore);
+// Lua: add_score(10)
+```
+
+The context must outlive the Lua state, or at least every script that can call the function.
+
 ### Loading Structs from Lua Tables
 
 Deserialise a Lua table into a Zig struct:
@@ -83,10 +116,10 @@ Supported field types: `bool`, `int`, `float`, and `?[]u8` (heap-allocated strin
 ```zig
 // Push an entity ID as a Lua global before running a script.
 eng.lua.pushInteger(@intCast(entity_id));
-eng.lua.setGlobal("player_entity");
+eng.setGlobal("player_entity");
 
 eng.lua.pushNumber(sprite_x);
-eng.lua.setGlobal("player_x");
+eng.setGlobal("player_x");
 
 try eng.runScript("assets/my_script.lua");
 ```
@@ -100,8 +133,10 @@ var seqCtx = seq.SeqScriptingContext.init(alloc, world, &seqPlayer);
 defer seqCtx.deinit();
 
 // Register seq_new / seq_wait / seq_move_to / seq_set_actor_state / seq_play
-seqCtx.bindToLua(scriptEng.lua);
+try seqCtx.bindToLua(&scriptEng);
 ```
+
+`seq_new` handles grow as needed; a handle's slot is reused once `seq_play` submits it.
 
 Then in Lua:
 
@@ -114,11 +149,26 @@ seq_play(h)
 
 ## Console Integration
 
-`console` provides an in-game Lua console backed by a `ScriptEngine`. See `examples/console_ex.zig`.
+`console` provides an in-game Lua console backed by a `ScriptEngine`. Let the engine own it alongside the script engine, then draw it inside a UI pass:
+
+```zig
+const AppRunner = pixzig.AppRunner(App, .{
+    .inputOpts = .{ .mouse = true, .textInput = true }, // the console reads typed text
+    .scripting = true,
+    .console = .{}, // ConsoleOpts; a null displaySize uses the logical size
+});
+
+// In render:
+self.ui.begin();
+eng.console.draw(&self.ui);
+self.ui.end();
+```
+
+`console` without `scripting` is a compile error. See `examples/console_ex.zig`.
 
 ## Tips
 
 - Use `runScript` for config and level scripts that live on disk.
 - Use `run` for short, generated, or unit-tested code strings.
-- Keep functions registered via `registerFunc` stateless. Use `SeqScriptingContext` or a similar context struct when the function needs to touch engine state.
+- Keep functions registered via `registerFunc` stateless. Use `registerMethod` when the function needs to touch your own state.
 - Lua 5.3 integers are 64-bit signed. Cast flecs entity IDs with `@intCast(entity_id)` before pushing.

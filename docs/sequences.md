@@ -124,7 +124,7 @@ The `update` function returns the time remaining. Return a negative value to sig
 ```zig
 var seqCtx = seq.SeqScriptingContext.init(alloc, world, &seqPlayer);
 defer seqCtx.deinit();
-seqCtx.bindToLua(scriptEng.lua);
+try seqCtx.bindToLua(&scriptEng);
 ```
 
 This registers five Lua globals:

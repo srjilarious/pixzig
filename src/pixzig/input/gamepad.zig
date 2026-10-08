@@ -130,12 +130,12 @@ pub const Gamepad = struct {
 
         const gp = self.handle orelse {
             self.connected = false;
-            self.currState_mut().clear();
+            self.currStatePtr().clear();
             return false;
         };
         self.connected = true;
 
-        var curr = self.currState_mut();
+        var curr = self.currStatePtr();
         var anyPressed: bool = false;
         inline for (@typeInfo(GamepadButton).@"enum".field_values) |field_value| {
             const btn: GamepadButton = @enumFromInt(field_value);
@@ -156,7 +156,7 @@ pub const Gamepad = struct {
         return &self.stateBuffers[self.currIdx];
     }
 
-    fn currState_mut(self: *Gamepad) *GamepadState {
+    fn currStatePtr(self: *Gamepad) *GamepadState {
         return &self.stateBuffers[self.currIdx];
     }
 

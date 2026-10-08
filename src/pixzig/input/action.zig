@@ -360,10 +360,10 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
         /// Reads bindings from a Lua table stored in the global `global_name`.
         /// Each entry is a table with an `action` or `axis` string key and a `type` field.
         /// Supported types: `"key"`, `"mouse_button"`, `"gamepad_button"`, `"chord"`, `"buttons"`, `"gamepad_axis"`, `"mouse_axis"`.
-        pub fn loadFromLua(self: *Self, script: *const ScriptEngine, global_name: [:0]const u8) !void {
+        pub fn loadFromLua(self: *Self, script: *const ScriptEngine, global_name: []const u8) !void {
             const lua = script.lua;
 
-            _ = try lua.getGlobal(global_name);
+            _ = script.getGlobal(global_name);
             defer lua.pop(1);
 
             if (!lua.isTable(-1)) return error.InvalidBindingsTable;
@@ -445,7 +445,7 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
             return &self.digitalActionBuffers[self.currIdx];
         }
 
-        pub fn currDigital_mut(self: *Self) *DigitalActionState {
+        pub fn currDigitalPtr(self: *Self) *DigitalActionState {
             return &self.digitalActionBuffers[self.currIdx];
         }
 
@@ -453,11 +453,11 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
             return &self.digitalActionBuffers[self.prevIdx];
         }
 
-        pub fn currAnalog(self: *const Self) *const AxisActionState {
+        pub fn currAxis(self: *const Self) *const AxisActionState {
             return &self.axisActionBuffers[self.currIdx];
         }
 
-        pub fn currAxis_mut(self: *Self) *AxisActionState {
+        pub fn currAxisPtr(self: *Self) *AxisActionState {
             return &self.axisActionBuffers[self.currIdx];
         }
 
@@ -503,7 +503,7 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
             self.currIdx = self.prevIdx;
             self.prevIdx = temp;
 
-            var curr = self.currDigital_mut();
+            var curr = self.currDigitalPtr();
             curr.clear();
 
             for (self.digitalBindings.items) |binding| {
@@ -521,7 +521,7 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
                 }
             }
 
-            var currAxes = self.currAxis_mut();
+            var currAxes = self.currAxisPtr();
             currAxes.clear();
 
             for (self.axisBindings.items) |binding| {
@@ -577,7 +577,7 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
         /// Returns the current value of an analog axis in [-1, +1].
         pub fn axis(self: *const Self, ax: Axes) f32 {
             const axisIdx = helpers.getIndexForAxis(ax);
-            return self.currAnalog().axes[axisIdx];
+            return self.currAxis().axes[axisIdx];
         }
 
         /// True on the first tick the action becomes held (rising edge).

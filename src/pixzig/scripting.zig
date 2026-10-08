@@ -33,17 +33,62 @@ pub const ScriptEngine = struct {
     /// stateless functions here; use a context struct (see
     /// `sequencer.SeqScriptingContext`) when the function needs to touch
     /// engine state.
-    pub fn registerFunc(self: *ScriptEngine, name: [:0]const u8, comptime func: LuaFunc) !void {
+    pub fn registerFunc(self: *ScriptEngine, name: []const u8, comptime func: LuaFunc) !void {
         self.lua.pushFunction(ziglua.wrap(func));
-        self.lua.setGlobal(name);
+        self.setGlobal(name);
+    }
+
+    /// Registers `method` as a global Lua function named `name` that is
+    /// called with `ctx`, so a binding can reach its own state without a
+    /// global. `ctx` is stored as a light userdata upvalue and must outlive
+    /// the Lua state (or the function must be unregistered first).
+    pub fn registerMethod(
+        self: *ScriptEngine,
+        comptime T: type,
+        ctx: *T,
+        name: []const u8,
+        comptime method: fn (*T, *Lua) i32,
+    ) !void {
+        const Thunk = struct {
+            fn call(lua: *Lua) i32 {
+                const self_ptr = lua.toUserdata(T, Lua.upvalueIndex(1)) catch {
+                    lua.raiseErrorStr("registerMethod: missing context upvalue", .{});
+                };
+                return method(self_ptr, lua);
+            }
+        };
+        self.lua.pushLightUserdata(ctx);
+        self.lua.pushClosure(ziglua.wrap(Thunk.call), 1);
+        self.setGlobal(name);
+    }
+
+    /// Pops the value on top of the stack into the global `name`.
+    pub fn setGlobal(self: *ScriptEngine, name: []const u8) void {
+        self.lua.pushGlobalTable();
+        _ = self.lua.pushString(name);
+        self.lua.rotate(-3, -1); // value, globals, name -> globals, name, value
+        self.lua.setTable(-3);
+        self.lua.pop(1);
+    }
+
+    /// Pushes the global `name` onto the stack and returns its type.
+    pub fn getGlobal(self: *const ScriptEngine, name: []const u8) ziglua.LuaType {
+        self.lua.pushGlobalTable();
+        _ = self.lua.pushString(name);
+        const kind = self.lua.getTable(-2);
+        self.lua.remove(-2);
+        return kind;
     }
 
     /// Compiles and runs an inline Lua code string. On a syntax or runtime
     /// error, logs the Lua error message and returns `error.SyntaxError` /
     /// `error.ScriptError`.
-    pub fn run(self: *ScriptEngine, code: [:0]const u8) !void {
+    pub fn run(self: *ScriptEngine, code: []const u8) !void {
+        const codeZ = try std.mem.concatWithSentinel(self.alloc, u8, &.{code}, 0);
+        defer self.alloc.free(codeZ);
+
         // Compile a line of Lua code
-        self.lua.loadString(code) catch {
+        self.lua.loadString(codeZ) catch {
             // If there was an error, Lua will place an error string on the top of the stack.
             // Here we print out the string to inform the user of the issue.
             std.log.err("{s}\n", .{self.lua.toString(-1) catch unreachable});
@@ -66,7 +111,7 @@ pub const ScriptEngine = struct {
     /// executable's own directory (see `paths`), so a packaged game finds
     /// its scripts wherever it is launched from. Raises the same errors as
     /// `run()` on syntax or runtime failure.
-    pub fn runScript(self: *ScriptEngine, file: [:0]const u8) !void {
+    pub fn runScript(self: *ScriptEngine, file: []const u8) !void {
         const resolved = try paths.resolveZ(self.alloc, file);
         defer self.alloc.free(resolved);
         try self.lua.doFile(resolved);
@@ -84,10 +129,10 @@ pub const ScriptEngine = struct {
     pub fn loadStruct(
         self: *const ScriptEngine,
         comptime T: type,
-        globalName: [:0]const u8,
+        globalName: []const u8,
     ) !T {
         // Push the global `config` table onto the stack
-        _ = try self.lua.getGlobal(globalName);
+        _ = self.getGlobal(globalName);
 
         // Ensure the global `config` is a table
         if (!self.lua.isTable(-1)) {

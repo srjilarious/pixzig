@@ -189,7 +189,7 @@ pub fn mouseEdgesTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = alloc;
 
     var mouse = Mouse.init();
-    mouse.curr_mut().set(.left, true);
+    mouse.currPtr().set(.left, true);
     try testz.expectTrue(mouse.down(.left));
     try testz.expectTrue(mouse.pressed(.left));
 
@@ -197,7 +197,7 @@ pub fn mouseEdgesTest(io: std.Io, alloc: std.mem.Allocator) !void {
     try testz.expectTrue(mouse.down(.left));
     try testz.expectFalse(mouse.pressed(.left));
 
-    mouse.curr_mut().set(.left, false);
+    mouse.currPtr().set(.left, false);
     try testz.expectTrue(mouse.released(.left));
 }
 
@@ -208,8 +208,8 @@ pub fn mouseScrollTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = alloc;
 
     var mouse = Mouse.init();
-    mouse.curr_mut().scrollDelta.y += 1.0;
-    mouse.curr_mut().scrollDelta.y += 2.0;
+    mouse.currPtr().scrollDelta.y += 1.0;
+    mouse.currPtr().scrollDelta.y += 2.0;
     try testz.expectEqual(mouse.scroll().y, 3.0);
 
     mouse.finishTick();
@@ -223,8 +223,8 @@ pub fn mouseDeltaTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = alloc;
 
     var mouse = Mouse.init();
-    mouse.curr_mut().addRawMotion(10.0, 11.0, 3.0, 4.0);
-    mouse.curr_mut().addRawMotion(12.0, 10.0, 2.0, -1.0);
+    mouse.currPtr().addRawMotion(10.0, 11.0, 3.0, 4.0);
+    mouse.currPtr().addRawMotion(12.0, 10.0, 2.0, -1.0);
 
     try testz.expectEqual(mouse.delta().x, 5.0);
     try testz.expectEqual(mouse.delta().y, 3.0);

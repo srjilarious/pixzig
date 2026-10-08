@@ -5,39 +5,29 @@ const Delay = pixzig.utils.Delay;
 const FpsCounter = pixzig.utils.FpsCounter;
 
 const imgui = pixzig.imgui;
-const scripting = pixzig.scripting;
-const console = pixzig.console;
 const manifest_options = @import("manifest_options");
 const AppRunner = pixzig.AppRunner(App, .{
     // The console reads typed characters through Keyboard.text(), which
     // needs the OS text-input machinery armed.
     .inputOpts = .{ .mouse = true, .textInput = true },
     .manifestOpts = manifest_options,
+    // The engine owns the Lua state and the console bound to it
+    // (`eng.scripts`, `eng.console`) and tears both down on shutdown.
+    .scripting = true,
+    .console = .{},
 });
 const UiContext = imgui.UiContext(AppRunner.Engine);
 
 pub const App = struct {
     fps: FpsCounter,
     alloc: std.mem.Allocator,
-    script: *scripting.ScriptEngine,
-    cons: *console.Console,
     ui: UiContext,
     delay: Delay = .{ .max = 120 },
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app: *App = try alloc.create(App);
-
-        const script = try alloc.create(scripting.ScriptEngine);
-        script.* = try scripting.ScriptEngine.init(alloc);
-        const console_size = eng.viewport.logicalSize.asVec2U();
         app.* = .{
             .alloc = alloc,
-            .script = script,
-            .cons = try console.Console.init(
-                alloc,
-                script,
-                .{ .displaySize = console_size },
-            ),
             .ui = UiContext.init(eng),
             .fps = FpsCounter.init(),
         };
@@ -48,11 +38,6 @@ pub const App = struct {
 
     pub fn deinit(self: *App) void {
         std.log.info("Deiniting application.", .{});
-        self.cons.deinit();
-
-        self.script.deinit();
-        self.alloc.destroy(self.script);
-
         self.alloc.destroy(self);
     }
 
@@ -74,7 +59,7 @@ pub const App = struct {
 
         eng.renderer.begin(.logical);
         self.ui.begin();
-        self.cons.draw(&self.ui);
+        eng.console.draw(&self.ui);
         self.ui.end();
         eng.renderer.end();
 

@@ -57,18 +57,17 @@ const AppStateMgr = pixzig.gamestate.GameStateMgr(
 );
 ```
 
-The compiler validates that the number of types matches the enum variant count.
+The compiler validates that the number of types matches the enum variant count, and that the enum's values run 0..N-1 in declaration order (the default when you don't assign values).
 
 ## Initialising with State Instances
 
-Pass state instances as `*anyopaque` pointers:
+Pass a tuple of pointers to the states, in the same order. Its type is `AppStateMgr.StatePtrs`, so a missing state or a pointer to the wrong type is a compile error:
 
 ```zig
 var stateA = StateA{};
 var stateB = StateB{};
-var stateArr = [_]*anyopaque{ &stateA, &stateB };
 
-const mgr = AppStateMgr.init(stateArr[0..]);
+const mgr = AppStateMgr.init(.{ &stateA, &stateB });
 ```
 
 ## Using the Manager in App
@@ -95,16 +94,15 @@ pub const App = struct {
 ## Full Example (main)
 
 ```zig
-pub fn main() !void {
-    const alloc = std.heap.c_allocator;
-    const appRunner = try AppRunner.init("State Test", alloc, .{});
+pub fn main(init: std.process.Init) !void {
+    const appRunner = try AppRunner.init("State Test", init.gpa, .{});
     defer appRunner.deinit();
 
     var stateA = StateA{};
     var stateB = StateB{};
-    var statesArr = [_]*anyopaque{ &stateA, &stateB };
 
-    const app = try App.init(alloc, statesArr[0..]);
+    // App.init takes `states: AppStateMgr.StatePtrs` and passes it to AppStateMgr.init.
+    const app = try App.init(init.gpa, .{ &stateA, &stateB });
     defer app.deinit();
 
     appRunner.run(app);

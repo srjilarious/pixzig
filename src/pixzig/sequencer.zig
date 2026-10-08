@@ -6,7 +6,9 @@ const common = @import("./common.zig");
 const sprites = @import("./renderer/sprites.zig");
 const flecs = @import("zflecs");
 const ziglua = @import("ziglua");
+const scripting = @import("./scripting.zig");
 const Lua = ziglua.Lua;
+const ScriptEngine = scripting.ScriptEngine;
 const Vec2F = common.Vec2F;
 const Color = common.Color;
 const Sprite = sprites.Sprite;
@@ -370,17 +372,16 @@ pub const SequencePlayer = struct {
 // Lua scripting bridge
 // ----------------------------------------------------------------------------
 
-/// Maximum number of in-progress sequences buildable from Lua at once.
-const MAX_PENDING_SEQS: usize = 16;
-
-/// Bridges Lua scripting with the sequence system. Bind it to a Lua state via
-/// bindToLua(), then Lua scripts can call seq_new / seq_wait / seq_move_to /
+/// Bridges Lua scripting with the sequence system. Bind it to a script engine
+/// via bindToLua(), then Lua scripts can call seq_new / seq_wait / seq_move_to /
 /// seq_set_actor_state / seq_play to build and queue sequences.
 pub const SeqScriptingContext = struct {
     alloc: std.mem.Allocator,
     world: *flecs.world_t,
     player: *SequencePlayer,
-    pending: [MAX_PENDING_SEQS]?Sequence,
+    /// In-progress sequences, indexed by the handle `seq_new` returned. A slot
+    /// goes back to null once `seq_play` submits it, and is reused.
+    pending: std.ArrayList(?Sequence),
 
     pub fn init(
         alloc: std.mem.Allocator,
@@ -391,116 +392,95 @@ pub const SeqScriptingContext = struct {
             .alloc = alloc,
             .world = world,
             .player = player,
-            .pending = @splat(null),
+            .pending = .empty,
         };
     }
 
     pub fn deinit(self: *SeqScriptingContext) void {
-        for (&self.pending) |*slot| {
+        for (self.pending.items) |*slot| {
             if (slot.*) |*s| s.deinit(self.alloc);
-            slot.* = null;
         }
+        self.pending.deinit(self.alloc);
     }
 
-    /// Register seq_* globals into the Lua state. The context must remain valid
-    /// while Lua can call the registered functions.
-    pub fn bindToLua(self: *SeqScriptingContext, lua: *Lua) void {
-        lua.pushLightUserdata(self);
-        lua.pushClosure(ziglua.wrap(luaSeqNew), 1);
-        lua.setGlobal("seq_new");
-        lua.pushLightUserdata(self);
-        lua.pushClosure(ziglua.wrap(luaSeqWait), 1);
-        lua.setGlobal("seq_wait");
-        lua.pushLightUserdata(self);
-        lua.pushClosure(ziglua.wrap(luaSeqMoveTo), 1);
-        lua.setGlobal("seq_move_to");
-        lua.pushLightUserdata(self);
-        lua.pushClosure(ziglua.wrap(luaSeqSetActorState), 1);
-        lua.setGlobal("seq_set_actor_state");
-        lua.pushLightUserdata(self);
-        lua.pushClosure(ziglua.wrap(luaSeqPlay), 1);
-        lua.setGlobal("seq_play");
+    /// Register seq_* globals into the script engine's Lua state. The context
+    /// must remain valid while Lua can call the registered functions.
+    pub fn bindToLua(self: *SeqScriptingContext, script: *ScriptEngine) !void {
+        try script.registerMethod(SeqScriptingContext, self, "seq_new", luaSeqNew);
+        try script.registerMethod(SeqScriptingContext, self, "seq_wait", luaSeqWait);
+        try script.registerMethod(SeqScriptingContext, self, "seq_move_to", luaSeqMoveTo);
+        try script.registerMethod(SeqScriptingContext, self, "seq_set_actor_state", luaSeqSetActorState);
+        try script.registerMethod(SeqScriptingContext, self, "seq_play", luaSeqPlay);
+    }
+
+    /// The pending sequence for a Lua handle, or null if it's out of range or
+    /// already played.
+    fn pendingSeq(self: *SeqScriptingContext, handle: ziglua.Integer) ?*Sequence {
+        if (handle < 0 or handle >= self.pending.items.len) return null;
+        const slot = &self.pending.items[@intCast(handle)];
+        return if (slot.*) |*s| s else null;
     }
 };
 
-// --- Lua C function implementations -----------------------------------------
-
-fn luaSeqContext(lua: *Lua) ?*SeqScriptingContext {
-    return lua.toUserdata(SeqScriptingContext, Lua.upvalueIndex(1)) catch null;
-}
+// --- Lua function implementations --------------------------------------------
 
 /// seq_new() -> handle:integer  — allocate a new pending sequence slot.
-fn luaSeqNew(lua: *Lua) i32 {
-    const ctx = luaSeqContext(lua) orelse {
-        lua.pushInteger(-1);
-        return 1;
-    };
-    for (&ctx.pending, 0..) |*slot, i| {
+fn luaSeqNew(ctx: *SeqScriptingContext, lua: *Lua) i32 {
+    for (ctx.pending.items, 0..) |*slot, i| {
         if (slot.* == null) {
             slot.* = Sequence.init(ctx.alloc);
             lua.pushInteger(@intCast(i));
             return 1;
         }
     }
-    lua.pushInteger(-1); // no free slot
+    ctx.pending.append(ctx.alloc, Sequence.init(ctx.alloc)) catch {
+        lua.pushInteger(-1); // out of memory
+        return 1;
+    };
+    lua.pushInteger(@intCast(ctx.pending.items.len - 1));
     return 1;
 }
 
 /// seq_wait(handle, ms) — append a WaitStep to the pending sequence.
-fn luaSeqWait(lua: *Lua) i32 {
-    const ctx = luaSeqContext(lua) orelse return 0;
+fn luaSeqWait(ctx: *SeqScriptingContext, lua: *Lua) i32 {
     const handle = lua.toInteger(1) catch return 0;
     const ms = lua.toNumber(2) catch return 0;
-    if (handle < 0 or handle >= @as(ziglua.Integer, MAX_PENDING_SEQS)) return 0;
-    const uhandle: usize = @intCast(handle);
-    if (ctx.pending[uhandle] != null) {
-        const s = &ctx.pending[uhandle].?;
+    if (ctx.pendingSeq(handle)) |s| {
         s.add(ctx.alloc, WaitStep.init(ctx.alloc, ms) catch return 0) catch {};
     }
     return 0;
 }
 
 /// seq_move_to(handle, entity_id, x, y, ms) — append a MoveToStep.
-fn luaSeqMoveTo(lua: *Lua) i32 {
-    const ctx = luaSeqContext(lua) orelse return 0;
+fn luaSeqMoveTo(ctx: *SeqScriptingContext, lua: *Lua) i32 {
     const handle = lua.toInteger(1) catch return 0;
     const entityId: flecs.entity_t = @intCast(lua.toInteger(2) catch return 0);
     const x: f32 = @floatCast(lua.toNumber(3) catch return 0);
     const y: f32 = @floatCast(lua.toNumber(4) catch return 0);
     const ms = lua.toNumber(5) catch return 0;
-    if (handle < 0 or handle >= @as(ziglua.Integer, MAX_PENDING_SEQS)) return 0;
-    const uhandle: usize = @intCast(handle);
-    if (ctx.pending[uhandle] != null) {
-        const s = &ctx.pending[uhandle].?;
+    if (ctx.pendingSeq(handle)) |s| {
         s.add(ctx.alloc, MoveToStep.init(ctx.alloc, ctx.world, entityId, .{ .x = x, .y = y }, ms) catch return 0) catch {};
     }
     return 0;
 }
 
 /// seq_set_actor_state(handle, entity_id, state_name) — append a SetActorStateStep.
-fn luaSeqSetActorState(lua: *Lua) i32 {
-    const ctx = luaSeqContext(lua) orelse return 0;
+fn luaSeqSetActorState(ctx: *SeqScriptingContext, lua: *Lua) i32 {
     const handle = lua.toInteger(1) catch return 0;
     const entityId: flecs.entity_t = @intCast(lua.toInteger(2) catch return 0);
     const stateName = lua.toString(3) catch return 0;
-    if (handle < 0 or handle >= @as(ziglua.Integer, MAX_PENDING_SEQS)) return 0;
-    const uhandle: usize = @intCast(handle);
-    if (ctx.pending[uhandle] != null) {
-        const s = &ctx.pending[uhandle].?;
+    if (ctx.pendingSeq(handle)) |s| {
         s.add(ctx.alloc, SetActorStateStep.init(ctx.alloc, ctx.world, entityId, stateName) catch return 0) catch {};
     }
     return 0;
 }
 
 /// seq_play(handle) — submit the sequence to the SequencePlayer and free the slot.
-fn luaSeqPlay(lua: *Lua) i32 {
-    const ctx = luaSeqContext(lua) orelse return 0;
+fn luaSeqPlay(ctx: *SeqScriptingContext, lua: *Lua) i32 {
     const handle = lua.toInteger(1) catch return 0;
-    if (handle < 0 or handle >= @as(ziglua.Integer, MAX_PENDING_SEQS)) return 0;
-    const uhandle: usize = @intCast(handle);
-    if (ctx.pending[uhandle]) |seq_val| {
-        ctx.player.add(seq_val) catch {};
-        ctx.pending[uhandle] = null;
+    if (ctx.pendingSeq(handle)) |s| {
+        ctx.player.add(s.*) catch {};
+        ctx.pending.items[@intCast(handle)] = null;
     }
     return 0;
 }

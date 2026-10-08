@@ -24,14 +24,12 @@ pub const zopengl = @import("zopengl");
 pub const gl = zopengl.bindings;
 pub const zmath = @import("zmath");
 pub const zaudio = @import("zaudio");
-// pub const zgui = @import("zgui");
 pub const ziglua = @import("ziglua");
 pub const flecs = @import("zflecs");
 pub const xml = @import("xml");
 pub const stb_tt = @import("stb_truetype");
 
 pub const common = @import("./common.zig");
-pub const comp = @import("./comp.zig");
 pub const utils = @import("./utils.zig");
 pub const platform = @import("./platform.zig");
 pub const shaders = @import("./renderer/shaders.zig");
@@ -45,7 +43,6 @@ pub const pixel_buffer = @import("./renderer/pixel_buffer.zig");
 pub const quad3d = @import("./renderer/quad3d_batch.zig");
 pub const audio = @import("./audio.zig");
 pub const sequencer = @import("./sequencer.zig");
-pub const system = @import("./system.zig");
 pub const tile = @import("./tile.zig");
 pub const gamestate = @import("./gamestate.zig");
 pub const scripting = @import("./scripting.zig");
@@ -59,7 +56,16 @@ pub const AssetKind = assets.AssetKind;
 pub const ManifestSource = assets.ManifestSource;
 pub const file_watcher = @import("./file_watcher.zig");
 pub const FileWatcher = file_watcher.FileWatcher;
-pub const GlTestContext = @import("./test_context.zig").GlTestContext;
+
+/// Build and test plumbing, not game API: the root wrapper `buildGame`
+/// generates uses `system.panic`/`system.std_options` (a game with
+/// `wrap_root = false` re-exports them itself), and the unit tests use
+/// `GlTestContext` for a hidden GL window.
+pub const internal = struct {
+    pub const system = @import("./system.zig");
+    pub const comp = @import("./comp.zig");
+    pub const GlTestContext = @import("./test_context.zig").GlTestContext;
+};
 
 pub const windowing = @import("./window.zig");
 pub const WindowState = windowing.WindowState;
@@ -160,6 +166,15 @@ pub const EngineOptions = struct {
     /// in the boot group are available for `renderInitOpts.font = .{ .id = ... }`.
     /// The engine owns the manifest and deinits it on shutdown.
     manifestOpts: ?type = null,
+
+    /// Create a Lua `ScriptEngine` the engine owns, reached as `eng.scripts`.
+    /// It is created after the renderer and closed before it on shutdown.
+    scripting: bool = false,
+
+    /// Create a script console the engine owns, reached as `eng.console`
+    /// (draw it with `eng.console.draw(&ui)`). Requires `scripting`. A null
+    /// `displaySize` sizes it to the logical resolution.
+    console: ?console.ConsoleOpts = null,
 };
 
 /// Runtime initialization options for the Pixzig Engine.  These options are
@@ -322,8 +337,18 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
         /// `DisabledAudioEngine`, whose methods are compile errors naming the flag.
         audio: if (engOpts.audioOpts.enabled) audio.AudioEngine else audio.DisabledAudioEngine = undefined,
         manifest: if (engOpts.manifestOpts != null) assets.AssetManifest else void,
+        /// The engine's Lua state when `scripting` is set.
+        scripts: if (engOpts.scripting) ScriptEngine else void,
+        /// The engine's script console when `console` is set. Bound to `scripts`.
+        console: if (engOpts.console != null) *console.Console else void,
 
         const Self = @This();
+
+        comptime {
+            if (engOpts.console != null and !engOpts.scripting) {
+                @compileError("EngineOptions.console requires EngineOptions.scripting = true");
+            }
+        }
         pub const Renderer = renderer.Renderer(engOpts.rendererOpts);
         pub const Inputs = input.InputManager;
 
@@ -410,6 +435,8 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
                 .resources = ResourceManager.init(allocator),
                 .inputs = input.InputManager.init(engOpts.inputOpts),
                 .manifest = if (engOpts.manifestOpts != null) undefined else {},
+                .scripts = if (engOpts.scripting) undefined else {},
+                .console = if (engOpts.console != null) undefined else {},
             };
             errdefer {
                 eng.resources.deinit();
@@ -436,6 +463,20 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
             eng.enableVSync(options.vsync);
 
             // ----------------------------------------------------------------
+            if (engOpts.scripting) {
+                std.log.info("Initializing Script Engine.", .{});
+                eng.scripts = try ScriptEngine.init(allocator);
+            }
+            errdefer if (engOpts.scripting) eng.scripts.deinit();
+
+            if (engOpts.console) |consoleOpts| {
+                var opts = consoleOpts;
+                if (opts.displaySize == null) opts.displaySize = eng.viewport.logicalSize.asVec2U();
+                eng.console = try console.Console.init(allocator, &eng.scripts, opts);
+            }
+            errdefer if (engOpts.console != null) eng.console.deinit();
+
+            // ----------------------------------------------------------------
             if (engOpts.audioOpts.enabled) {
                 std.log.info("Initializing Audio Engine.", .{});
                 eng.audio = try audio.AudioEngine.init(allocator, engOpts.audioOpts);
@@ -452,6 +493,10 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
             if (engOpts.audioOpts.enabled) {
                 self.audio.deinit();
             }
+
+            // The console holds a pointer to the script engine, so it goes first.
+            if (engOpts.console != null) self.console.deinit();
+            if (engOpts.scripting) self.scripts.deinit();
 
             self.renderer.deinit();
             if (comptime engOpts.manifestOpts != null) self.manifest.deinit();

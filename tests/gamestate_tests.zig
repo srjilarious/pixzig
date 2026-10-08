@@ -92,13 +92,6 @@ const Mgr2 = pixzig.gamestate.GameStateMgr(MockEngine, States2, &[_]type{ StateA
 const States3 = enum { A, B, C };
 const Mgr3 = pixzig.gamestate.GameStateMgr(MockEngine, States3, &[_]type{ StateA, StateB, StateC });
 
-fn makeMgr2() struct { mgr: Mgr2, a: StateA, b: StateB } {
-    var r: struct { mgr: Mgr2, a: StateA, b: StateB } = undefined;
-    r.a = StateA{};
-    r.b = StateB{};
-    return r;
-}
-
 // setCurrState activates the newly selected state.
 pub fn gameStateActivateCalledOnSetTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
@@ -106,8 +99,7 @@ pub fn gameStateActivateCalledOnSetTest(io: std.Io, alloc: std.mem.Allocator) !v
     resetCounters();
     var stateA = StateA{};
     var stateB = StateB{};
-    var arr = [_]*anyopaque{ @ptrCast(&stateA), @ptrCast(&stateB) };
-    var mgr = Mgr2.init(arr[0..]);
+    var mgr = Mgr2.init(.{ &stateA, &stateB });
 
     // Switching from the default index (0 = A) to B:
     // deactivates the previous slot (A), activates B.
@@ -127,8 +119,7 @@ pub fn gameStateSwitchDeactivatesOldActivatesNewTest(io: std.Io, alloc: std.mem.
     resetCounters();
     var stateA = StateA{};
     var stateB = StateB{};
-    var arr = [_]*anyopaque{ @ptrCast(&stateA), @ptrCast(&stateB) };
-    var mgr = Mgr2.init(arr[0..]);
+    var mgr = Mgr2.init(.{ &stateA, &stateB });
 
     // First switch: deactivate default slot (A), activate A.
     mgr.setCurrState(.A);
@@ -149,8 +140,7 @@ pub fn gameStateUpdateDelegatesToActiveStateTest(io: std.Io, alloc: std.mem.Allo
     resetCounters();
     var stateA = StateA{};
     var stateB = StateB{};
-    var arr = [_]*anyopaque{ @ptrCast(&stateA), @ptrCast(&stateB) };
-    var mgr = Mgr2.init(arr[0..]);
+    var mgr = Mgr2.init(.{ &stateA, &stateB });
     var eng = MockEngine{};
 
     mgr.setCurrState(.A);
@@ -173,8 +163,7 @@ pub fn gameStateRenderDelegatesToActiveStateTest(io: std.Io, alloc: std.mem.Allo
     resetCounters();
     var stateA = StateA{};
     var stateB = StateB{};
-    var arr = [_]*anyopaque{ @ptrCast(&stateA), @ptrCast(&stateB) };
-    var mgr = Mgr2.init(arr[0..]);
+    var mgr = Mgr2.init(.{ &stateA, &stateB });
     var eng = MockEngine{};
 
     mgr.setCurrState(.A);
@@ -196,8 +185,7 @@ pub fn gameStateNoLifecycleHooksTest(io: std.Io, alloc: std.mem.Allocator) !void
     var stateA = StateA{};
     var stateB = StateB{};
     var stateC = StateC{};
-    var arr = [_]*anyopaque{ @ptrCast(&stateA), @ptrCast(&stateB), @ptrCast(&stateC) };
-    var mgr = Mgr3.init(arr[0..]);
+    var mgr = Mgr3.init(.{ &stateA, &stateB, &stateC });
     var eng = MockEngine{};
 
     // StateC has no activate/deactivate — this must not panic.
@@ -219,8 +207,7 @@ pub fn gameStateSwitchBackReinvokesLifecycleTest(io: std.Io, alloc: std.mem.Allo
     resetCounters();
     var stateA = StateA{};
     var stateB = StateB{};
-    var arr = [_]*anyopaque{ @ptrCast(&stateA), @ptrCast(&stateB) };
-    var mgr = Mgr2.init(arr[0..]);
+    var mgr = Mgr2.init(.{ &stateA, &stateB });
 
     mgr.setCurrState(.A); // deactivate A(default), activate A
     mgr.setCurrState(.B); // deactivate A, activate B

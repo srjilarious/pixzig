@@ -9,7 +9,7 @@ const TileLayer = tile.TileLayer;
 const TileSet = tile.TileSet;
 const TileMapRenderer = tile.TileMapRenderer;
 const RectF = pixzig.RectF;
-const GlTestContext = pixzig.GlTestContext;
+const GlTestContext = pixzig.internal.GlTestContext;
 
 fn glCtx() *GlTestContext {
     return GlTestContext.get();

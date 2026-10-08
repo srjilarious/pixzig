@@ -101,7 +101,7 @@ pub const InputManager = struct {
             },
             sdl.SDL_EVENT_MOUSE_MOTION => {
                 if (self.mouseEnabled) {
-                    self.mouse.curr_mut().addRawMotion(
+                    self.mouse.currPtr().addRawMotion(
                         event.motion.x,
                         event.motion.y,
                         event.motion.xrel,
@@ -111,7 +111,7 @@ pub const InputManager = struct {
             },
             sdl.SDL_EVENT_MOUSE_BUTTON_DOWN, sdl.SDL_EVENT_MOUSE_BUTTON_UP => {
                 if (!self.mouseEnabled) return;
-                var state = self.mouse.curr_mut();
+                var state = self.mouse.currPtr();
                 state.setRawPos(event.button.x, event.button.y);
                 if (keys.fromSdlMouseButton(event.button.button)) |btn| {
                     state.set(btn, event.button.down);
@@ -125,7 +125,7 @@ pub const InputManager = struct {
                     dx = -dx;
                     dy = -dy;
                 }
-                var state = self.mouse.curr_mut();
+                var state = self.mouse.currPtr();
                 state.scrollDelta.x += dx;
                 state.scrollDelta.y += dy;
             },
@@ -150,8 +150,8 @@ pub const InputManager = struct {
         if (self.mouseEnabled) {
             const raw = self.mouse.rawPos();
             const fb = Vec2F{ .x = raw.x * scaleFactor.x, .y = raw.y * scaleFactor.y };
-            self.mouse.curr_mut().fbPos = fb;
-            self.mouse.curr_mut().logicalPos =
+            self.mouse.currPtr().fbPos = fb;
+            self.mouse.currPtr().logicalPos =
                 viewport.framebufferToLogical(fb) orelse Vec2F{ .x = -1, .y = -1 };
         }
 

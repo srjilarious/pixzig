@@ -60,8 +60,8 @@ pub fn build(b: *std.Build) void {
 `manifestFromDef` defines assets inline; use `manifestFromFile(b, "assets/manifest.json")` instead if the manifest lives as a separate JSON file. See [Asset Manifest](assets.html) for the full manifest format and runtime loading options.
 
 Because `wrap_root` is on by default, game source files do not need to define
-`pub const panic = pixzig.system.panic` or
-`pub const std_options = pixzig.system.std_options`. The generated root wrapper
+`pub const panic = pixzig.internal.system.panic` or
+`pub const std_options = pixzig.internal.system.std_options`. The generated root wrapper
 handles that for native and Emscripten builds, while your module stays focused
 on its `main`, app type, and game code. The wrapper supports either
 `pub fn main() !void` or `pub fn main(init: std.process.Init) !void`.

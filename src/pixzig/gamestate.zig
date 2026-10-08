@@ -13,21 +13,38 @@ pub fn GameStateMgr(
     comptime States: []const type,
 ) type {
 
-    // Constrain the state enum keys to be the same size as the provided states.
+    // Constrain the state enum keys to be the same size as the provided states,
+    // with values 0..N-1 so each key indexes its state directly.
     const numStates = comp.numEnumFields(StateKeysType);
     if (numStates != States.len) {
         @compileError("Number of states in keys enum and provided list must match!");
     }
+    for (@typeInfo(StateKeysType).@"enum".field_values, 0..) |value, idx| {
+        if (value != idx) {
+            @compileError("State keys enum values must be 0..N-1 in declaration order.");
+        }
+    }
 
     // Generate the GameState Manager
     return struct {
-        currStateIdx: usize,
-        states: []*anyopaque,
+        currState: StateKeysType,
+        states: StatePtrs,
 
         const Self = @This();
 
-        pub fn init(states: []*anyopaque) Self {
-            return .{ .currStateIdx = 0, .states = states };
+        /// A tuple of pointers to each state, in `States` order, e.g.
+        /// `.{ &titleState, &playState }`.
+        pub const StatePtrs = blk: {
+            var ptrTypes: [States.len]type = undefined;
+            for (States, 0..) |State, idx| ptrTypes[idx] = *State;
+            break :blk @Tuple(&ptrTypes);
+        };
+
+        /// `states` holds one pointer per entry in `States`, in the same
+        /// order; a missing, extra, or wrongly typed pointer is a compile
+        /// error. The first state starts current.
+        pub fn init(states: StatePtrs) Self {
+            return .{ .currState = @enumFromInt(0), .states = states };
         }
 
         pub fn deinit(self: *Self) void {
@@ -38,58 +55,36 @@ pub fn GameStateMgr(
         /// deactivate on the old state and activate on the new state
         /// if those methods exist.
         pub fn setCurrState(self: *Self, state: StateKeysType) void {
-            const oldState = self.currStateIdx;
-            self.currStateIdx = @intFromEnum(state);
+            std.log.debug("oldState = {t}, currState = {t}", .{ self.currState, state });
 
-            std.log.debug("oldState = {}, currState = {}", .{ oldState, self.currStateIdx });
-
-            // Check to deactivate the old state.
-            inline for (0..States.len) |idx| {
-                if (oldState == idx) {
-                    const stateType = States[idx];
-                    std.log.debug("Deactivating state: {}", .{idx});
-                    if (@hasDecl(stateType, "deactivate")) {
-                        const statePtr: *stateType = @ptrCast(@alignCast(self.states[oldState]));
-                        statePtr.deactivate();
-                    }
-                }
+            switch (self.currState) {
+                inline else => |old| {
+                    const statePtr = self.states[@intFromEnum(old)];
+                    if (@hasDecl(@TypeOf(statePtr.*), "deactivate")) statePtr.deactivate();
+                },
             }
 
-            // Check to activate the new state.
-            inline for (0..States.len) |idx| {
-                if (self.currStateIdx == idx) {
-                    const stateType = States[idx];
-                    std.log.debug("Activating state: {}", .{idx});
-                    if (@hasDecl(stateType, "activate")) {
-                        const statePtr: *stateType = @ptrCast(@alignCast(self.states[self.currStateIdx]));
-                        statePtr.activate();
-                    }
-                }
+            self.currState = state;
+            switch (state) {
+                inline else => |new| {
+                    const statePtr = self.states[@intFromEnum(new)];
+                    if (@hasDecl(@TypeOf(statePtr.*), "activate")) statePtr.activate();
+                },
             }
         }
 
-        /// Calls the update method on the current state if it exists, passing
-        /// along the engine and delta time.  Returns true if the update was
-        /// handled by the current state, false otherwise.
+        /// Calls the update method on the current state, passing along the
+        /// engine and delta time, and returns its result.
         pub fn update(self: *Self, eng: *Engine, deltaMs: f64) bool {
-            inline for (0..States.len) |idx| {
-                if (self.currStateIdx == idx) {
-                    const stateType = States[idx];
-                    const statePtr: *stateType = @ptrCast(@alignCast(self.states[idx]));
-                    return statePtr.update(eng, deltaMs);
-                }
+            switch (self.currState) {
+                inline else => |curr| return self.states[@intFromEnum(curr)].update(eng, deltaMs),
             }
-            return false;
         }
 
-        /// Calls the render method on the current state if it exists.
+        /// Calls the render method on the current state.
         pub fn render(self: *Self, eng: *Engine) void {
-            inline for (0..States.len) |idx| {
-                if (self.currStateIdx == idx) {
-                    const stateType = States[idx];
-                    const statePtr: *stateType = @ptrCast(@alignCast(self.states[idx]));
-                    return statePtr.render(eng);
-                }
+            switch (self.currState) {
+                inline else => |curr| self.states[@intFromEnum(curr)].render(eng),
             }
         }
     };

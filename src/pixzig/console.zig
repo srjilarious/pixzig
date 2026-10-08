@@ -21,8 +21,10 @@ pub const ConsoleOpts = struct {
     /// Whether the console is enabled by default.
     enabledByDefault: bool = true,
 
-    /// Pixel width of the display area, less offset on either side.
-    displaySize: Vec2U = .{ .x = 800, .y = 600 },
+    /// Pixel size of the display area, less offset on either side. Null is
+    /// 800x600 for a standalone console; an engine-owned console
+    /// (`EngineOptions.console`) uses the logical resolution instead.
+    displaySize: ?Vec2U = null,
 
     /// Padding in pixels between the text and the edge of the console window.
     padding: Vec2I = .{ .x = 10, .y = 10 },
@@ -72,8 +74,9 @@ pub const Console = struct {
         const stored_command_buffer = try alloc.allocSentinel(u8, inputLen, 0);
         errdefer alloc.free(stored_command_buffer);
 
-        const right: f32 = @floatFromInt(opts.displaySize.x - @as(usize, @intCast(opts.offs.x)));
-        const bottom: f32 = @floatFromInt(opts.displaySize.y - @as(usize, @intCast(opts.offs.y)));
+        const displaySize = opts.displaySize orelse Vec2U{ .x = 800, .y = 600 };
+        const right: f32 = @floatFromInt(displaySize.x - @as(usize, @intCast(opts.offs.x)));
+        const bottom: f32 = @floatFromInt(displaySize.y - @as(usize, @intCast(opts.offs.y)));
 
         console.* = .{
             .alloc = alloc,

@@ -253,7 +253,7 @@ pub fn luaSeqWaitBuildsAndRunsTest(io: std.Io, alloc: std.mem.Allocator) !void {
     var scriptEng = try ScriptEngine.init(alloc);
     defer scriptEng.deinit();
 
-    seqCtx.bindToLua(scriptEng.lua);
+    try seqCtx.bindToLua(&scriptEng);
 
     const script: [:0]const u8 =
         \\local h = seq_new()
@@ -292,7 +292,7 @@ pub fn luaSeqMoveToReachesTargetTest(io: std.Io, alloc: std.mem.Allocator) !void
     var scriptEng = try ScriptEngine.init(alloc);
     defer scriptEng.deinit();
 
-    seqCtx.bindToLua(scriptEng.lua);
+    try seqCtx.bindToLua(&scriptEng);
 
     // Push entity ID as a Lua global so the script can reference it.
     scriptEng.lua.pushInteger(@intCast(entity));
@@ -334,7 +334,7 @@ pub fn luaSeqMultipleStepsRunInOrderTest(io: std.Io, alloc: std.mem.Allocator) !
     var scriptEng = try ScriptEngine.init(alloc);
     defer scriptEng.deinit();
 
-    seqCtx.bindToLua(scriptEng.lua);
+    try seqCtx.bindToLua(&scriptEng);
 
     scriptEng.lua.pushInteger(@intCast(entity));
     scriptEng.lua.setGlobal("test_entity");
@@ -384,8 +384,8 @@ pub fn luaSeqContextsArePerVmTest(io: std.Io, alloc: std.mem.Allocator) !void {
     var script_eng_b = try ScriptEngine.init(alloc);
     defer script_eng_b.deinit();
 
-    seq_ctx_a.bindToLua(script_eng_a.lua);
-    seq_ctx_b.bindToLua(script_eng_b.lua);
+    try seq_ctx_a.bindToLua(&script_eng_a);
+    try seq_ctx_b.bindToLua(&script_eng_b);
 
     try script_eng_a.run(
         \\local h = seq_new()
@@ -407,4 +407,42 @@ pub fn luaSeqContextsArePerVmTest(io: std.Io, alloc: std.mem.Allocator) !void {
 
     player_b.update(20.0);
     try testz.expectEqual(player_b.sequences.items.len, 0);
+}
+
+// seq_new is no longer capped at a fixed slot count, and a played handle's
+// slot is reused.
+pub fn luaSeqNewGrowsAndReusesSlotsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    const world = makeWorld(.{Sprite});
+    defer _ = flecs.fini(world);
+
+    var player = seq.SequencePlayer.init(alloc);
+    defer player.deinit();
+
+    var seqCtx = seq.SeqScriptingContext.init(alloc, world, &player);
+    defer seqCtx.deinit();
+
+    var scriptEng = try ScriptEngine.init(alloc);
+    defer scriptEng.deinit();
+    try seqCtx.bindToLua(&scriptEng);
+
+    try scriptEng.run(
+        \\handles = {}
+        \\for i = 1, 40 do handles[i] = seq_new() end
+        \\last = handles[40]
+        \\seq_wait(handles[3], 10)
+        \\seq_play(handles[3])
+        \\reused = seq_new()
+    );
+
+    _ = scriptEng.getGlobal("last");
+    const last = try scriptEng.lua.toInteger(-1);
+    scriptEng.lua.pop(1);
+    try testz.expectEqual(last, 39);
+
+    _ = scriptEng.getGlobal("reused");
+    const reused = try scriptEng.lua.toInteger(-1);
+    scriptEng.lua.pop(1);
+    try testz.expectEqual(reused, 2);
+    try testz.expectEqual(player.sequences.items.len, 1);
 }
