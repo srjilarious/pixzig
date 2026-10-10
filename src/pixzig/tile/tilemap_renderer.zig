@@ -37,7 +37,7 @@ fn entryLessThan(_: void, a: LayerEntry, b: LayerEntry) bool {
 /// one chunked layer renderer per layer.
 ///
 /// The renderer is built from a map *name*, and works the rest out itself: it
-/// acquires the tilemap handle, borrows the built-in texture shader, and
+/// looks up the tilemap handle and the built-in texture shader, and
 /// resolves each layer's tileset image (the `<image source>` in the .tmx) to a
 /// texture via `ResourceManager.tilesetTexture`. Nothing else needs passing in,
 /// and the render calls take only a camera and a viewport.
@@ -56,12 +56,12 @@ pub const TileMapRenderer = struct {
     alloc: std.mem.Allocator,
     /// Where new layer textures come from, including after a reload.
     resources: *ResourceManager,
-    /// Our own reference to the map, released in `deinit`. Re-acquired by
-    /// `sync` when the .tmx is hot-reloaded.
     map: *TileMapHandle,
+    /// `map.version` the layers were built from; `sync` rebuilds when the
+    /// map has been reloaded since.
+    mapVersion: u32,
     entries: []LayerEntry,
-    /// Our own reference, so `reload` can still build renderers for newly
-    /// added layers. Released in `deinit`.
+    /// Kept so `reload` can build renderers for newly added layers.
     shader: *ShaderHandle,
 
     const Self = @This();
@@ -69,9 +69,7 @@ pub const TileMapRenderer = struct {
     /// Builds a renderer for the tilemap registered as `mapName` (by
     /// `loadTileMap` or `addTileMap`).
     pub fn init(alloc: std.mem.Allocator, res: *ResourceManager, mapName: []const u8) !Self {
-        const map = try res.acquireTileMap(mapName);
-        errdefer map.release();
-
+        const map = try res.getTileMap(mapName);
         const shader = try res.getShader(shaders.TextureShader);
 
         const entries = try buildEntries(alloc, res, shader, &map.val);
@@ -84,34 +82,33 @@ pub const TileMapRenderer = struct {
             .alloc = alloc,
             .resources = res,
             .map = map,
+            .mapVersion = map.version,
             .entries = entries,
-            .shader = shader.retain(),
+            .shader = shader,
         };
     }
 
     pub fn deinit(self: *Self) void {
         for (self.entries) |*e| e.renderer.deinit();
         self.alloc.free(self.entries);
-        self.shader.release();
-        self.map.release();
     }
 
-    /// The map this renderer draws. Valid until the next `sync`, which swaps
-    /// in the reloaded generation.
+    /// The map this renderer draws. A reload replaces its contents in place,
+    /// so pointers into the old map data are invalid after one.
     pub fn tileMap(self: *const Self) *TileMap {
         return &self.map.val;
     }
 
-    /// Picks up a hot-reloaded .tmx: re-acquires the map handle and rebuilds
-    /// every layer from it. Returns true when that happened, so a caller can
+    /// Picks up a hot-reloaded .tmx: rebuilds every layer from the reloaded
+    /// map. Returns true when that happened, so a caller can
     /// refresh whatever else it derived from the map (camera bounds, object
     /// positions). Every render call does this first, so calling it is only
     /// necessary for those extra derived values.
     ///
     /// A rebuild that fails is logged and leaves the previous layers drawing.
     pub fn sync(self: *Self) bool {
-        if (!self.map.dirty) return false;
-        self.map = self.map.reacquire();
+        if (self.map.version == self.mapVersion) return false;
+        self.mapVersion = self.map.version;
         self.reload() catch |err| {
             std.log.err("TileMapRenderer: could not rebuild after a map reload: {}", .{err});
         };

@@ -31,293 +31,73 @@ const Color8 = common.Color8;
 const RectF = common.RectF;
 const RectI = common.RectI;
 
-/// A pool of refcounted, hot-reloadable assets of type `T`, keyed by a
-/// user-supplied `u32` id. Multiple generations of the same id may coexist:
-/// adding a new version marks any older live version dirty so holders can
-/// notice and re-acquire, while unreferenced older versions are reclaimed
-/// immediately.
+/// A named asset slot. A handle is a pointer to one: the slot is allocated
+/// the first time a name is loaded and stays at that address until the
+/// `ResourceManager` deinits, so a handle never dangles and nothing needs to
+/// be released.
 ///
-/// Handles returned by `add` / `acquire` are heap-allocated and remain at
-/// stable addresses for their full lifetime, so callers may hold raw
-/// `*Handle` pointers across `add` calls.
-///
-/// Each `Handle` carries a back-pointer to its parent `ManagedResource` so
-/// callers only need to store one pointer. Call `handle.release()` to
-/// decrement the refcount, and `handle.reacquire()` to atomically upgrade to
-/// the latest generation after a hot-reload.
-pub fn ManagedResource(comptime ResourceName: []const u8, comptime T: type) type {
+/// Loading the same name again (a hot reload, or a second explicit load)
+/// frees the old value and swaps the new one into the same slot, so
+/// everything holding the handle uses the new asset with no extra code.
+/// Do reloads outside a `begin`/`end` render pass.
+pub fn Resource(comptime T: type, comptime freeFn: fn (*T) void) type {
     return struct {
-        res: std.ArrayList(?*Handle),
-        alloc: std.mem.Allocator,
-        freeFunc: Handle.FreeFunc,
-        id: u32,
-        /// The name the resource is registered under, used in leak and
-        /// error logs. Borrowed: the `ResourceManager` owns the bytes (its
-        /// map key) and frees them only after this resource is deinited.
-        name: []const u8,
-        gen: u32,
-        /// When true, superseded generations are never freed before
-        /// `deinit`, even at refCount 0. The `ResourceManager` sets this for
-        /// textures in debug builds so a borrowed (unreferenced) handle from
-        /// `getTexture` can't dangle after a hot-reload.
-        keepStale: bool = false,
+        val: T,
+        /// Goes up by one every time `replace` swaps in a new value. A holder
+        /// that caches data derived from `val` (a tile mesh built from a map,
+        /// attribute locations looked up in a shader) remembers the version
+        /// it built from and rebuilds when this no longer matches.
+        version: u32 = 0,
 
         const Self = @This();
 
-        /// A reference-counted, generation-tracked handle to an asset of
-        /// type `T`. Obtained via `ManagedResource.acquire`. Holders should
-        /// call `release` when done and `reacquire` when `dirty` is true.
-        pub const Handle = struct {
-            id: u32,
-            generation: u32,
-            refCount: u32,
-            dirty: bool,
-            val: T,
-            parent: *Self,
-
-            pub const FreeFunc = *const fn (T) void;
-
-            /// Upgrades to the latest generation from the parent, releasing
-            /// the current handle when it has been superseded. Returns the
-            /// new handle, or `self` when no newer generation exists yet.
-            pub fn reacquire(self: *Handle) *Handle {
-                const new = self.parent.latest() orelse return self;
-                if (new == self) return self;
-                new.refCount += 1;
-                std.debug.assert(self.refCount > 0);
-                self.refCount -= 1;
-                if (self.refCount == 0 and self.dirty and !self.parent.keepStale) {
-                    self.parent.freeHandle(self);
-                }
-                return new;
-            }
-
-            pub fn release(self: *Handle) void {
-                self.parent.release(self);
-            }
-
-            /// Adds a reference to this exact generation (unlike `acquire`,
-            /// which takes the latest). Pair with `release`.
-            pub fn retain(self: *Handle) *Handle {
-                self.refCount += 1;
-                return self;
-            }
-        };
-
-        pub fn init(alloc: std.mem.Allocator, id: u32, name: []const u8, freeFunc: Handle.FreeFunc) Self {
-            return .{
-                .res = .empty,
-                .alloc = alloc,
-                .freeFunc = freeFunc,
-                .id = id,
-                .name = name,
-                .gen = 0,
-            };
+        /// Frees the current value and stores `new` in its place.
+        pub fn replace(self: *Self, new: T) void {
+            freeFn(&self.val);
+            self.val = new;
+            self.version +%= 1;
         }
 
-        pub fn deinit(self: *Self) void {
-            for (self.res.items) |hOpt| {
-                if (hOpt) |h| {
-                    if (h.refCount != 0) {
-                        std.log.err("{s} '{s}' (generation {}): refCount = {} on deinit, a handle was never released", .{ ResourceName, self.name, h.generation, h.refCount });
-                    }
-                    self.freeFunc(h.val);
-                    self.alloc.destroy(h);
-                }
-            }
-            self.res.deinit(self.alloc);
-        }
-
-        /// Add a new version of the managed resource. Existing versions
-        /// are either marked dirty (if still referenced) or freed
-        /// immediately (if no one holds them).
-        pub fn add(self: *Self, obj: T) !void {
-            // Free unreferenced old versions first. Safe even if the insert
-            // below fails (refCount == 0 means no caller holds these), and
-            // creates null slots that insertHandle can reuse without allocating.
-            for (self.res.items, 0..) |hOpt, i| {
-                if (hOpt) |h| {
-                    if (h.refCount == 0 and !self.keepStale) {
-                        self.freeFunc(h.val);
-                        self.alloc.destroy(h);
-                        self.res.items[i] = null;
-                    }
-                }
-            }
-
-            const handle = try self.alloc.create(Handle);
-            errdefer self.alloc.destroy(handle);
-            handle.* = .{
-                .id = self.id,
-                .generation = self.gen + 1,
-                .refCount = 0,
-                .dirty = false,
-                .val = obj,
-                .parent = self,
-            };
-
-            try self.insertHandle(handle);
-
-            // Only mark still-referenced handles dirty after insertion succeeds.
-            // If insertHandle had failed, marking them dirty would leave callers
-            // with handles that get freed on release even though no new version exists.
-            self.gen += 1;
-            for (self.res.items) |hOpt| {
-                if (hOpt) |h| {
-                    if (h != handle) h.dirty = true;
-                }
-            }
-        }
-
-        /// Undo a just-added generation that has not been acquired by callers.
-        /// Used by multi-resource loaders to roll back partial commits.
-        pub fn rollbackAdd(self: *Self, generation: u32) bool {
-            for (self.res.items, 0..) |hOpt, i| {
-                if (hOpt) |h| {
-                    if (h.generation == generation) {
-                        if (h.refCount != 0) return false;
-                        self.freeFunc(h.val);
-                        self.alloc.destroy(h);
-                        self.res.items[i] = null;
-                        self.recomputeDirtyFlags();
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-        /// Increment the refCount on the latest live handle for the resource.
-        /// Returns null if nothing is registered under `id`.
-        pub fn acquire(self: *Self) ?*Handle {
-            const latestHandle = self.latest() orelse return null;
-            latestHandle.refCount += 1;
-            return latestHandle;
-        }
-
-        /// Decrement the refCount. A dirty handle dropping to refCount == 0
-        /// is freed and its slot reclaimed. Clean handles at refCount == 0
-        /// are retained so subsequent `acquire` calls still hit.
-        pub fn release(self: *Self, handle: *Handle) void {
-            std.debug.assert(handle.refCount > 0);
-            handle.refCount -= 1;
-            if (handle.refCount == 0 and handle.dirty and !self.keepStale) {
-                self.freeHandle(handle);
-            }
-        }
-
-        /// Latest live handle for the resource without bumping refCount.
-        /// Useful for peeking; prefer `acquire` for anything that outlives
-        /// one frame.
-        pub fn get(self: *Self) ?*Handle {
-            return self.latest();
-        }
-
-        fn latest(self: *Self) ?*Handle {
-            var latestHandle: ?*Handle = null;
-            for (self.res.items) |hOpt| {
-                if (hOpt) |h| {
-                    if (latestHandle == null or h.generation > latestHandle.?.generation) {
-                        latestHandle = h;
-                    }
-                }
-            }
-            return latestHandle;
-        }
-
-        fn recomputeDirtyFlags(self: *Self) void {
-            const latestHandle = self.latest();
-            for (self.res.items) |hOpt| {
-                if (hOpt) |h| {
-                    h.dirty = if (latestHandle) |latest_handle|
-                        h.generation < latest_handle.generation
-                    else
-                        false;
-                }
-            }
-        }
-
-        fn insertHandle(self: *Self, handle: *Handle) !void {
-            for (self.res.items) |*slot| {
-                if (slot.* == null) {
-                    slot.* = handle;
-                    return;
-                }
-            }
-            try self.res.append(self.alloc, handle);
-        }
-
-        fn freeHandle(self: *Self, handle: *Handle) void {
-            for (self.res.items, 0..) |hOpt, i| {
-                if (hOpt) |h| {
-                    if (h == handle) {
-                        self.freeFunc(h.val);
-                        self.alloc.destroy(h);
-                        self.res.items[i] = null;
-                        return;
-                    }
-                }
-            }
-            unreachable; // handle wasn't owned by this manager
+        /// Frees the value. Only the owning `ResourceManager` calls this.
+        pub fn free(self: *Self) void {
+            freeFn(&self.val);
         }
     };
 }
 
-/// The atlas stores named, refcounted views over GL textures. A Texture
-/// value owns no GL state itself, but a view added by the ResourceManager
-/// holds a reference on its `TextureImage` generation, released when the
-/// view is reclaimed.
-pub const ManagedTexture = ManagedResource("Texture", Texture);
+/// A named view into a GL texture: a whole image, an atlas frame, or a
+/// subtexture. Views own no GL state, so freeing one does nothing.
+pub const TextureHandle = Resource(Texture, freeTextureView);
 
-/// Debug builds keep superseded texture generations alive until the manager
-/// deinits, so borrowed handles (`getTexture`, `load*` return values) stay
-/// valid across hot-reloads. Release builds reclaim them eagerly.
-pub const keepStaleTextures = builtin.mode == .debug;
+/// A loaded image; owns the GL texture its views draw from. A hot reload
+/// re-uploads into the same GL texture object, so views keep working.
+pub const TextureImageHandle = Resource(TextureImage, freeTextureImage);
 
-/// A TextureImage owns the GL texture handle. Reclaiming a stale
-/// TextureImage deletes the GL handle.
-pub const ManagedTextureImage = ManagedResource("TextureImage", TextureImage);
+/// A Shader owns its GL program + vertex/fragment shaders.
+pub const ShaderHandle = Resource(Shader, freeShader);
 
-/// A Shader owns its GL program + vertex/fragment shaders. The managed resource
-/// stores shaders by value; pointer stability comes from the heap-allocated
-/// `Handle` inside the managed resource.
-pub const ManagedShader = ManagedResource("Shader", Shader);
+/// A FontAtlas owns a GL texture + a char-to-glyph hashmap.
+pub const FontAtlasHandle = Resource(FontAtlas, freeFontAtlas);
 
-/// A FontAtlas owns a GL texture + a char-to-glyph hashmap. Stored by value
-/// inside the managed resource.
-pub const ManagedFont = ManagedResource("Font", FontAtlas);
+/// A TileMap owns allocated tile/layer/tileset data.
+pub const TileMapHandle = Resource(TileMap, freeTileMap);
 
-/// A TileMap owns allocated tile/layer/tileset data. Stored by value inside
-/// the managed resource; the free function calls deinit to release all memory.
-pub const ManagedTileMap = ManagedResource("TileMap", TileMap);
+fn freeTextureView(_: *Texture) void {}
 
-pub const TextureHandle = ManagedTexture.Handle;
-pub const TextureImageHandle = ManagedTextureImage.Handle;
-pub const ShaderHandle = ManagedShader.Handle;
-pub const FontAtlasHandle = ManagedFont.Handle;
-pub const TileMapHandle = ManagedTileMap.Handle;
-
-fn freeTextureView(t: Texture) void {
-    if (t.image) |image| image.release();
-}
-
-fn freeTextureImage(t: TextureImage) void {
+fn freeTextureImage(t: *TextureImage) void {
     gl.deleteTextures(1, &t.texture);
 }
 
-fn freeShader(s: Shader) void {
-    var copy = s;
-    copy.deinit();
+fn freeShader(s: *Shader) void {
+    s.deinit();
 }
 
-fn freeFontAtlas(fa: FontAtlas) void {
-    var copy = fa;
-    copy.deinit();
+fn freeFontAtlas(fa: *FontAtlas) void {
+    fa.deinit();
 }
 
-fn freeTileMap(t: TileMap) void {
-    var copy = t;
-    copy.deinit();
+fn freeTileMap(t: *TileMap) void {
+    t.deinit();
 }
 
 // ---------------------------------------------------------------------------
@@ -436,46 +216,37 @@ const HotReload = struct {
 // ---------------------------------------------------------------------------
 
 /// Owns all loaded game assets: textures, shaders, atlases, fonts, and tilemaps.
-/// Each resource type is stored in a `ManagedResource` pool that supports multiple
-/// generations and ref-counting.
 ///
-/// Every resource type has the same two ways in:
-/// - Borrowed: the `load*` functions, `addSubTexture*`, and the `getX(name)`
-///   family (`getTexture`, `getShader`, `getFontAtlas`, `getTileMap`) return a
-///   handle without taking a reference. Never release it; it stays valid
-///   until the manager deinits (for textures in debug builds even across
-///   hot-reloads; in release builds re-loading the same name frees an
-///   unreferenced older generation). This is the simple path: load, draw,
-///   forget.
-/// - Owned: the `acquireX(name)` family (`acquireTexture`, `acquireShader`,
-///   `acquireFontAtlas`, `acquireTileMap`) bumps the refcount; call
-///   `handle.release()` when done. Use this when something must keep the
-///   resource alive on its own.
+/// Every asset lives in a `Resource` slot keyed by name. The `load*`
+/// functions, `addSubTexture*`, and the `getX(name)` family (`getTexture`,
+/// `getShader`, `getFontAtlas`, `getTileMap`) all return a pointer to that
+/// slot. It stays valid until the manager deinits and is never released:
+/// load, draw, forget.
 ///
-/// A `Sprite`, batch queue or tile renderer given a handle of either kind
-/// retains its own reference and releases it in `deinit`.
+/// Loading a name that is already registered replaces the value in its
+/// slot (see `Resource`), so a `Sprite`, batch or tile renderer holding the
+/// handle picks up the new asset on its next draw. Holders that cache data
+/// derived from an asset compare `handle.version` to notice.
 ///
 /// Relative file paths are resolved by `paths.resolve` against the build's
 /// asset base directory (the executable's own directory once packaged), not
 /// the process's current working directory.
 ///
-/// In debug builds, all file-backed resources are watched via `FileWatcher`.
-/// When a file changes, the resource is reloaded and live handles are marked
-/// dirty so callers can call `handle.reacquire()` to upgrade to the new version.
+/// In debug builds, all file-backed resources are watched via `FileWatcher`
+/// and reloaded in place when their file changes.
 pub const ResourceManager = struct {
-    textures: std.StringHashMap(*ManagedTextureImage),
-    shaders: std.StringHashMap(*ManagedShader),
-    atlas: std.StringHashMap(*ManagedTexture),
-    /// Tracks which frame names each atlas registered so stale frames can be
-    /// removed when the atlas JSON changes during hot-reload.
+    /// Loaded images, keyed by image name. Each owns a GL texture.
+    textures: std.StringHashMap(*TextureImageHandle),
+    shaders: std.StringHashMap(*ShaderHandle),
+    /// Texture views (whole images, atlas frames, subtextures) keyed by the
+    /// name `getTexture` looks up.
+    atlas: std.StringHashMap(*TextureHandle),
+    /// Which frame names each atlas registered, so a reload of the same
+    /// atlas isn't mistaken for a collision with another atlas.
     atlasManifests: std.StringHashMap(std.ArrayListUnmanaged([]const u8)),
-    fonts: std.StringHashMap(*ManagedFont),
-    tilemaps: std.StringHashMap(*ManagedTileMap),
+    fonts: std.StringHashMap(*FontAtlasHandle),
+    tilemaps: std.StringHashMap(*TileMapHandle),
     alloc: std.mem.Allocator,
-    /// Monotonic id assigned to each new ManagedResource the manager owns.
-    /// Lookups inside a managed resource use generations; this id distinguishes
-    /// each managed resource.
-    gid: u32,
     /// File-change watcher used in debug builds for hot-reload. Always null
     /// in release builds (never initialised). The field type is always
     /// `?HotReload` so the struct layout is uniform across build modes.
@@ -483,52 +254,28 @@ pub const ResourceManager = struct {
 
     const Self = @This();
 
-    const TextureLoad = struct {
-        managed: *ManagedTexture,
-        imageManaged: *ManagedTextureImage,
-        atlasGeneration: u32,
-        imageGeneration: u32,
-    };
-
-    const AtlasFrameLoad = struct {
-        managed: *ManagedTexture,
-        generation: u32,
-    };
-
     /// Initializes the resource manager.
     pub fn init(alloc: std.mem.Allocator) Self {
         return .{
-            .textures = std.StringHashMap(*ManagedTextureImage).init(alloc),
-            .shaders = std.StringHashMap(*ManagedShader).init(alloc),
-            .atlas = std.StringHashMap(*ManagedTexture).init(alloc),
+            .textures = std.StringHashMap(*TextureImageHandle).init(alloc),
+            .shaders = std.StringHashMap(*ShaderHandle).init(alloc),
+            .atlas = std.StringHashMap(*TextureHandle).init(alloc),
             .atlasManifests = std.StringHashMap(std.ArrayListUnmanaged([]const u8)).init(alloc),
-            .fonts = std.StringHashMap(*ManagedFont).init(alloc),
-            .tilemaps = std.StringHashMap(*ManagedTileMap).init(alloc),
+            .fonts = std.StringHashMap(*FontAtlasHandle).init(alloc),
+            .tilemaps = std.StringHashMap(*TileMapHandle).init(alloc),
             .alloc = alloc,
-            .gid = 0,
             .hotReload = null,
         };
     }
 
-    /// Frees all managed resources and their backing OpenGL objects.
-    /// All handles must be released before calling this.
+    /// Frees all resources and their backing OpenGL objects. Every handle
+    /// the manager gave out is invalid afterwards.
     pub fn deinit(self: *Self) void {
-        // Views hold references on their images, so free them first.
-        var it = self.atlas.iterator();
-        while (it.next()) |entry| {
-            entry.value_ptr.*.deinit();
-            self.alloc.destroy(entry.value_ptr.*);
-            self.alloc.free(entry.key_ptr.*);
-        }
-        self.atlas.deinit();
-
-        var tit = self.textures.iterator();
-        while (tit.next()) |entry| {
-            entry.value_ptr.*.deinit();
-            self.alloc.destroy(entry.value_ptr.*);
-            self.alloc.free(entry.key_ptr.*);
-        }
-        self.textures.deinit();
+        self.freeSlots(TextureHandle, &self.atlas);
+        self.freeSlots(TextureImageHandle, &self.textures);
+        self.freeSlots(ShaderHandle, &self.shaders);
+        self.freeSlots(FontAtlasHandle, &self.fonts);
+        self.freeSlots(TileMapHandle, &self.tilemaps);
 
         var amit = self.atlasManifests.iterator();
         while (amit.next()) |entry| {
@@ -538,31 +285,35 @@ pub const ResourceManager = struct {
         }
         self.atlasManifests.deinit();
 
-        var sit = self.shaders.iterator();
-        while (sit.next()) |entry| {
-            entry.value_ptr.*.deinit();
-            self.alloc.destroy(entry.value_ptr.*);
-            self.alloc.free(entry.key_ptr.*);
-        }
-        self.shaders.deinit();
-
-        var fit = self.fonts.iterator();
-        while (fit.next()) |entry| {
-            entry.value_ptr.*.deinit();
-            self.alloc.destroy(entry.value_ptr.*);
-            self.alloc.free(entry.key_ptr.*);
-        }
-        self.fonts.deinit();
-
-        var tmit = self.tilemaps.iterator();
-        while (tmit.next()) |entry| {
-            entry.value_ptr.*.deinit();
-            self.alloc.destroy(entry.value_ptr.*);
-            self.alloc.free(entry.key_ptr.*);
-        }
-        self.tilemaps.deinit();
-
         if (self.hotReload) |*hr| hr.deinit();
+    }
+
+    fn freeSlots(self: *Self, comptime H: type, map: *std.StringHashMap(*H)) void {
+        var it = map.iterator();
+        while (it.next()) |entry| {
+            entry.value_ptr.*.free();
+            self.alloc.destroy(entry.value_ptr.*);
+            self.alloc.free(entry.key_ptr.*);
+        }
+        map.deinit();
+    }
+
+    /// Stores `val` under `name`: in a new slot the first time, otherwise
+    /// replacing (and freeing) the value already there. On error `val` is
+    /// not taken, so the caller still owns it.
+    fn putSlot(self: *Self, comptime H: type, map: *std.StringHashMap(*H), name: []const u8, val: anytype) !*H {
+        if (map.get(name)) |slot| {
+            slot.replace(val);
+            return slot;
+        }
+
+        const key = try self.alloc.dupe(u8, name);
+        errdefer self.alloc.free(key);
+        const slot = try self.alloc.create(H);
+        errdefer self.alloc.destroy(slot);
+        slot.* = .{ .val = val };
+        try map.put(key, slot);
+        return slot;
     }
 
     // -----------------------------------------------------------------------
@@ -586,25 +337,15 @@ pub const ResourceManager = struct {
             .texture => |t| _ = try self.loadTextureImpl(t.name, t.path),
             .atlas => |a| _ = try self.loadAtlasImpl(a.name, a.basePath),
             .font_ttf => |f| {
-                const fa = try FontAtlas.initFromTtfFileIndexed(f.path, f.faceIndex, f.fontSize, self.alloc);
-                const managed = try self.getOrCreateFont(f.name);
-                try managed.add(fa);
+                var fa = try FontAtlas.initFromTtfFileIndexed(f.path, f.faceIndex, f.fontSize, self.alloc);
+                errdefer fa.deinit();
+                _ = try self.putSlot(FontAtlasHandle, &self.fonts, f.name, fa);
             },
             .tilemap => |t| {
                 std.log.info("Hot reload: reloading tilemap '{s}' from '{s}'", .{ t.name, t.path });
-                const map = try TiledMapXmlLoader.initFromFile(t.path, self.alloc);
-                const managed = try self.getOrCreateTileMap(t.name);
-                try managed.add(map);
-                std.log.info("Hot reload: tilemap '{s}' reloaded, {} live handles marked dirty", .{
-                    t.name,
-                    blk: {
-                        var n: usize = 0;
-                        for (managed.res.items) |h| if (h != null and h.?.dirty) {
-                            n += 1;
-                        };
-                        break :blk n;
-                    },
-                });
+                var map = try TiledMapXmlLoader.initFromFile(t.path, self.alloc);
+                errdefer map.deinit();
+                _ = try self.putSlot(TileMapHandle, &self.tilemaps, t.name, map);
             },
         }
     }
@@ -643,91 +384,6 @@ pub const ResourceManager = struct {
                 std.log.warn("File watcher fired for unknown watch id {}", .{id});
             }
         }
-    }
-
-    // -----------------------------------------------------------------------
-    // Internal managed resource helpers
-    // -----------------------------------------------------------------------
-
-    fn getOrCreateAtlasTexture(self: *Self, name: []const u8) !*ManagedTexture {
-        if (self.atlas.get(name)) |existing| return existing;
-
-        const keyOwned = try self.alloc.dupe(u8, name);
-        errdefer self.alloc.free(keyOwned);
-
-        const managed = try self.alloc.create(ManagedTexture);
-        errdefer self.alloc.destroy(managed);
-
-        managed.* = ManagedTexture.init(self.alloc, self.gid, keyOwned, freeTextureView);
-        managed.keepStale = keepStaleTextures;
-        self.gid += 1;
-
-        try self.atlas.put(keyOwned, managed);
-        return managed;
-    }
-
-    fn getOrCreateTextureImage(self: *Self, name: []const u8) !*ManagedTextureImage {
-        if (self.textures.get(name)) |existing| return existing;
-
-        const keyOwned = try self.alloc.dupe(u8, name);
-        errdefer self.alloc.free(keyOwned);
-
-        const managed = try self.alloc.create(ManagedTextureImage);
-        errdefer self.alloc.destroy(managed);
-
-        managed.* = ManagedTextureImage.init(self.alloc, self.gid, keyOwned, freeTextureImage);
-        self.gid += 1;
-
-        try self.textures.put(keyOwned, managed);
-        return managed;
-    }
-
-    fn getOrCreateShader(self: *Self, name: []const u8) !*ManagedShader {
-        if (self.shaders.get(name)) |existing| return existing;
-
-        const keyOwned = try self.alloc.dupe(u8, name);
-        errdefer self.alloc.free(keyOwned);
-
-        const managed = try self.alloc.create(ManagedShader);
-        errdefer self.alloc.destroy(managed);
-
-        managed.* = ManagedShader.init(self.alloc, self.gid, keyOwned, freeShader);
-        self.gid += 1;
-
-        try self.shaders.put(keyOwned, managed);
-        return managed;
-    }
-
-    fn getOrCreateTileMap(self: *Self, name: []const u8) !*ManagedTileMap {
-        if (self.tilemaps.get(name)) |existing| return existing;
-
-        const keyOwned = try self.alloc.dupe(u8, name);
-        errdefer self.alloc.free(keyOwned);
-
-        const managed = try self.alloc.create(ManagedTileMap);
-        errdefer self.alloc.destroy(managed);
-
-        managed.* = ManagedTileMap.init(self.alloc, self.gid, keyOwned, freeTileMap);
-        self.gid += 1;
-
-        try self.tilemaps.put(keyOwned, managed);
-        return managed;
-    }
-
-    fn getOrCreateFont(self: *Self, name: []const u8) !*ManagedFont {
-        if (self.fonts.get(name)) |existing| return existing;
-
-        const keyOwned = try self.alloc.dupe(u8, name);
-        errdefer self.alloc.free(keyOwned);
-
-        const managed = try self.alloc.create(ManagedFont);
-        errdefer self.alloc.destroy(managed);
-
-        managed.* = ManagedFont.init(self.alloc, self.gid, keyOwned, freeFontAtlas);
-        self.gid += 1;
-
-        try self.fonts.put(keyOwned, managed);
-        return managed;
     }
 
     // -----------------------------------------------------------------------
@@ -809,109 +465,85 @@ pub const ResourceManager = struct {
         return try self.loadTextureFromBuffer(name, width, height, buffer);
     }
 
-    /// Adds `view` as the newest generation of `managed`, taking a reference
-    /// on `view.image` for as long as that generation lives.
-    fn addTextureView(_: *Self, managed: *ManagedTexture, view: Texture) !void {
-        if (view.image) |image| _ = image.retain();
-        errdefer if (view.image) |image| image.release();
-        try managed.add(view);
-    }
-
-    fn rollbackTextureLoad(_: *Self, load: TextureLoad) void {
-        _ = load.managed.rollbackAdd(load.atlasGeneration);
-        _ = load.imageManaged.rollbackAdd(load.imageGeneration);
-    }
-
-    fn loadTextureFromBufferTracked(
+    /// Uploads RGBA `pixels` as the image `name`, and registers a view of the
+    /// whole image under the same name. A first load creates the GL texture;
+    /// a reload re-uploads into the existing one, so every view of the image
+    /// (atlas frames, subtextures) keeps a valid GL texture id.
+    fn uploadImage(
         self: *Self,
         name: []const u8,
         width: usize,
         height: usize,
-        buffer: []u8,
-    ) !TextureLoad {
-        const baseName = utils.baseNameFromPath(name);
-        const imageManaged = try self.getOrCreateTextureImage(baseName);
-        const managed = try self.getOrCreateAtlasTexture(baseName);
+        pixels: []const u8,
+    ) !*TextureHandle {
+        const size: Vec2U = .{ .x = @intCast(width), .y = @intCast(height) };
 
-        var texture: c_uint = undefined;
-        gl.genTextures(1, &texture);
-        var gl_texture_owned = false;
-        errdefer if (!gl_texture_owned) gl.deleteTextures(1, &texture);
+        const image = if (self.textures.get(name)) |existing| blk: {
+            existing.val.size = size;
+            existing.version +%= 1;
+            break :blk existing;
+        } else blk: {
+            var texture: c_uint = undefined;
+            gl.genTextures(1, &texture);
+            errdefer gl.deleteTextures(1, &texture);
 
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        const format = gl.RGBA;
-        gl.texImage2D(gl.TEXTURE_2D, 0, format, @intCast(width), @intCast(height), 0, format, gl.UNSIGNED_BYTE, @ptrCast(buffer));
-
-        const imageGeneration = imageManaged.gen + 1;
-        try imageManaged.add(.{
-            .texture = texture,
-            .size = .{ .x = @intCast(width), .y = @intCast(height) },
-        });
-        gl_texture_owned = true;
-        errdefer _ = imageManaged.rollbackAdd(imageGeneration);
-
-        const atlasGeneration = managed.gen + 1;
-        try self.addTextureView(managed, .{
-            .texture = texture,
-            .size = .{ .x = @intCast(width), .y = @intCast(height) },
-            .src = .{ .t = 0, .l = 0, .b = 1, .r = 1 },
-            .image = imageManaged.get().?,
-        });
-
-        return .{
-            .managed = managed,
-            .imageManaged = imageManaged,
-            .atlasGeneration = atlasGeneration,
-            .imageGeneration = imageGeneration,
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            break :blk try self.putSlot(TextureImageHandle, &self.textures, name, TextureImage{
+                .texture = texture,
+                .size = size,
+            });
         };
+
+        gl.bindTexture(gl.TEXTURE_2D, image.val.texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, @intCast(width), @intCast(height), 0, gl.RGBA, gl.UNSIGNED_BYTE, @ptrCast(pixels));
+
+        return self.putSlot(TextureHandle, &self.atlas, name, Texture{
+            .texture = image.val.texture,
+            .size = size,
+            .src = .{ .t = 0, .l = 0, .b = 1, .r = 1 },
+        });
     }
 
     /// Loads an RGBA texture from a raw buffer. The buffer should be in RGBA
     /// format, with 4 bytes per pixel. The name is the name that the texture
     /// will be stored with in the resource manager, and is used to access the
     /// texture later with `getTexture`. The width and height are the dimensions
-    /// of the texture and must match the buffer size. Returns a borrowed
-    /// handle (see `ResourceManager`).
+    /// of the texture and must match the buffer size.
     pub fn loadTextureFromBuffer(
         self: *Self,
         name: []const u8,
         width: usize,
         height: usize,
-        buffer: []u8,
+        buffer: []const u8,
     ) !*TextureHandle {
-        return latestOf((try self.loadTextureFromBufferTracked(name, width, height, buffer)).managed);
+        return self.uploadImage(utils.baseNameFromPath(name), width, height, buffer);
     }
 
     /// Internal: loads a texture from a file without registering a hot-reload
-    /// watch. Called from `loadTexture` (which adds the watch) and from
-    /// `loadAtlasImpl` (which registers atlas-level watches instead).
-    fn loadTextureImplTracked(
-        self: *Self,
-        name: []const u8,
-        filePath: []const u8,
-    ) !TextureLoad {
-        std.log.info("Loading image '{s}' from '{s}'\n", .{ name, filePath });
-        const nt_file_path = try std.mem.concatWithSentinel(self.alloc, u8, &.{filePath}, 0);
-        defer self.alloc.free(nt_file_path);
-
-        var image = try stbi.Image.loadFromFile(nt_file_path, 4);
-        defer image.deinit();
-
-        std.log.info("Loaded image '{s}', width={}, height={}\n", .{ name, image.width, image.height });
-
-        return try self.loadTextureFromBufferTracked(name, image.width, image.height, image.data);
-    }
-
+    /// watch. Called from `loadTexture` (which adds the watch) and from the
+    /// hot-reload path.
     fn loadTextureImpl(
         self: *Self,
         name: []const u8,
         filePath: []const u8,
-    ) !*ManagedTexture {
-        return (try self.loadTextureImplTracked(name, filePath)).managed;
+    ) !*TextureHandle {
+        var image = try self.decodeImage(name, filePath);
+        defer image.deinit();
+        return self.uploadImage(utils.baseNameFromPath(name), image.width, image.height, image.data);
+    }
+
+    fn decodeImage(self: *Self, name: []const u8, filePath: []const u8) !stbi.Image {
+        std.log.info("Loading image '{s}' from '{s}'\n", .{ name, filePath });
+        const nt_file_path = try std.mem.concatWithSentinel(self.alloc, u8, &.{filePath}, 0);
+        defer self.alloc.free(nt_file_path);
+
+        const image = try stbi.Image.loadFromFile(nt_file_path, 4);
+        std.log.info("Loaded image '{s}', width={}, height={}\n", .{ name, image.width, image.height });
+        return image;
     }
 
     /// Loads a texture from a file path. The name is the base name of the
@@ -921,10 +553,8 @@ pub const ResourceManager = struct {
     /// determined from the file extension, and should be a type supported
     /// by the `stbi` library, such as png or jpg.
     ///
-    /// In debug builds, the file is automatically watched and the texture
-    /// is reloaded (with any live handles marked dirty) when the file changes.
-    ///
-    /// Returns a borrowed handle (see `ResourceManager`).
+    /// In debug builds, the file is watched and the texture is reloaded in
+    /// place when it changes.
     pub fn loadTexture(
         self: *Self,
         name: []const u8,
@@ -946,12 +576,7 @@ pub const ResourceManager = struct {
             }
         }
 
-        return latestOf(result);
-    }
-
-    /// The newest generation of `managed`, which every loader has just added.
-    fn latestOf(managed: *ManagedTexture) *TextureHandle {
-        return managed.get().?;
+        return result;
     }
 
     // -----------------------------------------------------------------------
@@ -961,10 +586,11 @@ pub const ResourceManager = struct {
     /// Internal: loads a texture atlas without registering hot-reload watches.
     /// `name` is the resource key; `basePath` is the file path base (without
     /// extension). When both are equal this is an ordinary loadAtlas call.
+    ///
+    /// Everything that can fail on bad input (reading and parsing the JSON,
+    /// frame name collisions, decoding the PNG) happens before any slot is
+    /// touched, so a broken atlas file leaves the previous load drawing.
     fn loadAtlasImpl(self: *Self, name: []const u8, basePath: []const u8) !usize {
-        // Read and validate the JSON before touching the base texture: if the
-        // atlas fails to load, the previous texture (if any, from an earlier
-        // load of this same name) must be left untouched and still valid.
         const jsonName = try utils.addExtension(self.alloc, basePath, ".json");
         defer self.alloc.free(jsonName);
 
@@ -991,35 +617,25 @@ pub const ResourceManager = struct {
 
         const imageName = try utils.addExtension(self.alloc, basePath, ".png");
         defer self.alloc.free(imageName);
-        const base_load = try self.loadTextureImplTracked(name, imageName);
-        errdefer self.rollbackTextureLoad(base_load);
+        var decoded = try self.decodeImage(name, imageName);
+        defer decoded.deinit();
 
-        const texImageManaged = self.textures.get(utils.baseNameFromPath(name)) orelse return error.NoTextureWithThatName;
-        const texImage = texImageManaged.get() orelse return error.NoTextureWithThatName;
-        const sz: Vec2I = texImage.val.size.asVec2I();
+        const whole = try self.uploadImage(utils.baseNameFromPath(name), decoded.width, decoded.height, decoded.data);
+        const sz: Vec2I = whole.val.size.asVec2I();
 
-        var new_manifest: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer {
-            for (new_manifest.items) |n| self.alloc.free(n);
-            new_manifest.deinit(self.alloc);
+        const gop = try self.atlasManifests.getOrPut(name);
+        if (!gop.found_existing) {
+            gop.key_ptr.* = self.alloc.dupe(u8, name) catch |err| {
+                self.atlasManifests.removeByPtr(gop.key_ptr);
+                return err;
+            };
+            gop.value_ptr.* = .empty;
         }
+        const manifest = gop.value_ptr;
 
-        var added_frames: std.ArrayListUnmanaged(AtlasFrameLoad) = .empty;
-        defer added_frames.deinit(self.alloc);
-        errdefer {
-            for (added_frames.items) |frame_load| {
-                _ = frame_load.managed.rollbackAdd(frame_load.generation);
-            }
-        }
-
-        var num: usize = 0;
         for (spack.frames) |frame| {
-            const managed = try self.getOrCreateAtlasTexture(frame.name);
-            const generation = managed.gen + 1;
-            try added_frames.append(self.alloc, .{ .managed = managed, .generation = generation });
-            try self.addTextureView(managed, .{
-                .image = texImage,
-                .texture = texImage.val.texture,
+            _ = try self.putSlot(TextureHandle, &self.atlas, frame.name, Texture{
+                .texture = whole.val.texture,
                 .size = frame.sizePx,
                 .src = RectF.fromCoords(
                     frame.pos.l,
@@ -1031,35 +647,17 @@ pub const ResourceManager = struct {
                 ),
             });
 
-            const name_owned = try self.alloc.dupe(u8, frame.name);
-            errdefer self.alloc.free(name_owned);
-            try new_manifest.append(self.alloc, name_owned);
-
-            num += 1;
-        }
-
-        // Remove atlas entries for frames absent from the new JSON.
-        if (self.atlasManifests.getPtr(name)) |old_manifest| {
-            outer: for (old_manifest.items) |old_name| {
-                for (new_manifest.items) |new_name| {
-                    if (std.mem.eql(u8, old_name, new_name)) continue :outer;
-                }
-                if (self.atlas.fetchRemove(old_name)) |kv| {
-                    kv.value.deinit();
-                    self.alloc.destroy(kv.value);
-                    self.alloc.free(kv.key);
-                }
+            // A frame dropped from the JSON keeps its slot (handles to it
+            // must stay valid) and stays listed here, so it still counts as
+            // this atlas's own name.
+            if (!ownedByFrameList(manifest.items, frame.name)) {
+                const name_owned = try self.alloc.dupe(u8, frame.name);
+                errdefer self.alloc.free(name_owned);
+                try manifest.append(self.alloc, name_owned);
             }
-            for (old_manifest.items) |n| self.alloc.free(n);
-            old_manifest.deinit(self.alloc);
-            old_manifest.* = new_manifest;
-        } else {
-            const key_owned = try self.alloc.dupe(u8, name);
-            errdefer self.alloc.free(key_owned);
-            try self.atlasManifests.put(key_owned, new_manifest);
         }
 
-        return num;
+        return spack.frames.len;
     }
 
     fn ownedByFrameList(frames: ?[]const []const u8, frame_name: []const u8) bool {
@@ -1088,8 +686,8 @@ pub const ResourceManager = struct {
     /// Like `loadAtlas` but stores the resource under `name` instead of the
     /// base name of `basePath`. Use this when the manifest asset id should
     /// differ from the file name on disk (e.g. id="main_sprites", path="pac-tiles").
-    /// After loading, `acquireTexture(name)` returns a handle to the full atlas
-    /// image; individual frames remain accessible by their frame names.
+    /// After loading, `getTexture(name)` returns the full atlas image;
+    /// individual frames remain accessible by their frame names.
     pub fn loadAtlasNamed(self: *Self, name: []const u8, basePath: []const u8) !usize {
         const resolved = try paths.resolve(self.alloc, basePath);
         defer self.alloc.free(resolved);
@@ -1118,70 +716,41 @@ pub const ResourceManager = struct {
 
     /// Adds a named subtexture from a region of an existing texture. `px` is
     /// in pixels, relative to `tex`'s own top-left corner (so a subtexture of
-    /// a subtexture or atlas frame works as expected). Cuts from the exact
-    /// generation `tex` points at. Returns a borrowed handle (see
-    /// `ResourceManager`).
+    /// a subtexture or atlas frame works as expected). The region is cut
+    /// once, from `tex` as it is now.
     pub fn addSubTexture(
         self: *Self,
-        tex: *TextureHandle,
+        tex: *const TextureHandle,
         name: []const u8,
         px: RectI,
     ) !*TextureHandle {
-        const current = tex;
-        const managed = try self.getOrCreateAtlasTexture(name);
-        try self.addTextureView(managed, .{
-            .texture = current.val.texture,
+        return self.putSlot(TextureHandle, &self.atlas, name, Texture{
+            .texture = tex.val.texture,
             .size = .{ .x = @intCast(px.width()), .y = @intCast(px.height()) },
-            .src = sprites.pixelsToUv(&current.val, px),
-            .image = current.val.image,
+            .src = sprites.pixelsToUv(&tex.val, px),
         });
-        return latestOf(managed);
     }
 
     /// Like `addSubTexture`, but `coords` are in the underlying image's UV
     /// space: (0,0) is top-left, (1,1) is bottom-right.
     pub fn addSubTextureUV(
         self: *Self,
-        tex: *TextureHandle,
+        tex: *const TextureHandle,
         name: []const u8,
         coords: RectF,
     ) !*TextureHandle {
-        const current = tex;
-        const managed = try self.getOrCreateAtlasTexture(name);
-        try self.addTextureView(managed, current.val.sub(coords));
-        return latestOf(managed);
+        return self.putSlot(TextureHandle, &self.atlas, name, tex.val.sub(coords));
     }
 
     /// Creates a `Sprite` for the texture (or atlas frame / subtexture)
-    /// registered as `name`. The sprite retains its own reference; call
-    /// `sprite.deinit()` to release it.
+    /// registered as `name`.
     pub fn createSprite(self: *Self, name: []const u8) !sprites.Sprite {
         return sprites.Sprite.create(try self.getTexture(name));
     }
 
-    /// Borrows the newest generation of the texture (or atlas frame /
-    /// subtexture) registered as `name`, without taking a reference. Don't
-    /// release it; see `ResourceManager` for how long it stays valid. Use
-    /// `acquireTexture` for a refcounted handle instead.
+    /// The texture (or atlas frame / subtexture) registered as `name`.
     pub fn getTexture(self: *Self, name: []const u8) !*TextureHandle {
-        const managed = self.atlas.get(name) orelse return error.NoTextureWithThatName;
-        return managed.get() orelse return error.NoTextureWithThatName;
-    }
-
-    /// Acquires a refcounted handle to a texture by name. The handle stays
-    /// alive until released via `handle.release()`. The owning managed resource
-    /// marks the handle dirty when the texture is reloaded so the caller can
-    /// call `handle.reacquire()` to upgrade.
-    pub fn acquireTexture(self: *Self, name: []const u8) !*TextureHandle {
-        const managed = self.atlas.get(name) orelse return error.NoTextureWithThatName;
-        return managed.acquire() orelse return error.NoTextureWithThatName;
-    }
-
-    /// Acquires a refcounted handle to a shader by name. See `acquireTexture`
-    /// for lifecycle notes.
-    pub fn acquireShader(self: *Self, name: []const u8) !*ShaderHandle {
-        const managed = self.shaders.get(name) orelse return error.NoShaderWithThatName;
-        return managed.acquire() orelse return error.NoShaderWithThatName;
+        return self.atlas.get(name) orelse error.NoTextureWithThatName;
     }
 
     // -----------------------------------------------------------------------
@@ -1189,11 +758,10 @@ pub const ResourceManager = struct {
     // -----------------------------------------------------------------------
 
     /// Loads a TTF font from disk and registers it under `name`. A second
-    /// call with the same name marks the prior generation dirty and adds a
-    /// fresh one (auto-reload semantics matching other load* methods).
+    /// call with the same name replaces the atlas in place.
     ///
-    /// In debug builds, the file is watched and the font is reloaded (with
-    /// live handles marked dirty) when the file changes.
+    /// In debug builds, the file is watched and the font is reloaded in
+    /// place when it changes.
     pub fn loadFontFromTtfFile(
         self: *Self,
         name: []const u8,
@@ -1217,9 +785,7 @@ pub const ResourceManager = struct {
 
         var fa = try FontAtlas.initFromTtfFileIndexed(resolved, faceIndex, fontSize, self.alloc);
         errdefer fa.deinit();
-
-        const managed = try self.getOrCreateFont(name);
-        try managed.add(fa);
+        const handle = try self.putSlot(FontAtlasHandle, &self.fonts, name, fa);
 
         if (comptime builtin.mode == .debug) {
             self.ensureHotReload();
@@ -1232,7 +798,7 @@ pub const ResourceManager = struct {
             }
         }
 
-        return managed.get().?;
+        return handle;
     }
 
     /// Loads a TTF/OTF font from bytes in memory (e.g. an `@embedFile`) and
@@ -1246,10 +812,7 @@ pub const ResourceManager = struct {
     ) !*FontAtlasHandle {
         var fa = try FontAtlas.initFromTtfData(fontData, faceIndex, fontSize, self.alloc);
         errdefer fa.deinit();
-
-        const managed = try self.getOrCreateFont(name);
-        try managed.add(fa);
-        return managed.get().?;
+        return self.putSlot(FontAtlasHandle, &self.fonts, name, fa);
     }
 
     /// Loads a TTF font embedded at comptime into the binary and registers
@@ -1262,10 +825,7 @@ pub const ResourceManager = struct {
     ) !*FontAtlasHandle {
         var fa = try FontAtlas.initFromTtfEmbedded(fontPath, fontSize, self.alloc);
         errdefer fa.deinit();
-
-        const managed = try self.getOrCreateFont(name);
-        try managed.add(fa);
-        return managed.get().?;
+        return self.putSlot(FontAtlasHandle, &self.fonts, name, fa);
     }
 
     /// Loads a fixed-cell bitmap font and registers it under `name`.
@@ -1283,26 +843,12 @@ pub const ResourceManager = struct {
 
         var fa = try FontAtlas.initFromBitmap(resolved, charWidth, charHeight, charsPerRow, chars, self.alloc);
         errdefer fa.deinit();
-
-        const managed = try self.getOrCreateFont(name);
-        try managed.add(fa);
-        return managed.get().?;
+        return self.putSlot(FontAtlasHandle, &self.fonts, name, fa);
     }
 
-    /// Borrows the newest generation of the font atlas registered as `name`,
-    /// without taking a reference -- the font counterpart of `getTexture`.
-    /// Use `acquireFontAtlas` when something must keep the atlas alive on
-    /// its own.
+    /// The font atlas registered as `name`.
     pub fn getFontAtlas(self: *Self, name: []const u8) !*FontAtlasHandle {
-        const managed = self.fonts.get(name) orelse return error.NoFontWithThatName;
-        return managed.get() orelse return error.NoFontWithThatName;
-    }
-
-    /// Acquires a refcounted handle to a font atlas by name. See
-    /// `acquireTexture` for lifecycle notes.
-    pub fn acquireFontAtlas(self: *Self, name: []const u8) !*FontAtlasHandle {
-        const managed = self.fonts.get(name) orelse return error.NoFontWithThatName;
-        return managed.acquire() orelse return error.NoFontWithThatName;
+        return self.fonts.get(name) orelse error.NoFontWithThatName;
     }
 
     /// Appends a fallback face to an already-loaded TTF font. Codepoints the
@@ -1314,8 +860,7 @@ pub const ResourceManager = struct {
     /// that file alone and drops fallbacks; re-add them after a reload if it
     /// matters for the build.
     pub fn addFontFallback(self: *Self, name: []const u8, fontPath: []const u8, faceIndex: i32) !void {
-        const managed = self.fonts.get(name) orelse return error.NoFontWithThatName;
-        const handle = managed.get() orelse return error.NoFontWithThatName;
+        const handle = try self.getFontAtlas(name);
 
         const resolved = try paths.resolve(self.alloc, fontPath);
         defer self.alloc.free(resolved);
@@ -1328,21 +873,19 @@ pub const ResourceManager = struct {
     // -----------------------------------------------------------------------
 
     /// Loads a Tiled map from a .tmx file and registers it under `name`.
-    /// A second call with the same name marks the prior generation dirty so
-    /// holders can re-acquire the new data (hot-reload semantics matching
-    /// other load* methods).
+    /// A second call with the same name replaces the map in place and bumps
+    /// the handle's `version`, which is how `TileMapRenderer` knows to
+    /// rebuild.
     ///
-    /// In debug builds, the .tmx file is watched and the map is reloaded
-    /// (with live handles marked dirty) when the file changes.
+    /// In debug builds, the .tmx file is watched and the map is reloaded in
+    /// place when it changes.
     pub fn loadTileMap(self: *Self, name: []const u8, path: []const u8) !*TileMapHandle {
         const resolved = try paths.resolve(self.alloc, path);
         defer self.alloc.free(resolved);
 
         var map = try TiledMapXmlLoader.initFromFile(resolved, self.alloc);
         errdefer map.deinit();
-
-        const managed = try self.getOrCreateTileMap(name);
-        try managed.add(map);
+        const handle = try self.putSlot(TileMapHandle, &self.tilemaps, name, map);
 
         if (comptime builtin.mode == .debug) {
             self.ensureHotReload();
@@ -1355,24 +898,20 @@ pub const ResourceManager = struct {
             }
         }
 
-        return managed.get().?;
+        return handle;
     }
 
     /// Registers a tilemap that was built in code rather than loaded from a
     /// .tmx, under `name`. The manager takes ownership of `map`, so the
     /// caller must not deinit it; as with `loadTileMap`, a second call with
-    /// the same name marks the prior generation dirty.
+    /// the same name replaces the map in place.
     ///
     /// Nothing is watched for changes -- there is no file behind it.
-    ///
-    /// Returns a borrowed handle (see `ResourceManager`).
     pub fn addTileMap(self: *Self, name: []const u8, map: TileMap) !*TileMapHandle {
-        const managed = try self.getOrCreateTileMap(name);
-        try managed.add(map);
-        return managed.get().?;
+        return self.putSlot(TileMapHandle, &self.tilemaps, name, map);
     }
 
-    /// Borrows the texture a tileset draws from, loading it on the first call
+    /// Returns the texture a tileset draws from, loading it on the first call
     /// if nothing is registered under that name yet.
     ///
     /// The name is the base name of the tileset's `<image source>` -- the
@@ -1380,8 +919,6 @@ pub const ResourceManager = struct {
     /// texture the game loaded under that name is reused rather than loaded a
     /// second time. Otherwise the path is read relative to `map.sourcePath`,
     /// the .tmx the tileset came from.
-    ///
-    /// Returns a borrowed handle (see `ResourceManager`).
     pub fn tilesetTexture(self: *Self, map: *const TileMap, tileset: *const TileSet) !*TextureHandle {
         const source = tileset.imageSource orelse return error.TilesetHasNoImage;
         const name = utils.baseNameFromPath(source);
@@ -1415,42 +952,25 @@ pub const ResourceManager = struct {
         return std.fs.path.join(self.alloc, &.{ dir, source });
     }
 
-    /// Borrows the newest generation of the tilemap registered as `name`,
-    /// without taking a reference -- the tilemap counterpart of
-    /// `getTexture`. Use `acquireTileMap` when something must keep the map
-    /// alive on its own (a renderer built from it, say).
+    /// The tilemap registered as `name`.
     pub fn getTileMap(self: *Self, name: []const u8) !*TileMapHandle {
-        const managed = self.tilemaps.get(name) orelse return error.NoTileMapWithThatName;
-        return managed.get() orelse return error.NoTileMapWithThatName;
-    }
-
-    /// Acquires a refcounted handle to a tilemap by name. The handle stays
-    /// alive until released via `handle.release()`. The owning managed resource
-    /// marks the handle dirty when the map file is reloaded, signalling the
-    /// caller to call `handle.reacquire()` and rebuild any renderer data.
-    pub fn acquireTileMap(self: *Self, name: []const u8) !*TileMapHandle {
-        const managed = self.tilemaps.get(name) orelse return error.NoTileMapWithThatName;
-        return managed.acquire() orelse return error.NoTileMapWithThatName;
+        return self.tilemaps.get(name) orelse error.NoTileMapWithThatName;
     }
 
     // -----------------------------------------------------------------------
     // Shader loading
     // -----------------------------------------------------------------------
 
-    /// Borrows the newest generation of the shader registered as `name`,
-    /// without taking a reference -- the shader counterpart of `getTexture`.
-    /// Use `acquireShader` when something must keep the program alive on its
-    /// own (a batch queue, say).
+    /// The shader registered as `name`.
     pub fn getShader(self: *Self, name: []const u8) !*ShaderHandle {
-        const managed = self.shaders.get(name) orelse return error.NoShaderWithThatName;
-        return managed.get() orelse return error.NoShaderWithThatName;
+        return self.shaders.get(name) orelse error.NoShaderWithThatName;
     }
 
     /// Loads a shader from vertex and fragment shader source code, and stores
     /// it in the resource manager with the given name. Calling with an
-    /// existing name compiles a fresh shader and marks the prior version
-    /// dirty, so live holders can call `handle.reacquire()` to pick up the
-    /// new program.
+    /// existing name compiles a fresh program and replaces the old one in
+    /// place; holders re-look-up their uniform/attribute locations when the
+    /// handle's `version` changes.
     pub fn loadShader(
         self: *Self,
         name: []const u8,
@@ -1459,9 +979,6 @@ pub const ResourceManager = struct {
     ) !*ShaderHandle {
         var shader = try Shader.init(vs, fs);
         errdefer shader.deinit();
-
-        const managed = try self.getOrCreateShader(name);
-        try managed.add(shader);
-        return managed.get().?;
+        return self.putSlot(ShaderHandle, &self.shaders, name, shader);
     }
 };

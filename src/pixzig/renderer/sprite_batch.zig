@@ -44,10 +44,10 @@ pub const SpriteBatchQueue = struct {
     }
 
     /// Swap to a different shader entirely (e.g. text renderer toggling
-    /// between alpha and RGB pixel shaders). Releases the current handle,
-    /// acquires from `newShader`, and re-caches uniform/attribute locations.
-    pub fn swapShader(self: *SpriteBatchQueue, newShader: *ShaderHandle) !void {
-        try self.inner.swapShader(newShader);
+    /// between alpha and RGB pixel shaders), re-caching uniform/attribute
+    /// locations.
+    pub fn swapShader(self: *SpriteBatchQueue, newShader: *ShaderHandle) void {
+        self.inner.swapShader(newShader);
     }
 
     /// Begins a new render frame, setting the Model-View-Projection matrix to use.

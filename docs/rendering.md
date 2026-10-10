@@ -32,13 +32,10 @@ Sprites keep float positions so slow movement accumulates smoothly, but `drawSpr
 
 ## Loading Textures
 
-Every texture loader returns a `*TextureHandle`. There are two ways to hold one:
-
-- **Borrowed** (the simple path): `loadTexture`, `loadTextureFromBuffer`, `createTextureImageFromChars`, `addSubTexture`, and `getTexture(name)` return a handle without taking a reference. Keep it and draw with it; never release it. It stays valid until the resource manager deinits.
-- **Owned**: `acquireTexture(name)` bumps the refcount. Call `handle.release()` when you're done. Use this when something must keep a texture alive on its own terms (a cache, a long-lived renderer).
+Every texture loader (`loadTexture`, `loadTextureFromBuffer`, `createTextureImageFromChars`, `addSubTexture`) and `getTexture(name)` returns a `*TextureHandle`. A handle points at the resource manager's slot for that name: keep it, draw with it, and never free it. It stays valid until the resource manager deinits, and a reload of the same name updates it in place (see [Hot Reload](#hot-reload)).
 
 ```zig
-// During App.init -- nothing to release later:
+// During App.init -- nothing to free later:
 self.tex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
 
 // Later, anywhere:
@@ -54,11 +51,11 @@ eng.renderer.drawFullTexture(self.tex, .{ .x = 10, .y = 10 }, 2.0); // whole fra
 
 ### Atlas Loading
 
-`loadAtlas` reads matching `.json` and `.png` files. Each named frame in the JSON becomes its own texture entry. Acquire individual frames by their frame name:
+`loadAtlas` reads matching `.json` and `.png` files. Each named frame in the JSON becomes its own texture entry. Look up individual frames by their frame name:
 
 ```zig
 _ = try eng.resources.loadAtlas("assets/pac-tiles");
-self.player_tex = try eng.resources.acquireTexture("player_right_1");
+self.player_tex = try eng.resources.getTexture("player_right_1");
 ```
 
 `loadAtlasNamed` lets the resource id differ from the filename:
@@ -69,7 +66,7 @@ _ = try eng.resources.loadAtlasNamed("main_sprites", "assets/pac-tiles");
 
 ## Drawing Sprites
 
-`eng.resources.createSprite(name)` builds a sprite from any loaded texture, atlas frame, or subtexture, sized to that frame. `Sprite.create(handle)` does the same from a handle, borrowed or owned. Either way the sprite retains its own reference and releases it in `deinit()`; your handle is untouched.
+`eng.resources.createSprite(name)` builds a sprite from any loaded texture, atlas frame, or subtexture, sized to that frame. `Sprite.create(handle)` does the same from a handle. A sprite owns nothing, so there is no `deinit`.
 
 ```zig
 // During App.init:
@@ -79,10 +76,7 @@ self.spr.setScale(2, 2);      // relative to the frame size
 self.spr.tint = .{ .r = 1, .g = 0.4, .b = 0.4, .a = 1 }; // null = untinted
 
 // Each frame:
-eng.renderer.drawSprite(&self.spr); // uses the tinted batch when tint is set
-
-// During App.deinit:
-self.spr.deinit();
+eng.renderer.drawSprite(&self.spr);
 ```
 
 Set `fill` to draw the sprite as a flat silhouette of its own shape: the texture's rgb is replaced by the fill color (blended by `fill.a`, 1 = solid) while its alpha is kept. That's the classic hit flash. `fill` takes precedence over `tint`; `eng.renderer.drawSpriteFilled(&spr, color)` does the same for a single draw.
@@ -92,7 +86,7 @@ self.spr.fill = .{ .r = 1, .g = 1, .b = 1, .a = 1 }; // solid white silhouette
 self.spr.fill = null;                                 // back to normal
 ```
 
-`setPos`, `setPosF`, `setSize`, `setScale`, and `setOrigin` keep `dest` and `size` in sync; writing `dest` directly skips that. `setSrcRect(RectI)` draws a sub-region of the frame, in pixels. `setTexture(handle)` switches the texture (retaining the new one, releasing the old).
+`setPos`, `setPosF`, `setSize`, `setScale`, and `setOrigin` keep `dest` and `size` in sync; writing `dest` directly skips that. `setSrcRect(RectI)` draws a sub-region of the frame, in pixels. `setTexture(handle)` switches the texture.
 
 ### Origin
 
@@ -114,7 +108,7 @@ spr.setOrigin(3, 12);            // an exact pixel of the frame, e.g. a hand
 An `Actor` owns the `Sprite` it animates and plays named states (each a `FrameSequence`) on it. Move, scale, and draw it through `actor.sprite`:
 
 ```zig
-// During App.init (the actor takes ownership of the sprite):
+// During App.init:
 self.hero = Actor.init(alloc, try eng.resources.createSprite("player_right_1"));
 _ = try self.hero.addState(seqMgr.getState("walk_right").?, .{}); // first state applies its first frame
 self.hero.sprite.setOriginNormalized(0.5, 1);
@@ -127,11 +121,15 @@ self.hero.sprite.setPosF(x, y);
 // In render:
 eng.renderer.drawSprite(&self.hero.sprite);
 
-// During App.deinit (also releases the sprite):
+// During App.deinit (frees the actor's state table):
 self.hero.deinit();
 ```
 
 Frames may come from different textures; applying a frame switches the sprite's texture as needed.
+
+An `ActorState` is shared data: `addState` keeps a pointer to it, not a copy, so any number of actors can use one state, and the state must outlive them. Register states with a `FrameSequenceManager` (`addState`, or a sequence JSON file) and pass `getState(name)`; re-adding a name there updates the state in place, so actors see the change. `addState`'s `.name` option gives the state a different name on this actor, e.g. `.{ .name = "left" }` for a shared `"red_left"` state.
+
+Frames and states flip with `flipX`/`flipY`. A state's flip is applied on top of each frame's own, and two flips on the same axis cancel. Sequence JSON files keep the `"flip": "none" | "horz" | "vert" | "both"` field.
 
 `setState` returns `error.UnknownActorState` for a name that was never added.
 
@@ -141,7 +139,8 @@ A sequence's `mode` is `.loop` (the default) or `.once`. A `.once` sequence play
 
 ```zig
 // "attack" plays once, then drops back to "idle".
-_ = try self.hero.addState(&.{ .name = "attack", .nextState = "idle", .sequence = attackSeq }, .{});
+try seqMgr.addState(.{ .name = "attack", .nextState = "idle", .sequence = attackSeq });
+_ = try self.hero.addState(seqMgr.getState("attack").?, .{});
 
 // In update, when the attack button is pressed:
 try self.hero.setState("attack", .{});
@@ -173,24 +172,20 @@ eng.renderer.drawTexture(self.tex, dest, src);
 
 ## Hot Reload
 
-In debug builds, the resource manager watches texture, atlas, font, and tilemap files for changes. When a file changes, it reloads the asset and marks any live handles dirty. If you need to respond to a reload (for example to rebuild a renderer), check `handle.dirty` each tick and call `handle.reacquire()`:
+In debug builds, the resource manager watches texture, atlas, font, and tilemap files for changes. When a file changes, it reloads the asset **in place**: the handle you already hold now holds the new value, and the old one is freed. Sprites, actors, the text renderer and tile renderers all draw the new asset on their next draw with no code of yours. Loading the same name again yourself does the same thing in any build mode.
+
+A reloaded image is re-uploaded into the same GL texture, so its atlas frames and subtextures keep working. A frame that disappears from an atlas's JSON keeps its last value rather than being removed, so a handle to it never dangles.
+
+Each handle has a `version` that goes up by one on every reload. If you derived something from an asset (a mesh built from a map, positions read from it), keep the version you built from and rebuild when it changes:
 
 ```zig
-pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
-    _ = delta;
-    if (self.tex.dirty) self.tex = self.tex.reacquire();
-    // ...
-    return true;
+if (self.map.version != self.mapVersion) {
+    self.mapVersion = self.map.version;
+    self.rebuildSpawns();
 }
 ```
 
-`reacquire` atomically upgrades to the latest generation and releases the old handle. In release builds, `dirty` is always false and `reacquire` is a no-op. Until you reacquire, a stale handle keeps drawing the old image: atlas frames and subtextures hold a reference to their image, so a reload doesn't delete the GL texture out from under them.
-
-A `TileMapRenderer` does this for you: it holds the map handle itself and rebuilds its layers on the next render call after a reload (see [Tile Rendering](tile-rendering.md#hot-reload)).
-
-`reacquire` is for owned handles. A borrowed handle can't be reacquired (it holds no reference to hand back); call `getTexture(name)` again to pick up the new generation. In debug builds, superseded texture generations are kept until the resource manager deinits, so a borrowed handle you kept in a struct still points at valid (stale) data after a reload. Release builds reclaim an unreferenced older generation as soon as the same name is loaded again, so don't hold a borrowed handle across an explicit re-load there.
-
-When the resource manager deinits with a handle still referenced, the log names it, e.g. `Texture 'player_right_1' (generation 1): refCount = 1 on deinit`.
+A `TileMapRenderer` does this for you: it rebuilds its layers on the next render call after a reload (see [Tile Rendering](tile-rendering.md#hot-reload)). Reloads happen in `checkHotReload`, between frames, never inside a `begin`/`end` pass.
 
 ## Text and Fonts
 

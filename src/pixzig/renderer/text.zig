@@ -73,8 +73,8 @@ pub const TextRenderer = struct {
     alphaShader: *resources.ShaderHandle,
     texShader: *resources.ShaderHandle,
     alloc: std.mem.Allocator,
-    /// Active font handle. Released in deinit. The parent back-pointer is
-    /// used to reacquire after a hot-reload without re-doing the name lookup.
+    /// Active font. A hot reload replaces the atlas inside the handle, so
+    /// the next draw uses it.
     font: ?*resources.FontAtlasHandle,
     /// Set once the first draw call finds no font, so the "no font" warning
     /// is logged one time rather than on every string, every frame.
@@ -108,15 +108,8 @@ pub const TextRenderer = struct {
     }
 
     pub fn deinit(self: *TextRenderer) void {
-        if (self.font) |h| h.release();
         self.spriteBatch.deinit();
         self.colorBatch.deinit();
-    }
-
-    fn refreshAtlas(self: *TextRenderer) void {
-        const handle = self.font orelse return;
-        if (!handle.dirty) return;
-        self.font = handle.reacquire();
     }
 
     pub fn begin(self: *TextRenderer, mvp: zmath.Mat) void {
@@ -150,24 +143,18 @@ pub const TextRenderer = struct {
         fa.commitTexture();
     }
 
-    /// Adopt a new font for rendering. Releases any previously held handle,
-    /// takes a reference on `font`, and swaps the underlying batch's shader
-    /// to the alpha-channel program when the atlas was packed as alpha, or
-    /// the regular texture program otherwise.
-    ///
-    /// `font` is a borrowed handle (from `ResourceManager.getFontAtlas` or a
-    /// `load*` call); the text renderer retains its own reference and
-    /// releases it in `deinit`.
+    /// Adopt a new font for rendering, and swap the underlying batch's
+    /// shader to the alpha-channel program when the atlas was packed as
+    /// alpha, or the regular texture program otherwise.
     pub fn setFont(
         self: *TextRenderer,
         font: *resources.FontAtlasHandle,
     ) !void {
-        if (self.font) |h| h.release();
-        self.font = font.retain();
+        self.font = font;
         self.warnedNoFont = false;
 
-        const shader = if (self.font.?.val.isAlpha) self.alphaShader else self.texShader;
-        try self.spriteBatch.swapShader(shader);
+        const shader = if (font.val.isAlpha) self.alphaShader else self.texShader;
+        self.spriteBatch.swapShader(shader);
     }
 
     /// Logs the missing-font error once per renderer (reset by `setFont`),

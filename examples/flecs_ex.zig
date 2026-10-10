@@ -84,16 +84,6 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        // Release each live entity's sprite texture handle before the world
-        // (and its component storage) goes away.
-        var it = flecs.query_iter(self.world, self.drawQuery);
-        while (flecs.query_next(&it)) {
-            const spr = flecs.field(&it, Sprite, 0).?;
-            for (0..it.count()) |idx| {
-                spr[idx].deinit();
-            }
-        }
-
         flecs.query_fini(self.drawQuery);
         _ = flecs.fini(self.world);
         self.alloc.destroy(self);

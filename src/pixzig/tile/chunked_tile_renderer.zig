@@ -53,10 +53,11 @@ pub const ChunkedTiledLayerRenderer = struct {
     chunks: []TileChunk,
     chunksWide: u32,
     chunksTall: u32,
-    /// Refcounted shader handle. Refreshed in `render` when dirty.
     shader: *ShaderHandle,
-    /// Refcounted texture handle. Refreshed in `render` when dirty. Null for
-    /// a layer with no tileset to draw from, which never renders anything.
+    /// `shader.version` the cached locations and chunk VAOs were built from.
+    shaderVersion: u32,
+    /// Null for a layer with no tileset to draw from, which never renders
+    /// anything.
     texture: ?*TextureHandle,
     attrCoord: c_uint,
     attrTexcoord: c_uint,
@@ -77,11 +78,6 @@ pub const ChunkedTiledLayerRenderer = struct {
         texture: ?*TextureHandle,
         layer: *const TileLayer,
     ) !Self {
-        const shader_handle = shader.retain();
-        errdefer shader_handle.release();
-        const texture_handle = if (texture) |t| t.retain() else null;
-        errdefer if (texture_handle) |t| t.release();
-
         const map_w: u32 = @intCast(layer.size.x);
         const map_h: u32 = @intCast(layer.size.y);
 
@@ -141,11 +137,12 @@ pub const ChunkedTiledLayerRenderer = struct {
             .chunks = chunks,
             .chunksWide = chunksWide,
             .chunksTall = chunksTall,
-            .shader = shader_handle,
-            .texture = texture_handle,
-            .attrCoord = @intCast(gl.getAttribLocation(shader_handle.val.program, "coord3d")),
-            .attrTexcoord = @intCast(gl.getAttribLocation(shader_handle.val.program, "texcoord")),
-            .uniformMvp = @intCast(gl.getUniformLocation(shader_handle.val.program, "projectionMatrix")),
+            .shader = shader,
+            .shaderVersion = shader.version,
+            .texture = texture,
+            .attrCoord = @intCast(gl.getAttribLocation(shader.val.program, "coord3d")),
+            .attrTexcoord = @intCast(gl.getAttribLocation(shader.val.program, "texcoord")),
+            .uniformMvp = @intCast(gl.getUniformLocation(shader.val.program, "projectionMatrix")),
             .scratchVerts = scratchVerts,
             .scratchTexcoords = scratchTexcoords,
             .scratchIndices = scratchIndices,
@@ -153,8 +150,6 @@ pub const ChunkedTiledLayerRenderer = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        if (self.texture) |t| t.release();
-        self.shader.release();
         for (self.chunks) |*chunk| {
             gl.deleteVertexArrays(1, &chunk.vao);
             gl.deleteBuffers(1, &chunk.vboCoords);
@@ -167,21 +162,16 @@ pub const ChunkedTiledLayerRenderer = struct {
         self.alloc.free(self.scratchIndices);
     }
 
+    /// Re-looks-up the shader's locations after it was reloaded.
     fn refreshShader(self: *Self) void {
-        if (!self.shader.dirty) return;
-        self.shader = self.shader.reacquire();
+        if (self.shader.version == self.shaderVersion) return;
+        self.shaderVersion = self.shader.version;
         self.attrCoord = @intCast(gl.getAttribLocation(self.shader.val.program, "coord3d"));
         self.attrTexcoord = @intCast(gl.getAttribLocation(self.shader.val.program, "texcoord"));
         self.uniformMvp = @intCast(gl.getUniformLocation(self.shader.val.program, "projectionMatrix"));
         // Chunk VAOs bake in attrib pointer setup; rebuild them so they use the
         // new attribute locations from the reloaded shader.
         self.markAllDirty();
-    }
-
-    fn refreshTexture(self: *Self) void {
-        const texture = self.texture orelse return;
-        if (!texture.dirty) return;
-        self.texture = texture.reacquire();
     }
 
     pub fn markAllDirty(self: *Self) void {
@@ -213,8 +203,8 @@ pub const ChunkedTiledLayerRenderer = struct {
     }
 
     /// Render all chunks that intersect `viewport` (world-space rectangle).
-    /// Dirty chunks are rebuilt (GPU upload) before drawing. The held shader
-    /// and texture handles are refreshed first so hot-reloads land here.
+    /// Dirty chunks are rebuilt (GPU upload) before drawing. A reloaded
+    /// shader's locations are looked up again first.
     pub fn render(
         self: *Self,
         layer: *const TileLayer,
@@ -222,7 +212,6 @@ pub const ChunkedTiledLayerRenderer = struct {
         viewport: RectF,
     ) void {
         self.refreshShader();
-        self.refreshTexture();
 
         const texture = self.texture orelse return;
         const tileset = layer.tileset orelse return;

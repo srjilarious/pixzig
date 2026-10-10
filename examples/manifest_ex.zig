@@ -57,7 +57,6 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        if (self.spriteTex != null) self.spr.deinit();
         self.manifest.deinit();
         self.alloc.destroy(self);
     }
@@ -72,10 +71,7 @@ pub const App = struct {
         if (eng.inputs.keyboard.pressed(.u)) {
             if (self.groupLoaded) {
                 std.log.info("Unloading 'game' group", .{});
-                if (self.spriteTex != null) {
-                    self.spr.deinit();
-                    self.spriteTex = null;
-                }
+                self.spriteTex = null;
                 self.manifest.unloadGroup("game");
                 self.groupLoaded = false;
             } else {

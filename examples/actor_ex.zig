@@ -33,44 +33,35 @@ pub const App = struct {
             .facingLeft = false,
         };
 
-        const fr1: Frame = .{
-            .tex = try eng.resources.acquireTexture("player_right_1"),
-            .frameTimeMs = 300,
-            .flip = .none,
-        };
-        const fr2: Frame = .{
-            .tex = try eng.resources.acquireTexture("player_right_2"),
-            .frameTimeMs = 300,
-            .flip = .none,
-        };
-        const fr3: Frame = .{
-            .tex = try eng.resources.acquireTexture("player_right_3"),
-            .frameTimeMs = 300,
-            .flip = .none,
-        };
-        var frseq = try pixzig.sprites.FrameSequence.init(alloc, &[_]Frame{ fr1, fr2, fr3 });
-        frseq.ownsHandles = true;
+        const fr1: Frame = .{ .tex = try eng.resources.getTexture("player_right_1"), .frameTimeMs = 300 };
+        const fr2: Frame = .{ .tex = try eng.resources.getTexture("player_right_2"), .frameTimeMs = 300 };
+        const fr3: Frame = .{ .tex = try eng.resources.getTexture("player_right_3"), .frameTimeMs = 300 };
+        const frseq = try pixzig.sprites.FrameSequence.init(alloc, &[_]Frame{ fr1, fr2, fr3 });
         try app.seqMgr.addSeq("player_right", frseq);
 
         // A quick play-once bite on the same frames. Its states name a
         // `nextState`, so the actor drops back to walking when it ends.
         var chomp = try pixzig.sprites.FrameSequence.init(alloc, &[_]Frame{
-            .{ .tex = try eng.resources.acquireTexture("player_right_3"), .frameTimeMs = 400, .flip = .none },
-            .{ .tex = try eng.resources.acquireTexture("player_right_2"), .frameTimeMs = 400, .flip = .none },
-            .{ .tex = try eng.resources.acquireTexture("player_right_1"), .frameTimeMs = 400, .flip = .none },
-            .{ .tex = try eng.resources.acquireTexture("player_right_2"), .frameTimeMs = 400, .flip = .none },
-            .{ .tex = try eng.resources.acquireTexture("player_right_3"), .frameTimeMs = 400, .flip = .none },
+            .{ .tex = try eng.resources.getTexture("player_right_3"), .frameTimeMs = 400 },
+            .{ .tex = try eng.resources.getTexture("player_right_2"), .frameTimeMs = 400 },
+            .{ .tex = try eng.resources.getTexture("player_right_1"), .frameTimeMs = 400 },
+            .{ .tex = try eng.resources.getTexture("player_right_2"), .frameTimeMs = 400 },
+            .{ .tex = try eng.resources.getTexture("player_right_3"), .frameTimeMs = 400 },
         });
-        chomp.ownsHandles = true;
         chomp.mode = .once;
         try app.seqMgr.addSeq("player_chomp", chomp);
 
+        // States are shared data: register them once with the manager, and
+        // actors point at them.
         const walkSeq = app.seqMgr.getSeq("player_right").?;
         const chompSeq = app.seqMgr.getSeq("player_chomp").?;
-        _ = try app.actor.addState(&.{ .name = "right", .sequence = walkSeq, .flip = .none }, .{});
-        _ = try app.actor.addState(&.{ .name = "left", .sequence = walkSeq, .flip = .horz }, .{});
-        _ = try app.actor.addState(&.{ .name = "chomp_right", .sequence = chompSeq, .flip = .none }, .{});
-        _ = try app.actor.addState(&.{ .name = "chomp_left", .sequence = chompSeq, .flip = .horz }, .{});
+        try app.seqMgr.addState(.{ .name = "right", .sequence = walkSeq });
+        try app.seqMgr.addState(.{ .name = "left", .sequence = walkSeq, .flipX = true });
+        try app.seqMgr.addState(.{ .name = "chomp_right", .sequence = chompSeq });
+        try app.seqMgr.addState(.{ .name = "chomp_left", .sequence = chompSeq, .flipX = true });
+        for ([_][]const u8{ "right", "left", "chomp_right", "chomp_left" }) |name| {
+            _ = try app.actor.addState(app.seqMgr.getState(name).?, .{});
+        }
 
         // Pivot on the frame's center and park it mid-screen, so flips and
         // rotations turn in place.
@@ -111,7 +102,7 @@ pub const App = struct {
             self.actor.setState("right", .{}) catch unreachable;
         }
         if (eng.inputs.keyboard.pressed(.space)) {
-            self.actor.setState(if (self.facingLeft) "chomp_left" else "chomp_right", .{ .reset = true}) catch unreachable;
+            self.actor.setState(if (self.facingLeft) "chomp_left" else "chomp_right", .{ .reset = true }) catch unreachable;
         }
 
         if (eng.inputs.keyboard.pressed(.escape)) {

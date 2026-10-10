@@ -97,20 +97,18 @@ pub const App = struct {
         app.scriptEng = try scripting.ScriptEngine.init(alloc);
 
         // --- Build frame sequences ---
-        var right_seq = try FrameSequence.init(alloc, &[_]Frame{
-            .{ .tex = try eng.resources.acquireTexture("player_right_1"), .frameTimeMs = 70, .flip = .none },
-            .{ .tex = try eng.resources.acquireTexture("player_right_2"), .frameTimeMs = 70, .flip = .none },
-            .{ .tex = try eng.resources.acquireTexture("player_right_3"), .frameTimeMs = 70, .flip = .none },
+        const right_seq = try FrameSequence.init(alloc, &[_]Frame{
+            .{ .tex = try eng.resources.getTexture("player_right_1"), .frameTimeMs = 70 },
+            .{ .tex = try eng.resources.getTexture("player_right_2"), .frameTimeMs = 70 },
+            .{ .tex = try eng.resources.getTexture("player_right_3"), .frameTimeMs = 70 },
         });
-        right_seq.ownsHandles = true;
         try app.seqMgr.addSeq("player_right", right_seq);
 
-        var down_seq = try FrameSequence.init(alloc, &[_]Frame{
-            .{ .tex = try eng.resources.acquireTexture("player_down_1"), .frameTimeMs = 70, .flip = .none },
-            .{ .tex = try eng.resources.acquireTexture("player_down_2"), .frameTimeMs = 70, .flip = .none },
-            .{ .tex = try eng.resources.acquireTexture("player_down_3"), .frameTimeMs = 70, .flip = .none },
+        const down_seq = try FrameSequence.init(alloc, &[_]Frame{
+            .{ .tex = try eng.resources.getTexture("player_down_1"), .frameTimeMs = 70 },
+            .{ .tex = try eng.resources.getTexture("player_down_2"), .frameTimeMs = 70 },
+            .{ .tex = try eng.resources.getTexture("player_down_3"), .frameTimeMs = 70 },
         });
-        down_seq.ownsHandles = true;
         try app.seqMgr.addSeq("player_down", down_seq);
 
         // --- Set up flecs world with an Actor component (which owns its Sprite) ---
@@ -120,11 +118,15 @@ pub const App = struct {
 
         app.entity = flecs.new_entity(app.world, "player");
 
+        try app.seqMgr.addState(.{ .name = "right", .sequence = app.seqMgr.getSeq("player_right").? });
+        try app.seqMgr.addState(.{ .name = "left", .sequence = app.seqMgr.getSeq("player_right").?, .flipX = true });
+        try app.seqMgr.addState(.{ .name = "down", .sequence = app.seqMgr.getSeq("player_down").? });
+        try app.seqMgr.addState(.{ .name = "up", .sequence = app.seqMgr.getSeq("player_down").?, .flipY = true });
+
         var actor = Actor.init(alloc, Sprite.create(try eng.resources.getTexture("player_right_1")));
-        _ = try actor.addState(&.{ .name = "right", .sequence = app.seqMgr.getSeq("player_right").?, .flip = .none }, .{});
-        _ = try actor.addState(&.{ .name = "left", .sequence = app.seqMgr.getSeq("player_right").?, .flip = .horz }, .{});
-        _ = try actor.addState(&.{ .name = "down", .sequence = app.seqMgr.getSeq("player_down").?, .flip = .none }, .{});
-        _ = try actor.addState(&.{ .name = "up", .sequence = app.seqMgr.getSeq("player_down").?, .flip = .vert }, .{});
+        for ([_][]const u8{ "right", "left", "down", "up" }) |name| {
+            _ = try actor.addState(app.seqMgr.getState(name).?, .{});
+        }
         try actor.setState("right", .{});
         flecs.set(app.world, app.entity, Actor, actor);
 
@@ -138,8 +140,8 @@ pub const App = struct {
     pub fn deinit(self: *App) void {
         self.scriptEng.deinit();
         self.seqCtx.deinit();
-        // Free the Actor's states and release its sprite's texture while the
-        // ECS component storage (and thus the Actor value) is still alive.
+        // Free the Actor's state table while the ECS component storage (and
+        // thus the Actor value) is still alive.
         if (flecs.get_mut(self.world, self.entity, Actor)) |actor| {
             actor.deinit();
         }

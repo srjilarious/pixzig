@@ -164,10 +164,10 @@ pub fn spriteBatchSmokeTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     const ctx = glCtx();
 
-    var shader = try ctx.makeManagedShader(alloc);
-    defer shader.deinit();
+    var shader = try ctx.makeShaderHandle();
+    defer shader.free();
 
-    var batch = try pixzig.renderer.SpriteBatchQueue.init(alloc, shader.get().?);
+    var batch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &shader);
     defer batch.deinit();
 
     const mvp = zmath.identity();
@@ -179,16 +179,14 @@ pub fn spriteBatchSnapsSpriteToWholePixelsTest(io: std.Io, alloc: std.mem.Alloca
     _ = io;
     const ctx = glCtx();
 
-    var shader = try ctx.makeManagedShader(alloc);
-    defer shader.deinit();
-    var tex = try ctx.makeDummyManagedTexture(alloc);
-    defer tex.deinit();
+    var shader = try ctx.makeShaderHandle();
+    defer shader.free();
+    var tex = ctx.makeDummyTextureHandle();
 
-    var batch = try pixzig.renderer.SpriteBatchQueue.init(alloc, shader.get().?);
+    var batch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &shader);
     defer batch.deinit();
 
-    var spr = pixzig.sprites.Sprite.create(tex.get().?);
-    defer spr.deinit();
+    var spr = pixzig.sprites.Sprite.create(&tex);
     spr.setSize(10, 10);
     spr.setPosF(3.4, 7.6);
 

@@ -41,8 +41,9 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
     return struct {
         const Self = @This();
 
-        /// Refcounted shader handle. Refreshed in `begin` when dirty.
         shader: *ShaderHandle,
+        /// `shader.version` the cached locations below were looked up from.
+        shaderVersion: u32 = 0,
         vao: u32 = 0,
         vboVertices: u32 = 0,
         vboTexCoords: u32 = 0, // unused when !hasTex
@@ -88,12 +89,9 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
         /// Initializes the batch, allocating CPU scratch buffers and GPU
         /// objects for up to `maxQuads` quads at once.
         pub fn init(alloc: std.mem.Allocator, shader: *ShaderHandle, maxQuads: usize) !Self {
-            const handle = shader.retain();
-            errdefer handle.release();
-
             var batch = Self{
                 .allocator = alloc,
-                .shader = handle,
+                .shader = shader,
                 .maxQuads = maxQuads,
             };
 
@@ -152,7 +150,6 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
         /// Cleans up the OpenGL objects associated with the batch and frees
         /// the CPU-side scratch buffers.
         pub fn deinit(self: *Self) void {
-            self.shader.release();
             gl.deleteBuffers(1, &self.vboVertices);
             if (comptime hasTex) gl.deleteBuffers(1, &self.vboTexCoords);
             if (comptime hasColor) gl.deleteBuffers(1, &self.vboColorCoords);
@@ -165,6 +162,7 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
         }
 
         fn cacheShaderLocations(self: *Self) void {
+            self.shaderVersion = self.shader.version;
             self.attrCoord = @intCast(gl.getAttribLocation(self.shader.val.program, "coord3d"));
             if (comptime hasTex) self.attrTexCoord = @intCast(gl.getAttribLocation(self.shader.val.program, "texcoord"));
             if (comptime hasColor) self.attrColor = @intCast(gl.getAttribLocation(self.shader.val.program, "color"));
@@ -182,20 +180,17 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
             self.tint = .{ r, g, b, a };
         }
 
+        /// Re-looks-up the shader's locations after it was reloaded.
         fn refreshShader(self: *Self) void {
-            if (!self.shader.dirty) return;
-            self.shader = self.shader.reacquire();
+            if (self.shader.version == self.shaderVersion) return;
             self.cacheShaderLocations();
         }
 
         /// Swap to a different shader entirely (e.g. the text renderer
-        /// toggling between alpha and RGB pixel shaders). Releases the
-        /// current handle, acquires from `newShader`, and re-caches
+        /// toggling between alpha and RGB pixel shaders), re-caching
         /// uniform/attribute locations.
-        pub fn swapShader(self: *Self, newShader: *ShaderHandle) !void {
-            const new_handle = newShader.retain();
-            self.shader.release();
-            self.shader = new_handle;
+        pub fn swapShader(self: *Self, newShader: *ShaderHandle) void {
+            self.shader = newShader;
             self.cacheShaderLocations();
         }
 
@@ -369,6 +364,9 @@ pub fn StaticQuadBatch(comptime layout: BatchLayout) type {
         const Self = @This();
 
         shader: *ShaderHandle,
+        /// `shader.version` the cached locations (and the VAO's baked
+        /// attribute bindings) come from.
+        shaderVersion: u32 = 0,
         vao: u32 = 0,
         vboVertices: u32 = 0,
         vboTexCoords: u32 = 0, // unused when !hasTex
@@ -396,12 +394,9 @@ pub fn StaticQuadBatch(comptime layout: BatchLayout) type {
         /// Initializes the batch, creating its GL objects. No quad data is
         /// uploaded yet; call beginBuild/addQuad/endBuild before drawing.
         pub fn init(alloc: std.mem.Allocator, shader: *ShaderHandle) !Self {
-            const handle = shader.retain();
-            errdefer handle.release();
-
             var batch = Self{
                 .allocator = alloc,
-                .shader = handle,
+                .shader = shader,
             };
 
             gl.genVertexArrays(1, &batch.vao);
@@ -429,7 +424,6 @@ pub fn StaticQuadBatch(comptime layout: BatchLayout) type {
 
         /// Cleans up the OpenGL objects and any CPU-side scratch buffers.
         pub fn deinit(self: *Self) void {
-            self.shader.release();
             gl.deleteBuffers(1, &self.vboVertices);
             if (comptime hasTex) gl.deleteBuffers(1, &self.vboTexCoords);
             if (comptime hasColor) gl.deleteBuffers(1, &self.vboColorCoords);
@@ -442,6 +436,7 @@ pub fn StaticQuadBatch(comptime layout: BatchLayout) type {
         }
 
         fn cacheShaderLocations(self: *Self) void {
+            self.shaderVersion = self.shader.version;
             self.attrCoord = @intCast(gl.getAttribLocation(self.shader.val.program, "coord3d"));
             if (comptime hasTex) self.attrTexCoord = @intCast(gl.getAttribLocation(self.shader.val.program, "texcoord"));
             if (comptime hasColor) self.attrColor = @intCast(gl.getAttribLocation(self.shader.val.program, "color"));
@@ -478,8 +473,7 @@ pub fn StaticQuadBatch(comptime layout: BatchLayout) type {
         }
 
         fn refreshShader(self: *Self) void {
-            if (!self.shader.dirty) return;
-            self.shader = self.shader.reacquire();
+            if (self.shader.version == self.shaderVersion) return;
             self.cacheShaderLocations();
             self.rebindVaoAttribs();
         }

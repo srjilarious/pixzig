@@ -27,7 +27,7 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        self.pointer.deinit();
+        _ = self;
     }
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {

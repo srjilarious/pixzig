@@ -2,9 +2,6 @@ const std = @import("std");
 const paths = @import("./paths.zig");
 const resources = @import("./resources.zig");
 const ResourceManager = resources.ResourceManager;
-const TextureHandle = resources.TextureHandle;
-const FontAtlasHandle = resources.FontAtlasHandle;
-const TileMapHandle = resources.TileMapHandle;
 
 /// The default icon used for applications in pixzig.
 pub const icon48x48 = @embedFile("assets/pixzig_icon.png");
@@ -27,21 +24,8 @@ fn logAssetIoError(err: anyerror, kind: []const u8, path: []const u8) void {
 /// Asset kinds for use in manifests. `raw` marks files that must be present
 /// at runtime but are not loaded through `ResourceManager` (e.g. audio files,
 /// Lua scripts, fonts consumed directly by the renderer). `loadGroup` skips
-/// raw assets -- they produce no ref-counted handle.
+/// raw assets.
 pub const AssetKind = enum { texture, atlas, font, tilemap, raw };
-
-/// A ref-counted handle to any asset type. Call `release()` when done.
-pub const AnyHandle = union(enum) {
-    texture: *TextureHandle,
-    font: *FontAtlasHandle,
-    tilemap: *TileMapHandle,
-
-    pub fn release(self: AnyHandle) void {
-        switch (self) {
-            inline else => |h| h.release(),
-        }
-    }
-};
 
 const AssetDef = struct {
     kind: AssetKind,
@@ -95,9 +79,8 @@ pub const ManifestSource = union(enum) {
 /// Loads and manages a JSON asset manifest. Multiple manifests may coexist;
 /// each interacts with the shared `ResourceManager`.
 ///
-/// Resources are loaded lazily per group. The manifest acquires ref-counted
-/// handles on `loadGroup` and releases them on `unloadGroup`, so the ref count
-/// drops to zero only when all callers have also released their own handles.
+/// Resources are loaded lazily per group, into the shared `ResourceManager`,
+/// which keeps them until it deinits.
 ///
 /// **Boot group**: if the manifest JSON contains a group named `"boot"`, it is
 /// loaded automatically when the manifest is opened (via `loadFromFile` or
@@ -116,19 +99,10 @@ pub const AssetManifest = struct {
     groups: std.StringHashMap([]const []const u8),
     /// asset id -> definition (path slice into `parsed`).
     defs: std.StringHashMap(AssetDef),
-    /// group name -> acquired handles (keys owned by `loaded`).
-    loaded: std.StringHashMap([]AnyHandle),
+    /// Names of the groups `loadGroup` has loaded (keys owned).
+    loaded: std.StringHashMap(void),
 
     const Self = @This();
-
-    fn appendAcquiredHandle(
-        self: *Self,
-        handles: *std.ArrayListUnmanaged(AnyHandle),
-        handle: AnyHandle,
-    ) !void {
-        errdefer handle.release();
-        try handles.append(self.alloc, handle);
-    }
 
     /// Parse a manifest JSON file and return an `AssetManifest`. No assets are
     /// loaded yet; call `loadGroup` to load a group of assets.
@@ -243,13 +217,13 @@ pub const AssetManifest = struct {
             .parsed = parsed,
             .groups = groups,
             .defs = defs,
-            .loaded = std.StringHashMap([]AnyHandle).init(alloc),
+            .loaded = std.StringHashMap(void).init(alloc),
         };
     }
 
-    /// Load all assets in `group_name`, acquiring ref-counted handles.
+    /// Load all assets in `group_name` into the `ResourceManager`.
     /// Calling this on an already-loaded group is a no-op.
-    /// Assets with kind `raw` are skipped (no ResourceManager handle is created).
+    /// Assets with kind `raw` are skipped (nothing is loaded for them).
     pub fn loadGroup(self: *Self, group_name: []const u8) !void {
         if (self.loaded.contains(group_name)) return;
 
@@ -257,12 +231,6 @@ pub const AssetManifest = struct {
             std.log.err("AssetManifest: unknown group '{s}'", .{group_name});
             return error.UnknownGroup;
         };
-
-        var handles: std.ArrayListUnmanaged(AnyHandle) = .empty;
-        errdefer {
-            for (handles.items) |h| h.release();
-            handles.deinit(self.alloc);
-        }
 
         for (ids) |id| {
             const def = self.defs.get(id) orelse {
@@ -279,62 +247,47 @@ pub const AssetManifest = struct {
                         logAssetIoError(err, "texture", full_path);
                         return err;
                     };
-                    try self.appendAcquiredHandle(&handles, .{ .texture = try self.res.acquireTexture(id) });
                 },
                 .atlas => {
                     _ = self.res.loadAtlasNamed(id, full_path) catch |err| {
                         logAssetIoError(err, "atlas", full_path);
                         return err;
                     };
-                    try self.appendAcquiredHandle(&handles, .{ .texture = try self.res.acquireTexture(id) });
                 },
                 .font => {
                     _ = self.res.loadFontFromTtfFile(id, full_path, def.fontSize) catch |err| {
                         logAssetIoError(err, "font", full_path);
                         return err;
                     };
-                    try self.appendAcquiredHandle(&handles, .{ .font = try self.res.acquireFontAtlas(id) });
                 },
                 .tilemap => {
                     _ = self.res.loadTileMap(id, full_path) catch |err| {
                         logAssetIoError(err, "tilemap", full_path);
                         return err;
                     };
-                    try self.appendAcquiredHandle(&handles, .{ .tilemap = try self.res.acquireTileMap(id) });
                 },
             }
         }
 
         const owned_group_name = try self.alloc.dupe(u8, group_name);
         errdefer self.alloc.free(owned_group_name);
-
-        const owned_handles = try handles.toOwnedSlice(self.alloc);
-        errdefer {
-            for (owned_handles) |h| h.release();
-            self.alloc.free(owned_handles);
-        }
-
-        try self.loaded.put(owned_group_name, owned_handles);
+        try self.loaded.put(owned_group_name, {});
     }
 
-    /// Release the manifest's ref-counted handles for all assets in `group_name`.
-    /// This allows assets to be freed once all other callers release their handles.
-    /// Silently ignores groups that are not currently loaded.
+    /// Marks `group_name` as not loaded, so the next `loadGroup` loads its
+    /// files again (replacing the resources in place). The resources
+    /// themselves stay in the `ResourceManager` -- handles never dangle --
+    /// until it deinits. Silently ignores groups that are not loaded.
     pub fn unloadGroup(self: *Self, group_name: []const u8) void {
         const entry = self.loaded.fetchRemove(group_name) orelse return;
-        for (entry.value) |h| h.release();
-        self.alloc.free(entry.value);
         self.alloc.free(entry.key);
     }
 
-    /// Unload all loaded groups and free all manifest resources.
+    /// Frees the manifest's own data. Loaded resources stay in the
+    /// `ResourceManager`.
     pub fn deinit(self: *Self) void {
-        var it = self.loaded.iterator();
-        while (it.next()) |e| {
-            for (e.value_ptr.*) |h| h.release();
-            self.alloc.free(e.value_ptr.*);
-            self.alloc.free(e.key_ptr.*);
-        }
+        var it = self.loaded.keyIterator();
+        while (it.next()) |key| self.alloc.free(key.*);
         self.loaded.deinit();
         self.defs.deinit();
         self.groups.deinit();

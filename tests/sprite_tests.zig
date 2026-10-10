@@ -4,24 +4,24 @@ const pixzig = @import("pixzig");
 const RectF = pixzig.RectF;
 const RectI = pixzig.RectI;
 const ResourceManager = pixzig.resources.ResourceManager;
-const ManagedTexture = pixzig.resources.ManagedTexture;
-const Texture = pixzig.Texture;
+const TextureHandle = pixzig.resources.TextureHandle;
 const FrameSequenceManager = pixzig.sprites.FrameSequenceManager;
-
-fn noopFreeTexture(_: Texture) void {}
+const FrameSequence = pixzig.sprites.FrameSequence;
+const Frame = pixzig.sprites.Frame;
+const ActorState = pixzig.sprites.ActorState;
+const Actor = pixzig.sprites.Actor;
+const Sprite = pixzig.sprites.Sprite;
 
 fn createDummyTextureManager(alloc: std.mem.Allocator) !ResourceManager {
     var tm = ResourceManager.init(alloc);
-    var parent = ManagedTexture.init(alloc, 999, "test", noopFreeTexture);
-    defer parent.deinit();
-    try parent.add(.{
+    const parent = TextureHandle{ .val = .{
         .texture = 0,
         .size = .{ .x = 128, .y = 128 },
         .src = RectF.fromCoords(0, 0, 128, 128, 128, 128),
-    });
-    _ = try tm.addSubTexture(parent.get().?, "player_right_1", RectI.init(0, 0, 8, 8));
-    _ = try tm.addSubTexture(parent.get().?, "player_right_2", RectI.init(8, 0, 8, 8));
-    _ = try tm.addSubTexture(parent.get().?, "player_right_3", RectI.init(16, 0, 8, 8));
+    } };
+    _ = try tm.addSubTexture(&parent, "player_right_1", RectI.init(0, 0, 8, 8));
+    _ = try tm.addSubTexture(&parent, "player_right_2", RectI.init(8, 0, 8, 8));
+    _ = try tm.addSubTexture(&parent, "player_right_3", RectI.init(16, 0, 8, 8));
     return tm;
 }
 
@@ -44,8 +44,6 @@ pub fn frameSequenceFileLoadTest(io: std.Io, alloc: std.mem.Allocator) !void {
         \\ }
     ;
 
-    // tm must outlive seqMgr: FrameSequence.deinit releases each frame's
-    // texture handle back into tm, so tm needs to deinit last.
     var tm = try createDummyTextureManager(alloc);
     defer tm.deinit();
 
@@ -83,7 +81,6 @@ pub fn actorSequenceFileLoadTest(io: std.Io, alloc: std.mem.Allocator) !void {
         \\ }
     ;
 
-    // tm must outlive seqMgr (see frameSequenceFileLoadTest).
     var tm = try createDummyTextureManager(alloc);
     defer tm.deinit();
 
@@ -127,8 +124,7 @@ pub fn createSpriteByNameUsesFrameSizeTest(io: std.Io, alloc: std.mem.Allocator)
     var tm = try createDummyTextureManager(alloc);
     defer tm.deinit();
 
-    var spr = try tm.createSprite("player_right_3");
-    defer spr.deinit();
+    const spr = try tm.createSprite("player_right_3");
     try testz.expectEqual(spr.size.x, 8.0);
     try testz.expectEqual(spr.size.y, 8.0);
     try testz.expectEqual(spr.dest.r, 8.0);
@@ -143,7 +139,6 @@ pub fn spriteFloatPosAndScaleStayInSyncTest(io: std.Io, alloc: std.mem.Allocator
     defer tm.deinit();
 
     var spr = try tm.createSprite("player_right_1");
-    defer spr.deinit();
 
     spr.setPosF(10.5, 20.25);
     spr.setScale(2, 3);
@@ -167,7 +162,6 @@ pub fn spriteOriginPlacesPivotAtPosTest(io: std.Io, alloc: std.mem.Allocator) !v
     defer tm.deinit();
 
     var spr = try tm.createSprite("player_right_1"); // 8x8 frame
-    defer spr.deinit();
 
     // Bottom-center pivot: the frame's (4, 8) lands on (100, 50).
     spr.setOriginNormalized(0.5, 1);
@@ -193,7 +187,6 @@ pub fn spriteSetOriginKeepsPositionTest(io: std.Io, alloc: std.mem.Allocator) !v
     defer tm.deinit();
 
     var spr = try tm.createSprite("player_right_1");
-    defer spr.deinit();
 
     spr.setPos(10, 10);
     spr.setOrigin(2, 3);
@@ -204,61 +197,59 @@ pub fn spriteSetOriginKeepsPositionTest(io: std.Io, alloc: std.mem.Allocator) !v
     try testz.expectEqual(spr.dest.t, 7.0);
 }
 
-pub fn spriteRetainsAndReleasesItsHandleTest(io: std.Io, alloc: std.mem.Allocator) !void {
+fn makeWalkSeq(alloc: std.mem.Allocator, tm: *ResourceManager) !FrameSequence {
+    return FrameSequence.init(alloc, &[_]Frame{
+        .{ .tex = try tm.getTexture("player_right_2"), .frameTimeMs = 100 },
+        .{ .tex = try tm.getTexture("player_right_3"), .frameTimeMs = 100 },
+    });
+}
+
+pub fn frameApplyCombinesFlipsTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     var tm = try createDummyTextureManager(alloc);
     defer tm.deinit();
 
-    const tex = try tm.getTexture("player_right_1");
-    try testz.expectEqual(tex.refCount, 0);
+    const tex = try tm.getTexture("player_right_2");
+    const src = tex.val.src;
+    var spr = Sprite.create(tex);
 
-    var a = pixzig.sprites.Sprite.create(tex);
-    var b = pixzig.sprites.Sprite.create(tex);
-    try testz.expectEqual(tex.refCount, 2);
-    a.deinit();
-    b.deinit();
-    try testz.expectEqual(tex.refCount, 0);
+    // Frame flipped on x, state flipped on both: x cancels, y remains.
+    const frame: Frame = .{ .tex = tex, .frameTimeMs = 100, .flipX = true };
+    frame.apply(&spr, true, true);
+    try testz.expectEqual(spr.srcCoords.l, src.l);
+    try testz.expectEqual(spr.srcCoords.r, src.r);
+    try testz.expectEqual(spr.srcCoords.t, src.b);
+    try testz.expectEqual(spr.srcCoords.b, src.t);
+
+    frame.apply(&spr, false, false);
+    try testz.expectEqual(spr.srcCoords.l, src.r);
+    try testz.expectEqual(spr.srcCoords.r, src.l);
+    try testz.expectEqual(spr.srcCoords.t, src.t);
 }
 
-fn makeWalkSeq(alloc: std.mem.Allocator, tm: *ResourceManager) !pixzig.sprites.FrameSequence {
-    var seq = try pixzig.sprites.FrameSequence.init(alloc, &[_]pixzig.sprites.Frame{
-        .{ .tex = try tm.acquireTexture("player_right_2"), .frameTimeMs = 100, .flip = .none },
-        .{ .tex = try tm.acquireTexture("player_right_3"), .frameTimeMs = 100, .flip = .none },
-    });
-    seq.ownsHandles = true;
-    return seq;
-}
-
-pub fn actorOwnsSpriteAndAppliesFramesTest(io: std.Io, alloc: std.mem.Allocator) !void {
+pub fn actorAppliesFramesTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     var tm = try createDummyTextureManager(alloc);
     defer tm.deinit();
 
     var seq = try makeWalkSeq(alloc, &tm);
     defer seq.deinit();
+    const walk: ActorState = .{ .name = "walk", .sequence = &seq };
 
-    const start = try tm.getTexture("player_right_1");
     const f2 = try tm.getTexture("player_right_2");
     const f3 = try tm.getTexture("player_right_3");
 
-    var actor = pixzig.sprites.Actor.init(alloc, try tm.createSprite("player_right_1"));
-    try testz.expectEqual(start.refCount, 1);
+    var actor = Actor.init(alloc, try tm.createSprite("player_right_1"));
+    defer actor.deinit();
 
-    // Adding the first state applies its first frame right away, moving the
-    // sprite's reference from player_right_1 to player_right_2.
-    _ = try actor.addState(&.{ .name = "walk", .sequence = &seq }, .{});
+    // Adding the first state applies its first frame right away.
+    _ = try actor.addState(&walk, .{});
     try testz.expectEqual(actor.sprite.texture, f2);
-    try testz.expectEqual(start.refCount, 0);
     try testz.expectEqual(actor.sprite.srcCoords.l, f2.val.src.l);
 
     actor.update(150);
     try testz.expectEqual(actor.sprite.texture, f3);
     try testz.expectEqual(actor.sprite.srcCoords.l, f3.val.src.l);
-
-    // deinit releases the sprite's reference too.
-    const seqRefs = f3.refCount;
-    actor.deinit();
-    try testz.expectEqual(f3.refCount, seqRefs - 1);
 }
 
 pub fn actorSetStateAppliesFirstFrameTest(io: std.Io, alloc: std.mem.Allocator) !void {
@@ -268,11 +259,13 @@ pub fn actorSetStateAppliesFirstFrameTest(io: std.Io, alloc: std.mem.Allocator) 
 
     var seq = try makeWalkSeq(alloc, &tm);
     defer seq.deinit();
+    const right: ActorState = .{ .name = "right", .sequence = &seq };
+    const left: ActorState = .{ .name = "left", .sequence = &seq, .flipX = true };
 
-    var actor = pixzig.sprites.Actor.init(alloc, try tm.createSprite("player_right_1"));
+    var actor = Actor.init(alloc, try tm.createSprite("player_right_1"));
     defer actor.deinit();
-    _ = try actor.addState(&.{ .name = "right", .sequence = &seq }, .{});
-    _ = try actor.addState(&.{ .name = "left", .sequence = &seq, .flip = .horz }, .{});
+    _ = try actor.addState(&right, .{});
+    _ = try actor.addState(&left, .{});
 
     actor.update(150); // now on the second frame of "right"
     try actor.setState("left", .{});
@@ -283,13 +276,78 @@ pub fn actorSetStateAppliesFirstFrameTest(io: std.Io, alloc: std.mem.Allocator) 
     try testz.expectEqual(actor.sprite.srcCoords.r, f2.val.src.l);
 }
 
+pub fn actorAliasedStateNamesTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var tm = try createDummyTextureManager(alloc);
+    defer tm.deinit();
+
+    var seq = try makeWalkSeq(alloc, &tm);
+    defer seq.deinit();
+    const redLeft: ActorState = .{ .name = "red_left", .sequence = &seq };
+    const redRight: ActorState = .{ .name = "red_right", .sequence = &seq, .flipX = true };
+
+    var actor = Actor.init(alloc, try tm.createSprite("player_right_1"));
+    defer actor.deinit();
+
+    // The alias is copied, so a temporary buffer is fine.
+    var buf: [8]u8 = undefined;
+    _ = try actor.addState(&redLeft, .{ .name = try std.fmt.bufPrint(&buf, "left", .{}) });
+    @memset(&buf, 'x');
+    _ = try actor.addState(&redRight, .{ .name = "right" });
+
+    try testz.expectEqualStr(actor.currName, "left");
+    try testz.expectEqual(actor.currState.?, &redLeft);
+
+    try actor.setState("right", .{});
+    try testz.expectEqualStr(actor.currName, "right");
+    try testz.expectEqual(actor.currState.?, &redRight);
+    try testz.expectError(actor.setState("red_right", .{}), error.UnknownActorState);
+
+    // Already in "right": a no-op that doesn't restart the animation.
+    actor.update(150);
+    try actor.setState("right", .{});
+    try testz.expectEqual(actor.currFrame, 1);
+}
+
+pub fn actorsShareManagerStatesTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var tm = try createDummyTextureManager(alloc);
+    defer tm.deinit();
+
+    var seqMgr = try FrameSequenceManager.init(alloc);
+    defer seqMgr.deinit();
+    try seqMgr.addSeq("walk", try makeWalkSeq(alloc, &tm));
+    try seqMgr.addState(.{ .name = "walk", .sequence = seqMgr.getSeq("walk").? });
+    const state = seqMgr.getState("walk").?;
+
+    var a = Actor.init(alloc, try tm.createSprite("player_right_1"));
+    defer a.deinit();
+    var b = Actor.init(alloc, try tm.createSprite("player_right_1"));
+    defer b.deinit();
+    _ = try a.addState(state, .{});
+    _ = try b.addState(state, .{});
+    try testz.expectEqual(a.currState.?, b.currState.?);
+
+    // Re-adding a state or sequence updates it in place, so the actors'
+    // pointers stay valid and see the change.
+    try seqMgr.addState(.{ .name = "walk", .sequence = seqMgr.getSeq("walk").?, .flipY = true });
+    try testz.expectEqual(seqMgr.getState("walk").?, state);
+    try testz.expectTrue(a.currState.?.flipY);
+
+    const seqPtr = seqMgr.getSeq("walk").?;
+    try seqMgr.addSeq("walk", try FrameSequence.init(alloc, &[_]Frame{
+        .{ .tex = try tm.getTexture("player_right_1"), .frameTimeMs = 50 },
+    }));
+    try testz.expectEqual(seqMgr.getSeq("walk").?, seqPtr);
+    try testz.expectEqual(state.sequence.frames.items.len, 1);
+}
+
 // A two-frame play-once sequence (player_right_1, then _3), for "attack" states.
-fn makeOnceSeq(alloc: std.mem.Allocator, tm: *ResourceManager) !pixzig.sprites.FrameSequence {
-    var seq = try pixzig.sprites.FrameSequence.init(alloc, &[_]pixzig.sprites.Frame{
-        .{ .tex = try tm.acquireTexture("player_right_1"), .frameTimeMs = 100, .flip = .none },
-        .{ .tex = try tm.acquireTexture("player_right_3"), .frameTimeMs = 100, .flip = .none },
+fn makeOnceSeq(alloc: std.mem.Allocator, tm: *ResourceManager) !FrameSequence {
+    var seq = try FrameSequence.init(alloc, &[_]Frame{
+        .{ .tex = try tm.getTexture("player_right_1"), .frameTimeMs = 100 },
+        .{ .tex = try tm.getTexture("player_right_3"), .frameTimeMs = 100 },
     });
-    seq.ownsHandles = true;
     seq.mode = .once;
     return seq;
 }
@@ -301,10 +359,11 @@ pub fn actorOnceHoldsLastFrameTest(io: std.Io, alloc: std.mem.Allocator) !void {
 
     var seq = try makeOnceSeq(alloc, &tm);
     defer seq.deinit();
+    const attack: ActorState = .{ .name = "attack", .sequence = &seq };
 
-    var actor = pixzig.sprites.Actor.init(alloc, try tm.createSprite("player_right_1"));
+    var actor = Actor.init(alloc, try tm.createSprite("player_right_1"));
     defer actor.deinit();
-    _ = try actor.addState(&.{ .name = "attack", .sequence = &seq }, .{});
+    _ = try actor.addState(&attack, .{});
 
     const f3 = try tm.getTexture("player_right_3");
     actor.update(150); // second (last) frame
@@ -339,11 +398,13 @@ pub fn actorOnceFollowsNextStateTest(io: std.Io, alloc: std.mem.Allocator) !void
     defer walk.deinit();
     var attack = try makeOnceSeq(alloc, &tm);
     defer attack.deinit();
+    const idleState: ActorState = .{ .name = "idle", .sequence = &walk };
+    const attackState: ActorState = .{ .name = "attack", .nextState = "idle", .sequence = &attack };
 
-    var actor = pixzig.sprites.Actor.init(alloc, try tm.createSprite("player_right_1"));
+    var actor = Actor.init(alloc, try tm.createSprite("player_right_1"));
     defer actor.deinit();
-    _ = try actor.addState(&.{ .name = "idle", .sequence = &walk }, .{});
-    _ = try actor.addState(&.{ .name = "attack", .nextState = "idle", .sequence = &attack }, .{});
+    _ = try actor.addState(&idleState, .{});
+    _ = try actor.addState(&attackState, .{});
 
     try actor.setState("attack", .{});
     try testz.expectEqual(actor.sprite.texture, try tm.getTexture("player_right_1"));
@@ -351,7 +412,7 @@ pub fn actorOnceFollowsNextStateTest(io: std.Io, alloc: std.mem.Allocator) !void
     actor.update(150);
 
     // Back on idle's first frame, which is applied right away.
-    try testz.expectEqualStr(actor.currState.?.name, "idle");
+    try testz.expectEqualStr(actor.currName, "idle");
     try testz.expectEqual(actor.currFrame, 0);
     try testz.expectEqual(actor.sprite.texture, try tm.getTexture("player_right_2"));
     try testz.expectFalse(actor.finished());
@@ -364,14 +425,15 @@ pub fn actorOnceUnknownNextStateHoldsTest(io: std.Io, alloc: std.mem.Allocator) 
 
     var attack = try makeOnceSeq(alloc, &tm);
     defer attack.deinit();
+    const attackState: ActorState = .{ .name = "attack", .nextState = "missing", .sequence = &attack };
 
-    var actor = pixzig.sprites.Actor.init(alloc, try tm.createSprite("player_right_1"));
+    var actor = Actor.init(alloc, try tm.createSprite("player_right_1"));
     defer actor.deinit();
-    _ = try actor.addState(&.{ .name = "attack", .nextState = "missing", .sequence = &attack }, .{});
+    _ = try actor.addState(&attackState, .{});
 
     actor.update(150);
     actor.update(150);
-    try testz.expectEqualStr(actor.currState.?.name, "attack");
+    try testz.expectEqualStr(actor.currName, "attack");
     try testz.expectTrue(actor.finished());
 }
 
@@ -382,15 +444,17 @@ pub fn actorLoopIgnoresNextStateTest(io: std.Io, alloc: std.mem.Allocator) !void
 
     var walk = try makeWalkSeq(alloc, &tm);
     defer walk.deinit();
+    const walkState: ActorState = .{ .name = "walk", .nextState = "other", .sequence = &walk };
+    const otherState: ActorState = .{ .name = "other", .sequence = &walk };
 
-    var actor = pixzig.sprites.Actor.init(alloc, try tm.createSprite("player_right_1"));
+    var actor = Actor.init(alloc, try tm.createSprite("player_right_1"));
     defer actor.deinit();
-    _ = try actor.addState(&.{ .name = "walk", .nextState = "other", .sequence = &walk }, .{});
-    _ = try actor.addState(&.{ .name = "other", .sequence = &walk }, .{});
+    _ = try actor.addState(&walkState, .{});
+    _ = try actor.addState(&otherState, .{});
 
     actor.update(150);
     actor.update(150); // wraps
-    try testz.expectEqualStr(actor.currState.?.name, "walk");
+    try testz.expectEqualStr(actor.currName, "walk");
     try testz.expectEqual(actor.currFrame, 0);
     try testz.expectFalse(actor.finished());
 }
@@ -402,13 +466,14 @@ pub fn actorSetStateUnknownErrorsTest(io: std.Io, alloc: std.mem.Allocator) !voi
 
     var walk = try makeWalkSeq(alloc, &tm);
     defer walk.deinit();
+    const walkState: ActorState = .{ .name = "walk", .sequence = &walk };
 
-    var actor = pixzig.sprites.Actor.init(alloc, try tm.createSprite("player_right_1"));
+    var actor = Actor.init(alloc, try tm.createSprite("player_right_1"));
     defer actor.deinit();
-    _ = try actor.addState(&.{ .name = "walk", .sequence = &walk }, .{});
+    _ = try actor.addState(&walkState, .{});
 
     try testz.expectError(actor.setState("nope", .{}), error.UnknownActorState);
-    try testz.expectEqualStr(actor.currState.?.name, "walk");
+    try testz.expectEqualStr(actor.currName, "walk");
 }
 
 pub fn spriteSetSrcRectIsPixelsWithinFrameTest(io: std.Io, alloc: std.mem.Allocator) !void {
@@ -417,7 +482,6 @@ pub fn spriteSetSrcRectIsPixelsWithinFrameTest(io: std.Io, alloc: std.mem.Alloca
     defer tm.deinit();
 
     var spr = try tm.createSprite("player_right_3");
-    defer spr.deinit();
 
     // player_right_3 starts at image pixel 16; its (2,0)-(6,8) is image (18,0)-(22,8).
     spr.setSrcRect(RectI.init(2, 0, 4, 8));
@@ -451,12 +515,13 @@ pub fn actorCurrEmptySequenceIsNullTest(io: std.Io, alloc: std.mem.Allocator) !v
     var tm = try createDummyTextureManager(alloc);
     defer tm.deinit();
 
-    var empty = try pixzig.sprites.FrameSequence.initEmpty(alloc);
+    var empty = try FrameSequence.initEmpty(alloc);
     defer empty.deinit();
+    const idle: ActorState = .{ .name = "idle", .sequence = &empty };
 
-    var actor = pixzig.sprites.Actor.init(alloc, try tm.createSprite("player_right_1"));
+    var actor = Actor.init(alloc, try tm.createSprite("player_right_1"));
     defer actor.deinit();
-    _ = try actor.addState(&.{ .name = "idle", .sequence = &empty }, .{});
+    _ = try actor.addState(&idle, .{});
 
     try testz.expectTrue(actor.curr() == null);
 }

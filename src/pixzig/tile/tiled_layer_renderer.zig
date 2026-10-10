@@ -24,9 +24,9 @@ const TileIndexMap = @import("./tile_index_map.zig").TileIndexMap;
 
 pub const TiledLayerRenderer = struct {
     mapSize: Vec2U = undefined,
-    /// Refcounted shader handle. Refreshed in `draw` when dirty.
     shader: *ShaderHandle,
-    /// Refcounted texture handle. Refreshed in `draw` when dirty.
+    /// `shader.version` the cached locations come from.
+    shaderVersion: u32 = 0,
     texture: *TextureHandle,
     vao: u32 = 0,
     vboVertices: u32 = 0,
@@ -49,14 +49,9 @@ pub const TiledLayerRenderer = struct {
         shader: *ShaderHandle,
         texture: *TextureHandle,
     ) !TiledLayerRenderer {
-        const shader_handle = shader.retain();
-        errdefer shader_handle.release();
-        const texture_handle = texture.retain();
-        errdefer texture_handle.release();
-
         var tr = TiledLayerRenderer{
-            .shader = shader_handle,
-            .texture = texture_handle,
+            .shader = shader,
+            .texture = texture,
             .alloc = alloc,
             .tileIndexMap = TileIndexMap.init(alloc),
         };
@@ -76,8 +71,6 @@ pub const TiledLayerRenderer = struct {
     }
 
     pub fn deinit(self: *TiledLayerRenderer) void {
-        self.texture.release();
-        self.shader.release();
         gl.deleteVertexArrays(1, &self.vao);
         gl.deleteBuffers(1, &self.vboVertices);
         gl.deleteBuffers(1, &self.vboTexCoords);
@@ -91,20 +84,15 @@ pub const TiledLayerRenderer = struct {
     }
 
     fn cacheShaderLocations(self: *TiledLayerRenderer) void {
+        self.shaderVersion = self.shader.version;
         self.attrCoord = @intCast(gl.getAttribLocation(self.shader.val.program, "coord3d"));
         self.attrTexCoord = @intCast(gl.getAttribLocation(self.shader.val.program, "texcoord"));
         self.uniformMVP = @intCast(gl.getUniformLocation(self.shader.val.program, "projectionMatrix"));
     }
 
     fn refreshShader(self: *TiledLayerRenderer) void {
-        if (!self.shader.dirty) return;
-        self.shader = self.shader.reacquire();
+        if (self.shader.version == self.shaderVersion) return;
         self.cacheShaderLocations();
-    }
-
-    fn refreshTexture(self: *TiledLayerRenderer) void {
-        if (!self.texture.dirty) return;
-        self.texture = self.texture.reacquire();
     }
 
     fn tileCoords(idx: i32, tileset: *TileSet) RectF {
@@ -354,7 +342,6 @@ pub const TiledLayerRenderer = struct {
 
     pub fn draw(self: *TiledLayerRenderer, tiles: *TileLayer, mvp: zmath.Mat) !void {
         self.refreshShader();
-        self.refreshTexture();
 
         const mvpArr = zmath.matToArr(mvp);
         const layerWidth: usize = @intCast(tiles.size.x);

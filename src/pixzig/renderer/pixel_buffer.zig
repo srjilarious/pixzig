@@ -12,7 +12,6 @@ const ShaderHandle = resources.ShaderHandle;
 pub const PixelBuffer = struct {
     texId: c_uint,
     vbo: c_uint,
-    /// Refcounted shader handle. Refreshed in `render` when dirty.
     shader: *ShaderHandle,
     size: Vec2U,
     pixels: []u8,
@@ -31,19 +30,15 @@ pub const PixelBuffer = struct {
         errdefer allocator.free(pixels);
         @memset(pixels, 0);
 
-        // Load the shader and take our own reference on it.
         const shader = try res.loadShader(
             shaders.PixelBuffShader,
             &shaders.PixBuffVertexShader,
             &shaders.TexPixelShader,
         );
-        const handle = shader.retain();
-        errdefer handle.release();
-
         var self = PixelBuffer{
             .texId = undefined,
             .vbo = undefined,
-            .shader = handle,
+            .shader = shader,
             .size = size,
             .pixels = pixels,
             .allocator = allocator,
@@ -97,7 +92,6 @@ pub const PixelBuffer = struct {
 
     /// Frees the pixel buffer, texture and VBO.
     pub fn deinit(self: *PixelBuffer) void {
-        self.shader.release();
         self.allocator.free(self.pixels);
         gl.deleteTextures(1, &self.texId);
         gl.deleteBuffers(1, &self.vbo);
@@ -122,15 +116,9 @@ pub const PixelBuffer = struct {
         }
     }
 
-    fn refreshShader(self: *PixelBuffer) void {
-        if (!self.shader.dirty) return;
-        self.shader = self.shader.reacquire();
-    }
-
     /// Uploads the current pixel buffer and draws the texture as a fullscreen quad
     /// via the VBO setup during init.
     pub fn render(self: *PixelBuffer) void {
-        self.refreshShader();
         // Upload pixel data to texture
         gl.bindTexture(gl.TEXTURE_2D, self.texId);
         gl.texSubImage2D(

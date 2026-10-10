@@ -16,8 +16,8 @@ const ResourceManager = resources.ResourceManager;
 const TextureHandle = resources.TextureHandle;
 
 pub const Sprite = struct {
-    /// The sprite's own reference to its texture, retained by `create` and
-    /// released by `deinit()`.
+    /// The texture (or atlas frame) the sprite draws from. Owned by the
+    /// `ResourceManager`; a hot reload updates it in place.
     texture: *TextureHandle,
     srcCoords: RectF,
     /// On-screen rectangle. Kept in sync by `setPos`/`setPosF`/`setSize`/
@@ -44,15 +44,14 @@ pub const Sprite = struct {
     /// (1). Takes precedence over `tint`. Null draws normally.
     fill: ?Color = null,
 
-    /// Builds a sprite the size of `tex`'s texture frame. The sprite retains
-    /// its own reference to `tex` and releases it in `deinit()`, so `tex` may
-    /// be either a borrowed handle (`ResourceManager.getTexture`) or one you
-    /// acquired and still release yourself. To create a sprite straight from
-    /// a texture name, use `ResourceManager.createSprite`.
+    /// Builds a sprite the size of `tex`'s texture frame. A sprite holds no
+    /// resources of its own, so there is nothing to deinit. To create a
+    /// sprite straight from a texture name, use
+    /// `ResourceManager.createSprite`.
     pub fn create(tex: *TextureHandle) Sprite {
         const size = tex.val.size.asVec2F();
         return Sprite{
-            .texture = tex.retain(),
+            .texture = tex,
             .srcCoords = tex.val.src,
             .dest = .{ .l = 0, .t = 0, .r = size.x, .b = size.y },
             .size = size,
@@ -62,20 +61,11 @@ pub const Sprite = struct {
         };
     }
 
-    /// Releases the sprite's texture reference. Call exactly once, when the
-    /// sprite is no longer needed.
-    pub fn deinit(self: *Sprite) void {
-        self.texture.release();
-    }
-
-    /// Switches the texture the sprite draws from, retaining `tex` and
-    /// releasing the previous one. Size, position, and `srcCoords` are left
-    /// alone; set `srcCoords` (or call `setSrcRect`) to match the new frame.
+    /// Switches the texture the sprite draws from. Size, position, and
+    /// `srcCoords` are left alone; set `srcCoords` (or call `setSrcRect`) to
+    /// match the new frame.
     pub fn setTexture(self: *Sprite, tex: *TextureHandle) void {
-        if (tex == self.texture) return;
-        const old = self.texture;
-        self.texture = tex.retain();
-        old.release();
+        self.texture = tex;
     }
 
     /// Moves the sprite's origin to integer coordinates.
@@ -169,87 +159,70 @@ pub fn pixelsToUv(tex: *const Texture, px: RectI) RectF {
     };
 }
 
-/// A enum for flipping sprites.
+/// How a sequence file names a flip. In code, frames and states use
+/// `flipX`/`flipY` bools instead; see `Flip.x`/`Flip.y`.
 pub const Flip = enum {
     none,
     horz,
     vert,
     both,
+
+    pub fn x(self: Flip) bool {
+        return self == .horz or self == .both;
+    }
+
+    pub fn y(self: Flip) bool {
+        return self == .vert or self == .both;
+    }
 };
 
 pub const Frame = struct {
     tex: *TextureHandle,
     frameTimeMs: f64,
-    flip: Flip,
+    flipX: bool = false,
+    flipY: bool = false,
 
     /// Points `spr` at this frame: switches its texture if the frame lives
-    /// on a different one, and sets `srcCoords` with the combined flip.
-    pub fn apply(self: *Frame, spr: *Sprite, extraFlip: Flip) void {
+    /// on a different one, and sets `srcCoords` with the frame's flip
+    /// combined with an extra one (the actor state's). Two flips on the same
+    /// axis cancel out.
+    pub fn apply(self: *const Frame, spr: *Sprite, extraFlipX: bool, extraFlipY: bool) void {
         spr.setTexture(self.tex);
         const src = self.tex.val.src;
-        const flip = blk: {
-            switch (self.flip) {
-                .none => break :blk extraFlip,
-                .horz => {
-                    switch (extraFlip) {
-                        .none => break :blk .horz,
-                        .horz => break :blk .none,
-                        .vert => break :blk .both,
-                        .both => break :blk .vert,
-                    }
-                },
-                .vert => {
-                    switch (extraFlip) {
-                        .none => break :blk .vert,
-                        .horz => break :blk .both,
-                        .vert => break :blk .none,
-                        .both => break :blk .horz,
-                    }
-                },
-                .both => {
-                    switch (extraFlip) {
-                        .none => break :blk .both,
-                        .horz => break :blk .vert,
-                        .vert => break :blk .horz,
-                        .both => break :blk .none,
-                    }
-                },
-            }
+        const flipX = self.flipX != extraFlipX;
+        const flipY = self.flipY != extraFlipY;
+        spr.srcCoords = .{
+            .l = if (flipX) src.r else src.l,
+            .r = if (flipX) src.l else src.r,
+            .t = if (flipY) src.b else src.t,
+            .b = if (flipY) src.t else src.b,
         };
-
-        switch (flip) {
-            .none => spr.srcCoords = src,
-            .horz => {
-                spr.srcCoords = .{ .l = src.r, .t = src.t, .r = src.l, .b = src.b };
-            },
-            .vert => {
-                spr.srcCoords = .{ .l = src.l, .t = src.b, .r = src.r, .b = src.t };
-            },
-            .both => {
-                spr.srcCoords = .{ .l = src.r, .t = src.b, .r = src.l, .b = src.t };
-            },
-        }
     }
 };
 
 pub const AnimPlayMode = enum { loop, once };
 
+/// A named way of playing a `FrameSequence`. States are immutable data that
+/// any number of actors share: `Actor.addState` keeps a pointer, so a state
+/// must outlive every actor using it. Keep states in a
+/// `FrameSequenceManager` (`addState`/`getState`), or in game-owned storage
+/// that lives as long as the actors.
 pub const ActorState = struct {
     name: []const u8,
     /// State to switch to when a `.once` sequence plays its last frame.
     /// Ignored for `.loop` sequences. Null holds the last frame instead.
     nextState: ?[]const u8 = null,
     sequence: *const FrameSequence,
-    flip: Flip = .none,
+    flipX: bool = false,
+    flipY: bool = false,
 };
 
+/// A list of frames and how to play them. The frames' texture handles
+/// belong to the `ResourceManager`, so `deinit` only frees the list.
 pub const FrameSequence = struct {
     frames: std.ArrayList(Frame),
     alloc: std.mem.Allocator,
     mode: AnimPlayMode,
-    /// When true, `deinit` releases each frame's texture handle. Set for
-    /// sequences loaded from JSON where this struct acquired the handles.
-    ownsHandles: bool = false,
 
     pub fn initEmpty(alloc: std.mem.Allocator) !FrameSequence {
         const frames: std.ArrayList(Frame) = .empty;
@@ -276,11 +249,6 @@ pub const FrameSequence = struct {
     }
 
     pub fn deinit(self: *FrameSequence) void {
-        if (self.ownsHandles) {
-            for (self.frames.items) |frame| {
-                frame.tex.release();
-            }
-        }
         self.frames.deinit(self.alloc);
     }
 };
@@ -378,15 +346,16 @@ pub const FrameSequenceManager = struct {
         // First load the frame sequences, since actor states need those for looking up.
         for (parsed.value.sequences) |fileSeq| {
             var seq = try FrameSequence.initEmpty(self.alloc);
-            seq.ownsHandles = true;
             // addSeq takes a shallow-copy of seq; on failure it just destroys the
             // allocation, so we remain responsible for freeing the frames backing array.
             errdefer seq.deinit();
             for (fileSeq.frames) |fileFrame| {
+                const flip = fileFrame.flip orelse .none;
                 try seq.frames.append(self.alloc, .{
-                    .tex = try texMgr.acquireTexture(fileFrame.name),
+                    .tex = try texMgr.getTexture(fileFrame.name),
                     .frameTimeMs = fileFrame.ms,
-                    .flip = fileFrame.flip orelse .none,
+                    .flipX = flip.x(),
+                    .flipY = flip.y(),
                 });
             }
             try self.addSeq(fileSeq.name, seq);
@@ -402,28 +371,34 @@ pub const FrameSequenceManager = struct {
                 .name = fileState.name,
                 .nextState = fileState.nextStateName,
                 .sequence = sequence,
-                .flip = fileState.flip,
+                .flipX = fileState.flip.x(),
+                .flipY = fileState.flip.y(),
             });
         }
     }
 
+    /// Takes ownership of `seq` and registers it as `name`. Re-adding a name
+    /// replaces the sequence in place, so states built on it see the new
+    /// frames.
     pub fn addSeq(self: *Self, name: []const u8, seq: FrameSequence) !void {
-        const new = try self.alloc.create(FrameSequence);
-        new.* = seq;
-        errdefer self.alloc.destroy(new);
-
-        if (self.sequences.getPtr(name)) |oldPtr| {
-            oldPtr.*.deinit();
-            self.alloc.destroy(oldPtr.*);
-            oldPtr.* = new;
+        if (self.sequences.get(name)) |old| {
+            old.deinit();
+            old.* = seq;
             return;
         }
+
+        const new = try self.alloc.create(FrameSequence);
+        errdefer self.alloc.destroy(new);
+        new.* = seq;
 
         const nameCopy = try self.alloc.dupe(u8, name);
         errdefer self.alloc.free(nameCopy);
         try self.sequences.put(nameCopy, new);
     }
 
+    /// Copies `state` (and its name strings) into the manager. Re-adding a
+    /// name replaces the state in place, so actors holding it see the
+    /// change.
     pub fn addState(self: *Self, state: ActorState) !void {
         const nextStateDupe: ?[]const u8 = if (state.nextState) |ns|
             try self.alloc.dupe(u8, ns)
@@ -431,20 +406,20 @@ pub const FrameSequenceManager = struct {
             null;
         errdefer if (nextStateDupe) |ns| self.alloc.free(ns);
 
+        if (self.actorStates.get(state.name)) |old| {
+            // The key and `old.name` share bytes, so keep that allocation.
+            const keptName = old.name;
+            if (old.nextState) |ns| self.alloc.free(ns);
+            old.* = state;
+            old.name = keptName;
+            old.nextState = nextStateDupe;
+            return;
+        }
+
         const new = try self.alloc.create(ActorState);
         errdefer self.alloc.destroy(new);
         new.* = state;
         new.nextState = nextStateDupe;
-
-        if (self.actorStates.getPtr(state.name)) |oldPtr| {
-            // deinit frees value.name (not the key), and they share the same
-            // bytes, so reuse the old name allocation to keep the key valid.
-            new.name = oldPtr.*.name;
-            if (oldPtr.*.nextState) |ns| self.alloc.free(ns);
-            self.alloc.destroy(oldPtr.*);
-            oldPtr.* = new;
-            return;
-        }
 
         const nameDupe = try self.alloc.dupe(u8, state.name);
         errdefer self.alloc.free(nameDupe);
@@ -462,31 +437,38 @@ pub const FrameSequenceManager = struct {
 };
 
 pub const AddStateOpts = struct {
+    /// The name this actor knows the state by (for `setState` and other
+    /// states' `nextState`). Defaults to `state.name`. Copied, so it can be
+    /// a temporary.
     name: ?[]const u8 = null,
 };
 
 /// Plays named animation states (each a `FrameSequence`) on the `Sprite` it
 /// owns. Move, scale, and draw it through `actor.sprite`.
 pub const Actor = struct {
-    /// The sprite this actor animates. Owned: `deinit` releases it.
+    /// The sprite this actor animates.
     sprite: Sprite,
-    states: std.StringHashMap(*ActorState),
+    /// The actor's own names for its states. Keys are owned; the states are
+    /// shared (see `ActorState`).
+    states: std.StringHashMap(*const ActorState),
     alloc: std.mem.Allocator,
-    currState: ?*ActorState,
-    currFrame: i32,
+    currState: ?*const ActorState,
+    /// The key `currState` was added under, which differs from
+    /// `currState.name` when it was added with `AddStateOpts.name`.
+    currName: []const u8,
+    currFrame: usize,
     currFrameTimeMs: f64,
     /// Set when a `.once` state with no `nextState` has played its last
     /// frame; the actor holds that frame until the state changes.
     done: bool,
 
-    /// Takes ownership of `sprite`; the actor releases it in `deinit`, so
-    /// don't deinit it separately.
     pub fn init(alloc: std.mem.Allocator, sprite: Sprite) Actor {
         return .{
             .sprite = sprite,
-            .states = std.StringHashMap(*ActorState).init(alloc),
+            .states = std.StringHashMap(*const ActorState).init(alloc),
             .alloc = alloc,
             .currState = null,
+            .currName = "",
             .currFrame = 0,
             .currFrameTimeMs = 0,
             .done = false,
@@ -495,49 +477,31 @@ pub const Actor = struct {
 
     pub fn deinit(self: *Actor) void {
         self.currState = null;
-        var iterator = self.states.iterator();
-        while (iterator.next()) |kv| {
-            self.alloc.free(kv.key_ptr.*);
-            if (kv.value_ptr.*.nextState) |ns| self.alloc.free(ns);
-            self.alloc.destroy(kv.value_ptr.*);
-        }
+        var iterator = self.states.keyIterator();
+        while (iterator.next()) |key| self.alloc.free(key.*);
         self.states.deinit();
-        self.sprite.deinit();
     }
 
-    /// Copies `state` into this actor. The first state added becomes current
-    /// and its first frame is applied to the sprite.
+    /// Adds `state` under `opts.name` (or its own name). The actor keeps a
+    /// pointer, not a copy, so `state` must outlive the actor (see
+    /// `ActorState`). Re-adding a name points it at the new state. The first
+    /// state added becomes current and its first frame is applied to the
+    /// sprite.
     pub fn addState(self: *Actor, state: *const ActorState, opts: AddStateOpts) !*Actor {
         const nameToUse = opts.name orelse state.name;
 
-        const nextStateCopy: ?[]const u8 = if (state.nextState) |ns|
-            try self.alloc.dupe(u8, ns)
-        else
-            null;
-        errdefer if (nextStateCopy) |ns| self.alloc.free(ns);
-
-        const val = try self.alloc.create(ActorState);
-        errdefer self.alloc.destroy(val);
-        val.* = state.*;
-        val.nextState = nextStateCopy;
-
-        if (self.states.getPtr(nameToUse)) |oldPtr| {
-            // deinit frees the key (which == val.name), so reuse the old key
-            // bytes as val.name to keep the key valid after we free the old entry.
-            val.name = oldPtr.*.name;
-            if (oldPtr.*.nextState) |ns| self.alloc.free(ns);
-            if (self.currState == oldPtr.*) self.currState = val;
-            self.alloc.destroy(oldPtr.*);
-            oldPtr.* = val;
+        if (self.states.getPtr(nameToUse)) |existing| {
+            if (self.currState == existing.*) self.currState = state;
+            existing.* = state;
             return self;
         }
 
         const nameCopy = try self.alloc.dupe(u8, nameToUse);
         errdefer self.alloc.free(nameCopy);
-        val.name = nameCopy;
-        try self.states.put(nameCopy, val);
+        try self.states.put(nameCopy, state);
         if (self.currState == null) {
-            self.currState = val;
+            self.currState = state;
+            self.currName = nameCopy;
             self.applyCurrentFrame();
         }
 
@@ -549,16 +513,15 @@ pub const Actor = struct {
     /// state has finished, unless `opts.reset` is set, which restarts it from
     /// its first frame. Returns `error.UnknownActorState` if `name` was never
     /// added.
-    pub fn setState(self: *Actor, name: []const u8, opts: struct{ reset: bool = false }) !void {
+    pub fn setState(self: *Actor, name: []const u8, opts: struct { reset: bool = false }) !void {
         if (self.currState == null) return;
 
         // Only reset the state if we're not in it, or asked to.
-        const state = self.states.get(name) orelse return error.UnknownActorState;
-        if(opts.reset or !std.mem.eql(u8, self.currState.?.name, name)) {
-            self.enterState(state);
+        const entry = self.states.getEntry(name) orelse return error.UnknownActorState;
+        if (opts.reset or !std.mem.eql(u8, self.currName, name)) {
+            self.enterState(entry.key_ptr.*, entry.value_ptr.*);
         }
     }
-
 
     /// True once a `.once` state with no `nextState` has played its last
     /// frame. Cleared by switching states.
@@ -576,7 +539,7 @@ pub const Actor = struct {
 
         const currSeq = state.sequence;
         if (currSeq.frames.items.len == 0) return;
-        const currFrame = &currSeq.frames.items[@intCast(self.currFrame)];
+        const currFrame = &currSeq.frames.items[self.currFrame];
         self.currFrameTimeMs += deltaMs;
         if (self.currFrameTimeMs > currFrame.frameTimeMs) {
             self.currFrameTimeMs -= currFrame.frameTimeMs;
@@ -598,10 +561,10 @@ pub const Actor = struct {
 
     /// A `.once` state just ran past its last frame: hand off to its
     /// `nextState`, or hold the last frame if it has none (or it's unknown).
-    fn finishOnce(self: *Actor, state: *ActorState) void {
+    fn finishOnce(self: *Actor, state: *const ActorState) void {
         if (state.nextState) |nextName| {
-            if (self.states.get(nextName)) |next| {
-                self.enterState(next);
+            if (self.states.getEntry(nextName)) |next| {
+                self.enterState(next.key_ptr.*, next.value_ptr.*);
                 return;
             }
             std.log.warn("Actor state '{s}' has unknown nextState '{s}'; holding its last frame.", .{ state.name, nextName });
@@ -610,8 +573,9 @@ pub const Actor = struct {
         self.done = true;
     }
 
-    fn enterState(self: *Actor, state: *ActorState) void {
+    fn enterState(self: *Actor, name: []const u8, state: *const ActorState) void {
         self.currState = state;
+        self.currName = name;
         self.currFrame = 0;
         self.currFrameTimeMs = 0;
         self.done = false;
@@ -620,16 +584,16 @@ pub const Actor = struct {
 
     /// The frame currently showing, or null with no state or an empty
     /// sequence.
-    pub fn curr(self: *Actor) ?*Frame {
+    pub fn curr(self: *const Actor) ?*const Frame {
         const state = self.currState orelse return null;
         const frames = state.sequence.frames.items;
         if (frames.len == 0) return null;
-        return &frames[@intCast(self.currFrame)];
+        return &frames[self.currFrame];
     }
 
     fn applyCurrentFrame(self: *Actor) void {
         const state = self.currState orelse return;
         if (state.sequence.frames.items.len == 0) return;
-        state.sequence.frames.items[@intCast(self.currFrame)].apply(&self.sprite, state.flip);
+        state.sequence.frames.items[self.currFrame].apply(&self.sprite, state.flipX, state.flipY);
     }
 };

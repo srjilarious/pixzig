@@ -1,6 +1,6 @@
 # Asset Manifest
 
-An asset manifest is a JSON file that describes a game's assets. At runtime, `AssetManifest` loads assets from disk via `ResourceManager` and manages their ref-counted handles.
+An asset manifest is a JSON file that describes a game's assets. At runtime, `AssetManifest` loads groups of assets from disk into the `ResourceManager`.
 
 ## Asset Paths
 
@@ -95,7 +95,7 @@ The engine owns the resulting `AssetManifest` and deinits it on shutdown; access
 
 ```zig
 try eng.manifest.loadGroup("game");
-self.player_tex = try eng.resources.acquireTexture("player_right_1");
+self.player_tex = try eng.resources.getTexture("player_right_1");
 ```
 
 Use this path when you want boot-group assets (fonts, the initial atlas) available before your app's `init` runs. Use the manual path below when you need to choose the manifest source at runtime or defer loading until later in `init`.
@@ -116,19 +116,18 @@ else
 errdefer manifest.deinit();
 ```
 
-Then load a group and acquire handles:
+Then load a group and look up its assets:
 
 ```zig
 try manifest.loadGroup("game");
 
-self.player_tex = try eng.resources.acquireTexture("player_right_1");
+self.player_tex = try eng.resources.getTexture("player_right_1");
 ```
 
-Release handles in `deinit`, then deinit the manifest:
+Deinit the manifest in your `deinit`. Handles need no cleanup; the resource manager frees the assets when it deinits.
 
 ```zig
 pub fn deinit(self: *App) void {
-    self.player_tex.release();
     self.manifest.deinit();
     self.alloc.destroy(self);
 }
@@ -139,12 +138,12 @@ pub fn deinit(self: *App) void {
 Groups can be loaded and unloaded at runtime:
 
 ```zig
-// Unload a group (releases manifest's handles; others still valid until released).
+// Mark the group unloaded.
 manifest.unloadGroup("game");
 
-// Reload later.
+// Load it again later: its files are read again and replace the assets in
+// place, so handles you kept still work.
 try manifest.loadGroup("game");
-self.player_tex = try eng.resources.acquireTexture("player_right_1");
 ```
 
-The manifest holds one ref per asset per loaded group. The underlying `ManagedResource` only frees the GPU resource once all refs (manifest's and yours) are released.
+`unloadGroup` doesn't free anything: assets stay in the `ResourceManager` until it deinits, so a handle never dangles.

@@ -4,7 +4,6 @@ const gl = @import("zopengl").bindings;
 const common = @import("../common.zig");
 const utils = @import("../utils.zig");
 const shaders = @import("./shaders.zig");
-const resources = @import("../resources.zig");
 
 const Shader = shaders.Shader;
 const Vec2U = common.Vec2U;
@@ -23,12 +22,6 @@ pub const Texture = struct {
     texture: c_uint,
     size: Vec2U,
     src: RectF,
-    /// The image generation `texture` belongs to. A view stored in a
-    /// `ResourceManager` holds a reference on it (released when the view is
-    /// freed), so hot-reloading the image can't delete the GL texture while
-    /// a stale view still points at it. Null for views not backed by a
-    /// managed image. Copies of a view don't add a reference of their own.
-    image: ?*resources.TextureImageHandle = null,
 
     pub fn sub(self: *const Texture, coords: RectF) Texture {
         const w: u32 = @intFromFloat(coords.width() * @as(f32, @floatFromInt(self.size.x)));
@@ -37,7 +30,6 @@ pub const Texture = struct {
             .texture = self.texture,
             .size = .{ .x = w, .y = h },
             .src = coords,
-            .image = self.image,
         };
     }
 };

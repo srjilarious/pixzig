@@ -15,9 +15,8 @@ own directory, not the current working directory -- see
 [Asset Manifest](assets.md#asset-paths).
 
 That is usually the last you see of the handle: `TileMapRenderer` takes the
-map by name and holds its own reference. When something else needs the map
-data, `acquireTileMap` gives you a ref-counted handle of your own (release it
-in `deinit`), and `getTileMap` a borrowed one.
+map by name and looks it up itself. When something else needs the map data,
+`getTileMap(name)` returns the same handle.
 
 ## Choosing a Renderer
 
@@ -29,7 +28,7 @@ in `deinit`), and `getTileMap` a borrowed one.
 
 ### TileMapRenderer
 
-Built from the name the map was loaded under, and works the rest out itself: it acquires the map handle, borrows the built-in texture shader, and loads each layer's tileset image -- the `<image source>` in the `.tmx` -- as a texture. Nothing else is passed in, and the render calls take only a camera and a viewport.
+Built from the name the map was loaded under, and works the rest out itself: it looks up the map handle and the built-in texture shader, and loads each layer's tileset image -- the `<image source>` in the `.tmx` -- as a texture. Nothing else is passed in, and the render calls take only a camera and a viewport.
 
 ```zig
 _ = try eng.resources.loadTileMap("level1a", "assets/level1a.tmx");
@@ -89,7 +88,7 @@ if (mapRenderer.sync()) {
 }
 ```
 
-`tileMap()` is the map the renderer currently holds; it is replaced by the reloaded generation on the next `sync`, so read it rather than caching it across frames. `rebuildAll()` forces an immediate rebuild of every chunk when you changed tile data yourself and the layer structure is unchanged.
+`tileMap()` is the map the renderer draws. A reload replaces its contents in place, so read it rather than caching pointers into it across frames. `rebuildAll()` forces an immediate rebuild of every chunk when you changed tile data yourself and the layer structure is unchanged.
 
 For a map the game edits as it runs (digging, placing blocks), call `tileChanged(layerIndex, x, y)` after each `TileLayer.setTileData`. It marks only the chunk holding that tile dirty, which rebuilds on its next render:
 

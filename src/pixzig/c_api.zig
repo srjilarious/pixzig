@@ -272,7 +272,6 @@ export fn pz_init(opts: *const PzInitOptions) callconv(.c) ?*PzEngine {
 
 export fn pz_deinit(eng: *PzEngine) callconv(.c) void {
     for (eng.sprites.items) |spr| {
-        spr.sprite.deinit();
         eng.alloc.destroy(spr);
     }
     eng.sprites.deinit(eng.alloc);
@@ -484,8 +483,7 @@ export fn pz_set_default_font(eng: *PzEngine, name: [*:0]const u8) callconv(.c) 
 // ---------------------------------------------------------------------------
 
 fn pzSpriteCreateImpl(eng: *PzEngine, texture_name: []const u8) !*PzSprite {
-    var sprite = try eng.engine.resources.createSprite(texture_name);
-    errdefer sprite.deinit();
+    const sprite = try eng.engine.resources.createSprite(texture_name);
 
     const wrapper = try eng.alloc.create(PzSprite);
     errdefer eng.alloc.destroy(wrapper);
@@ -577,7 +575,6 @@ export fn pz_sprite_draw(spr: *PzSprite) callconv(.c) void {
 /// which pz_actor_destroy frees.
 export fn pz_sprite_destroy(spr: *PzSprite) callconv(.c) void {
     if (spr.owner != null) return;
-    spr.sprite.deinit();
     registryRemove(PzSprite, &spr.eng.sprites, spr);
     spr.eng.alloc.destroy(spr);
 }
@@ -1024,7 +1021,6 @@ export fn pz_anim_new_sequence(eng: *PzEngine, seq_name: [*:0]const u8, loop: bo
         return -1;
     };
     seq.mode = if (loop) .loop else .once;
-    seq.ownsHandles = true;
     mgr.addSeq(std.mem.span(seq_name), seq) catch |err| {
         seq.deinit();
         setLastErrorErr(err);
@@ -1044,12 +1040,12 @@ export fn pz_anim_seq_add_frame(eng: *PzEngine, seq_name: [*:0]const u8, texture
         setLastErrorMsg("no sequence with that name");
         return -1;
     };
-    const tex = eng.engine.resources.acquireTexture(std.mem.span(texture_name)) catch |err| {
+    const tex = eng.engine.resources.getTexture(std.mem.span(texture_name)) catch |err| {
         setLastErrorErr(err);
         return -1;
     };
-    seq.frames.append(mgr.alloc, .{ .tex = tex, .frameTimeMs = frameMs, .flip = flipFromInt(flip) }) catch |err| {
-        tex.release();
+    const f = flipFromInt(flip);
+    seq.frames.append(mgr.alloc, .{ .tex = tex, .frameTimeMs = frameMs, .flipX = f.x(), .flipY = f.y() }) catch |err| {
         setLastErrorErr(err);
         return -1;
     };
@@ -1067,11 +1063,13 @@ export fn pz_anim_add_state(eng: *PzEngine, state_name: [*:0]const u8, seq_name:
         setLastErrorMsg("no sequence with that name");
         return -1;
     };
+    const f = flipFromInt(flip);
     mgr.addState(.{
         .name = std.mem.span(state_name),
         .nextState = if (next_state) |ns| std.mem.span(ns) else null,
         .sequence = seq,
-        .flip = flipFromInt(flip),
+        .flipX = f.x(),
+        .flipY = f.y(),
     }) catch |err| {
         setLastErrorErr(err);
         return -1;
@@ -1111,8 +1109,8 @@ export fn pz_actor_destroy(ac: *PzActor) callconv(.c) void {
     ac.eng.alloc.destroy(ac);
 }
 
-/// Copies a state registered in the shared manager (by pz_anim_load_file or
-/// pz_anim_add_state) into this actor. The first state added becomes current.
+/// Adds a state registered in the shared manager (by pz_anim_load_file or
+/// pz_anim_add_state) to this actor. The first state added becomes current.
 export fn pz_actor_add_state(ac: *PzActor, state_name: [*:0]const u8) callconv(.c) i32 {
     const mgr = animMgr(ac.eng) catch |err| {
         setLastErrorErr(err);

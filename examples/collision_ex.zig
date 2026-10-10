@@ -96,16 +96,6 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        // Release each live entity's sprite texture handle before the world
-        // (and its component storage) goes away.
-        var it = flecs.query_iter(self.world, self.drawQuery);
-        while (flecs.query_next(&it)) {
-            const spr = flecs.field(&it, Sprite, 0).?;
-            for (0..it.count()) |idx| {
-                spr[idx].deinit();
-            }
-        }
-
         self.spriteBatch.deinit();
         self.collideGrid.deinit();
 
@@ -220,7 +210,6 @@ pub const App = struct {
                 for(0..num) |idx| {
                     std.log.debug("Hit {?}\n", .{hits[idx]});
                     _ = try self.collideGrid.removeRect(RectF.fromPosSize(mousePos.x, mousePos.y, 16, 16), hits[idx].?);
-                    if (flecs.get_mut(self.world, hits[idx].?, Sprite)) |spr| spr.deinit();
                     flecs.delete(self.world, hits[idx].?);
                 }
             }

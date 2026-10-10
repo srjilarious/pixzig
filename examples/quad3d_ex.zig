@@ -63,11 +63,10 @@ pub const App = struct {
 
         //* Register a named sub-texture for the stone tile's region of the
         //* atlas (same underlying GL texture, just a different UV rect and
-        //* size), then acquire it like any other managed texture -- draw
-        //* calls need no explicit tile math from here on.
+        //* size), and draw with it like any other texture -- draw calls
+        //* need no explicit tile math from here on.
         const texManaged = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
-        _ = try eng.resources.addSubTexture(texManaged, "quad3d_stone", RectI.init(TileCol * TileSize, TileRow * TileSize, TileSize, TileSize));
-        const stoneTex = try eng.resources.acquireTexture("quad3d_stone");
+        const stoneTex = try eng.resources.addSubTexture(texManaged, "quad3d_stone", RectI.init(TileCol * TileSize, TileRow * TileSize, TileSize, TileSize));
 
         var dynamicQuad = try Quad3DBatchQueue.init(alloc, &eng.resources);
         errdefer dynamicQuad.deinit();
@@ -111,7 +110,6 @@ pub const App = struct {
     pub fn deinit(self: *App) void {
         self.torus.deinit();
         self.dynamicQuad.deinit();
-        self.stoneTex.release();
         self.alloc.destroy(self);
     }
 

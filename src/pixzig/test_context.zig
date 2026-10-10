@@ -9,19 +9,12 @@ const textures_mod = @import("./renderer/textures.zig");
 const common = @import("./common.zig");
 
 const ResourceManager = resources.ResourceManager;
-const ManagedShader = resources.ManagedShader;
-const ManagedTexture = resources.ManagedTexture;
+const ShaderHandle = resources.ShaderHandle;
+const TextureHandle = resources.TextureHandle;
 const Shader = shaders_mod.Shader;
 const ShaderCode = shaders_mod.ShaderCode;
 const Texture = textures_mod.Texture;
 const RectF = common.RectF;
-
-fn freeShaderImpl(s: Shader) void {
-    var copy = s;
-    copy.deinit();
-}
-
-fn freeTextureNoop(_: Texture) void {}
 
 fn sdlError(err: anyerror) anyerror {
     std.log.err("SDL3: {s}", .{sdl.SDL_GetError()});
@@ -90,21 +83,17 @@ pub const GlTestContext = struct {
         sdl.SDL_Quit();
     }
 
-    /// Compiles the standard texture shader and wraps it in a ManagedShader.
-    /// The caller owns the returned value and must call `managedShader.deinit()`.
-    pub fn makeManagedShader(_: *Self, alloc: std.mem.Allocator) !ManagedShader {
+    /// Compiles the standard texture shader into a handle outside any
+    /// `ResourceManager`. The caller owns it and must call `handle.free()`.
+    pub fn makeShaderHandle(_: *Self) !ShaderHandle {
         const vs_arr = [_]ShaderCode{shaders_mod.TexVertexShader};
         const fs_arr = [_]ShaderCode{shaders_mod.TexPixelShader};
-        const shader = try Shader.init(&vs_arr, &fs_arr);
-        var managed = ManagedShader.init(alloc, 1, "test", freeShaderImpl);
-        try managed.add(shader);
-        return managed;
+        return .{ .val = try Shader.init(&vs_arr, &fs_arr) };
     }
 
     /// Returns a ResourceManager with the built-in texture shader already
     /// registered, which is what `TileMapRenderer` looks up by name. The
-    /// caller owns it and must call `deinit` after releasing every handle
-    /// taken from it.
+    /// caller owns it and must call `deinit`.
     pub fn makeResourceManager(_: *Self, alloc: std.mem.Allocator) !ResourceManager {
         var res = ResourceManager.init(alloc);
         errdefer res.deinit();
@@ -115,17 +104,14 @@ pub const GlTestContext = struct {
         return res;
     }
 
-    /// Returns a ManagedTexture containing a dummy Texture with no real GL object.
-    /// Suitable for tile renderer tests where tiles are all empty (no draw calls
-    /// actually sample the texture). The caller owns the returned value.
-    pub fn makeDummyManagedTexture(_: *Self, alloc: std.mem.Allocator) !ManagedTexture {
-        const tex = Texture{
+    /// Returns a handle to a dummy Texture with no real GL object. Suitable
+    /// for tests where no draw call actually samples the texture. Texture
+    /// views own nothing, so there is nothing to free.
+    pub fn makeDummyTextureHandle(_: *Self) TextureHandle {
+        return .{ .val = .{
             .texture = 0,
             .size = .{ .x = 128, .y = 128 },
             .src = .{ .l = 0, .t = 0, .r = 1, .b = 1 },
-        };
-        var managed = ManagedTexture.init(alloc, 1, "test", freeTextureNoop);
-        try managed.add(tex);
-        return managed;
+        } };
     }
 };
