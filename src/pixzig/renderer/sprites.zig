@@ -548,13 +548,16 @@ pub const Actor = struct {
     /// sprite right away. No-op if already in that state, even when a `.once`
     /// state has finished. Returns `error.UnknownActorState` if `name` was
     /// never added.
-    pub fn setState(self: *Actor, name: []const u8) !void {
-        // Don't reset the state if we're already on it.
-        if (self.currState != null and std.mem.eql(u8, self.currState.?.name, name)) return;
+    pub fn setState(self: *Actor, name: []const u8, opts: struct{ reset: bool = false }) !void {
+        if (self.currState == null) return;
 
-        const state = self.states.get(name) orelse return error.UnknownActorState;
-        self.enterState(state);
+        // Only reset the state if we're not in it, or asked to.
+        if(opts.reset or !std.mem.eql(u8, self.currState.?.name, name)) {
+            const state = self.states.get(name) orelse return error.UnknownActorState;
+            self.enterState(state);
+        }
     }
+
 
     /// True once a `.once` state with no `nextState` has played its last
     /// frame. Cleared by switching states.
