@@ -44,10 +44,17 @@ pub const Vec2U = struct {
     }
 };
 
-/// A float 2d vector
+/// A float 2d vector. The math methods take and return values, so they
+/// chain: `pos.add(vel.scale(dt))`.
+///
+/// Angles are radians measured from +x toward +y. Since y grows down on
+/// screen, positive angles turn clockwise there, matching `Camera2D.rotation`.
 pub const Vec2F = struct {
     x: f32,
     y: f32,
+
+    pub const zero: Vec2F = .{ .x = 0, .y = 0 };
+    pub const one: Vec2F = .{ .x = 1, .y = 1 };
 
     /// Converts to a Vec2I, truncating the floats
     pub fn asVec2I(self: *const Vec2F) Vec2I {
@@ -55,6 +62,83 @@ pub const Vec2F = struct {
             .x = @intFromFloat(self.x),
             .y = @intFromFloat(self.y),
         };
+    }
+
+    /// The unit vector pointing at `radians`.
+    pub fn fromAngle(radians: f32) Vec2F {
+        return .{ .x = @cos(radians), .y = @sin(radians) };
+    }
+
+    pub fn add(a: Vec2F, b: Vec2F) Vec2F {
+        return .{ .x = a.x + b.x, .y = a.y + b.y };
+    }
+
+    pub fn sub(a: Vec2F, b: Vec2F) Vec2F {
+        return .{ .x = a.x - b.x, .y = a.y - b.y };
+    }
+
+    /// Multiplies both components by `s`.
+    pub fn scale(a: Vec2F, s: f32) Vec2F {
+        return .{ .x = a.x * s, .y = a.y * s };
+    }
+
+    /// Component-wise product, e.g. for scaling x and y separately.
+    pub fn mul(a: Vec2F, b: Vec2F) Vec2F {
+        return .{ .x = a.x * b.x, .y = a.y * b.y };
+    }
+
+    pub fn neg(a: Vec2F) Vec2F {
+        return .{ .x = -a.x, .y = -a.y };
+    }
+
+    pub fn dot(a: Vec2F, b: Vec2F) f32 {
+        return a.x * b.x + a.y * b.y;
+    }
+
+    /// The z component of the 3D cross product. Positive when `b` is
+    /// clockwise from `a` on screen, negative when counter-clockwise, zero
+    /// when they're parallel.
+    pub fn cross(a: Vec2F, b: Vec2F) f32 {
+        return a.x * b.y - a.y * b.x;
+    }
+
+    /// Squared length; cheaper than `length` for comparing distances.
+    pub fn lengthSq(a: Vec2F) f32 {
+        return a.dot(a);
+    }
+
+    pub fn length(a: Vec2F) f32 {
+        return @sqrt(a.lengthSq());
+    }
+
+    pub fn distance(a: Vec2F, b: Vec2F) f32 {
+        return a.sub(b).length();
+    }
+
+    /// The unit vector in `a`'s direction. A zero vector stays zero rather
+    /// than turning into NaNs.
+    pub fn normalize(a: Vec2F) Vec2F {
+        const len = a.length();
+        if (len == 0) return zero;
+        return a.scale(1.0 / len);
+    }
+
+    /// Linear interpolation: `a` at t=0, `b` at t=1. `t` isn't clamped.
+    pub fn lerp(a: Vec2F, b: Vec2F, t: f32) Vec2F {
+        return .{ .x = a.x + (b.x - a.x) * t, .y = a.y + (b.y - a.y) * t };
+    }
+
+    /// Rotates `a` by `radians` around the origin.
+    pub fn rotate(a: Vec2F, radians: f32) Vec2F {
+        const c = @cos(radians);
+        const s = @sin(radians);
+        return .{ .x = a.x * c - a.y * s, .y = a.x * s + a.y * c };
+    }
+
+    /// The direction `a` points, in radians in (-pi, pi]. The inverse of
+    /// `fromAngle`.
+    pub fn angle(a: Vec2F) f32 {
+        return std.math.atan2(a.y, a.x);
     }
 };
 

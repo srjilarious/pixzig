@@ -67,32 +67,19 @@ pub const Camera2D = struct {
 
     /// Converts a world coordinate to logical viewport space.
     pub fn worldToLogical(self: *const Camera2D, viewport: *const Viewport, world: Vec2F) Vec2F {
-        const half = halfLogical(viewport);
-        const p = self.clampedPos(viewport);
-        const dx = (world.x - p.x) * self.zoom;
-        const dy = (world.y - p.y) * self.zoom;
-        const c = @cos(self.rotation);
-        const s = @sin(self.rotation);
-        // Same rotation `zmath.rotationZ` applies to a row vector in `matrix`.
-        return .{
-            .x = dx * c - dy * s + half.x,
-            .y = dx * s + dy * c + half.y,
-        };
+        // `Vec2F.rotate` turns the same way `zmath.rotationZ` does in `matrix`.
+        return world.sub(self.clampedPos(viewport))
+            .scale(self.zoom)
+            .rotate(self.rotation)
+            .add(halfLogical(viewport));
     }
 
     /// Converts a logical viewport coordinate to world space.
     pub fn logicalToWorld(self: *const Camera2D, viewport: *const Viewport, logical: Vec2F) Vec2F {
-        const half = halfLogical(viewport);
-        const p = self.clampedPos(viewport);
-        const dx = logical.x - half.x;
-        const dy = logical.y - half.y;
-        const c = @cos(self.rotation);
-        const s = @sin(self.rotation);
-        // Inverse rotation, then undo the zoom.
-        return .{
-            .x = (dx * c + dy * s) / self.zoom + p.x,
-            .y = (-dx * s + dy * c) / self.zoom + p.y,
-        };
+        return logical.sub(halfLogical(viewport))
+            .rotate(-self.rotation)
+            .scale(1.0 / self.zoom)
+            .add(self.clampedPos(viewport));
     }
 
     /// Half the logical viewport size, i.e. its center in logical space.
