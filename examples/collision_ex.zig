@@ -212,15 +212,17 @@ pub const App = struct {
             }
         }
 
-        const mousePos = eng.inputs.mouse.pos().asVec2I();
-        var hits: [4]?flecs.entity_t = .{ null, null, null, null };
-        const num = try self.collideGrid.checkPoint(mousePos, &hits[0..]);
-        if(num > 0) {
-            for(0..num) |idx| {
-                std.log.debug("Hit {?}\n", .{hits[idx]});
-                _ = try self.collideGrid.removeRect(RectF.fromPosSize(mousePos.x, mousePos.y, 16, 16), hits[idx].?);
-                if (flecs.get_mut(self.world, hits[idx].?, Sprite)) |spr| spr.deinit();
-                flecs.delete(self.world, hits[idx].?);
+        if (eng.inputs.mouse.pos()) |pos| {
+            const mousePos = pos.asVec2I();
+            var hits: [4]?flecs.entity_t = .{ null, null, null, null };
+            const num = try self.collideGrid.checkPoint(mousePos, &hits[0..]);
+            if(num > 0) {
+                for(0..num) |idx| {
+                    std.log.debug("Hit {?}\n", .{hits[idx]});
+                    _ = try self.collideGrid.removeRect(RectF.fromPosSize(mousePos.x, mousePos.y, 16, 16), hits[idx].?);
+                    if (flecs.get_mut(self.world, hits[idx].?, Sprite)) |spr| spr.deinit();
+                    flecs.delete(self.world, hits[idx].?);
+                }
             }
         }
         

@@ -236,6 +236,42 @@ pub fn mouseDeltaTest(io: std.Io, alloc: std.mem.Allocator) !void {
     try testz.expectEqual(mouse.delta().y, 0.0);
 }
 
+/// `mouse.pos()` is null over the letterbox and logical coordinates inside
+/// the viewport.
+pub fn mousePosNullOverLetterboxTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+
+    var inputs = input.InputManager.init(.{ .mouse = true });
+    // 400x300 fit into 800x450 scales by 1.5 to 600x450, leaving 100px
+    // pillarbox bars on each side.
+    const vp = pixzig.Viewport.init(.{ .x = 400, .y = 300 }, .{ .x = 800, .y = 450 }, .fit);
+    const noScale: pixzig.Vec2F = .{ .x = 1, .y = 1 };
+
+    inputs.mouse.currPtr().setRawPos(5, 200);
+    inputs.update(noScale, &vp);
+    try testz.expectTrue(inputs.mouse.pos() == null);
+
+    inputs.finishTick();
+    inputs.mouse.currPtr().setRawPos(400, 225);
+    inputs.update(noScale, &vp);
+    const pos = inputs.mouse.pos() orelse return error.ExpectedMousePos;
+    try testz.expectEqual(pos.x, 200.0);
+    try testz.expectEqual(pos.y, 150.0);
+    try testz.expectTrue(inputs.mouse.lastPos() == null);
+}
+
+/// `gamepad(idx)` only hands out the slots enabled at init.
+pub fn gamepadIndexBoundsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+
+    // No slots enabled, so no SDL gamepad subsystem is needed.
+    var inputs = input.InputManager.init(.{ .numGamepads = 0 });
+    try testz.expectTrue(inputs.gamepad(0) == null);
+    try testz.expectTrue(inputs.gamepad(input.MaxGamepads + 3) == null);
+}
+
 /// Sticks pass through as -1..1; triggers, which SDL reports as 0..32767,
 /// are rescaled onto the engine's -1..1 range.
 pub fn gamepadAxisScalingTest(io: std.Io, alloc: std.mem.Allocator) !void {

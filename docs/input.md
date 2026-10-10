@@ -50,7 +50,7 @@ The input manager exposes raw device state:
 |---|---|
 | `eng.inputs.keyboard` | Always enabled |
 | `eng.inputs.mouse` | Enabled when `inputOpts.mouse` is `true` (the default) |
-| `eng.inputs.gamepad(index)` | Enable slots with `inputOpts.numGamepads` |
+| `eng.inputs.gamepad(index)` | Enable slots with `inputOpts.numGamepads`; null past the last enabled slot |
 | `keyboard.text()` / `keyboard.preedit()` | Need `inputOpts.textInput = true` |
 
 `inputOpts.textInput` arms the OS text-input machinery on the window. It is off by default, because a game that only reads key bindings does not want an IME candidate bar armed over it (and on some platforms it changes on-screen-keyboard behaviour). Turn it on for anything with a text field, a console, or chat -- without it `keyboard.text()` returns nothing at all.
@@ -89,16 +89,19 @@ if (mods.ctrl and mods.shift) {
 
 ### Mouse
 
-`mouse.pos()` is in logical game coordinates after viewport mapping. It is `(-1, -1)` while the cursor is outside a letterboxed or pillarboxed viewport.
+`mouse.pos()` is in logical game coordinates after viewport mapping, as a `?Vec2F`. It is null while the cursor is outside a letterboxed or pillarboxed viewport. `lastPos()` is the previous tick's, with the same rule.
 
 ```zig
 const mouse = &eng.inputs.mouse;
-if (mouse.pressed(.left)) self.onClick(mouse.pos());
-if (mouse.down(.left)) self.onDrag(mouse.pos());
+if (mouse.pos()) |pos| {
+    if (mouse.pressed(.left)) self.onClick(pos);
+    if (mouse.down(.left)) self.onDrag(pos);
 
-const pos = mouse.pos();
-const last = mouse.lastPos();
-const dx = pos.x - last.x;
+    if (mouse.lastPos()) |last| {
+        const dx = pos.x - last.x;
+        _ = dx;
+    }
+}
 ```
 
 For first-person mouse-look, capture the cursor while the mode is active:
@@ -125,7 +128,7 @@ const AppRunner = pixzig.AppRunner(App, .{
 Then query a configured slot:
 
 ```zig
-const pad = eng.inputs.gamepad(0);
+const pad = eng.inputs.gamepad(0).?; // slot 0 is enabled above
 if (pad.isConnected()) {
     if (pad.pressed(.a)) self.jump();
     self.velocity.x = pad.axis(.left_x) * Speed;

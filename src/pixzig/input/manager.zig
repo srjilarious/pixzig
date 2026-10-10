@@ -151,8 +151,7 @@ pub const InputManager = struct {
             const raw = self.mouse.rawPos();
             const fb = Vec2F{ .x = raw.x * scaleFactor.x, .y = raw.y * scaleFactor.y };
             self.mouse.currPtr().fbPos = fb;
-            self.mouse.currPtr().logicalPos =
-                viewport.framebufferToLogical(fb) orelse Vec2F{ .x = -1, .y = -1 };
+            self.mouse.currPtr().logicalPos = viewport.framebufferToLogical(fb);
         }
 
         for (0..self.numGamepads) |i| {
@@ -176,8 +175,11 @@ pub const InputManager = struct {
         self.mouse.clear();
     }
 
-    /// Returns a pointer to the gamepad at the given index.
-    pub fn gamepad(self: *Self, idx: usize) *Gamepad {
+    /// Returns the gamepad slot at `idx`, or null when `idx` is past the
+    /// `inputOpts.numGamepads` slots enabled at init. A slot exists whether
+    /// or not a pad is plugged in; check `isConnected()` for that.
+    pub fn gamepad(self: *Self, idx: usize) ?*Gamepad {
+        if (idx >= self.numGamepads) return null;
         return &self.gamepads[idx];
     }
 };

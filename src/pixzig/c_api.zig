@@ -381,8 +381,10 @@ export fn pz_key_released(eng: *PzEngine, key: c_int) callconv(.c) bool {
     return eng.engine.inputs.keyboard.released(k);
 }
 
+// Writes (-1, -1) while the cursor is over the letterbox, where the Zig
+// API returns null.
 export fn pz_mouse_pos(eng: *PzEngine, out_x: *f32, out_y: *f32) callconv(.c) void {
-    const p = eng.engine.inputs.mouse.pos();
+    const p = eng.engine.inputs.mouse.pos() orelse pixzig.Vec2F{ .x = -1, .y = -1 };
     out_x.* = p.x;
     out_y.* = p.y;
 }
@@ -403,32 +405,37 @@ export fn pz_mouse_button_released(eng: *PzEngine, btn: c_int) callconv(.c) bool
 }
 
 export fn pz_gamepad_connected(eng: *PzEngine, idx: c_int) callconv(.c) bool {
-    if (idx < 0 or idx >= pixzig.input.MaxGamepads) return false;
-    return eng.engine.inputs.gamepad(@intCast(idx)).isConnected();
+    if (idx < 0) return false;
+    const gp = eng.engine.inputs.gamepad(@intCast(idx)) orelse return false;
+    return gp.isConnected();
 }
 
 export fn pz_gamepad_button_down(eng: *PzEngine, idx: c_int, btn: c_int) callconv(.c) bool {
-    if (idx < 0 or idx >= pixzig.input.MaxGamepads) return false;
+    if (idx < 0) return false;
     const b = enumArg(pixzig.GamepadButton, btn) orelse return false;
-    return eng.engine.inputs.gamepad(@intCast(idx)).down(b);
+    const gp = eng.engine.inputs.gamepad(@intCast(idx)) orelse return false;
+    return gp.down(b);
 }
 
 export fn pz_gamepad_button_pressed(eng: *PzEngine, idx: c_int, btn: c_int) callconv(.c) bool {
-    if (idx < 0 or idx >= pixzig.input.MaxGamepads) return false;
+    if (idx < 0) return false;
     const b = enumArg(pixzig.GamepadButton, btn) orelse return false;
-    return eng.engine.inputs.gamepad(@intCast(idx)).pressed(b);
+    const gp = eng.engine.inputs.gamepad(@intCast(idx)) orelse return false;
+    return gp.pressed(b);
 }
 
 export fn pz_gamepad_button_released(eng: *PzEngine, idx: c_int, btn: c_int) callconv(.c) bool {
-    if (idx < 0 or idx >= pixzig.input.MaxGamepads) return false;
+    if (idx < 0) return false;
     const b = enumArg(pixzig.GamepadButton, btn) orelse return false;
-    return eng.engine.inputs.gamepad(@intCast(idx)).released(b);
+    const gp = eng.engine.inputs.gamepad(@intCast(idx)) orelse return false;
+    return gp.released(b);
 }
 
 export fn pz_gamepad_axis(eng: *PzEngine, idx: c_int, axis: c_int) callconv(.c) f32 {
-    if (idx < 0 or idx >= pixzig.input.MaxGamepads) return 0;
+    if (idx < 0) return 0;
     const a = enumArg(pixzig.GamepadAxis, axis) orelse return 0;
-    return eng.engine.inputs.gamepad(@intCast(idx)).axis(a);
+    const gp = eng.engine.inputs.gamepad(@intCast(idx)) orelse return 0;
+    return gp.axis(a);
 }
 
 // ---------------------------------------------------------------------------

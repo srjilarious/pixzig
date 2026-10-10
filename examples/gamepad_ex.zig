@@ -45,7 +45,8 @@ pub const App = struct {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        const gp = eng.inputs.gamepad(0);
+        // Slot 0 exists: the runner enables one gamepad slot.
+        const gp = eng.inputs.gamepad(0).?;
 
         if (!gp.isConnected()) {
             if (self.printDelay.update(1)) {

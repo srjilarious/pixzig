@@ -35,8 +35,11 @@ pub const App = struct {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        const mousePos = eng.inputs.mouse.pos().asVec2I();
-        self.pointer.setPos(mousePos.x, mousePos.y);
+        // Null over the letterbox; the pointer stays where it was.
+        if (eng.inputs.mouse.pos()) |pos| {
+            const mousePos = pos.asVec2I();
+            self.pointer.setPos(mousePos.x, mousePos.y);
+        }
 
         if (eng.inputs.mouse.pressed(.left)) {
             std.log.info("left mouse!\n", .{});

@@ -14,9 +14,9 @@ pub const MouseState = struct {
     /// Cursor position in framebuffer pixels (rawPos * scaleFactor).
     /// Suitable for passing to any Viewport.framebufferToLogical() call.
     fbPos: Vec2F,
-    /// Logical game coordinates after viewport mapping.  Set to (-1, -1) when
-    /// the cursor is outside the viewport (letterbox / pillarbox region).
-    logicalPos: Vec2F,
+    /// Logical game coordinates after viewport mapping. Null when the
+    /// cursor is outside the viewport (letterbox / pillarbox region).
+    logicalPos: ?Vec2F,
     /// Mouse movement accumulated during the current tick, in SDL window
     /// coordinates. In captured/relative mode this is the unbounded motion.
     rawDelta: Vec2F,
@@ -29,7 +29,7 @@ pub const MouseState = struct {
             .buttons = buttons,
             .rawPos = .{ .x = 0, .y = 0 },
             .fbPos = .{ .x = 0, .y = 0 },
-            .logicalPos = .{ .x = -1, .y = -1 },
+            .logicalPos = null,
             .rawDelta = .{ .x = 0, .y = 0 },
             .scrollDelta = .{ .x = 0, .y = 0 },
         };
@@ -65,7 +65,7 @@ pub const MouseState = struct {
         self.buttons.setRangeValue(.{ .start = 0, .end = NumMouseButtons }, false);
         self.rawPos = .{ .x = 0, .y = 0 };
         self.fbPos = .{ .x = 0, .y = 0 };
-        self.logicalPos = .{ .x = -1, .y = -1 };
+        self.logicalPos = null;
         self.rawDelta = .{ .x = 0, .y = 0 };
         self.scrollDelta = .{ .x = 0, .y = 0 };
     }
@@ -136,14 +136,15 @@ pub const Mouse = struct {
         return (!self.curr().down(btnIdx) and self.prev().down(btnIdx));
     }
 
-    /// Logical game coordinates for the current tick.  Returns (-1, -1) when
-    /// the cursor is outside the viewport (letterbox / pillarbox region).
-    pub fn pos(self: *const Mouse) Vec2F {
+    /// Logical game coordinates for the current tick. Null when the cursor
+    /// is outside the viewport (letterbox / pillarbox region).
+    pub fn pos(self: *const Mouse) ?Vec2F {
         return self.curr().logicalPos;
     }
 
-    /// Logical game coordinates for the previous tick.
-    pub fn lastPos(self: *const Mouse) Vec2F {
+    /// Logical game coordinates for the previous tick, null when the cursor
+    /// was outside the viewport.
+    pub fn lastPos(self: *const Mouse) ?Vec2F {
         return self.prev().logicalPos;
     }
 
