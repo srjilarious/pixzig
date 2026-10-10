@@ -1,6 +1,6 @@
 const std = @import("std");
 const pixzig = @import("pixzig");
-const Delay = pixzig.utils.Delay;
+const Timer = pixzig.utils.Timer;
 
 const FpsCounter = pixzig.utils.FpsCounter;
 const AppRunner = pixzig.AppRunner(App, .{ .inputOpts = .{ .numGamepads = 1 } });
@@ -26,13 +26,13 @@ const ButtonColors = [_]struct { btn: pixzig.GamepadButton, color: Colors }{
 pub const App = struct {
     fps: FpsCounter,
     color: Colors,
-    printDelay: Delay,
+    printDelay: Timer(u32),
 
     pub fn init() App {
         return .{
             .fps = FpsCounter.init(),
             .color = .{ .r = 0, .g = 0, .b = 128 },
-            .printDelay = .{ .max = 60 },
+            .printDelay = .{ .period = 60 },
         };
     }
 

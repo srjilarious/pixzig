@@ -3,8 +3,7 @@ const testz = @import("testz");
 const pixzig = @import("pixzig");
 
 const FpsCounter = pixzig.utils.FpsCounter;
-const Delay = pixzig.utils.Delay;
-const DelayF = pixzig.utils.DelayF;
+const Timer = pixzig.utils.Timer;
 const baseNameFromPath = pixzig.utils.baseNameFromPath;
 const addExtension = pixzig.utils.addExtension;
 
@@ -14,9 +13,9 @@ pub fn fpsCounterInitTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     _ = alloc;
     const counter = FpsCounter.init();
-    try testz.expectEqual(counter.mFps, 0);
-    try testz.expectEqual(counter.mFrames, 0);
-    try testz.expectEqual(counter.mElapsed, 0.0);
+    try testz.expectEqual(counter.lastFps, 0);
+    try testz.expectEqual(counter.windowFrames, 0);
+    try testz.expectEqual(counter.elapsedMs, 0.0);
 }
 
 pub fn fpsCounterUpdateNotTriggeredBeforeThresholdTest(io: std.Io, alloc: std.mem.Allocator) !void {
@@ -46,7 +45,7 @@ pub fn fpsCounterFramesResetAfterTriggerTest(io: std.Io, alloc: std.mem.Allocato
     _ = alloc;
     var counter = FpsCounter.init();
     for (0..30) |_| counter.renderTick();
-    _ = counter.update(1001.0); // trigger, mFrames resets to 0
+    _ = counter.update(1001.0); // trigger, windowFrames resets to 0
 
     // After reset, a sub-second update should not trigger again.
     const triggered = counter.update(400.0);
@@ -79,86 +78,53 @@ pub fn fpsCounterElapsedSubtractedOnTriggerTest(io: std.Io, alloc: std.mem.Alloc
     // Overshoot by 200 ms so that 200 ms carry over to the next window.
     _ = counter.update(1200.0);
     // Elapsed should now be 200 (1200 - 1000).
-    try testz.expectEqual(counter.mElapsed, 200.0);
+    try testz.expectEqual(counter.elapsedMs, 200.0);
 }
 
-// --- Delay ---
+// --- Timer ---
 
-pub fn delayNotTriggeredBeforeMaxTest(io: std.Io, alloc: std.mem.Allocator) !void {
+pub fn timerNotFiredBeforePeriodTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     _ = alloc;
-    var d = Delay{ .max = 10 };
-    try testz.expectFalse(d.update(5));
-    try testz.expectEqual(d.curr, 5);
+    var t: Timer(u32) = .{ .period = 10 };
+    try testz.expectFalse(t.update(5));
+    try testz.expectEqual(t.elapsed, 5);
 }
 
-pub fn delayTriggeredWhenExceedingMaxTest(io: std.Io, alloc: std.mem.Allocator) !void {
+pub fn timerFiresAtPeriodTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     _ = alloc;
-    var d = Delay{ .max = 10 };
-    try testz.expectTrue(d.update(11));
+    // Ticking by one fires on exactly the period-th tick.
+    var t: Timer(u32) = .{ .period = 3 };
+    try testz.expectFalse(t.update(1));
+    try testz.expectFalse(t.update(1));
+    try testz.expectTrue(t.update(1));
+    try testz.expectEqual(t.elapsed, 0);
 }
 
-pub fn delayResetsAfterTriggerTest(io: std.Io, alloc: std.mem.Allocator) !void {
+pub fn timerCarriesOvershootTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     _ = alloc;
-    var d = Delay{ .max = 10 };
-    _ = d.update(11); // trigger
-    try testz.expectEqual(d.curr, 0);
-    // Should not trigger immediately after reset.
-    try testz.expectFalse(d.update(5));
+    var t: Timer(f64) = .{ .period = 100.0 };
+    try testz.expectTrue(t.update(130.0));
+    try testz.expectEqual(t.elapsed, 30.0);
+    // The 30 ms overshoot counts toward the next period.
+    try testz.expectTrue(t.update(70.0));
+    try testz.expectEqual(t.elapsed, 0.0);
 }
 
-pub fn delayAccumulatesAcrossCallsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+pub fn timerResetAndProgressTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     _ = alloc;
-    var d = Delay{ .max = 10 };
-    try testz.expectFalse(d.update(4));
-    try testz.expectFalse(d.update(4));
-    try testz.expectTrue(d.update(4)); // 12 > 10
-}
+    var t: Timer(f32) = .{ .period = 4.0 };
+    _ = t.update(1.0);
+    try testz.expectEqual(t.progress(), 0.25);
+    t.reset();
+    try testz.expectEqual(t.progress(), 0.0);
 
-pub fn delayExactlyAtMaxNotTriggeredTest(io: std.Io, alloc: std.mem.Allocator) !void {
-    _ = io;
-    _ = alloc;
-    var d = Delay{ .max = 10 };
-    // curr > max uses strict greater-than, so exactly at max does not trigger.
-    try testz.expectFalse(d.update(10));
-}
-
-// --- DelayF ---
-
-pub fn delayFNotTriggeredBeforeMaxTest(io: std.Io, alloc: std.mem.Allocator) !void {
-    _ = io;
-    _ = alloc;
-    var d = DelayF{ .max = 100.0 };
-    try testz.expectFalse(d.update(50.0));
-    try testz.expectEqual(d.curr, 50.0);
-}
-
-pub fn delayFTriggeredWhenExceedingMaxTest(io: std.Io, alloc: std.mem.Allocator) !void {
-    _ = io;
-    _ = alloc;
-    var d = DelayF{ .max = 100.0 };
-    try testz.expectTrue(d.update(101.0));
-}
-
-pub fn delayFResetsAfterTriggerTest(io: std.Io, alloc: std.mem.Allocator) !void {
-    _ = io;
-    _ = alloc;
-    var d = DelayF{ .max = 100.0 };
-    _ = d.update(101.0);
-    try testz.expectEqual(d.curr, 0.0);
-    try testz.expectFalse(d.update(50.0));
-}
-
-pub fn delayFAccumulatesAcrossCallsTest(io: std.Io, alloc: std.mem.Allocator) !void {
-    _ = io;
-    _ = alloc;
-    var d = DelayF{ .max = 1.0 };
-    try testz.expectFalse(d.update(0.4));
-    try testz.expectFalse(d.update(0.4));
-    try testz.expectTrue(d.update(0.4)); // 1.2 > 1.0
+    var ticks: Timer(u8) = .{ .period = 4 };
+    _ = ticks.update(2);
+    try testz.expectEqual(ticks.progress(), 0.5);
 }
 
 // --- baseNameFromPath ---

@@ -1,6 +1,5 @@
 const std = @import("std");
 const pixzig = @import("pixzig");
-const Delay = pixzig.utils.Delay;
 
 const FpsCounter = pixzig.utils.FpsCounter;
 
@@ -22,7 +21,6 @@ pub const App = struct {
     fps: FpsCounter,
     alloc: std.mem.Allocator,
     ui: UiContext,
-    delay: Delay = .{ .max = 120 },
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const app: *App = try alloc.create(App);

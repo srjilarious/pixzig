@@ -1,6 +1,5 @@
 const std = @import("std");
 const pixzig = @import("pixzig");
-const Delay = pixzig.utils.Delay;
 const zaudio = pixzig.zaudio;
 
 const FpsCounter = pixzig.utils.FpsCounter;
@@ -10,7 +9,6 @@ pub const App = struct {
     alloc: std.mem.Allocator,
     testVal: i32,
     fps: FpsCounter,
-    delay: Delay = .{ .max = 120 },
 
     pub fn init(allocator: std.mem.Allocator, engine: *AppRunner.Engine) !*App {
         engine.audio.loadSound("laserShoot", "assets/laserShoot.wav") catch |err| {

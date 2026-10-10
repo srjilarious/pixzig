@@ -10,7 +10,6 @@
 //* -- collapsed: Imports --
 const std = @import("std");
 const pixzig = @import("pixzig");
-const Delay = pixzig.utils.Delay;
 
 const FpsCounter = pixzig.utils.FpsCounter;
 
@@ -29,7 +28,6 @@ const AppRunner = pixzig.AppRunner(App, .{});
 pub const App = struct {
     testVal: i32,
     fps: FpsCounter,
-    delay: Delay = .{ .max = 120 },
 
     pub fn init(val: i32) App {
         return .{ .testVal = val, .fps = FpsCounter.init() };
