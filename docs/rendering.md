@@ -20,7 +20,7 @@ pub fn render(self: *App, eng: *AppRunner.Engine) void {
 | `begin(...)` | Space |
 |---|---|
 | `.logical` | The logical game resolution, y down. The usual choice. |
-| `.screen` | Framebuffer pixels, y down. For debug overlays in physical pixels. |
+| `.screen` | Framebuffer pixels, y down. For debug overlays in physical pixels; the pass spans the whole framebuffer (letterbox bars included) and `end()` restores the game viewport. |
 | `.{ .camera = &cam }` | World space seen through a `Camera2D`. |
 | `.{ .matrix = m }` | Your own model-view-projection matrix. |
 

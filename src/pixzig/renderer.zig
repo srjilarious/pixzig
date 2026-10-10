@@ -92,6 +92,8 @@ pub const Projection = union(enum) {
     logical,
     /// Framebuffer pixels: (0,0)..(framebufferW, framebufferH), y down.
     /// For debug overlays that should be positioned in physical pixels.
+    /// The pass covers the whole framebuffer, letterbox bars included;
+    /// `end()` restores the letterboxed game viewport.
     screen,
     /// World space seen through a camera (see `Camera2D.matrix`).
     camera: *const Camera2D,
@@ -150,6 +152,10 @@ pub fn Renderer(opts: RendererOptions) type {
             /// The batch the last draw went to. A draw to any other batch
             /// flushes this one first, which keeps submission order.
             active: BatchKind = .none,
+
+            /// True inside a `begin(.screen)` pass, which widens the GL
+            /// viewport to the whole framebuffer until `end()`.
+            screenPass: bool = false,
         };
 
         const DefaultFontName = "__pixzig_default_font";
@@ -312,18 +318,15 @@ pub fn Renderer(opts: RendererOptions) type {
         /// between them are buffered, and flushed when the next draw needs a
         /// different batch or at `end()`.
         pub fn begin(self: *Self, projection: Projection) void {
+            const impl = self.implMut();
             const mvp = switch (projection) {
                 .logical => self.viewport.projection(),
-                .screen => blk: {
-                    const fw: f32 = @floatFromInt(self.viewport.framebufferSize.x);
-                    const fh: f32 = @floatFromInt(self.viewport.framebufferSize.y);
-                    break :blk zmath.orthographicOffCenterLhGl(0, fw, 0, fh, -0.1, 1000);
-                },
+                .screen => self.viewport.applyFullscreen(),
                 .camera => |cam| cam.matrix(self.viewport),
                 .matrix => |m| m,
             };
 
-            const impl = self.implMut();
+            impl.screenPass = projection == .screen;
             impl.active = .none;
             impl.sprites.begin(mvp);
             impl.tinted.begin(mvp);
@@ -355,6 +358,11 @@ pub fn Renderer(opts: RendererOptions) type {
                 impl.text.end();
             }
             impl.active = .none;
+
+            if (impl.screenPass) {
+                self.viewport.apply();
+                impl.screenPass = false;
+            }
         }
 
         /// Makes `kind` the batch receiving draws, flushing the previously
@@ -381,13 +389,18 @@ pub fn Renderer(opts: RendererOptions) type {
         }
 
         /// Clips subsequent draws to `rect`, given in logical coordinates
-        /// (clamped to the logical screen). `null` restores the viewport's
-        /// own clip. Queued draws are flushed first, so they keep the
+        /// (clamped to the logical screen). `null` restores the pass's own
+        /// clip: the letterboxed viewport, or the whole framebuffer inside a
+        /// `.screen` pass. Queued draws are flushed first, so they keep the
         /// previous clip.
         pub fn setClip(self: *Self, rect: ?RectF) void {
             self.flush();
             const r = rect orelse {
-                self.viewport.apply();
+                if (self.implMut().screenPass) {
+                    _ = self.viewport.applyFullscreen();
+                } else {
+                    self.viewport.apply();
+                }
                 return;
             };
 
