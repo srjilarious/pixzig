@@ -114,26 +114,61 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             return error.NoMoreSpace;
         }
 
+        /// Inclusive range of cells a rectangle overlaps, clamped to the grid.
+        const CellRange = struct { x0: usize, x1: usize, y0: usize, y1: usize };
+
+        /// Returns the cells `bounds` overlaps, clamped to the grid, or null
+        /// when it lies entirely outside. The right/bottom edges are
+        /// exclusive, so a rect ending exactly on a cell boundary doesn't
+        /// spill into the next cell, but one straddling a boundary covers
+        /// both cells.
+        fn cellRange(self: *const Self, bounds: RectF) ?CellRange {
+            const x = axisCells(bounds.l, bounds.r, self.cellSize.x, self.gridSize.x) orelse return null;
+            const y = axisCells(bounds.t, bounds.b, self.cellSize.y, self.gridSize.y) orelse return null;
+            return .{ .x0 = x[0], .x1 = x[1], .y0 = y[0], .y1 = y[1] };
+        }
+
+        /// First and last cell (inclusive) the span [lo, hi) covers along
+        /// one axis, clamped to [0, numCells). A zero-width span still
+        /// covers the cell it sits in.
+        fn axisCells(lo: f32, hi: f32, cellSize: u32, numCells: u32) ?[2]usize {
+            if (numCells == 0) return null;
+            const cs: f32 = @floatFromInt(cellSize);
+            const first = @floor(lo / cs);
+            const last = @max(first, @ceil(hi / cs) - 1);
+            const maxCell: f32 = @floatFromInt(numCells - 1);
+            if (last < 0 or first > maxCell) return null;
+            return .{ @intFromFloat(@max(first, 0)), @intFromFloat(@min(last, maxCell)) };
+        }
+
+        /// Removes the first `obj` from one cell, moving the cell's last item
+        /// into the hole so occupied slots stay contiguous. Returns whether
+        /// it was found.
+        fn removeFromCell(items: *[maxItemsPerCell]?T, obj: T) bool {
+            for (0..items.len) |itIdx| {
+                if (items[itIdx] != obj) continue;
+
+                // Find the last non-null item after this one.
+                var lastIdx = itIdx;
+                while (lastIdx + 1 < items.len and items[lastIdx + 1] != null) {
+                    lastIdx += 1;
+                }
+
+                items[itIdx] = items[lastIdx];
+                items[lastIdx] = null;
+                return true;
+            }
+            return false;
+        }
+
         /// Inserts an object into the collision grid based on its bounding
-        /// rectangle, covering every cell the rectangle overlaps. Cells past
-        /// the top/left edge of the grid (negative `bounds.l`/`bounds.t`) are
-        /// not handled: converting a negative coordinate to an unsigned cell
-        /// index is undefined behavior, so `bounds` must lie within the
-        /// grid's positive extent.
+        /// rectangle, covering every cell the rectangle overlaps. Parts of
+        /// the rectangle outside the grid are ignored.
         pub fn insertRect(self: *Self, bounds: RectF, obj: T) !void {
-            const cx: usize = @as(usize, @intFromFloat(bounds.l)) / self.cellSize.x;
-            const cy: usize = @as(usize, @intFromFloat(bounds.t)) / self.cellSize.y;
-            const nx: usize = (@as(usize, @intFromFloat(bounds.width())) + self.cellSize.x - 1) / self.cellSize.x;
-            const ny: usize = (@as(usize, @intFromFloat(bounds.height())) + self.cellSize.y - 1) / self.cellSize.y;
+            const range = self.cellRange(bounds) orelse return;
 
-            for (cy..cy + ny) |y| {
-                if (y < 0) continue;
-                if (y >= self.gridSize.y) break;
-
-                for (cx..cx + nx) |x| {
-                    if (x < 0) continue;
-                    if (x >= self.gridSize.x) break;
-
+            for (range.y0..range.y1 + 1) |y| {
+                for (range.x0..range.x1 + 1) |x| {
                     // Go through the current cell's list and find a spot for the object.
                     const idx: usize = y * self.gridSize.x + x;
                     var items = &self.grid.items[idx];
@@ -167,88 +202,20 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
             const cx: usize = @as(usize, @intCast(pixelPos.x)) / self.cellSize.x;
             const cy: usize = @as(usize, @intCast(pixelPos.y)) / self.cellSize.y;
             const idx: usize = cy * self.gridSize.x + cx;
-            var items = &self.grid.items[idx];
-
-            var cellsRemoved: usize = 0;
-            for (0..items.len) |itIdx| {
-                if (items[itIdx] == obj) {
-                    cellsRemoved += 1;
-                    items[itIdx] = null;
-
-                    // Swap this cell's null with the last non-null item to fill it in.
-                    // First find the last non-null item.
-                    var swapIdx: usize = itIdx + 1;
-                    while (swapIdx < items.len) {
-                        if (items[swapIdx] == null) {
-                            break;
-                        }
-
-                        swapIdx += 1;
-                    }
-
-                    // Move back one from the last null item.  We'll make sure it's not the itIdx still.
-                    swapIdx -= 1;
-
-                    // Do the swap
-                    if (swapIdx < items.len and swapIdx != itIdx) {
-                        items[itIdx] = items[swapIdx];
-                        items[swapIdx] = null;
-                    }
-
-                    break;
-                }
-            }
-
-            return cellsRemoved;
+            return if (removeFromCell(&self.grid.items[idx], obj)) 1 else 0;
         }
 
         /// Removes an object from the collision grid based on its bounding
-        /// rectangle.
+        /// rectangle. Pass the same bounds it was inserted with.
         pub fn removeRect(self: *Self, bounds: RectF, obj: T) !usize {
+            const range = self.cellRange(bounds) orelse return 0;
+
             var cellsRemoved: usize = 0;
-            const cx: usize = @as(usize, @intFromFloat(bounds.l)) / self.cellSize.x;
-            const cy: usize = @as(usize, @intFromFloat(bounds.t)) / self.cellSize.y;
-            const nx: usize = (@as(usize, @intFromFloat(bounds.width())) + self.cellSize.x - 1) / self.cellSize.x;
-            const ny: usize = (@as(usize, @intFromFloat(bounds.height())) + self.cellSize.y - 1) / self.cellSize.y;
-
-            for (cy..cy + ny) |y| {
-                if (y < 0) continue;
-                if (y >= self.gridSize.y) break;
-
-                for (cx..cx + nx) |x| {
-                    if (x < 0) continue;
-                    if (x >= self.gridSize.x) break;
-
-                    // Go through the current cell's list and find a spot for the object.
+            for (range.y0..range.y1 + 1) |y| {
+                for (range.x0..range.x1 + 1) |x| {
                     const idx: usize = y * self.gridSize.x + x;
-                    var items = &self.grid.items[idx];
-                    for (0..items.len) |itIdx| {
-                        if (items[itIdx] == obj) {
-                            cellsRemoved += 1;
-                            items[itIdx] = null;
-
-                            // Swap this cell's null with the last non-null item to fill it in.
-                            // First find the last non-null item.
-                            var swapIdx: usize = itIdx + 1;
-                            while (swapIdx < items.len) {
-                                if (items[swapIdx] == null) {
-                                    break;
-                                }
-
-                                swapIdx += 1;
-                            }
-
-                            // Move back one from the last null item.  We'll make sure it's not the itIdx still.
-                            swapIdx -= 1;
-
-                            // Do the swap
-                            if (swapIdx < items.len and swapIdx != itIdx) {
-                                items[itIdx] = items[swapIdx];
-                                items[swapIdx] = null;
-                            }
-
-                            break;
-                        }
+                    if (removeFromCell(&self.grid.items[idx], obj)) {
+                        cellsRemoved += 1;
                     }
                 }
             }
@@ -339,7 +306,7 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
                         }
                     }
                     if (!itemFound) {
-                        if (baseIdx + itIdx >= outList.len) {
+                        if (baseIdx + subNumFound >= outList.len) {
                             return error.NoMoreSpace;
                         }
 
@@ -408,7 +375,7 @@ pub fn CollisionGrid(comptime T: type, comptime maxItemsPerCell: usize) type {
                         }
                     }
                     if (!itemFound) {
-                        if (baseIdx + itIdx >= outList.len) {
+                        if (baseIdx + subNumFound >= outList.len) {
                             return error.NoMoreSpace;
                         }
 

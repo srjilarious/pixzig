@@ -519,3 +519,62 @@ pub fn checkRemoveTest(io: std.Io, alloc: std.mem.Allocator) !void {
 
     try testz.expectEqual(hits[1], null);
 }
+
+pub fn insertRectStraddlesCellEdgeTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var grid = try IntCollisionGrid.init(alloc, .{ .x = 4, .y = 4 }, .{ .x = 16, .y = 16 });
+    defer grid.deinit();
+
+    // 10 wide starting at 15 covers cells 0 and 1, though it's narrower than a cell.
+    const bounds: pixzig.RectF = .{ .l = 15, .t = 0, .r = 25, .b = 10 };
+    try grid.insertRect(bounds, 100);
+
+    var hits: [2]?i32 = .{ null, null };
+    try testz.expectEqual(try grid.checkPoint(.{ .x = 15, .y = 5 }, &hits[0..]), 1);
+    try testz.expectEqual(try grid.checkPoint(.{ .x = 20, .y = 5 }, &hits[0..]), 1);
+
+    // A rect ending exactly on a cell boundary doesn't spill into the next cell.
+    try grid.insertRect(.{ .l = 32, .t = 0, .r = 48, .b = 16 }, 200);
+    try testz.expectEqual(try grid.checkPoint(.{ .x = 48, .y = 5 }, &hits[0..]), 0);
+
+    try testz.expectEqual(try grid.removeRect(bounds, 100), 2);
+    try testz.expectEqual(try grid.checkPoint(.{ .x = 20, .y = 5 }, &hits[0..]), 0);
+}
+
+pub fn insertRectNegativeBoundsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var grid = try IntCollisionGrid.init(alloc, .{ .x = 4, .y = 4 }, .{ .x = 16, .y = 16 });
+    defer grid.deinit();
+
+    // Partly off the top-left: only the on-grid cell is filled.
+    const bounds: pixzig.RectF = .{ .l = -8, .t = -8, .r = 8, .b = 8 };
+    try grid.insertRect(bounds, 100);
+
+    var hits: [2]?i32 = .{ null, null };
+    try testz.expectEqual(try grid.checkPoint(.{ .x = 2, .y = 2 }, &hits[0..]), 1);
+
+    // Entirely off-grid is a no-op rather than a panic.
+    try grid.insertRect(.{ .l = -40, .t = -40, .r = -20, .b = -20 }, 200);
+    try grid.insertRect(.{ .l = 100, .t = 0, .r = 120, .b = 10 }, 300);
+
+    try testz.expectEqual(try grid.removeRect(bounds, 100), 1);
+    try testz.expectEqual(try grid.removeRect(.{ .l = -40, .t = -40, .r = -20, .b = -20 }, 200), 0);
+}
+
+pub fn checkHorzSkippedDuplicatesFitTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var grid = try IntCollisionGrid.init(alloc, .{ .x = 4, .y = 4 }, .{ .x = 16, .y = 16 });
+    defer grid.deinit();
+
+    // 100 spans cells 0 and 1 (both axes); 200 only cell 1, after the repeated 100.
+    try grid.insertRect(.{ .l = 0, .t = 0, .r = 32, .b = 32 }, 100);
+    try grid.insertRect(.{ .l = 16, .t = 0, .r = 32, .b = 16 }, 200);
+    try grid.insertRect(.{ .l = 0, .t = 16, .r = 16, .b = 32 }, 300);
+
+    // Exactly two unique hits fit in a two-slot list.
+    var hits: [2]?i32 = .{ null, null };
+    try testz.expectEqual(try grid.checkHorz(0, 1, 0, &hits[0..]), 2);
+    try testz.expectEqual(hits[1].?, 200);
+    try testz.expectEqual(try grid.checkVert(0, 0, 1, &hits[0..]), 2);
+    try testz.expectEqual(hits[1].?, 300);
+}
