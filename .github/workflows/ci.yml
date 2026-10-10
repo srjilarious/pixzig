@@ -47,3 +47,9 @@ jobs:
       # unnoticed while the engine changes around them.
       - name: Build all examples
         run: zig build build-all
+
+      # `zig build new` copies template/, so it has to keep building against
+      # the engine (and through buildGame, the way a real game does).
+      - name: Build the project template
+        working-directory: template
+        run: zig build

@@ -1,0 +1,19 @@
+.{
+    .name = .my_game,
+    .version = "0.1.0",
+    .fingerprint = 0xe30c18d84ec07e7b,
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .pixzig = .{
+            // `zig build new` rewrites this to point at your pixzig checkout.
+            // Use a URL + hash instead for a fetched dependency.
+            .path = "..",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "assets",
+    },
+}

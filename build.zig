@@ -615,7 +615,7 @@ pub fn build(b: *std.Build) void {
                 b,
                 target,
                 optimize,
-                engDat.engine_lib,
+                engDat.engine_lib.getEmittedBin(),
                 engDat.pixeng_mod,
                 example_info.name,
                 exe_mod,
@@ -642,7 +642,7 @@ pub fn build(b: *std.Build) void {
                 .target = target,
                 .optimize = optimize,
             });
-            const spack = buildExample(b, target, optimize, engDat.engine_lib, engDat.pixeng_mod, "spack", spack_mod, manifestFromDef(b, .{}), is_package, false);
+            const spack = buildExample(b, target, optimize, null, engDat.pixeng_mod, "spack", spack_mod, manifestFromDef(b, .{}), is_package, false);
             const zargs = b.dependency("zargunaught", .{});
             spack.root_module.addImport("zargunaught", zargs.module("zargunaught"));
 
@@ -677,8 +677,37 @@ pub fn build(b: *std.Build) void {
         }
     }
 
+    addNewProjectStep(b);
+
     // Make build-all the default step
     b.default_step.dependOn(build_all_step);
+}
+
+/// `zig build new -Dname=my_cool_game -Ddest=../my_cool_game` copies
+/// `template/` into a new game project (see tools/new_project).
+fn addNewProjectStep(b: *std.Build) void {
+    const name = b.option([]const u8, "name", "zig build new: the new project's name") orelse "my_game";
+    const dest = b.option([]const u8, "dest", "zig build new: directory to create, relative to the pixzig root") orelse
+        b.fmt("../{s}", .{name});
+
+    const tool = b.addExecutable(.{
+        .name = "new_project",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/new_project/new_project.zig"),
+            .target = b.graph.host,
+        }),
+    });
+    const run = b.addRunArtifact(tool);
+    // Relative arguments resolve against the pixzig root.
+    run.setCwd(b.path("."));
+    run.addArg("template");
+    run.addArg(dest);
+    run.addArg(name);
+    run.addArg(".");
+    // It creates a directory outside the cache, so never skip it as cached.
+    run.has_side_effects = true;
+
+    b.step("new", "Create a new game project from template/ (-Dname=..., -Ddest=...)").dependOn(&run.step);
 }
 
 fn buildEngine(
@@ -712,6 +741,9 @@ fn buildEngine(
             });
             const installObjStep = b.addInstallFile(obj.getEmittedBin(), "web/pixzig.o");
             b.getInstallStep().dependOn(&installObjStep.step);
+            // Lets `buildGame` link the object straight from the dependency,
+            // without the game depending on pixzig's install step.
+            b.addNamedLazyPath("pixzig_obj", obj.getEmittedBin());
 
             break :blk obj;
         }
@@ -952,14 +984,22 @@ pub const BuildGameOptions = struct {
     engine_dep: *std.Build.Dependency,
     /// The executable's name; also the name of its run step.
     name: []const u8,
-    /// The game's root module.
-    root_module: *std.Build.Module,
+    /// The game's root module. Set this or `root_source_file`, not both.
+    /// Use a module when the game needs its own imports.
+    root_module: ?*std.Build.Module = null,
+    /// Shortcut for the common case: the game's `main.zig`. `buildGame`
+    /// makes the module from it with `target` and `optimize`.
+    root_source_file: ?std.Build.LazyPath = null,
     manifest: ManifestHandle,
     /// Font embedded as the renderer's default (`renderInitOpts.font = .embedded`).
     default_font: DefaultFont = .karla,
     /// Package assets next to the executable. Null reads the `-Dpackage`
-    /// build option instead.
+    /// build option instead (declared once, however many games share it).
     package: ?bool = null,
+    /// Install the executable to `zig-out/bin/<name>/` as part of
+    /// `zig build`/`zig build install`, next to the assets a package build
+    /// copies there. Native only; web builds always emit to `zig-out/web/`.
+    install: bool = true,
     /// Generate a tiny executable root module that installs Pixzig's panic
     /// and log handlers, then delegates to `root_module.main`. Leave this on
     /// unless your root module deliberately provides its own `panic` or
@@ -1020,6 +1060,20 @@ fn sameDefaultFont(a: DefaultFont, b: DefaultFont) bool {
     };
 }
 
+/// The builder that declared `-Dpackage` through `buildGame`, and its value.
+/// `b.option` panics if the same option is declared twice on one builder, so
+/// a second `buildGame` call (a game plus an editor) reuses the first read.
+var package_option_owner: ?*std.Build = null;
+var package_option_value: bool = false;
+
+fn packageOption(b: *std.Build) bool {
+    if (package_option_owner != b) {
+        package_option_value = b.option(bool, "package", "Package assets to the output directory") orelse false;
+        package_option_owner = b;
+    }
+    return package_option_value;
+}
+
 /// Builds a game executable against the pixzig dependency, wiring in the
 /// engine, its asset manifest and its embedded default font, plus a run
 /// step named after the game.
@@ -1041,16 +1095,20 @@ pub fn buildGame(b: *std.Build, opts: BuildGameOptions) *std.Build.Step.Compile 
         }
     }
 
-    const engine_lib: ?*std.Build.Step.Compile = blk: {
-        if (opts.target.result.os.tag != .emscripten) {
-            break :blk opts.engine_dep.artifact("pixzig");
-        } else {
-            break :blk null;
-        }
-    };
+    const engine_obj: ?std.Build.LazyPath = if (opts.target.result.os.tag == .emscripten)
+        opts.engine_dep.namedLazyPath("pixzig_obj")
+    else
+        null;
 
-    const is_package = opts.package orelse
-        (b.option(bool, "package", "Package assets to the output directory") orelse false);
+    const root_module = if (opts.root_module) |m| blk: {
+        if (opts.root_source_file != null) @panic("buildGame: set root_module or root_source_file, not both");
+        break :blk m;
+    } else if (opts.root_source_file) |src|
+        b.createModule(.{ .root_source_file = src, .target = opts.target, .optimize = opts.optimize })
+    else
+        @panic("buildGame: set root_module or root_source_file");
+
+    const is_package = opts.package orelse packageOption(b);
 
     // Relative asset paths resolve against the game's own source tree in dev
     // builds (so hot-reload watches the real files) and against the
@@ -1061,7 +1119,16 @@ pub fn buildGame(b: *std.Build, opts: BuildGameOptions) *std.Build.Step.Compile 
         assetBaseModule(b, devAssetBase(b, opts.target, is_package)),
     );
 
-    return buildExample(b, opts.target, opts.optimize, engine_lib, engine_mod, opts.name, opts.root_module, opts.manifest, is_package, opts.wrap_root);
+    const exe = buildExample(b, opts.target, opts.optimize, engine_obj, engine_mod, opts.name, root_module, opts.manifest, is_package, opts.wrap_root);
+
+    if (opts.install and opts.target.result.os.tag != .emscripten) {
+        const install_exe = b.addInstallArtifact(exe, .{
+            .dest_dir = .{ .override = .{ .custom = b.pathJoin(&.{ "bin", opts.name }) } },
+        });
+        b.getInstallStep().dependOn(&install_exe.step);
+    }
+
+    return exe;
 }
 
 fn wrappedRootModule(
@@ -1119,7 +1186,9 @@ pub fn buildExample(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
-    engine_lib: ?*std.Build.Step.Compile,
+    /// The engine object emcc links on web builds; ignored on native, where
+    /// the engine comes in through `pixeng_mod`.
+    engine_obj: ?std.Build.LazyPath,
     pixeng_mod: *std.Build.Module,
     name: []const u8,
     exe_mod: *std.Build.Module,
@@ -1201,12 +1270,8 @@ pub fn buildExample(
             manifest.addToWebModule(exe, exe_mod, emcc_command);
 
             emcc_command.addFileArg(exe.getEmittedBin());
-            if (engine_lib) |lib| {
-                emcc_command.addFileArg(lib.getEmittedBin());
-            } else {
-                const obj_path = b.pathJoin(&.{ "zig-out", "web/pixzig.o" });
-                emcc_command.addArg(obj_path);
-            }
+            emcc_command.addFileArg(engine_obj orelse
+                @panic("buildExample: web builds need the engine object (engine_obj)"));
 
             // Lua
             const ziglua = pixeng_mod.owner.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua53 });
