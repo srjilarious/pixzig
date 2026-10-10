@@ -218,7 +218,7 @@ pub fn rendererPassesInEveryProjectionTest(io: std.Io, alloc: std.mem.Allocator)
     var r = try Rndr.init(alloc, &rm, &test_viewport, .{});
     defer r.deinit();
 
-    const cam = pixzig.Camera2D.init(test_viewport.logicalSize);
+    const cam = pixzig.Camera2D.init();
     const projections = [_]pixzig.renderer.Projection{
         .logical,
         .screen,

@@ -27,7 +27,7 @@ pub const App = struct {
         std.log.info("Done initializing map renderer.", .{});
 
         const guy_rect = RectF.fromPosSize(33, 33, 32, 32);
-        var cam = pixzig.Camera2D.init(eng.viewport.logicalSize);
+        var cam = pixzig.Camera2D.init();
         cam.pos = guy_rect.centerF();
         cam.bounds = layerBounds(mainLayer(&mapRender));
 

@@ -588,7 +588,7 @@ export fn pz_camera_create(eng: *PzEngine) callconv(.c) ?*PzCamera {
     };
     wrapper.* = .{
         .eng = eng,
-        .camera = pixzig.Camera2D.init(eng.engine.viewport.logicalSize),
+        .camera = pixzig.Camera2D.init(),
         .registryIndex = undefined,
     };
     registryAdd(PzCamera, &eng.cameras, eng.alloc, wrapper) catch |err| {
@@ -1240,14 +1240,14 @@ export fn pz_screen_to_world(eng: *PzEngine, cam: *PzCamera, sx: f32, sy: f32, o
         out_y.* = 0;
         return false;
     };
-    const world = cam.camera.logicalToWorld(logical);
+    const world = cam.camera.logicalToWorld(&eng.engine.viewport, logical);
     out_x.* = world.x;
     out_y.* = world.y;
     return true;
 }
 
 export fn pz_world_to_screen(eng: *PzEngine, cam: *PzCamera, wx: f32, wy: f32, out_x: *f32, out_y: *f32) callconv(.c) void {
-    const logical = cam.camera.worldToLogical(.{ .x = wx, .y = wy });
+    const logical = cam.camera.worldToLogical(&eng.engine.viewport, .{ .x = wx, .y = wy });
     const win = fbToWindow(eng, eng.engine.viewport.logicalToFramebuffer(logical));
     out_x.* = win.x;
     out_y.* = win.y;

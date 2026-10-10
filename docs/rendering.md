@@ -21,7 +21,7 @@ pub fn render(self: *App, eng: *AppRunner.Engine) void {
 |---|---|
 | `.logical` | The logical game resolution, y down. The usual choice. |
 | `.screen` | Framebuffer pixels, y down. For debug overlays in physical pixels; the pass spans the whole framebuffer (letterbox bars included) and `end()` restores the game viewport. |
-| `.{ .camera = &cam }` | World space seen through a `Camera2D`. |
+| `.{ .camera = &cam }` | World space seen through a `Camera2D`. Its `viewRect`, `worldToLogical` and `logicalToWorld` take `&eng.viewport` too, and account for `zoom` and `rotation`. |
 | `.{ .matrix = m }` | Your own model-view-projection matrix. |
 
 Draws appear in the order you submit them. Each kind of draw (plain sprites and textures, tinted sprites, filled sprites, shapes, text, colored text) queues into its own batch; switching to a different kind flushes the previous batch first, and `end` flushes whatever is left. Consecutive draws of the same kind and texture still go out as one GL call, so when order doesn't matter, grouping similar draws keeps the call count down.
