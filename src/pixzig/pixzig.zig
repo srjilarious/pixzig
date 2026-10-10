@@ -601,9 +601,14 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
             self.viewport.updateFramebufferSize(fbsz);
 
             // Clear the whole framebuffer, letterbox bars included, before
-            // restoring the viewport's own scissor rect.
+            // restoring the viewport's own scissor rect. The game's clear
+            // color is put back afterwards, so a game that set it once with
+            // gl.clearColor keeps it across resizes.
+            var gameClearColor: [4]f32 = undefined;
+            gl.getFloatv(gl.COLOR_CLEAR_VALUE, &gameClearColor);
             gl.disable(gl.SCISSOR_TEST);
             self.renderer.clear(0, 0, 0, 255);
+            gl.clearColor(gameClearColor[0], gameClearColor[1], gameClearColor[2], gameClearColor[3]);
 
             self.viewport.apply();
         }
