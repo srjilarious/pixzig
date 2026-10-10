@@ -120,7 +120,7 @@ _ = try self.hero.addState(seqMgr.getState("walk_right").?, .{}); // first state
 self.hero.sprite.setOriginNormalized(0.5, 1);
 
 // In update:
-try self.hero.setState("walk_right"); // no-op if already in it; otherwise shows frame 0 now
+try self.hero.setState("walk_right", .{}); // no-op if already in it; otherwise shows frame 0 now
 self.hero.update(delta);
 self.hero.sprite.setPosF(x, y);
 
@@ -144,10 +144,14 @@ A sequence's `mode` is `.loop` (the default) or `.once`. A `.once` sequence play
 _ = try self.hero.addState(&.{ .name = "attack", .nextState = "idle", .sequence = attackSeq }, .{});
 
 // In update, when the attack button is pressed:
-try self.hero.setState("attack");
+try self.hero.setState("attack", .{});
 ```
 
-`setState` on the state the actor is already in is a no-op, even after a `.once` state has finished. To replay it, switch to another state first. In a sequence JSON file, set `"mode": "once"` on the sequence and `"nextStateName"` on the state.
+`setState` on the state the actor is already in is a no-op, even after a `.once` state has finished. Pass `.{ .reset = true }` to restart it from frame 0 instead, e.g. to replay an attack:
+
+```zig
+try self.hero.setState("attack", .{ .reset = true });
+``` In a sequence JSON file, set `"mode": "once"` on the sequence and `"nextStateName"` on the state.
 
 ### Subtextures
 

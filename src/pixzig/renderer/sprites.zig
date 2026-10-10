@@ -546,14 +546,15 @@ pub const Actor = struct {
 
     /// Switches to the state named `name` and applies its first frame to the
     /// sprite right away. No-op if already in that state, even when a `.once`
-    /// state has finished. Returns `error.UnknownActorState` if `name` was
-    /// never added.
+    /// state has finished, unless `opts.reset` is set, which restarts it from
+    /// its first frame. Returns `error.UnknownActorState` if `name` was never
+    /// added.
     pub fn setState(self: *Actor, name: []const u8, opts: struct{ reset: bool = false }) !void {
         if (self.currState == null) return;
 
         // Only reset the state if we're not in it, or asked to.
+        const state = self.states.get(name) orelse return error.UnknownActorState;
         if(opts.reset or !std.mem.eql(u8, self.currState.?.name, name)) {
-            const state = self.states.get(name) orelse return error.UnknownActorState;
             self.enterState(state);
         }
     }

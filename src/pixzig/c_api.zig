@@ -1139,7 +1139,7 @@ export fn pz_actor_sprite(ac: *PzActor) callconv(.c) *PzSprite {
 /// its sprite right away, so it updates even before the next tick. Fails if
 /// the actor has no state with that name.
 export fn pz_actor_set_state(ac: *PzActor, state_name: [*:0]const u8) callconv(.c) i32 {
-    ac.actor.setState(std.mem.span(state_name)) catch |err| {
+    ac.actor.setState(std.mem.span(state_name), .{}) catch |err| {
         setLastErrorErr(err);
         return -1;
     };

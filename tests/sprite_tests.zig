@@ -275,7 +275,7 @@ pub fn actorSetStateAppliesFirstFrameTest(io: std.Io, alloc: std.mem.Allocator) 
     _ = try actor.addState(&.{ .name = "left", .sequence = &seq, .flip = .horz }, .{});
 
     actor.update(150); // now on the second frame of "right"
-    try actor.setState("left");
+    try actor.setState("left", .{});
     const f2 = try tm.getTexture("player_right_2");
     try testz.expectEqual(actor.sprite.texture, f2);
     // Horizontal flip swaps l and r.
@@ -321,8 +321,13 @@ pub fn actorOnceHoldsLastFrameTest(io: std.Io, alloc: std.mem.Allocator) !void {
     try testz.expectTrue(actor.finished());
 
     // setState on the finished state stays a no-op.
-    try actor.setState("attack");
+    try actor.setState("attack", .{});
     try testz.expectTrue(actor.finished());
+
+    // ...unless asked to reset, which replays it from the first frame.
+    try actor.setState("attack", .{ .reset = true });
+    try testz.expectFalse(actor.finished());
+    try testz.expectEqual(actor.currFrame, 0);
 }
 
 pub fn actorOnceFollowsNextStateTest(io: std.Io, alloc: std.mem.Allocator) !void {
@@ -340,7 +345,7 @@ pub fn actorOnceFollowsNextStateTest(io: std.Io, alloc: std.mem.Allocator) !void
     _ = try actor.addState(&.{ .name = "idle", .sequence = &walk }, .{});
     _ = try actor.addState(&.{ .name = "attack", .nextState = "idle", .sequence = &attack }, .{});
 
-    try actor.setState("attack");
+    try actor.setState("attack", .{});
     try testz.expectEqual(actor.sprite.texture, try tm.getTexture("player_right_1"));
     actor.update(150);
     actor.update(150);
@@ -402,7 +407,7 @@ pub fn actorSetStateUnknownErrorsTest(io: std.Io, alloc: std.mem.Allocator) !voi
     defer actor.deinit();
     _ = try actor.addState(&.{ .name = "walk", .sequence = &walk }, .{});
 
-    try testz.expectError(actor.setState("nope"), error.UnknownActorState);
+    try testz.expectError(actor.setState("nope", .{}), error.UnknownActorState);
     try testz.expectEqualStr(actor.currState.?.name, "walk");
 }
 
