@@ -22,12 +22,34 @@ try sequence.add(alloc, try seq.WaitStep.init(alloc, 500.0)); // 500 ms pause
 
 ### MoveToStep
 
-Linearly interpolates a flecs entity's sprite from its current position to a target over a duration. The sprite is the entity's `Sprite` component, or its `Actor`'s own sprite when it has no `Sprite` component; register both component types in the world. Positions are the sprite's origin (`Sprite.pos()`, the top-left corner by default). Start position is captured lazily on the first tick.
+Moves a flecs entity's sprite from its current position to a target over a duration, linearly by default. The sprite is the entity's `Sprite` component, or its `Actor`'s own sprite when it has no `Sprite` component; register both component types in the world. Positions are the sprite's origin (`Sprite.pos()`, the top-left corner by default). Start position is captured lazily on the first tick.
 
 ```zig
 const target = Vec2F{ .x = 100, .y = 48 };
 try sequence.add(alloc, try seq.MoveToStep.init(
     alloc, world, entity, target, 300.0, // 300 ms
+));
+```
+
+`initEased` takes an extra `pixzig.Ease` curve (see [Math and Gameplay Helpers](math.md)), e.g. `.quad_out` to decelerate into place or `.back_out` to overshoot and settle:
+
+```zig
+try sequence.add(alloc, try seq.MoveToStep.initEased(
+    alloc, world, entity, target, 300.0, .quad_out,
+));
+```
+
+### TweenStep
+
+Tweens one `f32` from `from` to `to` over a duration along an easing curve, and hands each tick's value to a callback. Use it for anything you can drive from one number: a fade's alpha, a camera's zoom, a scale pop. The context pointer must outlive the step, so point it at a stable struct (your game state), not into a flecs component array.
+
+```zig
+fn setFade(self: *Game, alpha: f32) void {
+    self.fadeAlpha = alpha;
+}
+
+try sequence.add(alloc, try seq.TweenStep.init(
+    alloc, Game, self, setFade, 0.0, 1.0, 500.0, .sine_in_out,
 ));
 ```
 
@@ -133,7 +155,7 @@ This registers five Lua globals:
 |---|---|
 | `seq_new() -> handle` | Allocate a new pending sequence slot |
 | `seq_wait(h, ms)` | Append a WaitStep |
-| `seq_move_to(h, eid, x, y, ms)` | Append a MoveToStep |
+| `seq_move_to(h, eid, x, y, ms [, ease])` | Append a MoveToStep; `ease` is an `Ease` name such as `"quad_out"` (linear when omitted) |
 | `seq_set_actor_state(h, eid, name)` | Append a SetActorStateStep |
 | `seq_play(h)` | Submit the sequence to the player |
 

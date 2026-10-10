@@ -446,3 +446,101 @@ pub fn luaSeqNewGrowsAndReusesSlotsTest(io: std.Io, alloc: std.mem.Allocator) !v
     try testz.expectEqual(reused, 2);
     try testz.expectEqual(player.sequences.items.len, 1);
 }
+
+// ---------------------------------------------------------------------------
+// Easing + TweenStep tests
+// ---------------------------------------------------------------------------
+
+// An eased MoveToStep follows its curve mid-way and still lands on target.
+pub fn moveToStepEasedFollowsCurveTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    const world = makeWorld(.{Sprite});
+    defer _ = flecs.fini(world);
+
+    const entity = flecs.new_entity(world, "easedmove");
+    flecs.set(world, entity, Sprite, makeSprite(0, 0));
+
+    var sequence = seq.Sequence.init(alloc);
+    defer sequence.deinit(alloc);
+    try sequence.add(alloc, try seq.MoveToStep.initEased(alloc, world, entity, .{ .x = 100, .y = 0 }, 100.0, .quad_in));
+
+    // quad_in at t=0.5 is 0.25 of the way.
+    _ = sequence.update(50.0);
+    try testz.expectEqual(flecs.get(world, entity, Sprite).?.dest.l, 25.0);
+
+    try testz.expectTrue(sequence.update(50.0));
+    try testz.expectEqual(flecs.get(world, entity, Sprite).?.dest.l, 100.0);
+}
+
+const TweenTarget = struct {
+    value: f32 = -1,
+    calls: u32 = 0,
+
+    fn set(self: *TweenTarget, v: f32) void {
+        self.value = v;
+        self.calls += 1;
+    }
+};
+
+// TweenStep hands each tick's eased value to its callback and ends on `to`.
+pub fn tweenStepDrivesCallbackTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var target: TweenTarget = .{};
+
+    var sequence = seq.Sequence.init(alloc);
+    defer sequence.deinit(alloc);
+    try sequence.add(alloc, try seq.TweenStep.init(alloc, TweenTarget, &target, TweenTarget.set, 10, 20, 100.0, .linear));
+
+    try testz.expectFalse(sequence.update(25.0));
+    try testz.expectEqual(target.value, 12.5);
+
+    try testz.expectTrue(sequence.update(75.0));
+    try testz.expectEqual(target.value, 20.0);
+    try testz.expectEqual(target.calls, 2);
+}
+
+// A zero-length tween applies the end value on its first tick.
+pub fn tweenStepZeroDurationTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var target: TweenTarget = .{};
+
+    var sequence = seq.Sequence.init(alloc);
+    defer sequence.deinit(alloc);
+    try sequence.add(alloc, try seq.TweenStep.init(alloc, TweenTarget, &target, TweenTarget.set, 0, 1, 0.0, .sine_in_out));
+
+    try testz.expectTrue(sequence.update(0.0));
+    try testz.expectEqual(target.value, 1.0);
+}
+
+// seq_move_to takes an optional ease name as a sixth argument.
+pub fn luaSeqMoveToEaseArgTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    const world = makeWorld(.{Sprite});
+    defer _ = flecs.fini(world);
+
+    const entity = flecs.new_entity(world, "luaease");
+    flecs.set(world, entity, Sprite, makeSprite(0, 0));
+
+    var player = seq.SequencePlayer.init(alloc);
+    defer player.deinit();
+
+    var seqCtx = seq.SeqScriptingContext.init(alloc, world, &player);
+    defer seqCtx.deinit();
+
+    var scriptEng = try ScriptEngine.init(alloc);
+    defer scriptEng.deinit();
+
+    try seqCtx.bindToLua(&scriptEng);
+    scriptEng.lua.pushInteger(@intCast(entity));
+    scriptEng.lua.setGlobal("test_entity");
+
+    const script: [:0]const u8 =
+        \\local h = seq_new()
+        \\seq_move_to(h, test_entity, 100, 0, 100, "quad_in")
+        \\seq_play(h)
+    ;
+    try scriptEng.run(script);
+
+    player.update(50.0);
+    try testz.expectEqual(flecs.get(world, entity, Sprite).?.dest.l, 25.0);
+}

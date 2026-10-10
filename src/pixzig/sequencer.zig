@@ -7,9 +7,11 @@ const sprites = @import("./renderer/sprites.zig");
 const flecs = @import("zflecs");
 const ziglua = @import("ziglua");
 const scripting = @import("./scripting.zig");
+const easing = @import("./easing.zig");
 const Lua = ziglua.Lua;
 const ScriptEngine = scripting.ScriptEngine;
 const Vec2F = common.Vec2F;
+const Ease = easing.Ease;
 const Color = common.Color;
 const Sprite = sprites.Sprite;
 const Actor = sprites.Actor;
@@ -140,7 +142,8 @@ pub const ParallelStep = struct {
 /// on first tick to `target` over `durationMs`. The sprite is the entity's
 /// `Sprite` component, or else its `Actor`'s sprite, so the world must have
 /// both component types registered. Captures start position lazily on the
-/// first update call.
+/// first update call. `init` moves at a constant speed; `initEased` follows
+/// an easing curve instead.
 pub const MoveToStep = struct {
     world: *flecs.world_t,
     entityId: flecs.entity_t,
@@ -148,6 +151,7 @@ pub const MoveToStep = struct {
     durationMs: f64,
     elapsedMs: f64,
     startPos: ?Vec2F,
+    ease: Ease,
 
     const vtable: Step.VTable = .{
         .update = update,
@@ -161,6 +165,19 @@ pub const MoveToStep = struct {
         target: Vec2F,
         durationMs: f64,
     ) !Step {
+        return initEased(alloc, world, entityId, target, durationMs, .linear);
+    }
+
+    /// Like `init`, but the position follows `ease` from start to target,
+    /// e.g. `.quad_out` to decelerate into place.
+    pub fn initEased(
+        alloc: std.mem.Allocator,
+        world: *flecs.world_t,
+        entityId: flecs.entity_t,
+        target: Vec2F,
+        durationMs: f64,
+        ease: Ease,
+    ) !Step {
         const ptr = try alloc.create(MoveToStep);
         ptr.* = .{
             .world = world,
@@ -169,6 +186,7 @@ pub const MoveToStep = struct {
             .durationMs = durationMs,
             .elapsedMs = 0,
             .startPos = null,
+            .ease = ease,
         };
         return .{ .ptr = ptr, .vtable = &vtable, .done = false };
     }
@@ -187,10 +205,8 @@ pub const MoveToStep = struct {
 
         self.elapsedMs += deltaMs;
         const t: f32 = @floatCast(@min(self.elapsedMs / self.durationMs, 1.0));
-        const start = self.startPos.?;
-        const x = start.x + t * (self.target.x - start.x);
-        const y = start.y + t * (self.target.y - start.y);
-        spr.setPosF(x, y);
+        const pos = self.startPos.?.lerp(self.target, self.ease.apply(t));
+        spr.setPosF(pos.x, pos.y);
         self.markModified();
 
         const timeLeft = self.durationMs - self.elapsedMs;
@@ -215,6 +231,80 @@ pub const MoveToStep = struct {
         } else {
             flecs.modified(self.world, self.entityId, Actor);
         }
+    }
+};
+
+/// Tweens one value from `from` to `to` over `durationMs` along an easing
+/// curve, handing each tick's value to a callback. For anything a game can
+/// drive from a single f32: a fade's alpha, a camera's zoom, a scale pop.
+///
+/// ```zig
+/// fn setFade(self: *Game, alpha: f32) void { self.fadeAlpha = alpha; }
+/// ...
+/// try sequence.add(alloc, try seq.TweenStep.init(alloc, Game, self, setFade, 0, 1, 500, .sine_in_out));
+/// ```
+///
+/// `ctx` must outlive the step, so point it at something stable (the game
+/// struct), not into a flecs component array that can move.
+pub const TweenStep = struct {
+    ctx: *anyopaque,
+    applyFn: *const fn (ctx: *anyopaque, value: f32) void,
+    from: f32,
+    to: f32,
+    durationMs: f64,
+    elapsedMs: f64,
+    ease: Ease,
+
+    const vtable: Step.VTable = .{
+        .update = update,
+        .deinit = deinit,
+    };
+
+    pub fn init(
+        alloc: std.mem.Allocator,
+        comptime Ctx: type,
+        ctx: *Ctx,
+        comptime apply: fn (ctx: *Ctx, value: f32) void,
+        from: f32,
+        to: f32,
+        durationMs: f64,
+        ease: Ease,
+    ) !Step {
+        const Erased = struct {
+            fn call(p: *anyopaque, value: f32) void {
+                apply(@ptrCast(@alignCast(p)), value);
+            }
+        };
+
+        const ptr = try alloc.create(TweenStep);
+        ptr.* = .{
+            .ctx = ctx,
+            .applyFn = Erased.call,
+            .from = from,
+            .to = to,
+            .durationMs = durationMs,
+            .elapsedMs = 0,
+            .ease = ease,
+        };
+        return .{ .ptr = ptr, .vtable = &vtable, .done = false };
+    }
+
+    pub fn update(step: *Step, deltaMs: f64) f64 {
+        const self: *TweenStep = @ptrCast(@alignCast(step.ptr));
+        self.elapsedMs += deltaMs;
+
+        // A zero duration jumps straight to the end value.
+        const t: f32 = if (self.durationMs <= 0) 1.0 else @floatCast(@min(self.elapsedMs / self.durationMs, 1.0));
+        self.applyFn(self.ctx, easing.tween(self.ease, self.from, self.to, t));
+
+        const timeLeft = self.durationMs - self.elapsedMs;
+        step.done = timeLeft <= 0;
+        return timeLeft;
+    }
+
+    pub fn deinit(step: *Step, alloc: std.mem.Allocator) void {
+        const self: *TweenStep = @ptrCast(@alignCast(step.ptr));
+        alloc.destroy(self);
     }
 };
 
@@ -453,17 +543,30 @@ fn luaSeqWait(ctx: *SeqScriptingContext, lua: *Lua) i32 {
     return 0;
 }
 
-/// seq_move_to(handle, entity_id, x, y, ms) — append a MoveToStep.
+/// seq_move_to(handle, entity_id, x, y, ms [, ease]) — append a MoveToStep.
+/// `ease` is an `Ease` name such as "quad_out"; omitted, the move is
+/// linear. An unknown name logs a warning and falls back to linear.
 fn luaSeqMoveTo(ctx: *SeqScriptingContext, lua: *Lua) i32 {
     const handle = lua.toInteger(1) catch return 0;
     const entityId: flecs.entity_t = @intCast(lua.toInteger(2) catch return 0);
     const x: f32 = @floatCast(lua.toNumber(3) catch return 0);
     const y: f32 = @floatCast(lua.toNumber(4) catch return 0);
     const ms = lua.toNumber(5) catch return 0;
+    const ease = luaEaseArg(lua, 6);
     if (ctx.pendingSeq(handle)) |s| {
-        s.add(ctx.alloc, MoveToStep.init(ctx.alloc, ctx.world, entityId, .{ .x = x, .y = y }, ms) catch return 0) catch {};
+        s.add(ctx.alloc, MoveToStep.initEased(ctx.alloc, ctx.world, entityId, .{ .x = x, .y = y }, ms, ease) catch return 0) catch {};
     }
     return 0;
+}
+
+/// Reads an optional `Ease` name at stack index `idx`, defaulting to linear.
+fn luaEaseArg(lua: *Lua, idx: i32) Ease {
+    if (lua.getTop() < idx or lua.isNil(idx)) return .linear;
+    const name = lua.toString(idx) catch return .linear;
+    return std.meta.stringToEnum(Ease, name) orelse {
+        std.log.warn("seq_move_to: unknown ease '{s}', using linear", .{name});
+        return .linear;
+    };
 }
 
 /// seq_set_actor_state(handle, entity_id, state_name) — append a SetActorStateStep.

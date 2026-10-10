@@ -31,6 +31,10 @@ pub const stb_tt = @import("stb_truetype");
 
 pub const common = @import("./common.zig");
 pub const utils = @import("./utils.zig");
+pub const random = @import("./random.zig");
+pub const Rng = random.Rng;
+pub const easing = @import("./easing.zig");
+pub const Ease = easing.Ease;
 pub const platform = @import("./platform.zig");
 pub const shaders = @import("./renderer/shaders.zig");
 pub const textures = @import("./renderer/textures.zig");
@@ -198,10 +202,21 @@ pub const EngineInitOptions = struct {
     /// Whether vsync is enabled on init. Change it later with
     /// `Engine.enableVSync`, e.g. from a settings menu.
     vsync: bool = true,
+    /// Seed for `Engine.rng`. Null seeds it from the clock, so each run
+    /// differs; set it for reproducible runs (replays, tests, lockstep).
+    rngSeed: ?u64 = null,
     renderInitOpts: renderer.RendererInitOpts = .{},
 };
 
 pub const web = if (builtin.os.tag == .emscripten) @import("./web.zig") else {};
+
+/// A seed for `Engine.rng` when `EngineInitOptions.rngSeed` is null: the
+/// wall clock in nanoseconds, so each run differs.
+fn clockSeed() u64 {
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const ns = std.Io.Timestamp.now(io, .real).toNanoseconds();
+    return @truncate(@as(u128, @bitCast(@as(i128, ns))));
+}
 
 // Globals used by AppRunner main loop in emscripten for web builds.
 var g_EmscriptenRunnerRef: ?*anyopaque = null;
@@ -336,6 +351,10 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
         viewport: windowing.Viewport,
         resources: ResourceManager,
         inputs: Inputs,
+        /// The engine's random source, seeded from
+        /// `EngineInitOptions.rngSeed`. Draw gameplay randomness from here
+        /// so a fixed seed reproduces a run.
+        rng: random.Rng,
         renderer: Renderer = undefined,
         /// The audio engine. When `audioOpts.enabled` is false this is a
         /// `DisabledAudioEngine`, whose methods are compile errors naming the flag.
@@ -439,6 +458,7 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
                 .viewport = vp,
                 .resources = ResourceManager.init(allocator),
                 .inputs = input.InputManager.init(engOpts.inputOpts),
+                .rng = random.Rng.init(options.rngSeed orelse clockSeed()),
                 .manifest = if (engOpts.manifestOpts != null) undefined else {},
                 .scripts = if (engOpts.scripting) undefined else {},
                 .console = if (engOpts.console != null) undefined else {},
