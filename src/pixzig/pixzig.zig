@@ -644,25 +644,21 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
         /// Maps (0,0)..(framebufferW, framebufferH) with y=0 at the top-left.
         /// Use this for UI or debug overlays that should be positioned in screen
         /// pixels rather than logical game coordinates.
+        /// Equivalent to `viewport.screenProjection()`.
         pub fn screenProjection(self: *const Self) zmath.Mat {
-            const fw: f32 = @floatFromInt(self.windowState.framebufferSize.x);
-            const fh: f32 = @floatFromInt(self.windowState.framebufferSize.y);
-            return zmath.orthographicOffCenterLhGl(0, fw, 0, fh, -0.1, 1000);
+            return self.viewport.screenProjection();
         }
 
         /// Converts a window-coordinate position to framebuffer pixels,
         /// accounting for DPI scale.
         pub fn windowToFramebuffer(self: *const Self, pos: Vec2F) Vec2F {
-            return .{
-                .x = pos.x * self.windowState.scaleFactor.x,
-                .y = pos.y * self.windowState.scaleFactor.y,
-            };
+            return Viewport.windowToFramebuffer(pos, self.windowState.scaleFactor);
         }
 
         /// Converts a window-coordinate position to logical game coordinates.
         /// Returns null when the pointer is over a letterbox or pillarbox area.
         pub fn windowToLogical(self: *const Self, pos: Vec2F) ?Vec2F {
-            return self.viewport.framebufferToLogical(self.windowToFramebuffer(pos));
+            return self.viewport.windowToLogical(pos, self.windowState.scaleFactor);
         }
 
         /// Captures the whole framebuffer, letterbox bars included, and

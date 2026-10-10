@@ -940,8 +940,8 @@ export fn pz_draw_string(eng: *PzEngine, text: [*:0]const u8, x: i32, y: i32) ca
     _ = eng.engine.renderer.drawString(std.mem.span(text), .{ .x = x, .y = y });
 }
 
-/// Draws `text` with every glyph tinted by a 0-1 RGBA color. Expects a TTF
-/// (alpha-mask) font atlas; see `TextRenderer.drawStringColored`.
+/// Draws `text` with every glyph tinted by a 0-1 RGBA color; see
+/// `TextRenderer.drawStringColored`.
 export fn pz_draw_string_colored(eng: *PzEngine, text: [*:0]const u8, x: i32, y: i32, r: f32, g: f32, b: f32, a: f32) callconv(.c) void {
     _ = eng.engine.renderer.drawStringColored(std.mem.span(text), .{ .x = x, .y = y }, .{ .r = r, .g = g, .b = b, .a = a });
 }

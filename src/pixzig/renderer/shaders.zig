@@ -41,44 +41,52 @@ pub const TexPixelShader: ShaderCode =
     \\}
 ;
 
-/// Like `TexPixelShader`, but multiplies the sampled texel by a uniform
-/// `tint` colour so a single draw can be recoloured / faded. Used by the
-/// renderer's dedicated tinted sprite batch (see `Renderer.drawSpriteColored`).
-/// Kept as a separate program from `TextureShader` so the plain sprite,
-/// tilemap and pixel-buffer paths that share `TexPixelShader` are unaffected.
-pub const TexTintPixelShader: ShaderCode =
+/// The renderer's sprite batch vertex shader (see `SpriteBatch`). Every
+/// quad carries a texcoord, a color and a draw mode. Attribute locations are
+/// fixed so the batch's vertex layout never needs looking up.
+pub const SpriteVertexShader: ShaderCode =
     \\#version 300 es
-    \\precision mediump float;
+    \\layout(location = 0) in vec2 coord3d;
+    \\layout(location = 1) in vec2 texcoord;
+    \\layout(location = 2) in vec4 color;
+    \\layout(location = 3) in float mode;
+    \\out vec2 Texcoord;
+    \\out vec4 Col;
+    \\flat out float Mode;
     \\
-    \\in vec2 Texcoord;
-    \\uniform sampler2D tex;
-    \\uniform vec4 tint;
-    \\out vec4 fragColor;
+    \\uniform mat4 projectionMatrix;
     \\
     \\void main() {
-    \\    fragColor = texture(tex, Texcoord) * tint;
+    \\    gl_Position = projectionMatrix * vec4(coord3d, 0.0, 1.0);
+    \\    Texcoord = texcoord;
+    \\    Col = color;
+    \\    Mode = mode;
     \\}
 ;
 
-/// Replaces the sampled texel's colour with the uniform `tint` colour while
-/// keeping the texel's alpha, so a sprite draws as a solid silhouette of its
-/// own shape (the classic "hit flash"). `tint.a` is how much of the fill
-/// colour replaces the texel's rgb: 1 is a solid silhouette, 0 the plain
-/// sprite. Used by the renderer's fill sprite batch (see
-/// `Renderer.drawSpriteFilled`). The uniform keeps the `tint` name so the
-/// batch's existing `setTint` plumbing drives it.
-pub const TexFillPixelShader: ShaderCode =
+/// The sprite batch pixel shader. `Mode` is a `DrawMode`: 0 multiplies the
+/// texel by the color, 1 uses the texel's red channel as coverage for the
+/// color (font atlases), 2 replaces the texel's rgb with the color
+/// (blended by its alpha) and keeps the texel's alpha (silhouettes).
+pub const SpritePixelShader: ShaderCode =
     \\#version 300 es
     \\precision mediump float;
     \\
     \\in vec2 Texcoord;
+    \\in vec4 Col;
+    \\flat in float Mode;
     \\uniform sampler2D tex;
-    \\uniform vec4 tint;
     \\out vec4 fragColor;
     \\
     \\void main() {
     \\    vec4 texel = texture(tex, Texcoord);
-    \\    fragColor = vec4(mix(texel.rgb, tint.rgb, tint.a), texel.a);
+    \\    if (Mode < 0.5) {
+    \\        fragColor = texel * Col;
+    \\    } else if (Mode < 1.5) {
+    \\        fragColor = vec4(Col.rgb, Col.a * texel.r);
+    \\    } else {
+    \\        fragColor = vec4(mix(texel.rgb, Col.rgb, Col.a), texel.a);
+    \\    }
     \\}
 ;
 
@@ -129,78 +137,6 @@ pub const ColorPixelShader: ShaderCode =
     \\}
 ;
 
-/// A pixel shader that applies all white, using red as the alpha channel.
-pub const TextPixelShader_Desktop: ShaderCode =
-    \\ #version 300 es
-    \\ precision mediump float;
-    \\ in vec2 Texcoord; // Received from vertex shader
-    \\ uniform sampler2D tex; // Texture sampler
-    \\ out vec4 fragColor;
-    \\ void main() {
-    \\   fragColor = vec4(1.0, 1.0, 1.0, texture(tex, Texcoord).r); 
-    \\ }
-;
-
-/// A web version of the text pixel shader that uses the alpha channel instead of the red channel.
-pub const TextPixelShader_Web: ShaderCode =
-    \\ #version 300 es
-    \\ precision mediump float;
-    \\ in vec2 Texcoord; // Received from vertex shader
-    \\ uniform sampler2D tex; // Texture sampler
-    \\ out vec4 fragColor;
-    \\ void main() {
-    \\   fragColor = vec4(1.0, 1.0, 1.0, texture(tex, Texcoord).a); 
-    \\ }
-;
-
-/// A 2d vertex shader for tinted text: passes through texcoord plus a
-/// per-vertex color for the pixel shader to multiply against the font
-/// atlas's alpha mask, so each glyph draw can carry its own fg color.
-pub const TextColorVertexShader: ShaderCode =
-    \\#version 300 es
-    \\in vec2 coord3d;
-    \\in vec2 texcoord;
-    \\in vec4 color;
-    \\out vec2 Texcoord;
-    \\out vec4 Col;
-    \\
-    \\uniform mat4 projectionMatrix;
-    \\
-    \\void main() {
-    \\    gl_Position = projectionMatrix * vec4(coord3d, 0.0, 1.0);
-    \\    Texcoord = texcoord;
-    \\    Col = color;
-    \\}
-;
-
-/// Tints the font atlas's alpha mask (red channel on desktop GL) by the
-/// per-vertex color.
-pub const TextColorPixelShader_Desktop: ShaderCode =
-    \\ #version 300 es
-    \\ precision mediump float;
-    \\ in vec2 Texcoord;
-    \\ in vec4 Col;
-    \\ uniform sampler2D tex;
-    \\ out vec4 fragColor;
-    \\ void main() {
-    \\   fragColor = vec4(Col.rgb, Col.a * texture(tex, Texcoord).r);
-    \\ }
-;
-
-/// Web/WASM variant: the font atlas mask lives in the alpha channel instead
-/// of red (see TextPixelShader_Web).
-pub const TextColorPixelShader_Web: ShaderCode =
-    \\ #version 300 es
-    \\ precision mediump float;
-    \\ in vec2 Texcoord;
-    \\ in vec4 Col;
-    \\ uniform sampler2D tex;
-    \\ out vec4 fragColor;
-    \\ void main() {
-    \\   fragColor = vec4(Col.rgb, Col.a * texture(tex, Texcoord).a);
-    \\ }
-;
-
 /// A vertex shader that maps the pixel position to the screen position
 pub const PixBuffVertexShader: ShaderCode =
     \\#version 300 es
@@ -219,19 +155,9 @@ pub const ColorShader = "color_shader";
 /// The name for our normal texture shader used for sprites.
 pub const TextureShader = "texture_shader";
 
-/// The name for the tinted texture shader (texel * uniform `tint`), used by
-/// the renderer's dedicated tinted sprite batch.
-pub const TintTextureShader = "tint_texture_shader";
-
-/// The name for the fill texture shader (texel rgb replaced by uniform
-/// `tint`, alpha kept), used by the renderer's fill sprite batch.
-pub const FillTextureShader = "fill_texture_shader";
-
-/// Our text/font shader.
-pub const FontShader = "font_shader";
-
-/// Our tinted text/font shader (per-draw fg color).
-pub const TextColorShader = "text_color_shader";
+/// The name for the renderer's sprite batch shader (`SpriteVertexShader` +
+/// `SpritePixelShader`), which draws sprites, shapes and text.
+pub const SpriteShader = "sprite_shader";
 
 /// Our pixel buffer shader that maps directly to the screen pixels.
 pub const PixelBuffShader = "pixel_buffer_shader";

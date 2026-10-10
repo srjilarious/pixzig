@@ -149,7 +149,7 @@ pub const InputManager = struct {
 
         if (self.mouseEnabled) {
             const raw = self.mouse.rawPos();
-            const fb = Vec2F{ .x = raw.x * scaleFactor.x, .y = raw.y * scaleFactor.y };
+            const fb = windowing.Viewport.windowToFramebuffer(raw, scaleFactor);
             self.mouse.currPtr().fbPos = fb;
             self.mouse.currPtr().logicalPos = viewport.framebufferToLogical(fb);
         }

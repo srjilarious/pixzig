@@ -30,10 +30,10 @@ pub const BatchLayout = struct {
 /// or `end` is called.
 ///
 /// This holds only the generic vertex-data plumbing: buffer setup, shader
-/// attribute/uniform locations, and the flush-on-texture-change bookkeeping
-/// shared by every quad renderer in pixzig. Renderer-specific concerns (rect
-/// rotation, GL_DEPTH_TEST toggling, line-drawn rect outlines, ...) belong in
-/// a thin wrapper type built on top of this, not here.
+/// attribute/uniform locations, and the flush-on-texture-change bookkeeping.
+/// Renderer-specific concerns (GL_DEPTH_TEST toggling, ...) belong in a thin
+/// wrapper type built on top of this, not here. The 2d renderer uses its own
+/// interleaved `SpriteBatch` instead.
 pub fn QuadBatch(comptime layout: BatchLayout) type {
     const hasTex = layout.texDim > 0;
     const hasColor = layout.colorDim > 0;
@@ -53,12 +53,6 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
         vertices: []f32 = &.{},
         texCoords: []f32 = &.{}, // stays empty when !hasTex
         colorCoords: []f32 = &.{}, // stays empty when !hasColor
-        // u32 (not u16) element indices: a batch of `maxQuads` quads has
-        // `4 * maxQuads` vertices, and the largest vertex index must fit
-        // the type. u16 caps a batch at ~16k quads before the index
-        // `@intCast` below overflows; u32 lifts that to well past any
-        // sane `maxQuads`. Drawn with `gl.UNSIGNED_INT` to match.
-        indices: []u32 = &.{},
 
         allocator: std.mem.Allocator,
         maxQuads: usize,
@@ -67,19 +61,8 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
         attrTexCoord: c_uint = 0,
         attrColor: c_uint = 0,
         uniformMVP: c_int = 0,
-        /// Location of an optional `vec4 tint` uniform, or -1 when the bound
-        /// shader has none (the common case). When present, `flush` uploads
-        /// `tint` before drawing.
-        uniformTint: c_int = -1,
-        /// Colour multiplier uploaded to `uniformTint`. Defaults to white
-        /// (a no-op). Change it through `setTint`, which flushes first so a
-        /// tint change never retroactively recolours already-queued quads.
-        tint: [4]f32 = .{ 1, 1, 1, 1 },
+        uniformTex: c_int = -1,
 
-        currVert: usize = 0,
-        currTex: usize = 0,
-        currColor: usize = 0,
-        currIdx: usize = 0,
         currNumQuads: usize = 0,
 
         mvpArr: [16]f32 = @splat(0),
@@ -108,8 +91,15 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
             }
             errdefer if (comptime hasColor) alloc.free(batch.colorCoords);
 
-            batch.indices = try alloc.alloc(u32, 6 * maxQuads);
-            errdefer alloc.free(batch.indices);
+            // u32 (not u16) element indices: a batch of `maxQuads` quads has
+            // `4 * maxQuads` vertices, and u16 would cap a batch at ~16k
+            // quads. The pattern never changes, so it is uploaded once here.
+            const indices = try alloc.alloc(u32, 6 * maxQuads);
+            defer alloc.free(indices);
+            for (0..maxQuads) |q| {
+                const base: u32 = @intCast(4 * q);
+                indices[6 * q ..][0..6].* = .{ base, base + 1, base + 2, base + 2, base + 3, base };
+            }
 
             gl.genVertexArrays(1, &batch.vao);
             errdefer gl.deleteVertexArrays(1, &batch.vao);
@@ -118,26 +108,27 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
             gl.genBuffers(1, &batch.vboVertices);
             errdefer gl.deleteBuffers(1, &batch.vboVertices);
             gl.bindBuffer(gl.ARRAY_BUFFER, batch.vboVertices);
-            gl.bufferData(gl.ARRAY_BUFFER, @intCast(batch.vertices.len * @sizeOf(f32)), null, gl.DYNAMIC_DRAW);
+            gl.bufferData(gl.ARRAY_BUFFER, @intCast(batch.vertices.len * @sizeOf(f32)), null, gl.STREAM_DRAW);
 
             if (comptime hasTex) {
                 gl.genBuffers(1, &batch.vboTexCoords);
                 errdefer gl.deleteBuffers(1, &batch.vboTexCoords);
                 gl.bindBuffer(gl.ARRAY_BUFFER, batch.vboTexCoords);
-                gl.bufferData(gl.ARRAY_BUFFER, @intCast(batch.texCoords.len * @sizeOf(f32)), null, gl.DYNAMIC_DRAW);
+                gl.bufferData(gl.ARRAY_BUFFER, @intCast(batch.texCoords.len * @sizeOf(f32)), null, gl.STREAM_DRAW);
             }
 
             if (comptime hasColor) {
                 gl.genBuffers(1, &batch.vboColorCoords);
                 errdefer gl.deleteBuffers(1, &batch.vboColorCoords);
                 gl.bindBuffer(gl.ARRAY_BUFFER, batch.vboColorCoords);
-                gl.bufferData(gl.ARRAY_BUFFER, @intCast(batch.colorCoords.len * @sizeOf(f32)), null, gl.DYNAMIC_DRAW);
+                gl.bufferData(gl.ARRAY_BUFFER, @intCast(batch.colorCoords.len * @sizeOf(f32)), null, gl.STREAM_DRAW);
             }
 
             gl.genBuffers(1, &batch.vboIndices);
             errdefer gl.deleteBuffers(1, &batch.vboIndices);
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, batch.vboIndices);
-            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(batch.indices.len * @sizeOf(u32)), null, gl.DYNAMIC_DRAW);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(indices.len * @sizeOf(u32)), indices.ptr, gl.STATIC_DRAW);
+            gl.bindVertexArray(0);
 
             gl.enable(gl.BLEND);
             gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -158,7 +149,6 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
             self.allocator.free(self.vertices);
             if (comptime hasTex) self.allocator.free(self.texCoords);
             if (comptime hasColor) self.allocator.free(self.colorCoords);
-            self.allocator.free(self.indices);
         }
 
         fn cacheShaderLocations(self: *Self) void {
@@ -167,31 +157,7 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
             if (comptime hasTex) self.attrTexCoord = @intCast(gl.getAttribLocation(self.shader.val.program, "texcoord"));
             if (comptime hasColor) self.attrColor = @intCast(gl.getAttribLocation(self.shader.val.program, "color"));
             self.uniformMVP = @intCast(gl.getUniformLocation(self.shader.val.program, "projectionMatrix"));
-            self.uniformTint = @intCast(gl.getUniformLocation(self.shader.val.program, "tint"));
-        }
-
-        /// Sets the colour every subsequently queued quad is multiplied by
-        /// (only has an effect when the bound shader declares a `vec4 tint`
-        /// uniform). Flushes any already-queued quads first so they keep the
-        /// previous tint.
-        pub fn setTint(self: *Self, r: f32, g: f32, b: f32, a: f32) void {
-            if (self.tint[0] == r and self.tint[1] == g and self.tint[2] == b and self.tint[3] == a) return;
-            if (self.begun and self.currNumQuads > 0) self.flush();
-            self.tint = .{ r, g, b, a };
-        }
-
-        /// Re-looks-up the shader's locations after it was reloaded.
-        fn refreshShader(self: *Self) void {
-            if (self.shader.version == self.shaderVersion) return;
-            self.cacheShaderLocations();
-        }
-
-        /// Swap to a different shader entirely (e.g. the text renderer
-        /// toggling between alpha and RGB pixel shaders), re-caching
-        /// uniform/attribute locations.
-        pub fn swapShader(self: *Self, newShader: *ShaderHandle) void {
-            self.shader = newShader;
-            self.cacheShaderLocations();
+            if (comptime hasTex) self.uniformTex = gl.getUniformLocation(self.shader.val.program, "tex");
         }
 
         /// Begins a new batch, setting the matrix used to transform
@@ -201,7 +167,7 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
             if (self.begun) {
                 self.end();
             }
-            self.refreshShader();
+            if (self.shader.version != self.shaderVersion) self.cacheShaderLocations();
             self.begun = true;
             self.mvpArr = zmath.matToArr(mvp);
         }
@@ -235,43 +201,28 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
                 if (comptime hasTex) self.texture = texture;
             }
 
-            const vBase = self.currVert;
+            const q = self.currNumQuads;
             inline for (0..4) |i| {
                 inline for (0..layout.posDim) |c| {
-                    self.vertices[vBase + i * layout.posDim + c] = positions[i][c];
+                    self.vertices[(4 * q + i) * layout.posDim + c] = positions[i][c];
                 }
             }
-            self.currVert += 4 * layout.posDim;
 
             if (comptime hasTex) {
-                const tBase = self.currTex;
                 inline for (0..4) |i| {
                     inline for (0..layout.texDim) |c| {
-                        self.texCoords[tBase + i * layout.texDim + c] = texCoords[i][c];
+                        self.texCoords[(4 * q + i) * layout.texDim + c] = texCoords[i][c];
                     }
                 }
-                self.currTex += 4 * layout.texDim;
             }
 
             if (comptime hasColor) {
-                const cBase = self.currColor;
                 inline for (0..4) |i| {
                     inline for (0..layout.colorDim) |c| {
-                        self.colorCoords[cBase + i * layout.colorDim + c] = colors[i][c];
+                        self.colorCoords[(4 * q + i) * layout.colorDim + c] = colors[i][c];
                     }
                 }
-                self.currColor += 4 * layout.colorDim;
             }
-
-            const baseVertIdx: u32 = @intCast(vBase / layout.posDim);
-            const idx = self.indices[self.currIdx .. self.currIdx + 6];
-            idx[0] = baseVertIdx + 0;
-            idx[1] = baseVertIdx + 1;
-            idx[2] = baseVertIdx + 2;
-            idx[3] = baseVertIdx + 2;
-            idx[4] = baseVertIdx + 3;
-            idx[5] = baseVertIdx + 0;
-            self.currIdx += 6;
 
             self.currNumQuads += 1;
         }
@@ -280,6 +231,17 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
         pub fn end(self: *Self) void {
             self.flush();
             self.begun = false;
+        }
+
+        /// Orphans `vbo`'s storage and writes the first `count` floats of
+        /// `data` into the fresh buffer, so the driver needn't wait for the
+        /// previous draw to finish reading it.
+        fn upload(vbo: u32, data: []const f32, count: usize, attr: c_uint, dim: comptime_int) void {
+            gl.enableVertexAttribArray(attr);
+            gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+            gl.bufferData(gl.ARRAY_BUFFER, @intCast(data.len * @sizeOf(f32)), null, gl.STREAM_DRAW);
+            gl.bufferSubData(gl.ARRAY_BUFFER, 0, @intCast(count * @sizeOf(f32)), data.ptr);
+            gl.vertexAttribPointer(attr, dim, gl.FLOAT, gl.FALSE, 0, null);
         }
 
         /// Draws the current contents of the queue to the screen. Assumes
@@ -291,38 +253,18 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
 
             gl.useProgram(self.shader.val.program);
             gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&self.mvpArr[0]));
-            if (self.uniformTint >= 0) {
-                gl.uniform4f(self.uniformTint, self.tint[0], self.tint[1], self.tint[2], self.tint[3]);
-            }
 
             if (comptime hasTex) {
                 gl.activeTexture(gl.TEXTURE0);
                 gl.bindTexture(gl.TEXTURE_2D, self.texture.?.texture);
-                gl.uniform1i(gl.getUniformLocation(self.shader.val.program, "tex"), 0);
+                gl.uniform1i(self.uniformTex, 0);
             }
 
+            const verts = 4 * self.currNumQuads;
             gl.bindVertexArray(self.vao);
-            gl.enableVertexAttribArray(self.attrCoord);
-            gl.bindBuffer(gl.ARRAY_BUFFER, self.vboVertices);
-            gl.bufferData(gl.ARRAY_BUFFER, @intCast(layout.posDim * 4 * @sizeOf(f32) * self.currNumQuads), &self.vertices[0], gl.STATIC_DRAW);
-            gl.vertexAttribPointer(self.attrCoord, layout.posDim, gl.FLOAT, gl.FALSE, 0, null);
-
-            if (comptime hasTex) {
-                gl.enableVertexAttribArray(self.attrTexCoord);
-                gl.bindBuffer(gl.ARRAY_BUFFER, self.vboTexCoords);
-                gl.bufferData(gl.ARRAY_BUFFER, @intCast(layout.texDim * 4 * @sizeOf(f32) * self.currNumQuads), &self.texCoords[0], gl.STATIC_DRAW);
-                gl.vertexAttribPointer(self.attrTexCoord, layout.texDim, gl.FLOAT, gl.FALSE, 0, null);
-            }
-
-            if (comptime hasColor) {
-                gl.enableVertexAttribArray(self.attrColor);
-                gl.bindBuffer(gl.ARRAY_BUFFER, self.vboColorCoords);
-                gl.bufferData(gl.ARRAY_BUFFER, @intCast(layout.colorDim * 4 * @sizeOf(f32) * self.currNumQuads), &self.colorCoords[0], gl.STATIC_DRAW);
-                gl.vertexAttribPointer(self.attrColor, layout.colorDim, gl.FLOAT, gl.FALSE, 0, null);
-            }
-
-            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.vboIndices);
-            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(6 * @sizeOf(u32) * self.currNumQuads), &self.indices[0], gl.STATIC_DRAW);
+            upload(self.vboVertices, self.vertices, verts * layout.posDim, self.attrCoord, layout.posDim);
+            if (comptime hasTex) upload(self.vboTexCoords, self.texCoords, verts * layout.texDim, self.attrTexCoord, layout.texDim);
+            if (comptime hasColor) upload(self.vboColorCoords, self.colorCoords, verts * layout.colorDim, self.attrColor, layout.colorDim);
 
             gl.drawElements(gl.TRIANGLES, @intCast(6 * self.currNumQuads), gl.UNSIGNED_INT, null);
 
@@ -330,12 +272,9 @@ pub fn QuadBatch(comptime layout: BatchLayout) type {
             if (comptime hasTex) gl.disableVertexAttribArray(self.attrTexCoord);
             if (comptime hasColor) gl.disableVertexAttribArray(self.attrColor);
 
+            gl.bindVertexArray(0);
             gl.bindBuffer(gl.ARRAY_BUFFER, 0);
 
-            self.currVert = 0;
-            self.currTex = 0;
-            self.currColor = 0;
-            self.currIdx = 0;
             self.currNumQuads = 0;
             if (comptime hasTex) self.texture = null;
         }
@@ -378,6 +317,7 @@ pub fn StaticQuadBatch(comptime layout: BatchLayout) type {
         attrTexCoord: c_uint = 0,
         attrColor: c_uint = 0,
         uniformMVP: c_int = 0,
+        uniformTex: c_int = -1,
 
         // CPU-side scratch, only populated between beginBuild() and endBuild().
         vertices: std.ArrayList(f32) = .empty,
@@ -441,6 +381,7 @@ pub fn StaticQuadBatch(comptime layout: BatchLayout) type {
             if (comptime hasTex) self.attrTexCoord = @intCast(gl.getAttribLocation(self.shader.val.program, "texcoord"));
             if (comptime hasColor) self.attrColor = @intCast(gl.getAttribLocation(self.shader.val.program, "color"));
             self.uniformMVP = @intCast(gl.getUniformLocation(self.shader.val.program, "projectionMatrix"));
+            if (comptime hasTex) self.uniformTex = gl.getUniformLocation(self.shader.val.program, "tex");
         }
 
         /// Re-points the already-uploaded VBOs at the current shader's
@@ -601,7 +542,7 @@ pub fn StaticQuadBatch(comptime layout: BatchLayout) type {
             if (comptime hasTex) {
                 gl.activeTexture(gl.TEXTURE0);
                 gl.bindTexture(gl.TEXTURE_2D, self.texture.?.texture);
-                gl.uniform1i(gl.getUniformLocation(self.shader.val.program, "tex"), 0);
+                gl.uniform1i(self.uniformTex, 0);
             }
 
             gl.bindVertexArray(self.vao);

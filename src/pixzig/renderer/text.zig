@@ -1,26 +1,15 @@
 const std = @import("std");
-const gl = @import("zopengl").bindings;
-const zmath = @import("zmath");
 
 const common = @import("../common.zig");
 const resources = @import("../resources.zig");
-const shaders = @import("./shaders.zig");
 const font_atlas = @import("./font_atlas.zig");
-const quad_batch = @import("./quad_batch.zig");
-const C = @import("./constants.zig");
+const sprite_batch = @import("./sprite_batch.zig");
 
 const Vec2I = common.Vec2I;
 const RectF = common.RectF;
 const Color = common.Color;
-const Shader = shaders.Shader;
-const ResourceManager = resources.ResourceManager;
-const SpriteBatchQueue = @import("./sprite_batch.zig").SpriteBatchQueue;
-
-/// Dedicated batch for tinted text: same position/texcoord layout as
-/// `SpriteBatchQueue`, plus a per-vertex color stream so each glyph draw can
-/// carry its own fg color. Kept separate from `SpriteBatchQueue` (used
-/// everywhere else in the engine) so that shared type is untouched.
-const ColorBatch = quad_batch.QuadBatch(.{ .posDim = 2, .texDim = 2, .colorDim = 4 });
+const SpriteBatch = sprite_batch.SpriteBatch;
+const DrawMode = sprite_batch.DrawMode;
 
 pub const FontAtlas = font_atlas.FontAtlas;
 pub const FontFace = font_atlas.FontFace;
@@ -61,100 +50,41 @@ const CodepointIter = struct {
     }
 };
 
+const white: Color = .{ .r = 1, .g = 1, .b = 1, .a = 1 };
+
+/// Lays out strings with the active font and queues one quad per glyph into
+/// the renderer's `SpriteBatch`, so text keeps its place in draw order
+/// among sprites and shapes. A TTF atlas draws in `.mask` mode (the glyph
+/// coverage tints the color); a bitmap font's RGBA image in `.texture` mode.
 pub const TextRenderer = struct {
-    spriteBatch: SpriteBatchQueue,
-    /// Separate batch (own shader, own VAO/VBOs) for `drawStringColored`;
-    /// see `ColorBatch`'s doc comment for why it isn't folded into
-    /// `spriteBatch`.
-    colorBatch: ColorBatch,
-    /// Borrowed shader handles so `setFont` can swap the active program on
-    /// the underlying batch via `swapShader`. The batch takes its own
-    /// reference on whichever of the two is currently in use.
-    alphaShader: *resources.ShaderHandle,
-    texShader: *resources.ShaderHandle,
-    alloc: std.mem.Allocator,
+    /// The batch glyphs are queued into. Owned by the renderer.
+    batch: *SpriteBatch,
     /// Active font. A hot reload replaces the atlas inside the handle, so
     /// the next draw uses it.
-    font: ?*resources.FontAtlasHandle,
+    font: ?*resources.FontAtlasHandle = null,
     /// Set once the first draw call finds no font, so the "no font" warning
     /// is logged one time rather than on every string, every frame.
     warnedNoFont: bool = false,
 
-    /// Initializes the text renderer with the default `C.MaxSprites` glyph
-    /// capacity per batch. Use `initCapacity` to size it explicitly.
-    pub fn init(alloc: std.mem.Allocator, resMgr: *ResourceManager) !TextRenderer {
-        return initCapacity(alloc, resMgr, C.MaxSprites);
-    }
-
-    /// Like `init`, but each of the two glyph batches (plain and tinted)
-    /// holds up to `maxQuads` glyphs before it auto-flushes.
-    pub fn initCapacity(alloc: std.mem.Allocator, resMgr: *ResourceManager, maxQuads: usize) !TextRenderer {
-        const texShader = try resMgr.getShader(shaders.TextureShader);
-        const alphaShader = try resMgr.getShader(shaders.FontShader);
-        const colorShader = try resMgr.getShader(shaders.TextColorShader);
-        var spriteBatch = try SpriteBatchQueue.initCapacity(alloc, texShader, maxQuads);
-        errdefer spriteBatch.deinit();
-        var colorBatch = try ColorBatch.init(alloc, colorShader, maxQuads);
-        errdefer colorBatch.deinit();
-
-        return TextRenderer{
-            .alloc = alloc,
-            .spriteBatch = spriteBatch,
-            .colorBatch = colorBatch,
-            .alphaShader = alphaShader,
-            .texShader = texShader,
-            .font = null,
-        };
-    }
-
-    pub fn deinit(self: *TextRenderer) void {
-        self.spriteBatch.deinit();
-        self.colorBatch.deinit();
-    }
-
-    pub fn begin(self: *TextRenderer, mvp: zmath.Mat) void {
-        self.spriteBatch.begin(mvp);
-        self.colorBatch.begin(mvp);
-    }
-
-    pub fn end(self: *TextRenderer) void {
-        self.spriteBatch.end();
-        self.colorBatch.end();
-    }
-
-    /// Flushes queued text while keeping the renderer open for further draws.
-    pub fn flush(self: *TextRenderer) void {
-        self.spriteBatch.flush();
-        self.colorBatch.flush();
+    pub fn init(batch: *SpriteBatch) TextRenderer {
+        return .{ .batch = batch };
     }
 
     /// Makes sure every glyph `text` needs is packed into the active font
-    /// atlas and uploaded before the caller queues quads for it. If packing
-    /// grew the atlas texture, every glyph's UVs changed, so any quads
-    /// already queued this frame are flushed against the still-current
-    /// texture before the grown one is uploaded.
-    fn syncAtlasForText(self: *TextRenderer, text: []const u8) void {
-        const fa = &self.font.?.val;
+    /// atlas and uploaded before quads are queued for it. If packing grew
+    /// the atlas texture, every glyph's UVs changed, so any quads already
+    /// queued this frame are flushed against the still-current texture
+    /// before the grown one is uploaded.
+    fn syncAtlasForText(self: *TextRenderer, fa: *FontAtlas, text: []const u8) void {
         fa.loadBlocksForText(text);
-        if (fa.grewSinceUpload) {
-            self.spriteBatch.flush();
-            self.colorBatch.flush();
-        }
+        if (fa.grewSinceUpload) self.batch.flush();
         fa.commitTexture();
     }
 
-    /// Adopt a new font for rendering, and swap the underlying batch's
-    /// shader to the alpha-channel program when the atlas was packed as
-    /// alpha, or the regular texture program otherwise.
-    pub fn setFont(
-        self: *TextRenderer,
-        font: *resources.FontAtlasHandle,
-    ) !void {
+    /// Adopt a new font for rendering.
+    pub fn setFont(self: *TextRenderer, font: *resources.FontAtlasHandle) void {
         self.font = font;
         self.warnedNoFont = false;
-
-        const shader = if (font.val.isAlpha) self.alphaShader else self.texShader;
-        self.spriteBatch.swapShader(shader);
     }
 
     /// Logs the missing-font error once per renderer (reset by `setFont`),
@@ -168,211 +98,107 @@ pub const TextRenderer = struct {
     }
 
     pub fn drawString(self: *TextRenderer, text: []const u8, pos: Vec2I) Vec2I {
-        var currX: i32 = pos.x;
-
-        var drawSize: Vec2I = .{ .x = 0, .y = 0 };
-
-        if (self.font == null) {
-            self.warnNoFont();
-            return drawSize;
-        }
-
-        self.syncAtlasForText(text);
-
-        const posY = pos.y + self.font.?.val.ascent;
-        var it = CodepointIter{ .text = text };
-        while (it.next()) |cp| {
-            const charData = self.font.?.val.getChar(cp) orelse continue;
-
-            // Only draw if character has visual representation
-            if (charData.size.x > 0 and charData.size.y > 0) {
-                self.spriteBatch.draw(&self.font.?.val.texture, RectF.fromPosSize(currX + charData.bearing.x, posY - charData.bearing.y, charData.size.x, charData.size.y), charData.coords, .none);
-            }
-
-            currX += @intCast(charData.advance);
-            drawSize.x += @intCast(charData.advance);
-            drawSize.y = @max(drawSize.y, charData.size.y);
-        }
-
-        return drawSize;
+        return self.drawGlyphs(text, pos, 1.0, white, null);
     }
 
     /// Like `drawString`, but tints every glyph by `color` instead of
-    /// rendering plain white. Uses a separate shader/batch (see
-    /// `ColorBatch`), so it expects an alpha-mask (TTF-packed) font atlas --
-    /// a bitmap font's RGBA texture would only have its red channel sampled.
+    /// rendering plain white.
     pub fn drawStringColored(self: *TextRenderer, text: []const u8, pos: Vec2I, color: Color) Vec2I {
-        var currX: i32 = pos.x;
-
-        var drawSize: Vec2I = .{ .x = 0, .y = 0 };
-
-        if (self.font == null) {
-            self.warnNoFont();
-            return drawSize;
-        }
-
-        const colors: [4][4]f32 = .{
-            .{ color.r, color.g, color.b, color.a },
-            .{ color.r, color.g, color.b, color.a },
-            .{ color.r, color.g, color.b, color.a },
-            .{ color.r, color.g, color.b, color.a },
-        };
-
-        self.syncAtlasForText(text);
-
-        const posY = pos.y + self.font.?.val.ascent;
-        var it = CodepointIter{ .text = text };
-        while (it.next()) |cp| {
-            const charData = self.font.?.val.getChar(cp) orelse continue;
-
-            if (charData.size.x > 0 and charData.size.y > 0) {
-                const dest = RectF.fromPosSize(currX + charData.bearing.x, posY - charData.bearing.y, charData.size.x, charData.size.y);
-                const src = charData.coords;
-
-                const positions: [4][2]f32 = .{
-                    .{ dest.l, dest.b },
-                    .{ dest.l, dest.t },
-                    .{ dest.r, dest.t },
-                    .{ dest.r, dest.b },
-                };
-                const texCoords: [4][2]f32 = .{
-                    .{ src.l, src.b },
-                    .{ src.l, src.t },
-                    .{ src.r, src.t },
-                    .{ src.r, src.b },
-                };
-
-                self.colorBatch.addQuad(&self.font.?.val.texture, positions, texCoords, colors);
-            }
-
-            currX += @intCast(charData.advance);
-            drawSize.x += @intCast(charData.advance);
-            drawSize.y = @max(drawSize.y, charData.size.y);
-        }
-
-        return drawSize;
+        return self.drawGlyphs(text, pos, 1.0, color, null);
     }
 
     pub fn drawScaledString(self: *TextRenderer, text: []const u8, pos: Vec2I, scale: f32) Vec2I {
-        var currX: i32 = pos.x;
-
-        var drawSize: Vec2I = .{ .x = 0, .y = 0 };
-
-        if (self.font == null) {
-            self.warnNoFont();
-            return drawSize;
-        }
-
-        self.syncAtlasForText(text);
-
-        const posY = pos.y + scaleInt(self.font.?.val.ascent, scale);
-        var it = CodepointIter{ .text = text };
-        while (it.next()) |cp| {
-            const charData = self.font.?.val.getChar(cp) orelse continue;
-
-            // Only draw if character has visual representation
-            if (charData.size.x > 0 and charData.size.y > 0) {
-                self.spriteBatch.draw(
-                    &self.font.?.val.texture,
-                    RectF.fromPosSize(
-                        currX + scaleInt(charData.bearing.x, scale),
-                        posY - scaleInt(charData.bearing.y, scale),
-                        scaleInt(charData.size.x, scale),
-                        scaleInt(charData.size.y, scale),
-                    ),
-                    charData.coords,
-                    .none,
-                );
-            }
-
-            const advanceScale = scaleInt(charData.advance, scale);
-            currX += advanceScale;
-            drawSize.x += advanceScale;
-            drawSize.y = @max(drawSize.y, scaleInt(charData.size.y, scale));
-        }
-
-        return drawSize;
+        return self.drawGlyphs(text, pos, scale, white, null);
     }
 
-    // Like drawString but clips character quads to `clip` in the active
-    // draw coordinate space.
-    // Partially-visible edge characters have their source UV rect trimmed to
-    // match so no bleed from adjacent font glyphs appears.
+    /// Like drawString but clips character quads to `clip` in the active
+    /// draw coordinate space. Partially-visible edge characters have their
+    /// source UV rect trimmed to match so no bleed from adjacent font glyphs
+    /// appears.
     pub fn drawClippedString(self: *TextRenderer, text: []const u8, pos: Vec2I, clip: RectF) Vec2I {
-        var currX: i32 = pos.x;
-        var drawSize: Vec2I = .{ .x = 0, .y = 0 };
+        return self.drawGlyphs(text, pos, 1.0, white, clip);
+    }
 
-        if (self.font == null) {
+    /// The one glyph loop behind every draw call. Returns the drawn size:
+    /// the summed advances, and the tallest glyph.
+    fn drawGlyphs(self: *TextRenderer, text: []const u8, pos: Vec2I, scale: f32, color: Color, clip: ?RectF) Vec2I {
+        var drawSize: Vec2I = .{ .x = 0, .y = 0 };
+        const handle = self.font orelse {
             self.warnNoFont();
             return drawSize;
-        }
+        };
+        const fa = &handle.val;
+        self.syncAtlasForText(fa, text);
 
-        self.syncAtlasForText(text);
-
-        const posY = pos.y + self.font.?.val.ascent;
+        const mode: DrawMode = if (fa.isAlpha) .mask else .texture;
+        var currX: i32 = pos.x;
+        const posY = pos.y + scaleInt(fa.ascent, scale);
         var it = CodepointIter{ .text = text };
         while (it.next()) |cp| {
-            const charData = self.font.?.val.getChar(cp) orelse continue;
+            const ch = fa.getChar(cp) orelse continue;
+            const advance = scaleInt(ch.advance, scale);
 
-            if (charData.size.x > 0 and charData.size.y > 0) {
+            // Only draw if the character has a visual representation.
+            if (ch.size.x > 0 and ch.size.y > 0) {
                 var dest = RectF.fromPosSize(
-                    currX + charData.bearing.x,
-                    posY - charData.bearing.y,
-                    charData.size.x,
-                    charData.size.y,
+                    currX + scaleInt(ch.bearing.x, scale),
+                    posY - scaleInt(ch.bearing.y, scale),
+                    scaleInt(ch.size.x, scale),
+                    scaleInt(ch.size.y, scale),
                 );
-                var src = charData.coords;
+                var src = ch.coords;
 
-                // Entirely left of clip — advance cursor but don't draw.
-                if (dest.r <= clip.l) {
-                    currX += @intCast(charData.advance);
-                    drawSize.x += @intCast(charData.advance);
-                    continue;
+                if (clip) |c| {
+                    // Entirely left of clip: advance the pen but don't draw.
+                    if (dest.r <= c.l) {
+                        currX += advance;
+                        drawSize.x += advance;
+                        continue;
+                    }
+                    // Entirely right of clip: nothing further will be visible.
+                    if (dest.l >= c.r) break;
+
+                    const uv_per_px = (src.r - src.l) / dest.width();
+                    if (dest.l < c.l) {
+                        src.l += (c.l - dest.l) * uv_per_px;
+                        dest.l = c.l;
+                    }
+                    if (dest.r > c.r) {
+                        src.r -= (dest.r - c.r) * uv_per_px;
+                        dest.r = c.r;
+                    }
                 }
-                // Entirely right of clip — nothing further will be visible.
-                if (dest.l >= clip.r) break;
 
-                const uv_per_px = (src.r - src.l) / dest.width();
-
-                if (dest.l < clip.l) {
-                    src.l += (clip.l - dest.l) * uv_per_px;
-                    dest.l = clip.l;
-                }
-                if (dest.r > clip.r) {
-                    src.r -= (dest.r - clip.r) * uv_per_px;
-                    dest.r = clip.r;
-                }
-
-                self.spriteBatch.draw(&self.font.?.val.texture, dest, src, .none);
+                self.batch.draw(&fa.texture, dest, src, .none, color, mode);
             }
 
-            currX += @intCast(charData.advance);
-            drawSize.x += @intCast(charData.advance);
-            drawSize.y = @max(drawSize.y, charData.size.y);
+            currX += advance;
+            drawSize.x += advance;
+            drawSize.y = @max(drawSize.y, scaleInt(ch.size.y, scale));
         }
 
         return drawSize;
     }
 
-    // Helper function to measure text without drawing
+    /// Measures `text` without drawing it.
     pub fn measureString(self: *TextRenderer, text: []const u8) Vec2I {
         var width: i32 = 0;
         var height: i32 = 0;
 
-        if (self.font == null) {
+        const handle = self.font orelse {
             self.warnNoFont();
             return .{ .x = 0, .y = 0 };
-        }
+        };
 
         // Pack any not-yet-loaded blocks so their advances are known. No
         // quads are queued here, so a grow needs no batch flush.
-        _ = self.font.?.val.ensureBlocksForText(text);
+        _ = handle.val.ensureBlocksForText(text);
 
         var it = CodepointIter{ .text = text };
         while (it.next()) |cp| {
-            const charData = self.font.?.val.getChar(cp) orelse continue;
-            width += @intCast(charData.advance);
-            height = @max(height, charData.size.y);
+            const ch = handle.val.getChar(cp) orelse continue;
+            width += ch.advance;
+            height = @max(height, ch.size.y);
         }
 
         return Vec2I{ .x = width, .y = height };

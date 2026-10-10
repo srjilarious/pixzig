@@ -133,27 +133,36 @@ pub const Viewport = struct {
         gl.enable(gl.SCISSOR_TEST);
     }
 
+    /// Orthographic projection mapping (0,0)..(size) in raster convention:
+    /// (0,0) is top-left, x grows right, y grows down. zmath signature:
+    /// orthographicOffCenterLhGl(left, right, top, bottom, near, far).
+    fn rasterOrtho(size: Vec2I) zmath.Mat {
+        const w: f32 = @floatFromInt(size.x);
+        const h: f32 = @floatFromInt(size.y);
+        return zmath.orthographicOffCenterLhGl(0, w, 0, h, -0.1, 1000);
+    }
+
     /// Orthographic projection for the logical coordinate space.
-    /// Uses raster convention: (0,0) is top-left, x grows right, y grows down.
-    /// zmath signature: orthographicOffCenterLhGl(left, right, top, bottom, near, far)
     pub fn projection(self: *const Viewport) zmath.Mat {
-        const lw: f32 = @floatFromInt(self.logicalSize.x);
-        const lh: f32 = @floatFromInt(self.logicalSize.y);
-        return zmath.orthographicOffCenterLhGl(0, lw, 0, lh, -0.1, 1000);
+        return rasterOrtho(self.logicalSize);
+    }
+
+    /// Orthographic projection for the whole framebuffer in pixels, letterbox
+    /// bars included. Pair it with `applyFullscreen` (which also sets the GL
+    /// state such a pass needs).
+    pub fn screenProjection(self: *const Viewport) zmath.Mat {
+        return rasterOrtho(self.framebufferSize);
     }
 
     /// Sets the GL viewport to the full framebuffer and disables scissor testing,
-    /// then returns a projection matrix whose coordinate space matches the
-    /// framebuffer dimensions in pixels.  Use this for overlay UI passes that
+    /// then returns `screenProjection()`. Use this for overlay UI passes that
     /// should span the entire window including any letterbox / pillarbox bars.
     /// Call eng.viewport.apply() at the start of the next game render pass to
     /// restore the clipped game viewport.
     pub fn applyFullscreen(self: *const Viewport) zmath.Mat {
         gl.disable(gl.SCISSOR_TEST);
         gl.viewport(0, 0, self.framebufferSize.x, self.framebufferSize.y);
-        const fw: f32 = @floatFromInt(self.framebufferSize.x);
-        const fh: f32 = @floatFromInt(self.framebufferSize.y);
-        return zmath.orthographicOffCenterLhGl(0, fw, 0, fh, -0.1, 1000);
+        return self.screenProjection();
     }
 
     /// Converts a framebuffer-space position to logical coordinates.
@@ -184,17 +193,27 @@ pub const Viewport = struct {
         };
     }
 
+    /// Converts a window-coordinate position (what the OS reports for the
+    /// cursor) to framebuffer pixels. `window_scale` is the
+    /// framebuffer-to-window ratio (WindowState.scaleFactor), which differs
+    /// from 1 on HiDPI displays.
+    pub fn windowToFramebuffer(pos_window: Vec2F, window_scale: Vec2F) Vec2F {
+        return .{
+            .x = pos_window.x * window_scale.x,
+            .y = pos_window.y * window_scale.y,
+        };
+    }
+
     /// Converts a window-coordinate mouse position to logical game coordinates.
     /// `window_scale` is the framebuffer-to-window ratio (WindowState.scaleFactor).
     /// Returns null when pos_window maps to a letterbox or pillarbox region.
     pub fn windowToLogical(self: *const Viewport, pos_window: Vec2F, window_scale: Vec2F) ?Vec2F {
-        const fb = Vec2F{
-            .x = pos_window.x * window_scale.x,
-            .y = pos_window.y * window_scale.y,
-        };
-        return self.framebufferToLogical(fb);
+        return self.framebufferToLogical(windowToFramebuffer(pos_window, window_scale));
     }
 
+    /// Picks the scale for the policy, then centers the scaled logical area
+    /// in the framebuffer. With `fill`/`integer_fill` the offsets go
+    /// negative, cropping the overflow.
     fn compute(self: *Viewport) void {
         const fb_w: f32 = @floatFromInt(self.framebufferSize.x);
         const fb_h: f32 = @floatFromInt(self.framebufferSize.y);
@@ -203,66 +222,29 @@ pub const Viewport = struct {
 
         if (log_w <= 0 or log_h <= 0) return;
 
-        switch (self.policy) {
+        const sx = fb_w / log_w;
+        const sy = fb_h / log_h;
+        const uniform: f32 = switch (self.policy) {
             .stretch => {
-                self.scale = .{ .x = fb_w / log_w, .y = fb_h / log_h };
-                self.viewportPx = .{
-                    .l = 0,
-                    .t = 0,
-                    .r = self.framebufferSize.x,
-                    .b = self.framebufferSize.y,
-                };
+                // Each axis scales on its own and the logical area covers the
+                // framebuffer exactly; deriving the rect from the scale could
+                // lose a pixel to float rounding, so it is set directly.
+                self.scale = .{ .x = sx, .y = sy };
+                self.viewportPx = .{ .l = 0, .t = 0, .r = self.framebufferSize.x, .b = self.framebufferSize.y };
+                return;
             },
-            .fit => {
-                const s = @min(fb_w / log_w, fb_h / log_h);
-                self.scale = .{ .x = s, .y = s };
-                const vw: i32 = @intFromFloat(log_w * s);
-                const vh: i32 = @intFromFloat(log_h * s);
-                const ox: i32 = @intFromFloat((fb_w - log_w * s) * 0.5);
-                const oy: i32 = @intFromFloat((fb_h - log_h * s) * 0.5);
-                self.viewportPx = .{ .l = ox, .t = oy, .r = ox + vw, .b = oy + vh };
-            },
-            .fill => {
-                const s = @max(fb_w / log_w, fb_h / log_h);
-                self.scale = .{ .x = s, .y = s };
-                const vw: i32 = @intFromFloat(log_w * s);
-                const vh: i32 = @intFromFloat(log_h * s);
-                const ox: i32 = @intFromFloat((fb_w - log_w * s) * 0.5);
-                const oy: i32 = @intFromFloat((fb_h - log_h * s) * 0.5);
-                self.viewportPx = .{ .l = ox, .t = oy, .r = ox + vw, .b = oy + vh };
-            },
-            .integer_fit => {
-                const sx: i32 = @intFromFloat(fb_w / log_w);
-                const sy: i32 = @intFromFloat(fb_h / log_h);
-                const s: i32 = @max(1, @min(sx, sy));
-                const sf: f32 = @floatFromInt(s);
-                self.scale = .{ .x = sf, .y = sf };
-                const vw: i32 = @intFromFloat(log_w * sf);
-                const vh: i32 = @intFromFloat(log_h * sf);
-                const ox: i32 = @intFromFloat((fb_w - log_w * sf) * 0.5);
-                const oy: i32 = @intFromFloat((fb_h - log_h * sf) * 0.5);
-                self.viewportPx = .{ .l = ox, .t = oy, .r = ox + vw, .b = oy + vh };
-            },
-            .integer_fill => {
-                const sx: i32 = @intFromFloat(@ceil(fb_w / log_w));
-                const sy: i32 = @intFromFloat(@ceil(fb_h / log_h));
-                const s: i32 = @max(1, @max(sx, sy));
-                const sf: f32 = @floatFromInt(s);
-                self.scale = .{ .x = sf, .y = sf };
-                const vw: i32 = @intFromFloat(log_w * sf);
-                const vh: i32 = @intFromFloat(log_h * sf);
-                const ox: i32 = @intFromFloat((fb_w - log_w * sf) * 0.5);
-                const oy: i32 = @intFromFloat((fb_h - log_h * sf) * 0.5);
-                self.viewportPx = .{ .l = ox, .t = oy, .r = ox + vw, .b = oy + vh };
-            },
-            .fixed => |s| {
-                self.scale = .{ .x = s, .y = s };
-                const vw: i32 = @intFromFloat(log_w * s);
-                const vh: i32 = @intFromFloat(log_h * s);
-                const ox: i32 = @intFromFloat((fb_w - log_w * s) * 0.5);
-                const oy: i32 = @intFromFloat((fb_h - log_h * s) * 0.5);
-                self.viewportPx = .{ .l = ox, .t = oy, .r = ox + vw, .b = oy + vh };
-            },
-        }
+            .fit => @min(sx, sy),
+            .fill => @max(sx, sy),
+            .integer_fit => @max(1, @min(@floor(sx), @floor(sy))),
+            .integer_fill => @max(1, @max(@ceil(sx), @ceil(sy))),
+            .fixed => |f| f,
+        };
+
+        self.scale = .{ .x = uniform, .y = uniform };
+        const vw: i32 = @intFromFloat(log_w * uniform);
+        const vh: i32 = @intFromFloat(log_h * uniform);
+        const ox: i32 = @intFromFloat((fb_w - log_w * uniform) * 0.5);
+        const oy: i32 = @intFromFloat((fb_h - log_h * uniform) * 0.5);
+        self.viewportPx = .{ .l = ox, .t = oy, .r = ox + vw, .b = oy + vh };
     }
 };

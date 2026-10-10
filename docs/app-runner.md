@@ -72,7 +72,7 @@ The engine reference `eng` gives you access to:
 | `eng.projection()` | `zmath.Mat` | Orthographic matrix for the logical coordinate space; use this as the MVP base for all game rendering |
 | `eng.screenProjection()` | `zmath.Mat` | Orthographic matrix for the full framebuffer in actual pixels; use for UI overlays that should be in screen-pixel coordinates |
 
-Those two plus `Camera2D.matrix(&eng.viewport)` for a scrolling world view are the only projection matrices. `renderer.begin(.logical | .screen | .{ .camera = &cam })` picks the matching one for you; the matrices are only needed for custom batches (e.g. `GridRenderer.draw`). To scale up a low-resolution game, set `logicalSize` (and optionally `scalePolicy`) in the init options.
+Those two plus `Camera2D.matrix(&eng.viewport)` for a scrolling world view are the only projection matrices. `renderer.begin(.logical | .screen | .{ .camera = &cam })` picks the matching one for you; the matrices are only needed for custom renderers (e.g. `GridRenderer.draw`). To scale up a low-resolution game, set `logicalSize` (and optionally `scalePolicy`) in the init options.
 
 ## Game Loop Details
 

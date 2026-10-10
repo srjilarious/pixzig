@@ -1,8 +1,7 @@
 """TrueType text rendering. Access via `App.text`.
 
-The three draw calls mirror the engine's three text paths, which are
-separate batches and can't be combined: plain, colored, and scaled. There is
-no colored *and* scaled call yet.
+The three draw calls mirror the engine's three text calls: plain, colored,
+and scaled. There is no colored *and* scaled call yet.
 
     app.text.load_font("ui", "assets/Roboto.ttf", 16)
     app.text.set_font("ui")
@@ -39,8 +38,7 @@ class Text:
 
     def draw_colored(self, text: str, x: int, y: int, color) -> None:
         """Draws `text` with every glyph tinted by `color`, an (r, g, b) or
-        (r, g, b, a) tuple of 0-255 components. Expects a TTF font (the
-        alpha-mask atlas the colored batch samples), not a bitmap font."""
+        (r, g, b, a) tuple of 0-255 components."""
         r, g, b, a = _normalize_color(color)
         _n.pz_draw_string_colored(self._eng, text.encode("utf-8"), int(x), int(y), r, g, b, a)
 

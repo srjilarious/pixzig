@@ -1,5 +1,4 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const stbi = @import("zstbi");
 const gl = @import("zopengl").bindings;
 pub const stb_tt = @import("stb_truetype");
@@ -219,6 +218,8 @@ pub const FontAtlas = struct {
     /// where already-drawn ASCII text sits. Equals `maxY` for a bitmap
     /// font atlas, which has no scalable face to measure.
     ascent: i32,
+    /// True for a TTF atlas, whose texture is an R8 coverage mask; false for
+    /// a bitmap font's RGBA image.
     isAlpha: bool,
 
     fontSize: f32,
@@ -705,18 +706,20 @@ pub const FontAtlas = struct {
         self.maxY = @max(self.maxY, h);
     }
 
+    /// Uploads the coverage mask as a single-channel R8 texture. R8 is core
+    /// in GL ES 3.0 / WebGL 2 as well as desktop GL, so every target samples
+    /// coverage from `.r` and shares one shader.
     fn uploadTexture(self: *FontAtlas) void {
-        const format = if (builtin.os.tag == .emscripten) gl.ALPHA else gl.RED;
         gl.bindTexture(gl.TEXTURE_2D, self.texture.texture);
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
         gl.texImage2D(
             gl.TEXTURE_2D,
             0,
-            format,
+            gl.R8,
             @intCast(self.dim),
             @intCast(self.dim),
             0,
-            format,
+            gl.RED,
             gl.UNSIGNED_BYTE,
             @ptrCast(self.pixels.ptr),
         );

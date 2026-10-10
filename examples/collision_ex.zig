@@ -22,10 +22,10 @@ pub const App = struct {
     alloc: std.mem.Allocator,
     eng: *AppRunner.Engine,
     scrollOffset: Vec2F,
-    spriteBatch: pixzig.renderer.SpriteBatchQueue,
+    spriteBatch: pixzig.renderer.SpriteBatch,
     collideGrid: CollisionGridEntity,
     // colorShader: pixzig.shaders.Shader,
-    // shapeBatch: pixzig.renderer.ShapeBatchQueue,
+    // shapeBatch: pixzig.renderer.SpriteBatch,
     fps: FpsCounter,
     paused: bool,
     world: *flecs.world_t,
@@ -38,15 +38,15 @@ pub const App = struct {
         const bigtex = try eng.resources.loadTexture("tiles", "assets/pac-tiles.png");
         _ = try eng.resources.addSubTexture(bigtex, "guy", RectI.init(32, 32, 32, 32));
 
-        const tex_shader = try eng.resources.getShader(shaders.TextureShader);
-        const spriteBatch = try pixzig.renderer.SpriteBatchQueue.init(alloc, tex_shader);
+        const sprite_shader = try eng.resources.getShader(shaders.SpriteShader);
+        const spriteBatch = try pixzig.renderer.SpriteBatch.init(alloc, sprite_shader);
 
         // var colorShader = try pixzig.shaders.Shader.init(
         //         &pixzig.shaders.ColorVertexShader,
         //         &pixzig.shaders.ColorPixelShader
         //     );
         //
-        // const shapeBatch = try pixzig.renderer.ShapeBatchQueue.init(alloc, &colorShader);
+        // const shapeBatch = try pixzig.renderer.SpriteBatch.init(alloc, &colorShader);
         std.log.info("Done creating renderering data.\n", .{});
 
         const world = flecs.init();

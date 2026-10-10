@@ -24,7 +24,7 @@ pub fn render(self: *App, eng: *AppRunner.Engine) void {
 | `.{ .camera = &cam }` | World space seen through a `Camera2D`. Its `viewRect`, `worldToLogical` and `logicalToWorld` take `&eng.viewport` too, and account for `zoom` and `rotation`. |
 | `.{ .matrix = m }` | Your own model-view-projection matrix. |
 
-Draws appear in the order you submit them. Each kind of draw (plain sprites and textures, tinted sprites, filled sprites, shapes, text, colored text) queues into its own batch; switching to a different kind flushes the previous batch first, and `end` flushes whatever is left. Consecutive draws of the same kind and texture still go out as one GL call, so when order doesn't matter, grouping similar draws keeps the call count down.
+Draws appear in the order you submit them. Every draw -- plain, tinted and filled sprites, textures, shapes and text -- queues into one batch whose vertices carry their own color, so consecutive draws from the same texture go out as one GL call whatever their kind or color. Switching texture flushes; all shapes share a built-in white texture, and all text shares the font atlas. `end` flushes whatever is left. When order doesn't matter, grouping draws by texture keeps the call count down.
 
 Sprites keep float positions so slow movement accumulates smoothly, but `drawSprite` snaps a sprite's top-left to a whole pixel, so a sprite between pixels never draws blurry. The other draw calls take integer positions (`drawString`) or whole-pixel rects.
 

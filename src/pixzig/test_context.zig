@@ -83,11 +83,12 @@ pub const GlTestContext = struct {
         sdl.SDL_Quit();
     }
 
-    /// Compiles the standard texture shader into a handle outside any
-    /// `ResourceManager`. The caller owns it and must call `handle.free()`.
-    pub fn makeShaderHandle(_: *Self) !ShaderHandle {
-        const vs_arr = [_]ShaderCode{shaders_mod.TexVertexShader};
-        const fs_arr = [_]ShaderCode{shaders_mod.TexPixelShader};
+    /// Compiles the renderer's sprite batch shader into a handle outside
+    /// any `ResourceManager`. The caller owns it and must call
+    /// `handle.free()`.
+    pub fn makeSpriteShaderHandle(_: *Self) !ShaderHandle {
+        const vs_arr = [_]ShaderCode{shaders_mod.SpriteVertexShader};
+        const fs_arr = [_]ShaderCode{shaders_mod.SpritePixelShader};
         return .{ .val = try Shader.init(&vs_arr, &fs_arr) };
     }
 

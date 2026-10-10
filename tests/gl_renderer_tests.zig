@@ -164,10 +164,10 @@ pub fn spriteBatchSmokeTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     const ctx = glCtx();
 
-    var shader = try ctx.makeShaderHandle();
+    var shader = try ctx.makeSpriteShaderHandle();
     defer shader.free();
 
-    var batch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &shader);
+    var batch = try pixzig.renderer.SpriteBatch.init(alloc, &shader);
     defer batch.deinit();
 
     const mvp = zmath.identity();
@@ -179,11 +179,11 @@ pub fn spriteBatchSnapsSpriteToWholePixelsTest(io: std.Io, alloc: std.mem.Alloca
     _ = io;
     const ctx = glCtx();
 
-    var shader = try ctx.makeShaderHandle();
+    var shader = try ctx.makeSpriteShaderHandle();
     defer shader.free();
     var tex = ctx.makeDummyTextureHandle();
 
-    var batch = try pixzig.renderer.SpriteBatchQueue.init(alloc, &shader);
+    var batch = try pixzig.renderer.SpriteBatch.init(alloc, &shader);
     defer batch.deinit();
 
     var spr = pixzig.sprites.Sprite.create(&tex);
@@ -195,14 +195,53 @@ pub fn spriteBatchSnapsSpriteToWholePixelsTest(io: std.Io, alloc: std.mem.Alloca
 
     // Corners are (l,b) (l,t) (r,t) (r,b): top-left rounds to (3, 8) and
     // the 10px size is kept. The sprite's own position stays fractional.
-    const v = batch.inner.vertices;
-    try testz.expectEqual(v[0], @as(f32, 3));
-    try testz.expectEqual(v[1], @as(f32, 18));
-    try testz.expectEqual(v[2], @as(f32, 3));
-    try testz.expectEqual(v[3], @as(f32, 8));
-    try testz.expectEqual(v[4], @as(f32, 13));
+    const v = batch.vertices;
+    try testz.expectEqual(v[0].pos[0], @as(f32, 3));
+    try testz.expectEqual(v[0].pos[1], @as(f32, 18));
+    try testz.expectEqual(v[1].pos[0], @as(f32, 3));
+    try testz.expectEqual(v[1].pos[1], @as(f32, 8));
+    try testz.expectEqual(v[2].pos[0], @as(f32, 13));
     try testz.expectEqual(spr.pos().x, @as(f32, 3.4));
     batch.end();
+}
+
+pub fn spriteBatchQueuesKindsTogetherTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    const ctx = glCtx();
+
+    var shader = try ctx.makeSpriteShaderHandle();
+    defer shader.free();
+    var tex = ctx.makeDummyTextureHandle();
+    tex.val.texture = 42;
+
+    var batch = try pixzig.renderer.SpriteBatch.init(alloc, &shader);
+    defer batch.deinit();
+
+    var spr = pixzig.sprites.Sprite.create(&tex);
+    const red: pixzig.Color = .{ .r = 1, .g = 0, .b = 0, .a = 1 };
+
+    batch.begin(zmath.identity());
+    // A plain, a tinted and a filled sprite on one texture share one draw
+    // call; only the per-vertex color and mode differ.
+    batch.drawSprite(&spr);
+    spr.tint = red;
+    batch.drawSprite(&spr);
+    spr.fill = red;
+    batch.drawSprite(&spr);
+    try testz.expectEqual(batch.numQuads, 3);
+    try testz.expectTrue(std.mem.eql(u8, &batch.vertices[0].color, &.{ 255, 255, 255, 255 }));
+    try testz.expectEqual(batch.vertices[0].mode[0], @backingInt(pixzig.renderer.DrawMode.texture));
+    try testz.expectTrue(std.mem.eql(u8, &batch.vertices[4].color, &.{ 255, 0, 0, 255 }));
+    try testz.expectEqual(batch.vertices[8].mode[0], @backingInt(pixzig.renderer.DrawMode.fill));
+
+    // A shape switches to the white texture, which flushes the sprites
+    // first, and later shapes queue behind it.
+    batch.drawFilledRect(RectF.fromPosSize(0, 0, 4, 4), red);
+    batch.drawRect(RectF.fromPosSize(0, 0, 8, 8), red, 1);
+    try testz.expectEqual(batch.texture, batch.whiteTexture);
+    try testz.expectEqual(batch.numQuads, 5);
+    batch.end();
+    try testz.expectEqual(batch.numQuads, 0);
 }
 
 pub fn rendererPassesInEveryProjectionTest(io: std.Io, alloc: std.mem.Allocator) !void {
