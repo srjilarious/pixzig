@@ -635,7 +635,10 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
             return self.viewport.framebufferToLogical(self.windowToFramebuffer(pos));
         }
 
-        /// Captures the current framebuffer at logical resolution and writes it to a PNG file at `path`.
+        /// Captures the whole framebuffer, letterbox bars included, and
+        /// writes it to a PNG file at `path`. The image is the window's
+        /// size: on HiDPI the framebuffer is scaled down to it, otherwise
+        /// it is written pixel for pixel.
         pub fn captureScreenshot(self: *const Self, alloc: std.mem.Allocator, path: []const u8) !void {
             const fb_w: usize = @intCast(self.windowState.framebufferSize.x);
             const fb_h: usize = @intCast(self.windowState.framebufferSize.y);
@@ -670,14 +673,15 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
                 .is_hdr = false,
             };
 
-            const log_w: u32 = @intCast(self.viewport.logicalSize.x);
-            const log_h: u32 = @intCast(self.viewport.logicalSize.y);
+            const win_w: u32 = @intCast(self.windowState.windowSize.x);
+            const win_h: u32 = @intCast(self.windowState.windowSize.y);
 
-            // Only resize if logical size differs from framebuffer size (e.g. HiDPI).
-            const out_img = if (log_w != fb_img.width or log_h != fb_img.height) blk: {
-                const resized = fb_img.resize(log_w, log_h);
-                break :blk resized;
-            } else fb_img;
+            // Only resize on HiDPI, where the framebuffer is larger than the
+            // window. Both share an aspect ratio, so this never distorts.
+            const out_img = if (win_w != fb_img.width or win_h != fb_img.height)
+                fb_img.resize(win_w, win_h)
+            else
+                fb_img;
             // fb_img.data is owned by `pixels` (our allocator); only call deinit on a resized copy.
             defer if (out_img.data.ptr != fb_img.data.ptr) {
                 var m = out_img;
