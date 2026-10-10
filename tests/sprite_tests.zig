@@ -420,3 +420,38 @@ pub fn spriteSetSrcRectIsPixelsWithinFrameTest(io: std.Io, alloc: std.mem.Alloca
     try testz.expectEqual(spr.srcCoords.r, 22.0 / 128.0);
     try testz.expectEqual(spr.srcCoords.b, 8.0 / 128.0);
 }
+
+pub fn sequenceUnknownFrameSeqErrorsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    const jsonStr =
+        \\ {
+        \\     "sequences": [],
+        \\     "states": [
+        \\        { "name": "right", "nextStateName": null, "frameSeqName": "missing", "flip": "none" }
+        \\     ]
+        \\ }
+    ;
+
+    var tm = try createDummyTextureManager(alloc);
+    defer tm.deinit();
+
+    var seqMgr = try FrameSequenceManager.init(alloc);
+    defer seqMgr.deinit();
+    try testz.expectError(seqMgr.loadSequence(jsonStr, &tm), error.UnknownFrameSequence);
+    try testz.expectEqual(seqMgr.actorStates.count(), 0);
+}
+
+pub fn actorCurrEmptySequenceIsNullTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var tm = try createDummyTextureManager(alloc);
+    defer tm.deinit();
+
+    var empty = try pixzig.sprites.FrameSequence.initEmpty(alloc);
+    defer empty.deinit();
+
+    var actor = pixzig.sprites.Actor.init(alloc, try tm.createSprite("player_right_1"));
+    defer actor.deinit();
+    _ = try actor.addState(&.{ .name = "idle", .sequence = &empty }, .{});
+
+    try testz.expectTrue(actor.curr() == null);
+}

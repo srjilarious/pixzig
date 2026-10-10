@@ -2,6 +2,7 @@ const std = @import("std");
 const common = @import("../common.zig");
 const textures = @import("./textures.zig");
 const resources = @import("../resources.zig");
+const paths = @import("../paths.zig");
 
 const Vec2I = common.Vec2I;
 const Vec2F = common.Vec2F;
@@ -351,16 +352,25 @@ pub const FrameSequenceManager = struct {
         self.actorStates.deinit();
     }
 
+    /// Loads a sequence JSON file (see `loadSequence`). A relative
+    /// `filename` resolves against the asset base directory like every
+    /// other asset path (see `paths.zig`), not the working directory.
     pub fn loadSequenceFile(self: *Self, filename: []const u8, texMgr: *ResourceManager) !void {
+        const resolved = try paths.resolve(self.alloc, filename);
+        defer self.alloc.free(resolved);
+
         // Load file contents
         const io = std.Io.Threaded.global_single_threaded.io();
-        const file_contents = try std.Io.Dir.cwd().readFileAlloc(io, filename, self.alloc, .unlimited);
+        const file_contents = try std.Io.Dir.cwd().readFileAlloc(io, resolved, self.alloc, .unlimited);
         defer self.alloc.free(file_contents);
 
         // Load sequence
         try self.loadSequence(file_contents, texMgr);
     }
 
+    /// Loads frame sequences and the actor states built on them from JSON.
+    /// Returns `error.UnknownFrameSequence` when a state's `frameSeqName`
+    /// matches no sequence; sequences loaded before that point are kept.
     pub fn loadSequence(self: *Self, json_contents: []const u8, texMgr: *ResourceManager) !void {
         const parsed = try std.json.parseFromSlice(FrameSequenceFile, self.alloc, json_contents, .{});
         defer parsed.deinit();
@@ -384,10 +394,14 @@ pub const FrameSequenceManager = struct {
 
         // Next load the actor states
         for (parsed.value.states) |fileState| {
+            const sequence = self.sequences.get(fileState.frameSeqName) orelse {
+                std.log.err("Actor state '{s}' names unknown frame sequence '{s}'", .{ fileState.name, fileState.frameSeqName });
+                return error.UnknownFrameSequence;
+            };
             try self.addState(.{
                 .name = fileState.name,
                 .nextState = fileState.nextStateName,
-                .sequence = self.sequences.get(fileState.frameSeqName).?,
+                .sequence = sequence,
                 .flip = fileState.flip,
             });
         }
@@ -600,11 +614,13 @@ pub const Actor = struct {
         self.applyCurrentFrame();
     }
 
+    /// The frame currently showing, or null with no state or an empty
+    /// sequence.
     pub fn curr(self: *Actor) ?*Frame {
-        if (self.currState == null) return null;
-
-        const currSeq = self.currState.?.sequence;
-        return &currSeq.frames.items[@intCast(self.currFrame)];
+        const state = self.currState orelse return null;
+        const frames = state.sequence.frames.items;
+        if (frames.len == 0) return null;
+        return &frames[@intCast(self.currFrame)];
     }
 
     fn applyCurrentFrame(self: *Actor) void {
