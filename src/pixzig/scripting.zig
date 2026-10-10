@@ -109,12 +109,30 @@ pub const ScriptEngine = struct {
 
     /// Runs a Lua file from disk. A relative path is resolved against the
     /// executable's own directory (see `paths`), so a packaged game finds
-    /// its scripts wherever it is launched from. Raises the same errors as
-    /// `run()` on syntax or runtime failure.
+    /// its scripts wherever it is launched from. Like `run()`, logs the Lua
+    /// error message and returns `error.SyntaxError` / `error.ScriptError`
+    /// on syntax or runtime failure, plus `error.ScriptFileError` when the
+    /// file can't be opened or read.
     pub fn runScript(self: *ScriptEngine, file: []const u8) !void {
         const resolved = try paths.resolveZ(self.alloc, file);
         defer self.alloc.free(resolved);
-        try self.lua.doFile(resolved);
+
+        // Lua leaves an error message on the stack for every load failure.
+        self.lua.loadFile(resolved, .binary_text) catch |err| {
+            std.log.err("{s}\n", .{self.lua.toString(-1) catch unreachable});
+            self.lua.pop(1);
+            return switch (err) {
+                error.LuaFile => error.ScriptFileError,
+                error.OutOfMemory => error.OutOfMemory,
+                else => error.SyntaxError,
+            };
+        };
+
+        self.lua.protectedCall(.{ .args = 0, .results = 0, .msg_handler = 0 }) catch {
+            std.log.err("{s}\n", .{self.lua.toString(-1) catch unreachable});
+            self.lua.pop(1);
+            return error.ScriptError;
+        };
     }
 
     /// Reads the global Lua table named `globalName` into a Zig struct `T`.

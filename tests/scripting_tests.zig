@@ -121,6 +121,18 @@ pub fn runRuntimeErrorTest(io: std.Io, alloc: std.mem.Allocator) !void {
     try testz.expectTrue(got_error);
 }
 
+// runScript returns error.ScriptFileError for a missing file and pops the
+// Lua error message it logged.
+pub fn runScriptMissingFileTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var eng = try ScriptEngine.init(alloc);
+    defer eng.deinit();
+
+    const top = eng.lua.getTop();
+    try testz.expectError(eng.runScript("/nonexistent/pixzig_missing_script.lua"), error.ScriptFileError);
+    try testz.expectEqual(eng.lua.getTop(), top);
+}
+
 // --- registerFunc ---
 
 // Module-level variable so the Lua C callback can store its result.
