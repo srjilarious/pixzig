@@ -258,22 +258,28 @@ pub const Shader = struct {
             gl.getShaderInfoLog(res, 1024, &length, &logBuffer);
             std.log.err("Error compiling shader: {s}", .{logBuffer[0..@intCast(length)]});
 
+            gl.deleteShader(res);
             return error.BadShader;
         }
 
         return res;
     }
 
-    /// Initializes the shader, given pointers to the vertex and fragment shader source.
+    /// Initializes the shader, given pointers to the vertex and fragment
+    /// shader source. On failure the GL info log is logged and every GL
+    /// object created so far is deleted.
     pub fn init(vs: ShaderCodePtr, fs: ShaderCodePtr) !Shader {
         var shader = Shader{};
 
         // Compile the vertex and fragment shaders.
         shader.vertex = try compile(vs, gl.VERTEX_SHADER);
+        errdefer gl.deleteShader(shader.vertex);
         shader.fragment = try compile(fs, gl.FRAGMENT_SHADER);
+        errdefer gl.deleteShader(shader.fragment);
 
         // Create the shader program and attach our vertex/fragment shaders.
         shader.program = gl.createProgram();
+        errdefer gl.deleteProgram(shader.program);
         gl.attachShader(shader.program, shader.vertex);
         gl.attachShader(shader.program, shader.fragment);
         gl.linkProgram(shader.program);
@@ -282,7 +288,11 @@ pub const Shader = struct {
         var linkOk: c_int = gl.FALSE;
         gl.getProgramiv(shader.program, gl.LINK_STATUS, &linkOk);
         if (linkOk == gl.FALSE) {
-            return error.ShaderCompileError;
+            var logBuffer: [1024]u8 = undefined;
+            var length: c_int = 0;
+            gl.getProgramInfoLog(shader.program, 1024, &length, &logBuffer);
+            std.log.err("Error linking shader program: {s}", .{logBuffer[0..@intCast(length)]});
+            return error.ShaderLinkError;
         }
 
         return shader;

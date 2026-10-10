@@ -69,7 +69,6 @@ pub const TiledLayerRenderer = struct {
 
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-        gl.enable(gl.TEXTURE_2D);
 
         tr.cacheShaderLocations();
 

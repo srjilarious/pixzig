@@ -382,3 +382,31 @@ pub fn tiledUnknownMapNameFailsTest(io: std.Io, alloc: std.mem.Allocator) !void 
 
     try testz.expectError(TileMapRenderer.init(alloc, &res, "nope"), error.NoTileMapWithThatName);
 }
+
+pub fn shaderCompileFailureErrorsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    _ = glCtx();
+
+    const shaders = pixzig.shaders;
+    const bad: shaders.ShaderCode = "#version 300 es\nnot glsl at all";
+    try testz.expectError(shaders.Shader.init(&shaders.TexVertexShader, &bad), error.BadShader);
+}
+
+pub fn shaderLinkFailureErrorsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    _ = glCtx();
+
+    // Compiles on its own, but reads Texcoord as a vec3 where the vertex
+    // shader writes a vec2, so linking fails.
+    const shaders = pixzig.shaders;
+    const mismatched: shaders.ShaderCode =
+        \\#version 300 es
+        \\precision mediump float;
+        \\in vec3 Texcoord;
+        \\out vec4 fragColor;
+        \\void main() { fragColor = vec4(Texcoord, 1.0); }
+    ;
+    try testz.expectError(shaders.Shader.init(&shaders.TexVertexShader, &mismatched), error.ShaderLinkError);
+}
