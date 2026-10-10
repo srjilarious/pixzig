@@ -187,6 +187,10 @@ pub const EngineInitOptions = struct {
     fullscreen: bool = false,
     windowSize: Vec2I = .{ .x = 800, .y = 480 },
     resizable: bool = true,
+    /// Smallest size the user can shrink the window to, in screen
+    /// coordinates. Null leaves it unconstrained, so a 320x180 game can be
+    /// sized down to 1x.
+    minWindowSize: ?Vec2I = null,
     /// Logical game resolution. When null, logical size tracks the framebuffer,
     /// so `Engine.projection()` maps one unit to one framebuffer pixel.
     logicalSize: ?Vec2I = null,
@@ -366,6 +370,7 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
                 .size = options.windowSize,
                 .resizable = options.resizable,
                 .fullscreen = options.fullscreen,
+                .minSize = options.minWindowSize,
                 .textInput = engOpts.inputOpts.textInput,
             });
             errdefer window.destroy();

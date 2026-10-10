@@ -29,6 +29,8 @@ pub const WindowCreateOptions = struct {
     size: Vec2I,
     resizable: bool,
     fullscreen: bool,
+    /// Minimum window size in screen coordinates, or null for none.
+    minSize: ?Vec2I = null,
     /// Arms SDL's text-input machinery on the window, which is what makes
     /// `SDL_EVENT_TEXT_INPUT` (and the IME composition events) arrive at
     /// all. See `InputOptions.textInput`.
@@ -67,7 +69,9 @@ pub const Window = struct {
             return sdlError(error.SdlCreateWindowFailed);
         errdefer sdl.SDL_DestroyWindow(handle);
 
-        _ = sdl.SDL_SetWindowMinimumSize(handle, 400, 400);
+        if (options.minSize) |min| {
+            _ = sdl.SDL_SetWindowMinimumSize(handle, min.x, min.y);
+        }
 
         const glContext = sdl.SDL_GL_CreateContext(handle) orelse
             return sdlError(error.SdlCreateContextFailed);
