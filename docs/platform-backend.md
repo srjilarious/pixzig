@@ -1,114 +1,60 @@
 # Platform Backend
 
-Pixzig owns the public platform abstraction: windows, input, clipboard,
-timing, cursor state, and text input are exposed through engine APIs. The
-current implementation uses SDL3 underneath, but game code should treat that
-as a backend detail rather than a dependency to program against.
+Pixzig runs on SDL3 underneath, but games never talk to SDL. Windows, input, the clipboard, timing and text input all come through pixzig's own types. This page covers how that layer works, for when you need the details: IME text input, HiDPI math, or driving the engine by hand.
 
-## Engine Boundary
+## The Boundary
 
-Games, examples, scripting bindings, and Python bindings should stay on the
-Pixzig side of the boundary:
+Game code, the scripting bindings and the Python bindings all stay on pixzig's side:
 
-- `eng.window` is a `*platform.Window`, with methods for sizing, clipboard,
-  cursor capture, text-input area, and buffer swapping.
-- `eng.inputs` is the engine-owned `InputManager`.
-- `pixzig.Key`, `MouseButton`, `GamepadButton`, and `GamepadAxis` are the
-  stable device identities for game code, bindings, and serialized action
-  maps.
+- `eng.window` is a `*platform.Window`, with methods for size, title, fullscreen, the clipboard, cursor capture and the text-input area.
+- `eng.inputs` is the engine's `InputManager`.
+- `pixzig.Key`, `MouseButton`, `GamepadButton` and `GamepadAxis` are the device names used by game code, action maps and saved key bindings.
 
-The backend is responsible for translating OS events into those types. That
-keeps application code portable across desktop and web builds, and leaves
-room for the backend to change without forcing games to rename their inputs
-or include backend modules.
+The backend translates OS events into those types. That keeps the same code working on desktop and the web, and leaves room to change the backend without renaming anyone's inputs. Inside the engine, SDL is only used by the platform window, the input modules and the event loop.
 
-## Input Identities
+## Input Names
 
-The `Key` enum is dense and 0-based, and its values are Pixzig's own. That
-matters twice over:
+The `Key` enum belongs to pixzig, and its values run densely from 0. That matters in two places:
 
-- The keyboard and mouse bitsets index straight off `@intFromEnum`, so key
-  and button queries are constant-time enum lookups.
-- The Python bindings pass those values across the C ABI as plain ints.
-  `python/pixzig/constants.py` is **generated** from these enums by
-  `zig build py-constants`; after editing `keys.zig`, re-run it and commit
-  the result.
+- The keyboard and mouse state are bitsets indexed straight from the enum, so every key query is a constant-time lookup.
+- The Python bindings pass these values across the C API as plain integers. `python/pixzig/constants.py` is generated from the enums with `zig build py-constants`. After editing `keys.zig`, run it and commit the result.
 
-Field names are the stable names used by games, `ActionMap` binding strings,
-and saved keybind configs. They are intentionally engine-owned names; for
-example, Pixzig can expose reserved keyboard slots such as `world_1`,
-`world_2`, or `F25`, and mouse side buttons are spelled `x1` and `x2`.
+The field names are what action maps and saved key configs use, so they're stable. Mouse side buttons are `x1` and `x2`.
 
 ### Position, Not Keycap
 
-`Key` names a physical keyboard position: `.w` is the key where W sits on a
-US QWERTY board whatever layout is active, and WASD bindings stay under the
-same fingers on AZERTY or Dvorak. This is the right default for a game and
-the opposite of what a terminal wants.
+A `Key` is a physical position: `.w` is where W sits on a US QWERTY keyboard, whatever layout is active. That's right for game controls, since WASD stays under the same fingers on AZERTY or Dvorak. The layout's own meaning of each key is tracked alongside, through `keyboard.layoutDown`, `layoutPressed` and `layoutReleased`, for prompts that name a keycap. Typed text should always come from `keyboard.text()`, which is correct for every layout.
 
-The layout-resolved identity of the same key is available alongside it, via
-`keyboard.layoutDown` / `layoutPressed` / `layoutReleased`, for UI that
-cares about the keycap. Typed text should come from `keyboard.text()`,
-which is correct for every layout without either of these.
+## The Event Loop
 
-## Event Flow
+Each frame, `Engine.pollEvents` drains the OS event queue. It handles window events itself (close, resize, focus) and passes device events to `InputManager.handleEvent`.
 
-`Engine.pollEvents` drains the platform event queue, handles
-window-level events itself, and hands device events to
-`InputManager.handleEvent`.
+Input state is built from events, so a key-up that never arrives would leave a key stuck down. To avoid that, the engine clears all input state when the window loses focus.
 
-Two consequences:
-
-- Input events are routed directly through the engine-owned `InputManager`,
-  so each engine instance owns its keyboard, mouse, and gamepad state.
-- Polling self-heals and events latch. A key-up that never arrives leaves a
-  key stuck down forever, so the engine clears all input state when the
-  window loses focus.
-
-The tick has two halves. `inputs.update()` opens it, latching typed text and
-mapping the cursor into logical coordinates. `inputs.finishTick()` closes
-it, rolling the current state into the previous one so `pressed` /
-`released` are edges against exactly one tick. `AppRunner` does both
-around `app.update()`. A caller driving the loop by hand -- the Python
-bindings, for instance -- must call both; `pz_finish_tick` is the C entry
-point.
+Each update tick has two halves. `inputs.update()` opens it: it latches the text typed since the last tick and maps the cursor into logical coordinates. `inputs.finishTick()` closes it, copying the current state to the previous state so that `pressed` and `released` are edges across exactly one tick. `AppRunner` does both around `app.update`. Anything driving the loop by hand, like the Python bindings, has to call both; the C API's versions are `pz_update_input` and `pz_finish_tick`.
 
 ## Text Input and IME
 
-`InputOptions.textInput` enables OS text input for the window. It is **off
-by default**: a game that only reads key bindings does not want an IME
-candidate bar armed over it, and on some platforms active text input changes
-on-screen-keyboard behaviour. With it off, `keyboard.text()` returns
-nothing.
+`inputOpts.textInput` turns on OS text input for the window. It's off by default, because a game that only reads keys doesn't want an IME candidate bar popping up, and on some platforms text input changes how the on-screen keyboard behaves. With it off, `keyboard.text()` returns nothing.
 
-With it on, the engine also tracks the IME's in-progress composition
-through `keyboard.preedit()` and `keyboard.preeditCursorByte()`. An app that
-wants to accept Japanese, Chinese, or Korean input has to draw that
-composition at the caret and call `window.setTextInputArea` to tell the OS
-where the caret is. Otherwise the candidate window sits at the window origin
-and the user types into an apparently dead window until the commit lands.
-Note that `setTextInputArea` takes **window** coordinates, so a caret rect
-measured in framebuffer pixels must be divided by
-`windowState.scaleFactor` first.
+With it on, the engine also tracks the IME's in-progress composition: `keyboard.preedit()` is the text being composed and `keyboard.preeditCursorByte()` is the cursor within it. An app that accepts Japanese, Chinese or Korean input should:
+
+1. Draw the preedit text at the caret, so the player sees what they're composing.
+2. Call `window.setTextInputArea(x, y, w, h, cursor)` with the caret's rect, so the OS puts its candidate window next to it.
+
+Without step 2 the candidate window sits at the window's corner. `setTextInputArea` takes window coordinates, so divide a framebuffer-pixel rect by `windowState.scaleFactor` first.
 
 ## HiDPI
 
-Windows request high pixel density framebuffers, so on a 2x display
-`framebufferSize` genuinely differs from `windowSize` and
-`windowState.scaleFactor` is the ratio between them. Prefer
-`scaleFactor` for coordinate math: the display content scale can disagree
-with the actual framebuffer ratio under Wayland fractional scaling.
-Anything handed back *to* the platform in window units -- `window.setSize`,
-`window.setTextInputArea` -- has to be divided down by it.
+Windows ask for a high-density framebuffer. On a 2x display, `windowState.framebufferSize` really is twice `windowSize`, and `windowState.scaleFactor` is the ratio between them.
+
+Use `scaleFactor` for coordinate math rather than `contentScale`. The display scale the OS reports can disagree with the actual framebuffer ratio under Wayland fractional scaling. Anything you hand back to the platform in window units, like `window.setSize` or `window.setTextInputArea`, has to be divided by `scaleFactor`.
 
 ## Targets
 
-| Target | Platform behavior |
+| Target | Backend |
 |---|---|
-| Linux, Windows | Pixzig links the platform backend through its build package, so games import the engine module rather than adding platform libraries themselves. |
-| Emscripten | The web build uses Emscripten's platform support and the engine's translated backend declarations, keeping the public Pixzig API the same as desktop. |
+| Linux, Windows | SDL3, built and linked by pixzig's build. Games don't add platform libraries themselves. |
+| Web | Emscripten's own SDL3 port, with WebGL 2. The pixzig API is the same as on desktop. |
 
-Desktop and web builds may sit on slightly different backend point releases,
-so a platform-specific bug can still exist. Treat that as an engine/backend
-diagnostic detail; application code should continue to use the Pixzig
-abstractions.
+The desktop and web SDL builds can be slightly different versions, so a platform-specific bug is possible. Treat that as an engine problem to fix in the backend; game code should keep using pixzig's types.

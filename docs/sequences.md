@@ -1,213 +1,187 @@
 # Sequences
 
-The sequencer runs timed game events such as movement, animation changes, waits, and custom logic.
+Games are full of little scripted moments: walk the player three tiles to the right, wait half a second, open the door, fade the screen. Writing those as state machines in `update` gets messy fast. The sequencer lets you list the steps in order and play them.
 
-## Core Concepts
-
-| Type | Role |
+| Type | What it is |
 |---|---|
-| `Step` | A single action with a VTable (`update` + `deinit`) |
-| `Sequence` | An ordered list of steps that run one after another |
-| `SequencePlayer` | Holds and ticks all active sequences; removes them when done |
+| `Step` | One action, like "wait 500 ms" or "move here over 300 ms". |
+| `Sequence` | A list of steps that run one after another. |
+| `SequencePlayer` | Runs any number of sequences at once and drops them when they finish. |
+
+The sequencer lives in `pixzig.sequencer`. The examples below use `const seq = pixzig.sequencer;`.
+
+## Playing a Sequence
+
+Keep one `SequencePlayer` for the game and update it every tick. Build a sequence, add steps, and hand it to the player:
+
+```zig
+// In App:
+seqPlayer: seq.SequencePlayer,
+
+// In init:
+self.seqPlayer = seq.SequencePlayer.init(alloc);
+
+// Anywhere, e.g. when the player hits a switch:
+var s = seq.Sequence.init(alloc);
+try s.add(alloc, try seq.SetActorStateStep.init(alloc, world, player, "walk_right"));
+try s.add(alloc, try seq.MoveToStep.init(alloc, world, player, .{ .x = 80, .y = 16 }, 300.0));
+try s.add(alloc, try seq.WaitStep.init(alloc, 200.0));
+try self.seqPlayer.add(s);
+
+// In update:
+self.seqPlayer.update(deltaMs);
+
+// In deinit:
+self.seqPlayer.deinit();
+```
+
+The player owns the sequence once you add it, and frees it when it finishes. `seqPlayer.sequences.items.len` is how many are still running, which is handy for ignoring input during a cutscene:
+
+```zig
+if (self.seqPlayer.sequences.items.len == 0 and self.actions.pressed(.move_right)) {
+    try self.queueMove("walk_right", 16, 0);
+}
+```
 
 ## Built-in Steps
 
 ### WaitStep
 
-Pauses the sequence for a given number of milliseconds:
+Does nothing for a number of milliseconds:
 
 ```zig
-try sequence.add(alloc, try seq.WaitStep.init(alloc, 500.0)); // 500 ms pause
+try s.add(alloc, try seq.WaitStep.init(alloc, 500.0));
 ```
 
 ### MoveToStep
 
-Moves a flecs entity's sprite from its current position to a target over a duration, linearly by default. The sprite is the entity's `Sprite` component, or its `Actor`'s own sprite when it has no `Sprite` component; register both component types in the world. Positions are the sprite's origin (`Sprite.pos()`, the top-left corner by default). Start position is captured lazily on the first tick.
+Moves an entity's sprite to a target position over a duration. The entity lives in a flecs world (see [Entities and Events](page:ecs)) and needs a `Sprite` component, or an `Actor` whose sprite gets moved. Register both component types in the world. Positions are the sprite's origin, and the start position is read when the step begins, not when you create it.
 
 ```zig
-const target = Vec2F{ .x = 100, .y = 48 };
-try sequence.add(alloc, try seq.MoveToStep.init(
-    alloc, world, entity, target, 300.0, // 300 ms
-));
+try s.add(alloc, try seq.MoveToStep.init(alloc, world, entity, .{ .x = 100, .y = 48 }, 300.0));
 ```
 
-`initEased` takes an extra `pixzig.Ease` curve (see [Math and Gameplay Helpers](math.md)), e.g. `.quad_out` to decelerate into place or `.back_out` to overshoot and settle:
+The move is linear. `initEased` takes an easing curve (see [Math and Gameplay Helpers](page:math)), like `.quad_out` to slow into place or `.back_out` to overshoot and settle:
 
 ```zig
-try sequence.add(alloc, try seq.MoveToStep.initEased(
-    alloc, world, entity, target, 300.0, .quad_out,
-));
+try s.add(alloc, try seq.MoveToStep.initEased(alloc, world, entity, target, 300.0, .back_out));
+```
+
+### SetActorStateStep
+
+Switches an entity's `Actor` to a named animation state and moves on right away:
+
+```zig
+try s.add(alloc, try seq.SetActorStateStep.init(alloc, world, entity, "walk_right"));
 ```
 
 ### TweenStep
 
-Tweens one `f32` from `from` to `to` over a duration along an easing curve, and hands each tick's value to a callback. Use it for anything you can drive from one number: a fade's alpha, a camera's zoom, a scale pop. The context pointer must outlive the step, so point it at a stable struct (your game state), not into a flecs component array.
+Tweens one number from `from` to `to` and passes each tick's value to a function of yours. Anything you can drive from one number works: a fade's alpha, a camera zoom, a scale pop.
 
 ```zig
 fn setFade(self: *Game, alpha: f32) void {
     self.fadeAlpha = alpha;
 }
 
-try sequence.add(alloc, try seq.TweenStep.init(
-    alloc, Game, self, setFade, 0.0, 1.0, 500.0, .sine_in_out,
-));
+try s.add(alloc, try seq.TweenStep.init(alloc, Game, self, setFade, 0.0, 1.0, 500.0, .sine_in_out));
 ```
 
-### SetActorStateStep
-
-Switches a flecs entity's `Actor` animation state and immediately advances.
-
-```zig
-try sequence.add(alloc, try seq.SetActorStateStep.init(
-    alloc, world, entity, "walk_right",
-));
-```
+The context pointer has to stay valid while the step runs, so point it at something stable like your game struct, not into a flecs component array.
 
 ### ParallelStep
 
-Runs multiple sub-steps concurrently. The parallel step finishes when **all** sub-steps are done.
+Runs several steps at the same time, and finishes when all of them have:
 
 ```zig
 var par = try seq.ParallelStep.init(alloc);
-try seq.ParallelStep.add(&par, alloc, try seq.WaitStep.init(alloc, 200.0));
-try seq.ParallelStep.add(&par, alloc, try seq.MoveToStep.init(alloc, world, entityB, target, 200.0));
-try sequence.add(alloc, par);
+try seq.ParallelStep.add(&par, alloc, try seq.MoveToStep.init(alloc, world, heroA, targetA, 400.0));
+try seq.ParallelStep.add(&par, alloc, try seq.MoveToStep.init(alloc, world, heroB, targetB, 400.0));
+try s.add(alloc, par);
 ```
 
-## Building and Playing a Sequence
+## Writing Your Own Steps
+
+A step is a pointer plus a small vtable with `update` and `deinit`. Steps for things the engine doesn't know about, like screen flashes or sound cues, live in your game:
 
 ```zig
-var seqPlayer = seq.SequencePlayer.init(alloc);
-defer seqPlayer.deinit();
-
-var sequence = seq.Sequence.init(alloc);
-try sequence.add(alloc, try seq.SetActorStateStep.init(alloc, world, entity, "right"));
-try sequence.add(alloc, try seq.MoveToStep.init(alloc, world, entity, .{ .x = 80, .y = 16 }, 300.0));
-try sequence.add(alloc, try seq.WaitStep.init(alloc, 200.0));
-
-try seqPlayer.add(sequence);
-
-pub fn update(self: *App, ...) bool {
-    self.seqPlayer.update(delta);
-    ...
-}
-```
-
-## Gating Actions While a Sequence Runs
-
-Assuming `.move_right` is bound in an `ActionMap`, queue a move only when the player has no running sequence:
-
-```zig
-_ = self.actions.update(&eng.inputs, deltaTimeMs * 1000.0);
-if (self.seqPlayer.sequences.items.len == 0 and self.actions.pressed(.move_right)) {
-    self.queueMove("right", 16, 0) catch return false;
-}
-```
-
-## Custom Game-Side Steps
-
-Steps not appropriate for the engine (e.g. screen flashes, sound triggers) live in your game and follow the same VTable pattern:
-
-```zig
-pub const FlashStep = struct {
-    flash: *FlashState,
-    durationMs: f64,
-    color: [4]f32,
+pub const PlaySoundStep = struct {
+    eng: *AppRunner.Engine,
+    name: []const u8,
 
     const vtable: seq.Step.VTable = .{ .update = update, .deinit = deinit };
 
-    pub fn init(alloc: std.mem.Allocator, flash: *FlashState, ms: f64, color: [4]f32) !seq.Step {
-        const ptr = try alloc.create(FlashStep);
-        ptr.* = .{ .flash = flash, .durationMs = ms, .color = color };
-        return .{ .ptr = ptr, .vtable = &vtable, .done = false };
+    pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine, name: []const u8) !seq.Step {
+        const self = try alloc.create(PlaySoundStep);
+        self.* = .{ .eng = eng, .name = name };
+        return .{ .ptr = self, .vtable = &vtable };
     }
 
-    pub fn update(step: *seq.Step, _: f64) f64 {
-        const self: *FlashStep = @ptrCast(@alignCast(step.ptr));
-        self.flash.* = .{ .active = true, .remainingMs = self.durationMs,
-                          .totalMs = self.durationMs, .color = self.color };
+    fn update(step: *seq.Step, _: f64) f64 {
+        const self: *PlaySoundStep = @ptrCast(@alignCast(step.ptr));
+        self.eng.audio.playSound(self.name) catch {};
         step.done = true;
-        return -1.0; // Negative means done immediately.
+        return -1.0;
     }
 
-    pub fn deinit(step: *seq.Step, alloc: std.mem.Allocator) void {
-        const self: *FlashStep = @ptrCast(@alignCast(step.ptr));
+    fn deinit(step: *seq.Step, alloc: std.mem.Allocator) void {
+        const self: *PlaySoundStep = @ptrCast(@alignCast(step.ptr));
         alloc.destroy(self);
     }
 };
 ```
 
-The `update` function returns the time remaining. Return a negative value to signal that the step is done and the sequence should advance immediately.
+`update` gets the elapsed milliseconds and returns the time it has left. When the step is finished, set `step.done = true` and return a negative number, and the sequence moves to the next step. `deinit` frees whatever the step allocated, and runs when the sequence is freed.
 
-## Lua Scripting Bridge
+## Building Sequences From Lua
 
-`SeqScriptingContext` exposes sequence building to Lua scripts. Bind it once after init:
+`SeqScriptingContext` lets Lua scripts build and play sequences. Bind it to a script engine once:
 
 ```zig
-var seqCtx = seq.SeqScriptingContext.init(alloc, world, &seqPlayer);
-defer seqCtx.deinit();
-try seqCtx.bindToLua(&scriptEng);
+self.seqCtx = seq.SeqScriptingContext.init(alloc, world, &self.seqPlayer);
+try self.seqCtx.bindToLua(&eng.scripts);
 ```
 
-This registers five Lua globals:
+That adds five Lua functions:
 
-| Function | Description |
+| Function | What it does |
 |---|---|
-| `seq_new() -> handle` | Allocate a new pending sequence slot |
-| `seq_wait(h, ms)` | Append a WaitStep |
-| `seq_move_to(h, eid, x, y, ms [, ease])` | Append a MoveToStep; `ease` is an `Ease` name such as `"quad_out"` (linear when omitted) |
-| `seq_set_actor_state(h, eid, name)` | Append a SetActorStateStep |
-| `seq_play(h)` | Submit the sequence to the player |
+| `seq_new() -> handle` | Start a new sequence. |
+| `seq_wait(h, ms)` | Add a `WaitStep`. |
+| `seq_move_to(h, entity, x, y, ms [, ease])` | Add a `MoveToStep`. `ease` is a curve name like `"quad_out"`; linear when left out. |
+| `seq_set_actor_state(h, entity, name)` | Add a `SetActorStateStep`. |
+| `seq_play(h)` | Hand the sequence to the player. |
 
-Each binding captures its `SeqScriptingContext`, so separate Lua states can drive separate sequence players. Keep the context alive as long as the Lua state may call these functions. On shutdown, deinitialize the Lua state before the context.
-
-Set entity ID and position globals from Zig before running the script:
+Lua doesn't know about your entities, so pass in what the script needs as globals before running it:
 
 ```zig
-scriptEng.lua.pushInteger(@intCast(self.entity));
-scriptEng.lua.setGlobal("player_entity");
+const scripts = &eng.scripts;
+scripts.lua.pushInteger(@intCast(self.player));
+scripts.setGlobal("player");
 
-const actor = flecs.get(world, entity, Actor).?;
-const pos = actor.sprite.pos();
-scriptEng.lua.pushNumber(@floatCast(pos.x));
-scriptEng.lua.setGlobal("player_x");
-scriptEng.lua.pushNumber(@floatCast(pos.y));
-scriptEng.lua.setGlobal("player_y");
+const pos = flecs.get(world, self.player, pixzig.Actor).?.sprite.pos();
+scripts.lua.pushNumber(pos.x);
+scripts.setGlobal("player_x");
+scripts.lua.pushNumber(pos.y);
+scripts.setGlobal("player_y");
 
-try scriptEng.runScript("assets/circle_move.lua");
+try scripts.runScript("assets/circle_move.lua");
 ```
-
-The script then builds and submits the sequence entirely in Lua:
 
 ```lua
--- circle_move.lua
-local step = 16
-local ms   = 300
+-- circle_move.lua: walk a 16 pixel square
 local h = seq_new()
-
-seq_set_actor_state(h, player_entity, "right")
-seq_move_to(h, player_entity, player_x + step, player_y, ms)
-
-seq_set_actor_state(h, player_entity, "down")
-seq_move_to(h, player_entity, player_x + step, player_y + step, ms)
-
-seq_set_actor_state(h, player_entity, "left")
-seq_move_to(h, player_entity, player_x, player_y + step, ms)
-
-seq_set_actor_state(h, player_entity, "up")
-seq_move_to(h, player_entity, player_x, player_y, ms)
-
+seq_set_actor_state(h, player, "right")
+seq_move_to(h, player, player_x + 16, player_y, 300)
+seq_set_actor_state(h, player, "down")
+seq_move_to(h, player, player_x + 16, player_y + 16, 300)
+seq_set_actor_state(h, player, "left")
+seq_move_to(h, player, player_x, player_y + 16, 300)
+seq_set_actor_state(h, player, "up")
+seq_move_to(h, player, player_x, player_y, 300, "quad_out")
 seq_play(h)
 ```
 
-## Step VTable Contract
+The context must stay alive, and not move, as long as scripts can call these functions. Call `seqCtx.deinit()` when you're done to free any sequences a script started but never played.
 
-| Field | Type | Semantics |
-|---|---|---|
-| `ptr` | `*anyopaque` | Pointer to the concrete step struct |
-| `vtable` | `*const Step.VTable` | Points to a `const` vtable on the concrete type |
-| `done` | `bool` | Set to `true` by `update` when finished |
-
-`update(step, deltaMs) f64` ticks the step and returns time remaining. A negative value means done. The sequence advances after `done` is set.
-
-`deinit(step, alloc)` frees memory owned by the step when the sequence is destroyed.
+`examples/sequencer_ex.zig` runs this script, plus a custom flash step.

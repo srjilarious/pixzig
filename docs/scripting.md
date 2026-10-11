@@ -1,10 +1,10 @@
-# Scripting
+# Scripting and the Console
 
-`ScriptEngine` wraps a Lua 5.3 state provided by `ziglua`. Use it for configuration, sequences, or registered Zig functions.
+Pixzig embeds Lua 5.3 through [ziglua](https://github.com/natecraddock/ziglua). `ScriptEngine` wraps a Lua state with a few helpers for the common jobs: running config files, reading settings into structs, and exposing Zig functions to scripts. There's also an in-game Lua console.
 
-## ScriptEngine Basics
+## Getting a Script Engine
 
-The simplest setup lets the engine own the Lua state. Set `scripting` in the engine options and use `eng.scripts`:
+The easiest way is to let the engine own one:
 
 ```zig
 const AppRunner = pixzig.AppRunner(App, .{ .scripting = true });
@@ -13,162 +13,126 @@ const AppRunner = pixzig.AppRunner(App, .{ .scripting = true });
 try eng.scripts.runScript("assets/config.lua");
 ```
 
-The engine creates it after the renderer and closes it on shutdown. You can still create one yourself, e.g. in tests or tools that don't start an engine:
+The engine creates it after the renderer and closes it on shutdown. Tools and tests that don't start an engine can make their own:
 
 ```zig
-const scripting = pixzig.scripting;
-
-var eng = try scripting.ScriptEngine.init(allocator);
-defer eng.deinit();
+var scripts = try pixzig.ScriptEngine.init(alloc);
+defer scripts.deinit();
 ```
 
-Every name and code string the API takes is a plain `[]const u8`.
+The Lua standard libraries (string, table, math and so on) are open.
 
-### Running Code
-
-Execute an inline string:
+## Running Lua
 
 ```zig
-try eng.run(
-    \\x = 42
-    \\print("hello from Lua!")
-);
+try scripts.run("print('hello from Lua')");     // a string
+try scripts.runScript("assets/level1.lua");     // a file
 ```
 
-Execute a file:
+Script paths resolve like every other asset (see [Assets](page:assets)). On an error, both log Lua's message and return `error.SyntaxError` or `error.ScriptError`. `runScript` returns `error.ScriptFileError` when the file can't be read.
+
+## Reading a Config Table
+
+`loadStruct` copies a global Lua table into a Zig struct, matching fields by name:
+
+```lua
+-- config.lua
+config = { fullscreen = true, scale = 4, volume = 0.8, title = "My Game" }
+```
 
 ```zig
-try eng.runScript("assets/config.lua");
+const Config = struct {
+    fullscreen: bool = false,
+    scale: i32 = 1,
+    volume: f32 = 1.0,
+    title: ?[]u8 = null,
+};
+
+try scripts.runScript("assets/config.lua");
+const cfg = try scripts.loadStruct(Config, "config");
+defer if (cfg.title) |t| alloc.free(t);
 ```
 
-Both methods print Lua errors to stderr and return `error.ScriptError`.
+Fields can be `bool`, integers, floats and `?[]u8` strings. Every field has to be in the table with the right type. A missing or mistyped field returns `error.InvalidFieldType` rather than falling back to the default, so treat the defaults as documentation. Strings are copied with the allocator the script engine was created with, and you free them. A missing global returns `error.InvalidConfigTable`.
 
-### Registering Zig Functions
+Key bindings have their own loader, `ActionMap.loadFromLua`. See [Input](page:input).
 
-Expose a Zig function to Lua as a global:
+## Calling Zig From Lua
+
+Register a Zig function as a Lua global. It reads its arguments from the Lua stack, pushes its results, and returns how many it pushed:
 
 ```zig
 const ziglua = pixzig.ziglua;
 
-fn myLuaFunc(lua: *ziglua.Lua) i32 {
+fn double(lua: *ziglua.Lua) i32 {
     const n = lua.toInteger(1) catch 0; // first argument
-    lua.pushInteger(n * 2);             // return value
-    return 1;                           // number of return values
+    lua.pushInteger(n * 2);
+    return 1; // one return value
 }
 
-try eng.registerFunc("double", myLuaFunc);
-// Lua: local result = double(21)  --> 42
+try scripts.registerFunc("double", double);
+// Lua: print(double(21))  --> 42
 ```
 
-The function signature is `fn(*ziglua.Lua) i32`. Arguments are read from the stack by index (1-based) using `lua.toInteger`, `lua.toNumber`, `lua.toString`, etc. Return values are pushed onto the stack; the return count is the i32.
-
-### Registering Methods with Context
-
-When the function needs your own state, use `registerMethod`. It stores the context pointer with the Lua function and passes it back on each call:
+When the function needs your game's state, use `registerMethod`. It stores a pointer you give it and passes it back on every call:
 
 ```zig
 const Game = struct {
     score: i64 = 0,
 
-    fn luaAddScore(self: *Game, lua: *ziglua.Lua) i32 {
+    fn addScore(self: *Game, lua: *ziglua.Lua) i32 {
         self.score += lua.toInteger(1) catch 0;
         return 0;
     }
 };
 
-try eng.registerMethod(Game, &game, "add_score", Game.luaAddScore);
+try scripts.registerMethod(Game, &self.game, "add_score", Game.addScore);
 // Lua: add_score(10)
 ```
 
-The context must outlive the Lua state, or at least every script that can call the function.
+The pointer has to stay valid as long as scripts can call the function.
 
-### Loading Structs from Lua Tables
+## Passing Values to Lua
 
-Deserialise a Lua table into a Zig struct:
-
-```zig
-// config.lua:
-// config = { fullscreen = true, scale = 4, title = "My Game" }
-
-const Config = struct {
-    fullscreen: bool  = false,
-    scale:      i32   = 1,
-    title:      ?[]u8 = null,
-
-    pub fn deinit(self: *const Config, alloc: std.mem.Allocator) void {
-        if (self.title) |t| alloc.free(t);
-    }
-};
-
-try eng.runScript("assets/config.lua");
-var cfg = try eng.loadStruct(Config, "config");
-defer cfg.deinit(allocator);
-
-// cfg.fullscreen == true, cfg.scale == 4, cfg.title == "My Game"
-```
-
-Supported field types: `bool`, `int`, `float`, and `?[]u8` (heap-allocated string, caller frees). Unsupported field types return `error.UnsupportedFieldType`.
-
-## Accessing the Raw Lua State
-
-`ScriptEngine.lua` is the underlying `*ziglua.Lua`. Use it to push globals before running a script, or to call any ziglua API directly:
+Push a value and pop it into a global with `setGlobal`. `scripts.lua` is the raw `*ziglua.Lua` for anything else:
 
 ```zig
-// Push an entity ID as a Lua global before running a script.
-eng.lua.pushInteger(@intCast(entity_id));
-eng.setGlobal("player_entity");
+scripts.lua.pushInteger(@intCast(playerEntity));
+scripts.setGlobal("player");
+scripts.lua.pushNumber(spawnX);
+scripts.setGlobal("spawn_x");
 
-eng.lua.pushNumber(sprite_x);
-eng.setGlobal("player_x");
-
-try eng.runScript("assets/my_script.lua");
+try scripts.runScript("assets/intro.lua");
 ```
 
-## Sequence Scripting
+Lua integers are 64-bit signed, so cast entity ids with `@intCast` before pushing them. `getGlobal(name)` pushes a global onto the stack and returns its type, for reading values back.
 
-`SeqScriptingContext` lets Lua build and queue steps on a `SequencePlayer`. See [Sequences](sequences.html).
+The [sequencer](page:sequences) uses these pieces to let Lua script cutscenes.
 
-```zig
-var seqCtx = seq.SeqScriptingContext.init(alloc, world, &seqPlayer);
-defer seqCtx.deinit();
+## The Console
 
-// Register seq_new / seq_wait / seq_move_to / seq_set_actor_state / seq_play
-try seqCtx.bindToLua(&scriptEng);
-```
-
-`seq_new` handles grow as needed; a handle's slot is reused once `seq_play` submits it.
-
-Then in Lua:
-
-```lua
-local h = seq_new()
-seq_wait(h, 500)
-seq_move_to(h, player_entity, 100, 50, 300)
-seq_play(h)
-```
-
-## Console Integration
-
-`console` provides an in-game Lua console backed by a `ScriptEngine`. Let the engine own it alongside the script engine, then draw it inside a UI pass:
+The console is a Lua prompt drawn with the [immediate-mode UI](page:ui). Type a line and it runs. Scripts can write to it with `con:log("message")`. Let the engine create it alongside the script engine:
 
 ```zig
 const AppRunner = pixzig.AppRunner(App, .{
-    .inputOpts = .{ .mouse = true, .textInput = true }, // the console reads typed text
+    .inputOpts = .{ .textInput = true }, // the console reads typed text
     .scripting = true,
-    .console = .{}, // ConsoleOpts; a null displaySize uses the logical size
+    .console = .{},                      // ConsoleOpts
 });
+const UiContext = pixzig.imgui.UiContext(AppRunner.Engine);
+
+// In update:
+if (eng.inputs.keyboard.pressed(.grave_accent)) eng.console.toggle();
+self.ui.update();
 
 // In render:
+eng.renderer.begin(.logical);
 self.ui.begin();
 eng.console.draw(&self.ui);
 self.ui.end();
+eng.renderer.end();
 ```
 
-`console` without `scripting` is a compile error. See `examples/console_ex.zig`.
+`ConsoleOpts` sets its size, position, how many lines it keeps, the window title, and whether it starts open (`enabledByDefault`, true by default). With no `displaySize`, it fills the logical screen minus its offsets. Up and Down step through the command history. Asking for `console` without `scripting` is a compile error.
 
-## Tips
-
-- Use `runScript` for config and level scripts that live on disk.
-- Use `run` for short, generated, or unit-tested code strings.
-- Keep functions registered via `registerFunc` stateless. Use `registerMethod` when the function needs to touch your own state.
-- Lua 5.3 integers are 64-bit signed. Cast flecs entity IDs with `@intCast(entity_id)` before pushing.
+`examples/console_ex.zig` is a complete console, and `examples/lua_ex.zig` shows registering functions without an engine.

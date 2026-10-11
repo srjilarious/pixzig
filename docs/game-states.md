@@ -1,118 +1,89 @@
 # Game States
 
-`GameStateMgr` dispatches `update` and `render` to the active state. States may also provide `activate` and `deactivate` hooks.
+Most games have a few distinct screens: a title screen, the game itself, a pause menu, a game over screen. `GameStateMgr` gives each one its own struct and forwards `update` and `render` to whichever is active.
 
 ## Defining States
 
-Each state is a plain struct. It must implement `update` and `render` using the same signatures as the top-level App. Lifecycle hooks are optional.
+A state is a plain struct with the same `update` and `render` methods as an app. It can also have `activate` and `deactivate`, which run when it becomes active or stops being active:
 
 ```zig
-const StateA = struct {
-    // Called when this state becomes active.
-    pub fn activate(self: *StateA) void {
-        std.debug.print("StateA activated\n", .{});
+const TitleState = struct {
+    pub fn activate(self: *TitleState) void {
+        _ = self;
+        std.log.info("showing title", .{});
     }
 
-    // Called when this state is replaced by another.
-    pub fn deactivate(self: *StateA) void {
-        std.debug.print("StateA deactivated\n", .{});
+    pub fn update(self: *TitleState, eng: *AppRunner.Engine, deltaMs: f64) bool {
+        _ = self;
+        _ = deltaMs;
+        return !eng.inputs.keyboard.pressed(.escape);
     }
 
-    pub fn update(self: *StateA, eng: *AppRunner.Engine, delta: f64) bool {
-        _ = self; _ = eng; _ = delta;
-        return true;
-    }
-
-    pub fn render(self: *StateA, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0, 255, 0, 255); // green background
+    pub fn render(self: *TitleState, eng: *AppRunner.Engine) void {
+        _ = self;
+        eng.renderer.clear(0, 0, 80, 255);
     }
 };
 
-const StateB = struct {
-    pub fn update(self: *StateB, eng: *AppRunner.Engine, delta: f64) bool {
-        _ = self; _ = eng; _ = delta;
-        return true;
-    }
-
-    pub fn render(self: *StateB, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(255, 0, 0, 255); // red background
-    }
-};
+const PlayState = struct { ... };
 ```
-
-`activate` and `deactivate` are optional.
 
 ## Creating the Manager
 
-Instantiate `GameStateMgr` with the engine type, state enum, and concrete state types in enum order:
+Name the states with an enum, and list the state types in the same order:
 
 ```zig
-const States = enum { StateA, StateB };
+const States = enum { title, play };
 
-// Order must match the enum declaration.
-const AppStateMgr = pixzig.gamestate.GameStateMgr(
+const StateMgr = pixzig.gamestate.GameStateMgr(
     AppRunner.Engine,
     States,
-    &[_]type{ StateA, StateB },
+    &[_]type{ TitleState, PlayState },
 );
 ```
 
-The compiler validates that the number of types matches the enum variant count, and that the enum's values run 0..N-1 in declaration order (the default when you don't assign values).
+The compiler checks that the enum and the list are the same length, and that the enum's values run 0, 1, 2... in order, which is the default when you don't assign any.
 
-## Initialising with State Instances
-
-Pass a tuple of pointers to the states, in the same order. Its type is `AppStateMgr.StatePtrs`, so a missing state or a pointer to the wrong type is a compile error:
+Create it with a tuple of pointers to your state instances, in the same order:
 
 ```zig
-var stateA = StateA{};
-var stateB = StateB{};
-
-const mgr = AppStateMgr.init(.{ &stateA, &stateB });
+self.titleState = .{};
+self.playState = .{};
+self.states = StateMgr.init(.{ &self.titleState, &self.playState });
 ```
 
-## Using the Manager in App
+The tuple's type is `StateMgr.StatePtrs`, so a missing state or a pointer of the wrong type is a compile error. The states have to stay put while the manager uses them, so keep them in your heap-allocated app (or somewhere else stable), not in local variables of `init`.
+
+## Using It
+
+Forward the app's methods to the manager and switch states with `setCurrState`:
 
 ```zig
 pub const App = struct {
-    states: AppStateMgr,
+    titleState: TitleState,
+    playState: PlayState,
+    states: StateMgr,
 
-    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
-        if (eng.inputs.keyboard.pressed(.one)) self.states.setCurrState(.StateA);
-        if (eng.inputs.keyboard.pressed(.two)) self.states.setCurrState(.StateB);
-        if (eng.inputs.keyboard.pressed(.escape)) return false;
-
-        return self.states.update(eng, delta);
+    pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) bool {
+        if (self.states.currState == .title and eng.inputs.keyboard.pressed(.enter)) {
+            self.states.setCurrState(.play);
+        }
+        return self.states.update(eng, deltaMs);
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
         self.states.render(eng);
-        self.fps.renderTick();
     }
 };
 ```
 
-## Full Example (main)
+Some things to know:
 
-```zig
-pub fn main(init: std.process.Init) !void {
-    const appRunner = try AppRunner.init("State Test", init.gpa, .{});
-    defer appRunner.deinit();
+- The manager starts on the first state, without calling its `activate`.
+- `setCurrState` calls `deactivate` on the old state and `activate` on the new one, when they exist.
+- `update` returns whatever the active state's `update` returned, so a state can end the game by returning false.
+- There's no state stack. For a pause menu over gameplay, keep a stack of your own on top of `setCurrState`, or draw the menu from the play state.
 
-    var stateA = StateA{};
-    var stateB = StateB{};
+States often need to reach back into the game, e.g. to switch states themselves. Give them a pointer to the app, or to a shared game struct, when you create them.
 
-    // App.init takes `states: AppStateMgr.StatePtrs` and passes it to AppStateMgr.init.
-    const app = try App.init(init.gpa, .{ &stateA, &stateB });
-    defer app.deinit();
-
-    appRunner.run(app);
-}
-```
-
-The manager starts on the first enum value. Initialization does not call its `activate` hook.
-
-## Notes
-
-- States are identified by enum value (`.StateA` rather than an integer index).
-- There is no built-in state stack; if you need push/pop semantics, layer a stack on top of `setCurrState`.
-- `update` on the manager returns the bool returned by the active state's `update`, so returning `false` from a state exits the game loop.
+`examples/game_state_ex.zig` switches between two states with the number keys.

@@ -35,8 +35,8 @@ pub const Sprite = struct {
     origin: Vec2F = .{ .x = 0, .y = 0 },
     flip: Flip,
     rotate: Rotate,
-    /// Colour multiplier. `Renderer.drawSprite` routes to the tinted batch
-    /// when this is set, and to the plain (faster) batch when null.
+    /// Colour multiplier applied by `Renderer.drawSprite`. Null draws the
+    /// texture's own colours.
     tint: ?Color = null,
     /// Silhouette colour. When set, `Renderer.drawSprite` draws the sprite's
     /// shape filled with this colour (alpha kept from the texture), with

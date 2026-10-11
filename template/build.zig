@@ -8,8 +8,9 @@ pub fn build(b: *std.Build) void {
     const pixzig_dep = b.dependency("pixzig", .{ .target = target, .build_examples = false });
 
     // No assets yet. List textures, atlases, fonts and the like here (see
-    // pixzig's docs/assets.md) and they are loaded at startup, and copied
-    // next to the executable by `zig build -Dpackage=true`.
+    // pixzig's docs/assets.md), and set `.manifestOpts` in main.zig to load
+    // the "boot" group at startup. `zig build -Dpackage=true` copies
+    // assets/ next to the executable.
     const manifest = pixzig_build.manifestFromDef(b, .{});
 
     // Builds and installs zig-out/bin/my_game/my_game, and adds a

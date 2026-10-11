@@ -2,9 +2,11 @@
 
 ![Pixzig Logo](assets/pixzig.png)
 
-Pixzig is a Zig 2D game engine with a fixed-timestep [game loop](sym:AppRunner), OpenGL [rendering](sym:Renderer), flecs ECS, [Lua scripting](sym:ScriptEngine), [audio](mod:audio), [input](mod:input), and [sequences](sym:SequencePlayer).
+Pixzig is a 2D game engine written in Zig. It gives you a fixed-timestep game loop, a batched OpenGL renderer, input with action maps, Tiled map loading, audio, Lua scripting, a sequencer for timed events and a small immediate-mode UI. Games build for Linux, Windows and the browser from the same code.
 
-## Starting From the Template
+These pages walk through each system in roughly the order you'll need them. Start here, then read [The Game Loop](page:app-runner) and [Rendering](page:rendering).
+
+## Creating a Project
 
 The quickest start is to generate a project from pixzig's `template/` directory. From a pixzig checkout:
 
@@ -14,13 +16,13 @@ cd ../my_cool_game
 zig build my_cool_game   # builds and runs it
 ```
 
-`-Ddest` is relative to the pixzig checkout (or absolute) and defaults to `../<name>`. The name must be a valid Zig identifier. The new project gets its own `build.zig.zon` fingerprint and a relative `.path` dependency on the checkout you ran it from; switch that to a URL + hash when you want a fetched dependency. It won't overwrite an existing directory.
+`-Ddest` is relative to the pixzig checkout, or absolute, and defaults to `../<name>`. The name has to be a valid Zig identifier. The new project gets its own `build.zig.zon` fingerprint and a `.path` dependency on the checkout you ran it from. Switch that to a URL and hash when you want a fetched dependency. The tool won't overwrite an existing directory.
 
-The rest of this page explains what the template sets up.
+You get a window with a bouncing square and a line of text. The rest of this page explains what the template sets up.
 
-## Adding Pixzig to Your Project
+## Adding Pixzig to a Project
 
-Declare pixzig as a dependency in your `build.zig.zon`:
+If you'd rather wire it up by hand, declare pixzig as a dependency in `build.zig.zon`:
 
 ```zig
 .dependencies = .{
@@ -30,11 +32,11 @@ Declare pixzig as a dependency in your `build.zig.zon`:
 },
 ```
 
-In your `build.zig`, import `buildGame` and a manifest constructor from pixzig's build module and call `buildGame` with a `ManifestHandle` as the final argument:
+Then call `buildGame` from your `build.zig`:
 
 ```zig
-const buildGame = @import("pixzig").buildGame;
-const manifestFromDef = @import("pixzig").manifestFromDef;
+const std = @import("std");
+const pixzig_build = @import("pixzig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -42,11 +44,10 @@ pub fn build(b: *std.Build) void {
 
     const pixzig_dep = b.dependency("pixzig", .{ .target = target, .build_examples = false });
 
-    // No assets yet; pass an empty manifest. See the Asset Manifest doc to
-    // add textures, atlases, fonts, and other assets.
-    const manifest = manifestFromDef(b, .{});
+    // No assets yet. See the Assets page to list textures, fonts and maps.
+    const manifest = pixzig_build.manifestFromDef(b, .{});
 
-    _ = buildGame(b, .{
+    _ = pixzig_build.buildGame(b, .{
         .target = target,
         .optimize = optimize,
         .engine_dep = pixzig_dep,
@@ -57,7 +58,7 @@ pub fn build(b: *std.Build) void {
 }
 ```
 
-`buildGame` installs the executable to `zig-out/bin/my_game/` as part of `zig build`, and adds a `zig build my_game` step that runs it. The game doesn't need to depend on pixzig's install step, and doesn't need `use_llvm`. Set `game.use_llvm = true` on the returned compile step only if you want LLVM's fuller debug info for a debugger.
+`buildGame` installs the executable to `zig-out/bin/my_game/` as part of `zig build`, and adds a `zig build my_game` step that runs it. It returns the compile step, so you can still tweak it, e.g. `game.use_llvm = true` if you want LLVM's fuller debug info in a debugger.
 
 If the game needs its own imports, build the module yourself and pass it as `.root_module` instead of `.root_source_file`:
 
@@ -71,28 +72,24 @@ exe_mod.addImport("zargunaught", zargs.module("zargunaught"));
 // ... then `.root_module = exe_mod` in buildGame's options.
 ```
 
-`BuildGameOptions` also takes these optional fields:
+### Build Options
 
-- `default_font` -- the font embedded in the executable as the renderer's default. It is pixzig's bundled Karla-Regular (`.karla`) unless you pass `.{ .path = b.path("assets/MyFont.ttf") }` to embed your own font instead, or `.none` to embed no font. Every game in one `build.zig` shares the engine module, so they must all use the same `default_font`.
-- `package` -- copy assets next to the executable. When null, the `-Dpackage` build option decides. It is declared once, so a game and its editor can both leave this null.
-- `install` -- defaults to `true`: install the executable to `zig-out/bin/<name>/` on `zig build`. Native only.
-- `wrap_root` -- defaults to `true`. `buildGame` generates a tiny executable root module that installs pixzig's panic and log handlers, then calls your module's `main`. Set `.wrap_root = false` if your own root module deliberately provides `panic`, `std_options`, or other root-only declarations.
+`BuildGameOptions` has a few optional fields:
 
-`manifestFromDef` defines assets inline; use `manifestFromFile(b, "assets/manifest.json")` instead if the manifest lives as a separate JSON file. See [Asset Manifest](assets.html) for the full manifest format and runtime loading options.
+| Field | Default | What it does |
+|---|---|---|
+| `default_font` | `.karla` | The font embedded as the renderer's default. Pass `.{ .path = b.path("assets/MyFont.ttf") }` to embed your own, or `.none` to embed nothing. Every game in one `build.zig` shares the engine module, so they must all agree. |
+| `package` | `null` | Copy assets next to the executable. Null reads the `-Dpackage` option instead. |
+| `install` | `true` | Install to `zig-out/bin/<name>/` on `zig build`. Native only. |
+| `wrap_root` | `true` | Generate a small root module that installs pixzig's panic and log handlers, then calls your `main`. |
 
-Because `wrap_root` is on by default, game source files do not need to define
-`pub const panic = pixzig.internal.system.panic` or
-`pub const std_options = pixzig.internal.system.std_options`. The generated root wrapper
-handles that for native and Emscripten builds, while your module stays focused
-on its `main`, app type, and game code. The wrapper supports either
-`pub fn main() !void` or `pub fn main(init: std.process.Init) !void`.
-When adding game-specific imports or options, add them to the module you pass as
-`.root_module` (`exe_mod` above); with wrapping enabled, the returned compile
-step's root module is the generated wrapper.
+Because of `wrap_root`, your `main.zig` doesn't need to declare `panic` or `std_options`. Your `main` can be `pub fn main() !void` or `pub fn main(init: std.process.Init) !void`. Only turn wrapping off if your root module provides those declarations itself. With wrapping on, add game-specific imports to the module you pass in (`exe_mod` above), not to the returned compile step's root module, which is the wrapper.
 
-## A Minimal Example
+See [Building and Shipping](page:building) for packaging, Windows and web builds.
 
-This application opens a window and exits when Escape is pressed:
+## A Minimal Game
+
+This opens a window and exits when Escape is pressed:
 
 ```zig
 const std = @import("std");
@@ -114,12 +111,15 @@ pub const App = struct {
     }
 
     pub fn update(_: *App, eng: *AppRunner.Engine, _: f64) bool {
-        if (eng.inputs.keyboard.pressed(.escape)) return false;
-        return true;
+        return !eng.inputs.keyboard.pressed(.escape);
     }
 
     pub fn render(_: *App, eng: *AppRunner.Engine) void {
         eng.renderer.clear(26, 26, 51, 255);
+
+        eng.renderer.begin(.logical);
+        _ = eng.renderer.drawString("Hello!", .{ .x = 8, .y = 8 });
+        eng.renderer.end();
     }
 };
 
@@ -133,3 +133,18 @@ pub fn main(init: std.process.Init) !void {
     appRunner.run(app);
 }
 ```
+
+That's the whole shape of a pixzig game: an `App` with `update` and `render`, handed to an `AppRunner`. [The Game Loop](page:app-runner) covers what the runner does with it.
+
+## Running the Examples
+
+The pixzig repo has an example for most systems in `examples/`. Each one is its own build step:
+
+```sh
+zig build render_ex      # sprites and shapes
+zig build actor_ex       # sprite animation
+zig build tile_load_ex   # a Tiled map with a camera
+zig build imgui_ex       # the immediate-mode UI
+```
+
+`zig build --help` lists them all. They read the shared `assets/` folder in the repo root.

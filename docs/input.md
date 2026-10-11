@@ -1,123 +1,169 @@
 # Input
 
-`AppRunner` updates `eng.inputs` before each call to `App.update`. Use an `ActionMap` for game controls. Read `eng.inputs` directly for text entry, pointer position, or device-specific behavior.
+The runner updates `eng.inputs` before each `update` call. For game controls, bind named actions with an `ActionMap`. For text entry, the mouse cursor and device-specific behavior, read the keyboard, mouse and gamepads directly.
 
 ## Action Maps
 
-An action map names controls independently of their physical bindings:
+An action map lets your game code ask "is the player jumping?" instead of "is Space down?". Players can rebind keys, and one action can have a keyboard key and a gamepad button at the same time.
+
+Define your actions and axes as enums, then bind them:
 
 ```zig
 const Action = enum { quit, jump, fire };
 const Axis = enum { move_x };
-const Actions = pixzig.input.ActionMap(Action, Axis);
+const Actions = pixzig.ActionMap(Action, Axis);
 
-// During App initialization:
+// In App:
+actions: *Actions,
+
+// In init:
 self.actions = try Actions.init(alloc);
 try self.actions.bind(.quit, .{ .key = .escape });
 try self.actions.bind(.jump, .{ .key = .space });
+try self.actions.bind(.jump, .{ .gamepad_button = .a });
 try self.actions.bind(.fire, .{ .mouse_button = .left });
 try self.actions.bindAxis(.move_x, .{ .buttons = .{
     .negative = .{ .key = .a },
     .positive = .{ .key = .d },
 } });
+try self.actions.bindAxis(.move_x, .{ .gamepad_axis = .{ .axis = .left_x } });
+
+// In deinit:
+self.actions.deinit();
 ```
 
-Update actions once per game tick, then query them:
+Update it once per tick, then query it:
 
 ```zig
-pub fn update(self: *App, eng: *AppRunner.Engine, deltaTimeMs: f64) bool {
-    _ = self.actions.update(&eng.inputs, deltaTimeMs * 1000.0);
+pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) bool {
+    _ = self.actions.update(&eng.inputs, deltaMs * 1000.0);
 
     if (self.actions.pressed(.quit)) return false;
     if (self.actions.pressed(.jump)) self.jump();
     if (self.actions.down(.fire)) self.fire();
-
-    self.velocity.x = self.actions.axis(.move_x) * Speed;
+    self.vel.x = self.actions.axis(.move_x) * Speed;
     return true;
 }
 ```
 
-`bind` may be called more than once for the same action. Digital bindings accept keys, mouse buttons, and gamepad buttons. Axis bindings accept a keyboard button pair, a gamepad axis, or a mouse movement axis.
-Call `self.actions.deinit()` from `App.deinit`.
+`pressed` and `released` are true for one tick, on the edge. `down` and `up` are the held state. `axis` is in -1 to 1 for buttons and sticks.
 
-`update`'s return value is currently unused (it always returns `false`); ignore it as the example above does. Gamepad button and axis bindings always read gamepad slot 0, regardless of `inputOpts.numGamepads`.
+`update` takes elapsed time in microseconds, which only matters for key chords (below). Its return value isn't used yet.
 
-## Input Manager
+A few binding details:
 
-The input manager exposes raw device state:
+- `bind` can be called several times for one action. Any of its bindings counts.
+- Several axis bindings on one axis add up, so keyboard and stick can both drive `move_x`.
+- `gamepad_axis` has a `deadzone` (0.18 by default). Gamepad bindings read gamepad slot 0.
+- `mouse_axis` reads the mouse movement for the tick, scaled by `sensitivity` and clamped to `clamp`. Use it for mouse look.
 
-| Field | Availability |
-|---|---|
-| `eng.inputs.keyboard` | Always enabled |
-| `eng.inputs.mouse` | Enabled when `inputOpts.mouse` is `true` (the default) |
-| `eng.inputs.gamepad(index)` | Enable slots with `inputOpts.numGamepads`; null past the last enabled slot |
-| `keyboard.text()` / `keyboard.preedit()` | Need `inputOpts.textInput = true` |
+### Key Chords
 
-`inputOpts.textInput` arms the OS text-input machinery on the window. It is off by default, because a game that only reads key bindings does not want an IME candidate bar armed over it (and on some platforms it changes on-screen-keyboard behaviour). Turn it on for anything with a text field, a console, or chat -- without it `keyboard.text()` returns nothing at all.
-
-### Keyboard
+An action can also be bound to a key combination, or a two-step sequence like Ctrl+K then Ctrl+S:
 
 ```zig
-const keyboard = &eng.inputs.keyboard;
+const KeyChordPiece = pixzig.input.KeyChordPiece;
 
-if (keyboard.down(.left)) self.x -= 3;
-if (keyboard.pressed(.space)) self.jump();
-if (keyboard.released(.space)) self.stopJump();
-if (keyboard.pressed(.escape)) return false;
+try self.actions.bindChord(KeyChordPiece.from(.{ .ctrl = true }, .s), .save);
+try self.actions.bindChord2(
+    KeyChordPiece.from(.{ .ctrl = true }, .k),
+    KeyChordPiece.from(.{ .ctrl = true }, .s),
+    .save_all,
+);
 ```
 
-Keys are `pixzig.Key` values such as `.a`, `.space`, `.escape`, `.left`, and `.left_shift`.
+A partial sequence resets after two seconds.
 
-A `Key` names a **physical position**, not the letter printed on the keycap: `.w` is the key where W sits on a US QWERTY board whatever layout the OS has active, so WASD bindings stay under the same fingers on AZERTY or Dvorak. When you want the keycap instead -- a "press Y to confirm" prompt, say -- use the layout-resolved queries, which take the same `Key` values:
+### Bindings From Lua
 
-```zig
-if (keyboard.layoutPressed(.y)) self.confirm();
-```
+Bindings can live in a Lua config file so players can edit them. Each entry names an `action` or an `axis`, plus a `type`:
 
-For text input, supply a buffer. `text` returns the number of UTF-8 bytes written for this tick, already resolved through the active layout, dead keys and IME, so it is the correct source for anything the player types:
-
-```zig
-var chars: [16]u8 = undefined;
-const len = eng.inputs.keyboard.text(&chars);
-self.acceptText(chars[0..len]);
-
-const mods = eng.inputs.keyboard.currKeys().modifiers();
-if (mods.ctrl and mods.shift) {
-    // Handle Ctrl+Shift shortcut.
+```lua
+bindings = {
+    { action = "jump", type = "key", key = "space" },
+    { action = "jump", type = "gamepad_button", button = "a" },
+    { action = "fire", type = "mouse_button", button = "left" },
+    { action = "save", type = "chord", key = "ctrl+s" },
+    { action = "save_all", type = "chord", key = "ctrl+k ctrl+s" },
+    { axis = "move_x", type = "buttons", neg = "a", pos = "d" },
+    { axis = "move_x", type = "gamepad_axis", stick = "left_x", deadzone = 0.2 },
+    { axis = "look_x", type = "mouse_axis", component = "x", sensitivity = 0.1 },
 }
 ```
 
-### Mouse
+```zig
+try eng.scripts.runScript("assets/bindings.lua");
+try self.actions.loadFromLua(&eng.scripts, "bindings");
+```
 
-`mouse.pos()` is in logical game coordinates after viewport mapping, as a `?Vec2F`. It is null while the cursor is outside a letterboxed or pillarboxed viewport. `lastPos()` is the previous tick's, with the same rule.
+Names match the Zig enum fields. An unknown action or key returns an error such as `error.UnknownAction` or `error.UnknownKey`. See [Scripting](page:scripting) for setting up Lua.
+
+## Keyboard
+
+```zig
+const kb = &eng.inputs.keyboard;
+
+if (kb.down(.left)) self.x -= 3;
+if (kb.pressed(.space)) self.jump();
+if (kb.released(.space)) self.endJump();
+if (kb.ctrl() and kb.pressed(.s)) self.save();
+```
+
+`shift()`, `ctrl()`, `alt()` and `super()` check either side of the modifier. Keys are `pixzig.Key` values such as `.a`, `.space`, `.escape`, `.left` and `.left_shift`.
+
+A `Key` names a physical position on the keyboard, not the letter printed on it. `.w` is where W sits on a US QWERTY board, whatever layout the player uses, so WASD controls stay under the same fingers on AZERTY or Dvorak. That's the right choice for game controls. When you mean the printed letter, like "press Y to confirm", use the layout versions:
+
+```zig
+if (kb.layoutPressed(.y)) self.confirm();
+```
+
+### Typed Text
+
+For anything the player types, like a name or a chat line, read `text()`. It's already run through the keyboard layout, dead keys and IME, so it's correct for every language:
+
+```zig
+var buf: [16]u8 = undefined;
+const len = eng.inputs.keyboard.text(&buf);
+self.name.appendSlice(buf[0..len]);
+```
+
+Text input is off by default, and `text()` returns nothing until you turn it on:
+
+```zig
+const AppRunner = pixzig.AppRunner(App, .{
+    .inputOpts = .{ .textInput = true },
+});
+```
+
+It's off because an active text input can pop up an IME candidate bar or change on-screen keyboard behavior, which a game that only reads keys doesn't want. For Japanese, Chinese or Korean input, see [Platform Backend](page:platform-backend) for drawing the IME composition.
+
+## Mouse
 
 ```zig
 const mouse = &eng.inputs.mouse;
 if (mouse.pos()) |pos| {
-    if (mouse.pressed(.left)) self.onClick(pos);
-    if (mouse.down(.left)) self.onDrag(pos);
-
-    if (mouse.lastPos()) |last| {
-        const dx = pos.x - last.x;
-        _ = dx;
-    }
+    if (mouse.pressed(.left)) self.clickAt(pos);
+    if (mouse.down(.left)) self.dragTo(pos);
 }
+const wheel = mouse.scroll().y;
 ```
 
-For first-person mouse-look, capture the cursor while the mode is active:
+`pos()` is in logical coordinates and is null while the cursor is outside the game area, over a letterbox bar. `lastPos()` is the previous tick's position. `scroll()` is the wheel movement for this tick. Buttons are `.left`, `.middle`, `.right`, `.x1` and `.x2`.
+
+To convert the cursor to world coordinates under a camera, use `camera.logicalToWorld` (see [Viewport and Cameras](page:viewport)).
+
+For first-person style mouse look, capture the cursor. It's hidden and its movement is no longer stopped by the window edge:
 
 ```zig
 try eng.setCursorCapture(true);
-defer eng.setCursorCapture(false) catch {};
-
 const turn = eng.inputs.mouse.delta().x * sensitivity;
 ```
 
-`setCursorCapture(true)` enables captured relative mouse movement, so the system cursor is hidden and movement is not clamped at the window edge. `mouse.delta()` is the movement accumulated during the current tick in window coordinates, and action-map `mouse_axis` bindings read the same delta.
+`delta()` is the movement this tick in window coordinates. Release the cursor with `setCursorCapture(false)`. The mouse is on by default; turn it off with `inputOpts.mouse = false` if your game doesn't use it.
 
-### Gamepad
+## Gamepads
 
-Configure the number of tracked gamepads in the runner options:
+Gamepads are off by default. Ask for as many slots as you need, up to four:
 
 ```zig
 const AppRunner = pixzig.AppRunner(App, .{
@@ -125,31 +171,34 @@ const AppRunner = pixzig.AppRunner(App, .{
 });
 ```
 
-Then query a configured slot:
-
 ```zig
-const pad = eng.inputs.gamepad(0).?; // slot 0 is enabled above
-if (pad.isConnected()) {
-    if (pad.pressed(.a)) self.jump();
-    self.velocity.x = pad.axis(.left_x) * Speed;
+if (eng.inputs.gamepad(0)) |pad| {
+    if (pad.isConnected()) {
+        if (pad.pressed(.a)) self.jump();
+        self.vel.x = pad.axis(.left_x) * Speed;
+    }
 }
 ```
 
-## Key Chords
+`gamepad(index)` is null past the last slot you asked for. Pads can be plugged in and out while the game runs. Buttons use positional names (`.a` is the bottom face button) and axes are `.left_x`, `.left_y`, `.right_x`, `.right_y`, `.left_trigger` and `.right_trigger`.
 
-`KeyMap` matches key sequences to command strings. It is intended for command-style input, such as editor bindings, rather than ordinary movement controls.
+When the window loses focus, all input state is cleared so no key gets stuck down.
+
+## Command Key Maps
+
+For editor-style commands rather than game controls, `KeyMap(T)` maps key chords to any value you like, such as a command name:
 
 ```zig
-var keymap = try pixzig.input.KeyMap.init(alloc);
+var keymap = try pixzig.input.KeyMap([]const u8).init(alloc);
 defer keymap.deinit();
 
-_ = try keymap.addKeyChord(.{}, .g, "goto", null);
+_ = try keymap.addKeyChord(.{ .ctrl = true }, .o, "open", null);
 _ = try keymap.addTwoKeyChord(.{}, .g, .d, "goto_definition", null);
 
 switch (keymap.update(eng.inputs.keyboard.currKeys(), deltaMs * 1000.0)) {
-    .triggered => |chord| self.dispatchCommand(chord.func.?),
+    .triggered => |chord| self.runCommand(chord.func.?),
     else => {},
 }
 ```
 
-`KeyMap.update` takes elapsed microseconds. Chord timing defaults are defined in `pixzig.input.keychord`.
+Most games want an `ActionMap` instead. `examples/mouse_ex.zig` and `examples/gamepad_ex.zig` show the raw devices.

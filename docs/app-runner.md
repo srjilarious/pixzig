@@ -1,119 +1,138 @@
-# App Runner Model
+# The Game Loop
 
-[](sym:AppRunner) owns the engine lifecycle and calls an application's `update` and `render` methods on desktop and web builds.
+[](sym:AppRunner) owns the window, the engine and the main loop. You give it an app with `update` and `render` methods and it calls them at the right times, on desktop and in the browser.
 
-## Creating the AppRunner
- 
-```zig
-const AppRunner = pixzig.AppRunner(App, .{
-    .rendererOpts = .{
-        .shapeRendering = true,
-        .textRendering = true, // the default; false compiles out text and the embedded font
-    },
-    .audioOpts = .{ .enabled = false },
-    .inputOpts = .{ .numGamepads = 1 },
-});
-```
+## The App
 
-[](sym:EngineOptions) is evaluated at compile time. Use it to enable rendering, audio, and input features required by the application. Calling a method whose feature is turned off (for example `drawString` with `textRendering = false`, or `eng.audio.playSound` with audio disabled) is a compile error that names the option to set.
-
-Note that these options strip unused engine *code paths* only, not native dependencies: `build.zig` always links the platform backend, OpenGL, flecs, zaudio/miniaudio, Lua, XML, and STB TrueType into every build regardless of which options are set.
-
-## Initialising
-
-```zig
-pub fn main() !void {
-    const alloc = std.heap.c_allocator;
-    const appRunner = try AppRunner.init("Window Title", alloc, .{
-        .windowSize = .{ .x = 800, .y = 600 },
-        .logicalSize = .{ .x = 320, .y = 180 },
-        .scalePolicy = .integer_fit,
-        .fullscreen = false,
-    });
-    defer appRunner.deinit();
-
-    const app = try App.init(alloc, appRunner.engine);
-    defer app.deinit();
-
-    appRunner.engine.enableVSync(false);
-    appRunner.run(app);
-}
-```
-
-[](sym:AppRunner.init) creates the window, loads OpenGL, and initializes engine systems. If audio is enabled it also initializes [](sym:AudioEngine). `appRunner.run(app)` owns the loop; use `defer app.deinit()` and `defer appRunner.deinit()` in `main` so app-owned resources and engine resources are released when the loop exits.
-
-## The App Interface
-
-An app provides these public methods:
+An app is any struct with these two methods:
 
 ```zig
 pub const App = struct {
-    // Called at a fixed rate of 120 Hz. Return false to exit.
-    // delta is the step size in milliseconds (about 8.33 ms by default).
-    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool { ... }
+    // Called at a fixed rate (120 Hz by default). `deltaMs` is the step
+    // length in milliseconds. Return false to quit.
+    pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) bool { ... }
 
-    // Called once per rendered frame (uncapped, or capped by vsync).
+    // Called once per displayed frame.
     pub fn render(self: *App, eng: *AppRunner.Engine) void { ... }
 };
 ```
 
+Game logic goes in `update` and drawing goes in `render`. Keep them apart: `update` runs at a steady rate no matter how fast the screen refreshes, so movement and timers behave the same on every machine.
 
-The engine reference `eng` gives you access to:
+## Creating the Runner
 
-| Member | Type / Return | Description |
-|---|---|---|
-| `eng.inputs` | `input.InputManager` | Keyboard, mouse, and configured gamepads |
-| `eng.renderer` | `Renderer` | Sprite, shape, and text drawing |
-| `eng.resources` | `ResourceManager` | Texture and atlas loading |
-| `eng.viewport` | `Viewport` | Logical size, scaling, and projection |
-| `eng.audio` | `AudioEngine` | Sound playback (if enabled; otherwise a stub whose methods are compile errors naming `audioOpts.enabled`) |
-| `eng.window` | `*platform.Window` | The engine's window handle for sizing, cursor state, clipboard, and buffer swaps |
-| `eng.allocator` | `std.mem.Allocator` | Engine-owned allocator |
-| `eng.projection()` | `zmath.Mat` | Orthographic matrix for the logical coordinate space; use this as the MVP base for all game rendering |
-| `eng.screenProjection()` | `zmath.Mat` | Orthographic matrix for the full framebuffer in actual pixels; use for UI overlays that should be in screen-pixel coordinates |
-
-Those two plus `Camera2D.matrix(&eng.viewport)` for a scrolling world view are the only projection matrices. `renderer.begin(.logical | .screen | .{ .camera = &cam })` picks the matching one for you; the matrices are only needed for custom renderers (e.g. `GridRenderer.draw`). To scale up a low-resolution game, set `logicalSize` (and optionally `scalePolicy`) in the init options.
-
-## Game Loop Details
-
-The default update rate is 120 Hz. Set `updateStepHz` in `EngineOptions` to change it. Rendering is uncapped unless vsync limits it. Vsync is on by default: set `.vsync = false` in the init options, or call `eng.enableVSync(bool)` at runtime (e.g. from a settings menu).
-
-A single frame catches up on at most `maxLagMs` (default 250 ms) of updates. Any backlog past that, from a debugger pause or a long hitch, is dropped, so the game briefly slows down instead of running hundreds of updates at once. `run()` also restarts the clock before the first frame, so time spent loading assets in `App.init` isn't counted. Call `appRunner.resetClock()` yourself after any other long pause that shouldn't be caught up.
+`AppRunner` takes your app type and a set of compile-time [](sym:EngineOptions):
 
 ```zig
-// Inside AppRunner.gameLoopCore, simplified:
-lag = @min(lag + delta, maxLagMs);
+const AppRunner = pixzig.AppRunner(App, .{
+    .audioOpts = .{ .enabled = true },
+    .inputOpts = .{ .numGamepads = 1 },
+});
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `updateStepHz` | `120` | How often `update` runs. |
+| `maxLagMs` | `250` | The most time one frame will catch up on. See below. |
+| `rendererOpts` | `.{}` | `shapeRendering`, `textRendering` (both on) and the batch size `maxSprites`. |
+| `audioOpts` | off | Set `.enabled = true` to get `eng.audio`. See [Audio](page:audio). |
+| `inputOpts` | mouse on | Mouse, gamepad slots and OS text input. See [Input](page:input). |
+| `manifestOpts` | `null` | Load an asset manifest during init. See [Assets](page:assets). |
+| `scripting` | `false` | Create a Lua state as `eng.scripts`. See [Scripting](page:scripting). |
+| `console` | `null` | Create a Lua console as `eng.console`. Needs `scripting`. |
+| `defaultIcon` | `true` | Set pixzig's window icon. |
+
+Turning a feature off removes its code paths. Using it anyway is a compile error that names the option, e.g. calling `eng.audio.playSound` without `audioOpts.enabled`. It doesn't change which native libraries get linked, though: every build still links SDL3, OpenGL, flecs, miniaudio, Lua and the rest.
+
+## Starting It Up
+
+`AppRunner.init` creates the window, loads OpenGL and starts the engine's systems. It takes the window title, an allocator and runtime [](sym:EngineInitOptions):
+
+```zig
+pub fn main(init: std.process.Init) !void {
+    const appRunner = try AppRunner.init("My Game", init.gpa, .{
+        .windowSize = .{ .x = 960, .y = 540 },
+        .logicalSize = .{ .x = 320, .y = 180 },
+        .scalePolicy = .integer_fit,
+    });
+    defer appRunner.deinit();
+
+    const app = try App.init(init.gpa, appRunner.engine);
+    defer app.deinit();
+
+    appRunner.run(app);
+}
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `windowSize` | 800x480 | Window size in screen coordinates. |
+| `logicalSize` | `null` | The game's own resolution. Null means one unit per framebuffer pixel. |
+| `scalePolicy` | `.fit` | How the logical resolution scales to the window. See [Viewport and Cameras](page:viewport). |
+| `fullscreen`, `resizable` | `false`, `true` | Window mode. |
+| `minWindowSize` | `null` | Smallest size the user can shrink the window to. |
+| `vsync` | `true` | Change it later with `eng.enableVSync(bool)`. |
+| `rngSeed` | `null` | Seed for `eng.rng`. Null seeds from the clock. |
+| `renderInitOpts` | embedded font | The renderer's default font. See [Text and Fonts](page:text). |
+
+`run` owns the loop and returns when `update` returns false or the window closes. The `defer`s then tear down your app first and the engine second, which is the order you want: your app may still hold handles into engine resources.
+
+## The Engine
+
+Both app methods get the engine. It's how you reach every system:
+
+| Member | What it is |
+|---|---|
+| `eng.renderer` | Sprites, shapes and text. See [Rendering](page:rendering). |
+| `eng.resources` | The `ResourceManager`: textures, atlases, fonts, maps and shaders. |
+| `eng.inputs` | Keyboard, mouse and gamepads. |
+| `eng.viewport` | The logical size and how it maps to the window. |
+| `eng.audio` | Sound playback, when enabled. |
+| `eng.rng` | A seeded random source. See [Math and Gameplay Helpers](page:math). |
+| `eng.scripts`, `eng.console` | Lua state and console, when enabled. |
+| `eng.manifest` | The asset manifest, when `manifestOpts` is set. |
+| `eng.window` | The platform window: size, clipboard, cursor capture. |
+| `eng.windowState` | Window and framebuffer sizes and the HiDPI scale. |
+| `eng.allocator` | The allocator the engine was created with. |
+
+A few engine methods are handy at runtime: `enableVSync(bool)`, `showCursor(bool)`, `setCursorCapture(bool)` for mouse look, `defaultFontAtlas()` and `captureScreenshot(alloc, "shot.png")`.
+
+## How the Loop Runs
+
+Each frame, the runner measures how much time passed and runs `update` in fixed steps until it has caught up, then calls `render` once:
+
+```zig
+// AppRunner.gameLoopCore, simplified:
+lag = @min(lag + elapsed, maxLagMs);
+eng.pollEvents();
 while (lag > UpdateStepMs) {
     lag -= UpdateStepMs;
-    eng.inputs.update(eng.windowState.scaleFactor, &eng.viewport);
-    eng.resources.checkHotReload();
-    if (!app.update(eng, UpdateStepMs)) return false;
-    eng.inputs.finishTick();
+    eng.inputs.update(...);          // latch this tick's input
+    eng.resources.checkHotReload();  // debug builds: pick up changed files
+    const keepRunning = app.update(eng, UpdateStepMs);
+    eng.inputs.finishTick();         // so pressed/released are one-tick edges
+    if (!keepRunning) return false;
 }
 app.render(eng);
 window.swapBuffers();
 ```
 
-## Stack vs Heap App
+A few things fall out of this:
 
-For simple apps with no allocations, the app can live on the stack:
+- `deltaMs` is always the same value (about 8.33 ms at 120 Hz). You can treat it as a constant, but passing it through keeps your code correct if you change `updateStepHz`.
+- On a fast machine `render` runs more often than `update`. On a slow one `update` runs several times per frame. Either way game speed stays the same.
+- `pressed` and `released` are true for exactly one `update` call, even when several updates run in one frame.
+- Rendering is capped by vsync, which is on by default. With vsync off it runs as fast as it can.
+
+The catch-up is capped at `maxLagMs`. After a long hitch or a debugger pause, the game drops the backlog and briefly slows down instead of running hundreds of updates at once. `run` also resets the clock before the first frame, so time spent loading in `App.init` isn't counted. Call `appRunner.resetClock()` yourself after any other long pause.
+
+## Where the App Lives
+
+Most apps load assets and own memory, so they're heap allocated and `init` returns `*App`, as shown above. A tiny app with nothing to free can live on the stack instead:
 
 ```zig
-var app = App.init(123);   // returns App, not *App
-defer app.deinit();
+var app = App{ .fps = pixzig.utils.FpsCounter.init() };
 appRunner.run(&app);
 ```
 
-For apps that load assets or own heap memory, allocate with the provided allocator and return `*App` from `init`:
-
-```zig
-pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
-    const app = try alloc.create(App);
-    app.* = .{ .alloc = alloc, ... };
-    return app;
-}
-
-pub fn deinit(self: *App) void {
-    self.alloc.destroy(self);
-}
-```
+`examples/gameloop_ex.zig` is the smallest complete example.

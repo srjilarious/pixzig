@@ -1,143 +1,162 @@
-# Tile Rendering
+# Tile Maps
 
-Pixzig loads Tiled `.tmx` maps and draws them with `TileMapRenderer`. `GridRenderer` sits alongside it as a debug overlay, and one older renderer is still reachable while it is on its way out.
+Pixzig loads maps made in [Tiled](https://www.mapeditor.org/) and draws them with a `TileMapRenderer`. Tiles can carry collision flags and custom properties, and object layers give you spawn points and triggers.
 
-## Loading a Map
+## Loading and Drawing a Map
 
-Maps load through `ResourceManager` like other assets:
-
-```zig
-_ = try eng.resources.loadTileMap("level1a", "assets/level1a.tmx");
-```
-
-A relative path like `assets/level1a.tmx` resolves against the executable's
-own directory, not the current working directory -- see
-[Asset Manifest](assets.md#asset-paths).
-
-That is usually the last you see of the handle: `TileMapRenderer` takes the
-map by name and looks it up itself. When something else needs the map data,
-`getTileMap(name)` returns the same handle.
-
-## Choosing a Renderer
-
-| Renderer | Use for | Notes |
-|---|---|---|
-| `TileMapRenderer` | Whole-map rendering | Chunked, one chunked layer renderer per map layer; supports z-order and parallax via layer properties |
-| `GridRenderer` | Debug grid lines over a map | Not a tile renderer — draws colored cell borders for a given map/tile size, independent of any `TileMap`/`TileLayer` |
-| `deprecated.TiledLayerRenderer` | A single dynamically-updated overlay layer | On its way out: one full-map vertex buffer per layer with `u16` indices, so it overflows on large maps |
-
-### TileMapRenderer
-
-Built from the name the map was loaded under, and works the rest out itself: it looks up the map handle and the built-in texture shader, and loads each layer's tileset image -- the `<image source>` in the `.tmx` -- as a texture. Nothing else is passed in, and the render calls take only a camera and a viewport.
+Load the `.tmx` through the resource manager, then build a renderer from the map's name:
 
 ```zig
-_ = try eng.resources.loadTileMap("level1a", "assets/level1a.tmx");
+// In init:
+_ = try eng.resources.loadTileMap("level1", "assets/level1.tmx");
+self.mapRenderer = try pixzig.TileMapRenderer.init(alloc, &eng.resources, "level1");
 
-var mapRenderer = try tile.TileMapRenderer.init(alloc, &eng.resources, "level1a");
-defer mapRenderer.deinit();
+// In render:
+self.mapRenderer.render(&self.camera, &eng.viewport);
 
-// Each frame:
-mapRenderer.render(&camera, &eng.viewport);
+// In deinit:
+self.mapRenderer.deinit();
 ```
 
-Internally it splits each layer into fixed-size chunks (32x32 tiles) and culls chunks outside the camera's viewport. Chunks rebuild lazily as they come into view, so a full-map hot reload doesn't stall a frame.
+The renderer works out the rest itself. It loads each layer's tileset image, as named by the `<image source>` in the `.tmx`, and only draws the parts of the map the camera can see. The map's file paths are relative to the `.tmx`, so keep them as Tiled wrote them.
 
-#### Tileset textures
+Tile maps draw on their own rather than through the sprite batch, so call the render functions outside a `renderer.begin`/`end` pair.
 
-Each layer draws from its own tileset's image, so a map with more than one tileset renders correctly (within the one-tileset-per-layer limit below).
+## Layers and Draw Order
 
-A tileset image is registered under its **base name**: `<image source="../art/tiles.png">` becomes the texture `tiles`. If a texture is already registered under that name, it is reused rather than read off disk again -- which is also how a map built in code rather than loaded from a `.tmx` names its texture:
+Usually you want some layers behind your sprites and some in front. Give each layer a `z` float property in Tiled, then draw the map in two halves:
 
 ```zig
-_ = try eng.resources.loadTexture("tiles", "assets/tiles.png");
+self.mapRenderer.renderLayersBelow(1.0, &self.camera, &eng.viewport);
 
-var tileset = try TileSet.initEmpty(alloc, tileSize, textureSize, tileCount);
-tileset.imageSource = try alloc.dupe(u8, "tiles"); // matches the loaded name
-// ... build layers, then:
-_ = try eng.resources.addTileMap("generated", map); // takes ownership of the map
+eng.renderer.begin(.{ .camera = &self.camera });
+eng.renderer.drawSprite(&self.player);
+eng.renderer.end();
+
+self.mapRenderer.renderLayersAbove(1.0, &self.camera, &eng.viewport);
 ```
 
-Otherwise the path is read relative to the `.tmx` it came from, so the `source` attribute must be correct as Tiled wrote it. A layer whose tileset image can't be resolved fails `init`; a layer with no tileset at all simply draws nothing.
-
-#### Draw order and parallax
-
-Per-layer draw order and parallax scrolling are read from Tiled custom properties set on the layer:
+The renderer reads these layer properties:
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `z` | float | `0.0` | Draw order; lower z renders first |
-| `parallax_x` | float | `1.0` | Horizontal scroll factor relative to the camera |
-| `parallax_y` | float | `1.0` | Vertical scroll factor relative to the camera |
+| `z` | float | `0.0` | Draw order. Lower draws first. |
+| `parallax_x` | float | `1.0` | Horizontal scroll speed relative to the camera. 0.5 scrolls at half speed. |
+| `parallax_y` | float | `1.0` | Vertical scroll speed relative to the camera. |
 
-Layers are sorted by `z` ascending at init time. Use `render()` to draw every layer in order, `renderLayersBelow(z)` / `renderLayersAbove(z)` to interleave tile layers with your own draw calls, or `renderLayerNamed(name)` / `renderLayer(index)` for one layer on its own:
+`render` draws every layer in `z` order. `renderLayerNamed("background", ...)` and `renderLayer(index, ...)` draw a single layer.
+
+## Reading the Map
+
+`mapRenderer.tileMap()` is the map it draws. You can also get it with `eng.resources.getTileMap("level1")`.
 
 ```zig
-mapRenderer.renderLayersBelow(1.0, &camera, &eng.viewport);
-// draw sprites/objects here
-mapRenderer.renderLayersAbove(1.0, &camera, &eng.viewport);
+const map = self.mapRenderer.tileMap();
+const ground = map.layerByName("ground").?;
+
+const size = ground.size;          // in tiles
+const tileSize = ground.tileSize;  // in pixels
+const index = ground.tileData(x, y); // -1 for an empty cell
+const tile = ground.tile(x, y);      // ?*Tile, with its flags and properties
 ```
 
-#### Hot reload
+### Tile Properties
 
-Every render call picks up a reloaded `.tmx` first and rebuilds its layers, including added, removed, or reordered ones -- there is nothing to wire up. Call `sync()` yourself only when you derived something else from the map and need to refresh it; it returns true when a reload happened:
+Give tiles in your Tiled tileset custom properties to describe them. Two property names are special and set flags in `tile.core`:
+
+| Property | Values | Flag |
+|---|---|---|
+| `blocks` | `left`, `right`, `top`, `bottom`, `all` | `tile.BlocksLeft`, ..., `tile.BlocksAll` |
+| `kills` | `true` | `tile.Kills` |
 
 ```zig
-if (mapRenderer.sync()) {
-    // the map changed: recompute camera bounds, respawn objects, ...
-    camera.bounds = layerBounds(mapRenderer.tileMap().layerByName("main_layer").?);
+if (ground.tile(tx, ty)) |t| {
+    if (t.core & pixzig.tile.Kills != 0) self.die();
 }
 ```
 
-`tileMap()` is the map the renderer draws. A reload replaces its contents in place, so read it rather than caching pointers into it across frames. `rebuildAll()` forces an immediate rebuild of every chunk when you changed tile data yourself and the layer structure is unchanged.
+Every other property is kept as a string in `tile.properties`. The blocking flags are what [Collision and Pathfinding](page:collision) uses to stop movement and plan paths.
 
-For a map the game edits as it runs (digging, placing blocks), call `tileChanged(layerIndex, x, y)` after each `TileLayer.setTileData`. It marks only the chunk holding that tile dirty, which rebuilds on its next render:
+### Objects
+
+Object layers come in as `ObjectGroup`s, which is the usual place for spawn points, doors and triggers:
 
 ```zig
-layer.setTileData(x, y, tileIdx);
-mapRenderer.tileChanged(0, x, y);
+const spawns = map.objectGroupByName("spawns").?;
+
+if (spawns.firstByClass("player")) |p| {
+    self.player.setPos(p.pos.x, p.pos.y);
+}
+
+var it = spawns.iterator("enemy"); // pass null for every object
+while (it.next()) |obj| {
+    try self.spawnEnemy(obj.pos, obj.intPropWithDefault("hp", 3));
+}
 ```
 
-### GridRenderer
+An object has an `id`, `name`, `class`, `pos`, `size` and custom properties, read with `intProp`, `intPropWithDefault` and `stringProp`. Tiled's older `type` attribute is read as the class too.
 
-Draws debug grid lines sized to a map's dimensions; it does not read a `TileMap` at all:
+## Changing Tiles at Runtime
+
+For a map the game edits as it runs, like digging or placing blocks, change the tile data and tell the renderer which tile changed:
 
 ```zig
-var grid = try tile.GridRenderer.init(
-    alloc, color_shader,
-    .{ .x = MapWidth, .y = MapHeight },
-    .{ .x = TileWidth, .y = TileHeight },
-    1, // border size in pixels
-    Color{ .r = 1, .g = 1, .b = 1, .a = 1 },
+layer.setTileData(x, y, newIndex);
+self.mapRenderer.tileChanged(layerIndex, x, y);
+```
+
+Only the chunk holding that tile is rebuilt, on its next draw. After changing lots of tiles at once, `rebuildAll()` rebuilds everything right away.
+
+To render a map you generate in code, build a `TileMap` and register it with `eng.resources.addTileMap("generated", map)`, which takes ownership. Set each tileset's `imageSource` to the name of a texture you've already loaded and the renderer will use it.
+
+## Hot Reload
+
+Edit and save the map in Tiled while a debug build is running and it reloads. Every render call checks for a reload first and rebuilds its layers, including added, removed or reordered ones. There's nothing to wire up.
+
+If you derived something from the map, like camera bounds or spawn points, call `sync()` in `update`. It returns true when a reload just happened:
+
+```zig
+if (self.mapRenderer.sync()) {
+    self.camera.bounds = self.mapBounds();
+}
+```
+
+A reload replaces the map's contents in place, so don't keep pointers into it across frames. Look layers up again instead.
+
+## Supported Tiled Features
+
+Pixzig reads a practical subset of the `.tmx` format:
+
+- **Layer data:** CSV only. Base64 and compressed layers fail with `error.UnsupportedLayerEncoding`.
+- **Tilesets:** inline in the `.tmx`, one tileset per layer. Several tilesets per map are fine as long as each layer uses only one.
+- **Properties:** on layers, tiles and objects.
+
+Not supported:
+
+- Layers that mix tiles from more than one tileset.
+- External `.tsx` tileset files.
+- Flipped or rotated tiles.
+- Image collection tilesets and object templates.
+
+In Tiled, set the map's tile layer format to CSV and embed your tilesets, and you'll stay inside what pixzig reads.
+
+## Debug Grid
+
+`tile.GridRenderer` draws grid lines over an area, which helps when debugging collision or placement. It doesn't read a map, just sizes:
+
+```zig
+var grid = try pixzig.tile.GridRenderer.init(
+    alloc,
+    try eng.resources.getShader(pixzig.shaders.ColorShader),
+    .{ .x = 20, .y = 12 },  // cells
+    .{ .x = 16, .y = 16 },  // cell size
+    1,                      // line width
+    Color.from(255, 0, 255, 255),
 );
 defer grid.deinit();
 
-grid.draw(mvp);
+// In render, outside a renderer pass:
+try grid.draw(self.camera.matrix(&eng.viewport));
 ```
 
-### deprecated.TiledLayerRenderer
-
-The original single-layer renderer, kept under `tile.deprecated` while it is phased out. Still used by `a_star_path_ex.zig` for a path-highlight overlay alongside a `GridRenderer`, but it keeps one full vertex/index buffer per layer with `u16` indices, so it isn't suited to large maps. Build new code against `TileMapRenderer`.
-
-```zig
-var layerRenderer = try tile.deprecated.TiledLayerRenderer.init(alloc, shader, texture);
-defer layerRenderer.deinit();
-
-try layerRenderer.recreateVertices(tileset, layer);
-// ...
-try layerRenderer.draw(layer, mvp);
-```
-
-## Supported Tiled Subset
-
-- **Layer data encoding:** CSV only. Base64 and compressed (zlib/gzip) tile data are rejected with `error.UnsupportedLayerEncoding`.
-- **Multiple tilesets / `firstgid`:** supported for the simple case of one tileset per layer; each layer draws from its own tileset's image. GID-to-tileset resolution picks the tileset with the highest `firstgid <= gid`, but does not validate that the GID is still within that tileset's tile count or before the next tileset's `firstgid` — a corrupt or out-of-range GID can silently resolve to the wrong tile.
-- **Layer properties:** loaded into `TileLayer.properties`, including the `z`/`parallax_x`/`parallax_y` properties `TileMapRenderer` reads.
-
-### Not Supported
-
-- **Mixed-tileset layers.** `TileLayer` stores a single `tileset` pointer for the whole layer, so a layer containing GIDs from more than one tileset cannot be represented correctly — per-tile tileset identity is lost. Keep each Tiled layer to a single tileset.
-- **External TSX tileset files.** Tileset definitions must be inline in the `.tmx`; a `source`-referenced external `.tsx` is not resolved.
-- **Flipped/rotated tile flags.** The horizontal/vertical/diagonal flip bits Tiled stores in the top bits of each GID are not stripped or applied.
-- **Image collection tilesets** (one image per tile) and **object templates** are not read.
-
-If your map needs any of the above, preprocess it (e.g. flatten to CSV, split mixed-tileset layers, inline external tilesets) before loading it with Pixzig.
+`examples/tile_load_ex.zig` loads a map, follows a box with a camera and collides it against the walls.

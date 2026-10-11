@@ -133,9 +133,10 @@ pub fn AStarPathFinder(comptime CheckContext: type) type {
             return &self.locDataArr.items[index];
         }
 
-        /// Finds a path from start to goal and appends the path locations to the provided path
-        /// list. The path will be from start to goal order.  If no path can be found, the path
-        /// list will be left with just the start location.
+        /// Finds a path from start to goal, replacing the contents of `path`. The path runs
+        /// from the first step after `start` up to and including `goal`; `start` itself is
+        /// not included. If no path can be found, the first entry is `(-1, -1)` instead of
+        /// a real step.
         pub fn findPath(self: *Self, start: TileLoc, goal: TileLoc, path: *Path) !void {
             var frontier = AStarPriorityQueue.initContext(.{});
             defer frontier.deinit(self.alloc);
