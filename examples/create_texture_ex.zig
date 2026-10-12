@@ -6,7 +6,9 @@ const pixzig = @import("pixzig");
 const RectF = pixzig.RectF;
 const Color8 = pixzig.Color8;
 const CharToColor = pixzig.textures.CharToColor;
-const AppRunner = pixzig.AppRunner(App, .{});
+const AppRunner = pixzig.AppRunner(App, .{
+    .screenshotHook = true,
+});
 
 pub const App = struct {
     alloc: std.mem.Allocator,

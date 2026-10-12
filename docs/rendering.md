@@ -2,6 +2,8 @@
 
 `eng.renderer` draws sprites, textures, rectangles and text. Every draw goes between a `begin` and an `end`, and shows up in the order you submit it.
 
+![render_ex drawing textures and filled rectangles](assets/screenshots/render.png)
+
 ## A Render Frame
 
 ```zig

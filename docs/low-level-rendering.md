@@ -64,6 +64,8 @@ A `Quad3DBatch` uses one texture. Keep one batch per texture if you need several
 
 `examples/quad3d_ex.zig` spins a quad and a torus.
 
+![quad3d_ex: a textured quad and torus in 3D](assets/screenshots/quad3d.png)
+
 ## Your Own Sprite Batch
 
 `eng.renderer` is built on a `renderer.SpriteBatch`. You can make your own, for example to draw into a different matrix without ending the renderer's pass:

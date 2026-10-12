@@ -18,6 +18,8 @@ Each draw call returns the size of the text it drew, which is handy for boxes an
 
 Glyphs are packed into the font atlas the first time they're drawn. Text is UTF-8, so Japanese, accented letters and symbols work as long as the font has them.
 
+![text_rendering_ex: scaled text and a measured, boxed string](assets/screenshots/text.png)
+
 ## Picking the Default Font
 
 Set the default font with `renderInitOpts.font` when creating the runner. It's a `FontSource`:
@@ -64,6 +66,8 @@ try eng.renderer.setDefaultFont(&eng.resources, "font5r");
 ```
 
 Start the renderer with `.font = .none` when you're going to swap in a bitmap font, so it doesn't load the embedded one for nothing. `drawStringColored` tints bitmap fonts too. See `examples/bitmap_text_rendering_ex.zig`.
+
+![bitmap_text_rendering_ex drawing with a bitmap font](assets/screenshots/bitmap_text.png)
 
 ## Fallback Fonts
 

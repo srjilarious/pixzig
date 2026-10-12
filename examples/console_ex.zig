@@ -20,6 +20,7 @@ const AppRunner = pixzig.AppRunner(App, .{
     .scripting = true,
     .console = .{},
     .actionOpts = .{ .Action = Action },
+    .screenshotHook = true,
 });
 const UiContext = imgui.UiContext(AppRunner.Engine);
 

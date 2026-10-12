@@ -55,6 +55,7 @@ pub const imgui = @import("./imgui.zig");
 pub const collision = @import("./collision.zig");
 pub const a_star = @import("./a_star.zig");
 pub const assets = @import("./assets.zig");
+pub const screenshot = @import("./screenshot.zig");
 pub const AssetManifest = assets.AssetManifest;
 pub const AssetKind = assets.AssetKind;
 pub const ManifestSource = assets.ManifestSource;
@@ -186,6 +187,13 @@ pub const EngineOptions = struct {
     /// (draw it with `eng.console.draw(&ui)`). Requires `scripting`. A null
     /// `displaySize` sizes it to the logical resolution.
     console: ?console.ConsoleOpts = null,
+
+    /// Compile in `AppRunner`'s screenshot hook, which captures a frame to
+    /// a PNG and exits when `PIXZIG_SCREENSHOT` is set (see
+    /// `screenshot.zig`). Off by default so a shipped game can't be driven
+    /// by environment variables; the examples turn it on for the doc
+    /// screenshots. Ignored on the web.
+    screenshotHook: bool = false,
 };
 
 /// Runtime initialization options for the Pixzig Engine.  These options are
@@ -254,8 +262,13 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
         alloc: std.mem.Allocator,
         lag: f64 = 0,
         currTime: f64 = 0,
+        /// The screenshot hook, when compiled in and `PIXZIG_SCREENSHOT` is set.
+        shot: if (HasScreenshotHook) ?screenshot.ScreenshotHook else void,
+        /// Ticks run under the screenshot hook, which is its game clock.
+        shotTicks: u64 = 0,
 
         const UpdateStepMs = 1000.0 / engOpts.updateStepHz;
+        const HasScreenshotHook = engOpts.screenshotHook and builtin.target.os.tag != .emscripten;
         const Self = @This();
 
         pub fn init(
@@ -266,13 +279,34 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
             var appRunner = try alloc.create(Self);
             errdefer alloc.destroy(appRunner);
 
-            appRunner.engine = try EngineType.init(title, alloc, engInitOpts);
+            var initOpts = engInitOpts;
+            if (HasScreenshotHook) {
+                appRunner.shot = try screenshot.ScreenshotHook.fromEnv(alloc, UpdateStepMs);
+                appRunner.shotTicks = 0;
+                if (appRunner.shot) |shot| {
+                    if (shot.windowSize) |size| initOpts.windowSize = size;
+                    initOpts.rngSeed = shot.seed;
+                    // Frames are paced by ticks, not the display, so there
+                    // is nothing to wait for.
+                    initOpts.vsync = false;
+                }
+            } else {
+                appRunner.shot = {};
+            }
+            errdefer if (HasScreenshotHook) {
+                if (appRunner.shot) |*shot| shot.deinit();
+            };
+
+            appRunner.engine = try EngineType.init(title, alloc, initOpts);
             appRunner.alloc = alloc;
             appRunner.currTime = platform.timeMs();
             return appRunner;
         }
 
         pub fn deinit(self: *Self) void {
+            if (HasScreenshotHook) {
+                if (self.shot) |*shot| shot.deinit();
+            }
             self.engine.deinit();
             self.alloc.destroy(self);
         }
@@ -284,7 +318,27 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
             self.lag = 0;
         }
 
+        /// Runs one fixed update step. Returns false when the app asks to quit.
+        fn updateTick(self: *Self, app: *AppData) bool {
+            self.engine.inputs.update(
+                self.engine.windowState.scaleFactor,
+                &self.engine.viewport,
+            );
+            self.engine.updateActions(UpdateStepMs);
+            self.engine.resources.checkHotReload();
+            const keepRunning = app.update(self.engine, UpdateStepMs);
+            // Roll this tick's input into the previous-tick buffers only
+            // after the app has read it, so a press that lands between
+            // two ticks is still an edge for exactly one of them.
+            self.engine.inputs.finishTick();
+            return keepRunning;
+        }
+
         pub fn gameLoopCore(self: *Self, app: *AppData) bool {
+            if (HasScreenshotHook) {
+                if (self.shot) |*shot| return self.screenshotLoopCore(app, shot);
+            }
+
             const newCurrTime = platform.timeMs();
             const delta = newCurrTime - self.currTime;
             self.lag = @min(self.lag + delta, engOpts.maxLagMs);
@@ -295,22 +349,36 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
 
             while (self.lag > UpdateStepMs) {
                 self.lag -= UpdateStepMs;
-
-                self.engine.inputs.update(
-                    self.engine.windowState.scaleFactor,
-                    &self.engine.viewport,
-                );
-                self.engine.updateActions(UpdateStepMs);
-                self.engine.resources.checkHotReload();
-                const keepRunning = app.update(self.engine, UpdateStepMs);
-                // Roll this tick's input into the previous-tick buffers only
-                // after the app has read it, so a press that lands between
-                // two ticks is still an edge for exactly one of them.
-                self.engine.inputs.finishTick();
-                if (!keepRunning) return false;
+                if (!self.updateTick(app)) return false;
             }
 
             app.render(self.engine);
+            self.engine.window.swapBuffers();
+            return true;
+        }
+
+        /// The loop under the screenshot hook: exactly one tick per frame,
+        /// with scripted input fed in first, until the capture time is
+        /// reached. The captured frame is read back before the swap and the
+        /// loop then stops as if the app had quit.
+        fn screenshotLoopCore(self: *Self, app: *AppData, shot: *screenshot.ScreenshotHook) bool {
+            self.engine.pollEvents();
+            self.engine.refreshWindowState();
+
+            const tickStartMs = @as(f64, @floatFromInt(self.shotTicks)) * UpdateStepMs;
+            shot.applyInput(&self.engine.inputs, tickStartMs);
+            if (!self.updateTick(app)) return false;
+            self.shotTicks += 1;
+
+            app.render(self.engine);
+            if (shot.due(tickStartMs + UpdateStepMs)) {
+                if (self.engine.captureScreenshot(self.alloc, shot.path)) {
+                    std.log.info("Screenshot written to {s}", .{shot.path});
+                } else |err| {
+                    std.log.err("Screenshot to {s} failed: {}", .{ shot.path, err });
+                }
+                return false;
+            }
             self.engine.window.swapBuffers();
             return true;
         }

@@ -14,7 +14,7 @@ const Vec2F = pixzig.common.Vec2F;
 
 // The engine owns the action map (`eng.actions`) and updates it each tick.
 const Action = enum { move_right, move_left, move_down, move_up, circle, quit };
-const AppRunner = pixzig.AppRunner(App, .{ .actionOpts = .{ .Action = Action } });
+const AppRunner = pixzig.AppRunner(App, .{ .actionOpts = .{ .Action = Action }, .screenshotHook = true });
 
 // Maps a 0-1 color channel to the 0-255 range `renderer.clear` takes.
 fn unit8(v: f32) u8 {

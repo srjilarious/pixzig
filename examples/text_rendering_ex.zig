@@ -7,6 +7,7 @@ const FpsCounter = pixzig.utils.FpsCounter;
 const manifest_options = @import("manifest_options");
 const AppRunner = pixzig.AppRunner(App, .{
     .manifestOpts = manifest_options,
+    .screenshotHook = true,
 });
 
 const default_font_size: f32 = 20.0;

@@ -6,7 +6,9 @@ const Color = pixzig.common.Color;
 
 const FpsCounter = pixzig.utils.FpsCounter;
 
-const AppRunner = pixzig.AppRunner(App, .{});
+const AppRunner = pixzig.AppRunner(App, .{
+    .screenshotHook = true,
+});
 
 pub const App = struct {
     fps: FpsCounter,

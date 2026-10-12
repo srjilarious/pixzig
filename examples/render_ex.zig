@@ -7,7 +7,9 @@ const Color = pixzig.common.Color;
 const FpsCounter = pixzig.utils.FpsCounter;
 //* ---
 
-const AppRunner = pixzig.AppRunner(App, .{});
+const AppRunner = pixzig.AppRunner(App, .{
+    .screenshotHook = true,
+});
 
 //* For this application, we load a texture and define some coordinates to
 //* use for drawing sprites and shapes.

@@ -135,4 +135,6 @@ eng.renderer.end();
 
 `ConsoleOpts` sets its size, position, how many lines it keeps, the window title, and whether it starts open (`enabledByDefault`, true by default). With no `displaySize`, it fills the logical screen minus its offsets. Up and Down step through the command history. Asking for `console` without `scripting` is a compile error.
 
+![console_ex: the console after running two lines of Lua](assets/screenshots/console.png)
+
 `examples/console_ex.zig` is a complete console, and `examples/lua_ex.zig` shows registering functions without an engine.

@@ -42,6 +42,7 @@ const AppRunner = pixzig.AppRunner(App, .{
 | `scripting` | `false` | Create a Lua state as `eng.scripts`. See [Scripting](page:scripting). |
 | `console` | `null` | Create a Lua console as `eng.console`. Needs `scripting`. |
 | `defaultIcon` | `true` | Set pixzig's window icon. |
+| `screenshotHook` | `false` | Let `PIXZIG_SCREENSHOT` capture a frame and exit. See [Building and Shipping](page:building). |
 
 Turning a feature off removes its code paths. Using it anyway is a compile error that names the option, e.g. calling `eng.audio.playSound` without `audioOpts.enabled`. It doesn't change which native libraries get linked, though: every build still links SDL3, OpenGL, flecs, miniaudio, Lua and the rest.
 

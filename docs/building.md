@@ -72,3 +72,27 @@ zig build docs           # build these docs into docs-out/
 ```
 
 The tests use [testz](https://github.com/srjilarious/testz) and open a hidden window for the ones that need OpenGL. The docs are built with [zkdocs](https://github.com/srjilarious/zkdocs) from the pages in `docs/` and the doc comments in the source.
+
+## Screenshots
+
+`tools/doc_screenshots.py` regenerates the example screenshots in `docs/assets/screenshots/`. It needs Pillow:
+
+```sh
+tools/doc_screenshots.py              # build, then capture every shot
+tools/doc_screenshots.py actor tiles  # just these
+tools/doc_screenshots.py --list       # which shot goes on which page
+```
+
+Each shot runs an example under SDL's offscreen driver, so no windows open, and the script crops and scales the frame. The shots, their timing, input and crops are a table at the top of the script.
+
+It works through a hook in `AppRunner` that an app opts into with `EngineOptions.screenshotHook`. It's off by default, so a shipped game can't be driven by environment variables. With it on, setting `PIXZIG_SCREENSHOT` makes the runner do one update per frame, capture the frame at a set game time and exit:
+
+| Variable | What it does |
+|---|---|
+| `PIXZIG_SCREENSHOT` | The PNG to write. Nothing changes unless this is set. |
+| `PIXZIG_SCREENSHOT_MS` | Game time to capture at, default 1000. |
+| `PIXZIG_SCREENSHOT_SIZE` | Window size as `WxH`. |
+| `PIXZIG_SCREENSHOT_SEED` | Seed for `eng.rng`, default 1. |
+| `PIXZIG_SCREENSHOT_INPUT` | Scripted input, like `300 tap F1; 500 text print(1); 600 tap enter`. |
+
+Because game time counts ticks rather than wall time, a capture lands on the same tick every run. The input verbs are `tap`, `down` and `up` for keys, `text` to type, `move` for the cursor, and `click`, `mdown` and `mup` for mouse buttons. `src/pixzig/screenshot.zig` has the details.

@@ -4,6 +4,8 @@
 
 It draws through the normal renderer, so it uses the default font and needs shape and text rendering (both on by default).
 
+![imgui_ex: two windows of widgets](assets/screenshots/imgui.png)
+
 ## Setting It Up
 
 ```zig

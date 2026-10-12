@@ -9,7 +9,9 @@ const Quad3DBatchQueue = pixzig.quad3d.Quad3DBatchQueue;
 const Quad3DBatch = pixzig.quad3d.Quad3DBatch;
 const Camera3D = pixzig.Camera3D;
 //* ---
-const AppRunner = pixzig.AppRunner(App, .{});
+const AppRunner = pixzig.AppRunner(App, .{
+    .screenshotHook = true,
+});
 //* ---
 
 //* Torus mesh parameters, shared between init() (mesh generation) and

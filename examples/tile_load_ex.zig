@@ -8,7 +8,7 @@ const FpsCounter = pixzig.utils.FpsCounter;
 
 // The engine owns the action map (`eng.actions`) and updates it each tick.
 const Action = enum { left, right, up, down, quit };
-const AppRunner = pixzig.AppRunner(App, .{ .actionOpts = .{ .Action = Action } });
+const AppRunner = pixzig.AppRunner(App, .{ .actionOpts = .{ .Action = Action }, .screenshotHook = true });
 
 pub const App = struct {
     alloc: std.mem.Allocator,

@@ -46,6 +46,8 @@ You can also make textures from data:
 - `loadTextureFromBuffer(name, width, height, rgbaBytes)` uploads raw RGBA pixels.
 - `createTextureImageFromChars(name, width, height, chars, mapping)` builds a small texture from a string, one character per pixel, with a table mapping characters to colors. It's a quick way to make placeholder art. See `examples/create_texture_ex.zig`.
 
+![create_texture_ex: tiles built from a character grid](assets/screenshots/create_texture.png)
+
 ## Atlases
 
 An atlas is a PNG with many images packed into it, plus a JSON file naming each frame. Load both by their shared base name:

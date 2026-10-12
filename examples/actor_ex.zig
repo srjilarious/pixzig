@@ -11,7 +11,7 @@ const Actor = pixzig.sprites.Actor;
 
 // The engine owns the action map (`eng.actions`) and updates it each tick.
 const Action = enum { face_up, face_down, face_left, face_right, chomp, quit };
-const AppRunner = pixzig.AppRunner(App, .{ .actionOpts = .{ .Action = Action } });
+const AppRunner = pixzig.AppRunner(App, .{ .actionOpts = .{ .Action = Action }, .screenshotHook = true });
 
 pub const App = struct {
     alloc: std.mem.Allocator,

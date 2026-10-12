@@ -2,6 +2,8 @@
 
 Pixzig loads maps made in [Tiled](https://www.mapeditor.org/) and draws them with a `TileMapRenderer`. Tiles can carry collision flags and custom properties, and object layers give you spawn points and triggers.
 
+![tile_load_ex: a Tiled map with a camera following the player box](assets/screenshots/tiles.png)
+
 ## Loading and Drawing a Map
 
 Load the `.tmx` through the resource manager, then build a renderer from the map's name:

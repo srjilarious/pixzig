@@ -10,6 +10,8 @@ Pixzig animates sprites with three pieces:
 
 Sequences and states are shared data that you register once with a `FrameSequenceManager`. Every actor that walks the same way points at the same state.
 
+![actor_ex: an animated actor walking right](assets/screenshots/actor.png)
+
 ## Building Sequences in Code
 
 Frames name textures, so load your atlas first. Then build sequences and states and register them with the manager:

@@ -16,7 +16,7 @@ const CollisionGrid = pixzig.collision.CollisionGrid;
 
 const CollisionGridEntity = CollisionGrid(flecs.entity_t, 4);
 
-const AppRunner =  pixzig.AppRunner(App, .{ .inputOpts = .{ .mouse = true } });
+const AppRunner =  pixzig.AppRunner(App, .{ .inputOpts = .{ .mouse = true }, .screenshotHook = true });
 
 pub const App = struct {
     alloc: std.mem.Allocator,

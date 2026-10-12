@@ -23,6 +23,7 @@ const Axis = enum { scroll_x, scroll_y };
 const AppRunner = pixzig.AppRunner(App, .{
     .updateStepHz = 60.0,
     .actionOpts = .{ .Action = Action, .Axes = Axis },
+    .screenshotHook = true,
 });
 
 pub const App = struct {

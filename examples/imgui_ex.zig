@@ -24,6 +24,7 @@ const AppRunner = pixzig.AppRunner(App, .{
     // Keyboard.text() -- and so the UI's text fields -- produce anything.
     .inputOpts = .{ .mouse = true, .textInput = true },
     .manifestOpts = manifest_options,
+    .screenshotHook = true,
 });
 const UiContext = imgui.UiContext(AppRunner.Engine);
 

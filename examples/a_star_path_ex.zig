@@ -33,7 +33,7 @@ const MapHeight = 18;
 
 // The engine owns the action map (`eng.actions`) and updates it each tick.
 const Action = enum { refresh, set_start, set_end, add_wall, cursor_left, cursor_right, cursor_up, cursor_down, quit };
-const AppRunner = pixzig.AppRunner(App, .{ .actionOpts = .{ .Action = Action } });
+const AppRunner = pixzig.AppRunner(App, .{ .actionOpts = .{ .Action = Action }, .screenshotHook = true });
 
 pub const App = struct {
     alloc: std.mem.Allocator,

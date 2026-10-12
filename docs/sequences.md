@@ -10,6 +10,8 @@ Games are full of little scripted moments: walk the player three tiles to the ri
 
 The sequencer lives in `pixzig.sequencer`. The examples below use `const seq = pixzig.sequencer;`.
 
+![sequencer_ex: an actor partway through a scripted sequence](assets/screenshots/sequencer.png)
+
 ## Playing a Sequence
 
 Keep one `SequencePlayer` for the game and update it every tick. Build a sequence, add steps, and hand it to the player:

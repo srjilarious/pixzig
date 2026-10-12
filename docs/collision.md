@@ -31,6 +31,8 @@ Move one axis at a time like this, and sliding along walls works for free.
 
 For lots of moving objects, checking every pair gets slow. A `CollisionGrid` splits the world into cells and keeps a list of which objects touch each cell. You only check objects in the cells near you.
 
+![collision_ex: sprites in a collision grid, with the ones under the cursor's path removed](assets/screenshots/collision.png)
+
 The grid stores any small value type, usually an entity id or an index into your own array, with a fixed number of slots per cell:
 
 ```zig
@@ -104,6 +106,8 @@ self.path.deinit(alloc);
 The path runs from the first step after `start` to `goal`, so it doesn't include the start tile. It's cleared at the start of each search. Reuse one finder per map; it allocates its working memory once in `init`.
 
 If the goal can't be reached, the path's first entry is `(-1, -1)` rather than a real step, so check that before following it.
+
+![a_star_path_ex: a path from the start tile around a wall to the end tile](assets/screenshots/a_star.png)
 
 ### Your Own Rules
 

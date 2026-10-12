@@ -2,6 +2,8 @@
 
 Pixzig doesn't force a way to organize your game objects. For small games, a few arrays of structs in your app are plenty. When you want an entity component system, pixzig bundles [flecs](https://www.flecs.dev/) through the [zflecs](https://github.com/zig-gamedev/zflecs) bindings, re-exported as `pixzig.flecs`. For letting systems talk to each other without knowing about each other, there's a small `EventBus`.
 
+![flecs_ex: sprite entities moving with random velocities](assets/screenshots/flecs.png)
+
 ## A flecs World
 
 Create a world, register your component types, and add entities:

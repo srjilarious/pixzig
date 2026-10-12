@@ -6,6 +6,21 @@ Pixzig is a 2D game engine written in Zig. It gives you a fixed-timestep game lo
 
 These pages walk through each system in roughly the order you'll need them. Start here, then read [The Game Loop](page:app-runner) and [Rendering](page:rendering).
 
+## Running the Examples
+
+The pixzig repo has an example for most systems in `examples/`. Each one is its own build step:
+
+```sh
+zig build render_ex      # sprites and shapes
+zig build actor_ex       # sprite animation
+zig build tile_load_ex   # a Tiled map with a camera
+zig build imgui_ex       # the immediate-mode UI
+```
+
+![render_ex, actor_ex, tile_load_ex and imgui_ex running](assets/screenshots/examples.png)
+
+`zig build --help` lists them all. They read the shared `assets/` folder in the repo root.
+
 ## Creating a Project
 
 The quickest start is to generate a project from pixzig's `template/` directory. From a pixzig checkout:
@@ -136,15 +151,3 @@ pub fn main(init: std.process.Init) !void {
 
 That's the whole shape of a pixzig game: an `App` with `update` and `render`, handed to an `AppRunner`. [The Game Loop](page:app-runner) covers what the runner does with it.
 
-## Running the Examples
-
-The pixzig repo has an example for most systems in `examples/`. Each one is its own build step:
-
-```sh
-zig build render_ex      # sprites and shapes
-zig build actor_ex       # sprite animation
-zig build tile_load_ex   # a Tiled map with a camera
-zig build imgui_ex       # the immediate-mode UI
-```
-
-`zig build --help` lists them all. They read the shared `assets/` folder in the repo root.
