@@ -27,23 +27,34 @@ const Fixture = struct {
 
     /// Mixes `ms` milliseconds of audio, advancing the engine clock.
     fn pump(self: *Fixture, ms: u32) !void {
+        _ = try self.pumpPeak(ms);
+    }
+
+    /// `pump`, returning the loudest sample mixed (0 when it was silent).
+    fn pumpPeak(self: *Fixture, ms: u32) !f32 {
         var buf: [2 * 480]f32 = undefined;
+        var peak: f32 = 0;
         var left: u64 = @as(u64, ms) * self.eng.sampleRate() / 1000;
         while (left > 0) {
-            const n = @min(left, 480);
+            const n: usize = @intCast(@min(left, 480));
             try self.eng.renderFrames(&buf, n);
+            for (buf[0 .. n * 2]) |s| peak = @max(peak, @abs(s));
             left -= n;
         }
+        return peak;
     }
 };
 
 /// Writes a mono 16-bit 48 kHz WAV of `frames` frames of a quiet square
-/// wave to `.zig-cache/pixzig_audio_tests/<name>` and returns its absolute
-/// path (caller frees).
+/// wave to `.zig-cache/pixzig_audio_tests/<pid>/<name>` and returns its
+/// absolute path (caller frees). Per process, so test runs side by side
+/// don't overwrite each other's files.
 fn writeWav(io: std.Io, alloc: std.mem.Allocator, name: []const u8, frames: u32) ![]u8 {
     const cwd = try std.Io.Dir.cwd().realPathFileAlloc(io, ".", alloc);
     defer alloc.free(cwd);
-    const dir = try std.fs.path.join(alloc, &.{ cwd, ".zig-cache", "pixzig_audio_tests" });
+    var pidBuf: [16]u8 = undefined;
+    const pid = try std.fmt.bufPrint(&pidBuf, "{}", .{std.c.getpid()});
+    const dir = try std.fs.path.join(alloc, &.{ cwd, ".zig-cache", "pixzig_audio_tests", pid });
     defer alloc.free(dir);
     try std.Io.Dir.cwd().createDirPath(io, dir);
     const path = try std.fs.path.join(alloc, &.{ dir, name });
@@ -288,14 +299,44 @@ pub fn oggMusicLoopsPastItsEndTest(io: std.Io, alloc: std.mem.Allocator) !void {
     defer f.deinit();
 
     // stb_vorbis runs in push mode, so the stream's length is unknown and
-    // looping relies on seeking back at the end. The track is 8 s long.
-    _ = try f.res.loadMusic("theme", "assets/music_loop.ogg");
+    // looping relies on seeking back at the end. With no known length the
+    // cursor is a running total of frames read; it never resets on a loop.
+    //
+    // Streams decode pages on miniaudio's job thread, and a read that gets
+    // ahead of it comes back short: the mix is silent and the cursor stalls.
+    // Pumping faster than real time outruns it (8 s of track can take ~16 s
+    // of pumping), so this follows the cursor, not the clock. Each step is
+    // 100 ms of audio; the step limits are only hang guards.
+    const theme = try f.res.loadMusic("theme", "assets/music_loop.ogg");
+    const snd = theme.val.snd.?;
+    const rate: u64 = f.eng.sampleRate();
     try f.eng.playMusic("theme", .{ .loop = true });
-    try f.pump(9000);
+
+    // Play into the second time through: 9 s of an 8 s track.
+    for (0..600) |_| {
+        if (try snd.getCursorInPcmFrames() >= 9 * rate) break;
+        try f.pump(100);
+        std.Thread.yield() catch {};
+    }
+    try testz.expectTrue(try snd.getCursorInPcmFrames() >= 9 * rate);
     try testz.expectTrue(f.eng.musicPlaying());
 
+    // And it's still audible there, not reading silence past the end.
+    var peak: f32 = 0;
+    for (0..50) |_| {
+        peak = @max(peak, try f.pumpPeak(100));
+        if (peak > 0.01) break;
+        std.Thread.yield() catch {};
+    }
+    try testz.expectTrue(peak > 0.01);
+
+    // Turning looping off on the playing track lets it run out.
     try f.eng.playMusic("theme", .{ .loop = false });
-    try f.pump(8000);
+    for (0..600) |_| {
+        if (!f.eng.musicPlaying()) break;
+        try f.pump(100);
+        std.Thread.yield() catch {};
+    }
     try testz.expectFalse(f.eng.musicPlaying());
 }
 
