@@ -8,7 +8,10 @@ const FrameSequenceManager = pixzig.sprites.FrameSequenceManager;
 const FpsCounter = pixzig.utils.FpsCounter;
 const Sprite = pixzig.sprites.Sprite;
 const Actor = pixzig.sprites.Actor;
-const AppRunner = pixzig.AppRunner(App, .{});
+
+// The engine owns the action map (`eng.actions`) and updates it each tick.
+const Action = enum { face_up, face_down, face_left, face_right, chomp, quit };
+const AppRunner = pixzig.AppRunner(App, .{ .actionOpts = .{ .Action = Action } });
 
 pub const App = struct {
     alloc: std.mem.Allocator,
@@ -21,6 +24,13 @@ pub const App = struct {
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         _ = try eng.resources.loadAtlas("assets/pac-tiles");
+
+        try eng.actions.bind(.face_up, .{ .key = .up });
+        try eng.actions.bind(.face_down, .{ .key = .down });
+        try eng.actions.bind(.face_left, .{ .key = .left });
+        try eng.actions.bind(.face_right, .{ .key = .right });
+        try eng.actions.bind(.chomp, .{ .key = .space });
+        try eng.actions.bind(.quit, .{ .key = .escape });
 
         var app = try alloc.create(App);
 
@@ -85,27 +95,28 @@ pub const App = struct {
         self.actor.update(30);
 
         const spr = &self.actor.sprite;
-        if (eng.inputs.keyboard.pressed(.up)) {
+        const actions = eng.actions;
+        if (actions.pressed(.face_up)) {
             spr.rotate = .rot90;
         }
-        if (eng.inputs.keyboard.pressed(.down)) {
+        if (actions.pressed(.face_down)) {
             spr.rotate = .rot270;
         }
-        if (eng.inputs.keyboard.pressed(.left)) {
+        if (actions.pressed(.face_left)) {
             spr.rotate = .none;
             self.facingLeft = true;
             self.actor.setState("left", .{}) catch unreachable;
         }
-        if (eng.inputs.keyboard.pressed(.right)) {
+        if (actions.pressed(.face_right)) {
             spr.rotate = .none;
             self.facingLeft = false;
             self.actor.setState("right", .{}) catch unreachable;
         }
-        if (eng.inputs.keyboard.pressed(.space)) {
+        if (actions.pressed(.chomp)) {
             self.actor.setState(if (self.facingLeft) "chomp_left" else "chomp_right", .{ .reset = true }) catch unreachable;
         }
 
-        if (eng.inputs.keyboard.pressed(.escape)) {
+        if (actions.pressed(.quit)) {
             return false;
         }
         return true;

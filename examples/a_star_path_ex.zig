@@ -30,7 +30,10 @@ const BasicTileMapPathChecker = pixzig.a_star.BasicTileMapPathChecker;
 
 const MapWidth = 24;
 const MapHeight = 18;
-const AppRunner = pixzig.AppRunner(App, .{});
+
+// The engine owns the action map (`eng.actions`) and updates it each tick.
+const Action = enum { refresh, set_start, set_end, add_wall, cursor_left, cursor_right, cursor_up, cursor_down, quit };
+const AppRunner = pixzig.AppRunner(App, .{ .actionOpts = .{ .Action = Action } });
 
 pub const App = struct {
     alloc: std.mem.Allocator,
@@ -48,6 +51,16 @@ pub const App = struct {
     endPos: Vec2I = .{ .x = 6, .y = 8 },
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
+        try eng.actions.bind(.refresh, .{ .key = .space });
+        try eng.actions.bind(.set_start, .{ .key = .s });
+        try eng.actions.bind(.set_end, .{ .key = .e });
+        try eng.actions.bind(.add_wall, .{ .key = .x });
+        try eng.actions.bind(.cursor_left, .{ .key = .left });
+        try eng.actions.bind(.cursor_right, .{ .key = .right });
+        try eng.actions.bind(.cursor_up, .{ .key = .up });
+        try eng.actions.bind(.cursor_down, .{ .key = .down });
+        try eng.actions.bind(.quit, .{ .key = .escape });
+
         const app = try alloc.create(App);
 
         const color_shader = try eng.resources.getShader(shaders.ColorShader);
@@ -328,47 +341,47 @@ pub const App = struct {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        if (eng.inputs.keyboard.pressed(.space)) {
+        if (eng.actions.pressed(.refresh)) {
             self.refreshPath();
         }
 
-        if (eng.inputs.keyboard.pressed(.s)) {
+        if (eng.actions.pressed(.set_start)) {
             self.startPos = self.cursorPos;
             self.refreshPath();
         }
 
-        if (eng.inputs.keyboard.pressed(.e)) {
+        if (eng.actions.pressed(.set_end)) {
             self.endPos = self.cursorPos;
             self.refreshPath();
         }
 
-        if (eng.inputs.keyboard.pressed(.x)) {
+        if (eng.actions.pressed(.add_wall)) {
             self.layer.setTileData(self.cursorPos.x, self.cursorPos.y, 1);
             self.refreshPath();
         }
 
-        if (eng.inputs.keyboard.pressed(.left)) {
+        if (eng.actions.pressed(.cursor_left)) {
             if (self.cursorPos.x > 0) {
                 self.cursorPos.x -= 1;
             }
         }
-        if (eng.inputs.keyboard.pressed(.right)) {
+        if (eng.actions.pressed(.cursor_right)) {
             if (self.cursorPos.x < MapWidth - 1) {
                 self.cursorPos.x += 1;
             }
         }
-        if (eng.inputs.keyboard.pressed(.up)) {
+        if (eng.actions.pressed(.cursor_up)) {
             if (self.cursorPos.y > 0) {
                 self.cursorPos.y -= 1;
             }
         }
-        if (eng.inputs.keyboard.pressed(.down)) {
-            if (self.cursorPos.x < MapHeight - 1) {
+        if (eng.actions.pressed(.cursor_down)) {
+            if (self.cursorPos.y < MapHeight - 1) {
                 self.cursorPos.y += 1;
             }
         }
 
-        if (eng.inputs.keyboard.pressed(.escape)) {
+        if (eng.actions.pressed(.quit)) {
             return false;
         }
         return true;

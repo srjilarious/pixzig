@@ -38,7 +38,7 @@ self.seqPlayer.deinit();
 The player owns the sequence once you add it, and frees it when it finishes. `seqPlayer.sequences.items.len` is how many are still running, which is handy for ignoring input during a cutscene:
 
 ```zig
-if (self.seqPlayer.sequences.items.len == 0 and self.actions.pressed(.move_right)) {
+if (self.seqPlayer.sequences.items.len == 0 and eng.actions.pressed(.move_right)) {
     try self.queueMove("walk_right", 16, 0);
 }
 ```

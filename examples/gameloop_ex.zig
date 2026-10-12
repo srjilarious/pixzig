@@ -5,7 +5,8 @@
 //* The App struct has an `update` and `render` function that will be called
 //* by AppRunner, and in this example we just print out the FPS and some
 //* keyboard input to demonstrate that the game loop is working while clearing
-//* the screen.
+//* the screen. Its controls go through the engine-owned action map, so
+//* `update` asks about named actions instead of physical keys.
 
 //* -- collapsed: Imports --
 const std = @import("std");
@@ -19,7 +20,15 @@ const FpsCounter = pixzig.utils.FpsCounter;
 //* on our App struct.  It also provides the Engine to those functions,
 //* which has references to the renderer, input, and other systems that
 //* we can use in our game logic and rendering.
-const AppRunner = pixzig.AppRunner(App, .{});
+//*
+//* Setting `actionOpts` asks the engine for an action map over our `Action`
+//* enum, reached as `eng.actions`. The runner updates it every tick before
+//* calling `App.update`, so the app only binds it and queries it.
+const Action = enum { one, two, three, left, right, show, quit };
+
+const AppRunner = pixzig.AppRunner(App, .{
+    .actionOpts = .{ .Action = Action },
+});
 
 //* This is the definition of the application that will be run by the `AppRunner`.
 //* It has an `update` and `render` function that will be called by the `AppRunner`.
@@ -29,7 +38,16 @@ pub const App = struct {
     testVal: i32,
     fps: FpsCounter,
 
-    pub fn init(val: i32) App {
+    //* Binds each action to a key. An action can take several bindings,
+    //* for example a key and a gamepad button.
+    pub fn init(eng: *AppRunner.Engine, val: i32) !App {
+        try eng.actions.bind(.one, .{ .key = .one });
+        try eng.actions.bind(.two, .{ .key = .two });
+        try eng.actions.bind(.three, .{ .key = .three });
+        try eng.actions.bind(.left, .{ .key = .left });
+        try eng.actions.bind(.right, .{ .key = .right });
+        try eng.actions.bind(.show, .{ .key = .space });
+        try eng.actions.bind(.quit, .{ .key = .escape });
         return .{ .testVal = val, .fps = FpsCounter.init() };
     }
 
@@ -42,21 +60,22 @@ pub const App = struct {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        if (eng.inputs.keyboard.pressed(.one)) std.log.info("one!\n", .{});
-        if (eng.inputs.keyboard.pressed(.two)) std.log.info("two!\n", .{});
-        if (eng.inputs.keyboard.pressed(.three)) std.log.info("three!\n", .{});
-        if (eng.inputs.keyboard.pressed(.left)) {
+        const actions = eng.actions;
+        if (actions.pressed(.one)) std.log.info("one!\n", .{});
+        if (actions.pressed(.two)) std.log.info("two!\n", .{});
+        if (actions.pressed(.three)) std.log.info("three!\n", .{});
+        if (actions.pressed(.left)) {
             std.log.info("Left!\n", .{});
             self.testVal -= 1;
         }
-        if (eng.inputs.keyboard.pressed(.right)) {
+        if (actions.pressed(.right)) {
             std.log.info("Right!\n", .{});
             self.testVal += 1;
         }
-        if (eng.inputs.keyboard.pressed(.space)) {
+        if (actions.pressed(.show)) {
             std.log.info("Context: {}\n", .{self.testVal});
         }
-        if (eng.inputs.keyboard.pressed(.escape)) {
+        if (actions.pressed(.quit)) {
             return false;
         }
         return true;
@@ -76,7 +95,7 @@ pub fn main(init: std.process.Init) !void {
     const appRunner = try AppRunner.init("Pixzig Game Loop Example.", init.gpa, .{});
     defer appRunner.deinit();
 
-    var app = App.init(123);
+    var app = try App.init(appRunner.engine, 123);
     defer app.deinit();
 
     appRunner.run(&app);

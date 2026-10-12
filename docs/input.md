@@ -6,49 +6,46 @@ The runner updates `eng.inputs` before each `update` call. For game controls, bi
 
 An action map lets your game code ask "is the player jumping?" instead of "is Space down?". Players can rebind keys, and one action can have a keyboard key and a gamepad button at the same time.
 
-Define your actions and axes as enums, then bind them:
+Define your actions and axes as enums, and ask the engine for an action map over them with `actionOpts`:
 
 ```zig
 const Action = enum { quit, jump, fire };
 const Axis = enum { move_x };
-const Actions = pixzig.ActionMap(Action, Axis);
 
-// In App:
-actions: *Actions,
+const AppRunner = pixzig.AppRunner(App, .{
+    .actionOpts = .{ .Action = Action, .Axes = Axis },
+});
+```
 
-// In init:
-self.actions = try Actions.init(alloc);
-try self.actions.bind(.quit, .{ .key = .escape });
-try self.actions.bind(.jump, .{ .key = .space });
-try self.actions.bind(.jump, .{ .gamepad_button = .a });
-try self.actions.bind(.fire, .{ .mouse_button = .left });
-try self.actions.bindAxis(.move_x, .{ .buttons = .{
+The engine creates the map as `eng.actions` and frees it on shutdown. Bind it in your app's `init`:
+
+```zig
+try eng.actions.bind(.quit, .{ .key = .escape });
+try eng.actions.bind(.jump, .{ .key = .space });
+try eng.actions.bind(.jump, .{ .gamepad_button = .a });
+try eng.actions.bind(.fire, .{ .mouse_button = .left });
+try eng.actions.bindAxis(.move_x, .{ .buttons = .{
     .negative = .{ .key = .a },
     .positive = .{ .key = .d },
 } });
-try self.actions.bindAxis(.move_x, .{ .gamepad_axis = .{ .axis = .left_x } });
-
-// In deinit:
-self.actions.deinit();
+try eng.actions.bindAxis(.move_x, .{ .gamepad_axis = .{ .axis = .left_x } });
 ```
 
-Update it once per tick, then query it:
+The runner updates the map every tick, just before `update`, so all you do is query it:
 
 ```zig
 pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) bool {
-    _ = self.actions.update(&eng.inputs, deltaMs * 1000.0);
-
-    if (self.actions.pressed(.quit)) return false;
-    if (self.actions.pressed(.jump)) self.jump();
-    if (self.actions.down(.fire)) self.fire();
-    self.vel.x = self.actions.axis(.move_x) * Speed;
+    if (eng.actions.pressed(.quit)) return false;
+    if (eng.actions.pressed(.jump)) self.jump();
+    if (eng.actions.down(.fire)) self.fire();
+    self.vel.x = eng.actions.axis(.move_x) * Speed;
     return true;
 }
 ```
 
 `pressed` and `released` are true for one tick, on the edge. `down` and `up` are the held state. `axis` is in -1 to 1 for buttons and sticks.
 
-`update` takes elapsed time in microseconds, which only matters for key chords (below). Its return value isn't used yet.
+`.Axes` is optional. Leave it out and the map gets `pixzig.input.NoAxes`, which has a single `.none` axis that always reads 0.
 
 A few binding details:
 
@@ -64,8 +61,8 @@ An action can also be bound to a key combination, or a two-step sequence like Ct
 ```zig
 const KeyChordPiece = pixzig.input.KeyChordPiece;
 
-try self.actions.bindChord(KeyChordPiece.from(.{ .ctrl = true }, .s), .save);
-try self.actions.bindChord2(
+try eng.actions.bindChord(KeyChordPiece.from(.{ .ctrl = true }, .s), .save);
+try eng.actions.bindChord2(
     KeyChordPiece.from(.{ .ctrl = true }, .k),
     KeyChordPiece.from(.{ .ctrl = true }, .s),
     .save_all,
@@ -93,10 +90,35 @@ bindings = {
 
 ```zig
 try eng.scripts.runScript("assets/bindings.lua");
-try self.actions.loadFromLua(&eng.scripts, "bindings");
+try eng.actions.loadFromLua(&eng.scripts, "bindings");
 ```
 
 Names match the Zig enum fields. An unknown action or key returns an error such as `error.UnknownAction` or `error.UnknownKey`. See [Scripting](page:scripting) for setting up Lua.
+
+### While the Console Is Open
+
+If the engine owns a console (`EngineOptions.console`), the action map goes quiet while it's open: every action is up and every axis is 0, so typing `w` into the console doesn't walk the player. An action held when the console opens reports `released` on that tick.
+
+Anything that has to work with the console open, like the key that closes it, should read the keyboard directly. `examples/console_ex.zig` toggles the console on F1 this way.
+
+### Your Own Action Maps
+
+`ActionMap` also works on its own, for example to give each local player a separate map. Then you create it, update it and free it yourself:
+
+```zig
+const Actions = pixzig.ActionMap(Action, Axis);
+
+// In init:
+self.actions = try Actions.init(alloc);
+
+// At the top of update:
+self.actions.update(&eng.inputs, deltaMs);
+
+// In deinit:
+self.actions.deinit();
+```
+
+`update` takes the tick length in milliseconds, which only matters for key chords. `updateSuppressed()` advances a tick as if nothing were held; it's what the engine uses while the console is open.
 
 ## Keyboard
 
@@ -195,7 +217,7 @@ defer keymap.deinit();
 _ = try keymap.addKeyChord(.{ .ctrl = true }, .o, "open", null);
 _ = try keymap.addTwoKeyChord(.{}, .g, .d, "goto_definition", null);
 
-switch (keymap.update(eng.inputs.keyboard.currKeys(), deltaMs * 1000.0)) {
+switch (keymap.update(eng.inputs.keyboard.currKeys(), deltaMs)) {
     .triggered => |chord| self.runCommand(chord.func.?),
     else => {},
 }

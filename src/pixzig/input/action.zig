@@ -202,6 +202,21 @@ fn parseAxisSource(lua: *Lua, entry_abs: i32) !AxisSource {
     }
 }
 
+/// Compile-time options for the engine-owned action map
+/// (`EngineOptions.actionOpts`). When set, the engine creates an
+/// `ActionMap(Action, Axes)` reached as `eng.actions` and `AppRunner` updates
+/// it each tick before `App.update`.
+pub const ActionOptions = struct {
+    /// The enum naming the game's digital actions (jump, fire, quit, ...).
+    Action: type,
+    /// The enum naming the game's analog axes. Defaults to `NoAxes`.
+    Axes: type = NoAxes,
+};
+
+/// The `Axes` enum for a game without analog axes. It has one value because
+/// an empty enum can't be stored in a binding; `axis(.none)` always reads 0.
+pub const NoAxes = enum { none };
+
 /// Returns a comptime-specialised action map for the given `Action` and `Axes` enums.
 ///
 /// Binds named actions/axes to physical inputs (keys, mouse buttons, gamepad axes) and
@@ -496,12 +511,16 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
             }
         }
 
-        /// Advances the action state by one tick, reading from `inputs`.
-        /// `elapsedUs` is used for chord timeout and repeat tracking; pass 0 if not using chords.
-        pub fn update(self: *Self, inputs: *const InputManager, elapsedUs: f64) bool {
+        fn swapBuffers(self: *Self) void {
             const temp = self.currIdx;
             self.currIdx = self.prevIdx;
             self.prevIdx = temp;
+        }
+
+        /// Advances the action state by one tick, reading from `inputs`.
+        /// `deltaMs` is used for chord timeout and repeat tracking; pass 0 if not using chords.
+        pub fn update(self: *Self, inputs: *const InputManager, deltaMs: f64) void {
+            self.swapBuffers();
 
             var curr = self.currDigitalPtr();
             curr.clear();
@@ -512,7 +531,7 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
                 }
             }
 
-            _ = self.chordMap.update(inputs.keyboard.currKeys(), elapsedUs);
+            _ = self.chordMap.update(inputs.keyboard.currKeys(), deltaMs);
             if (self.chordMap.chords.downKey != .unknown) {
                 if (self.chordMap.chords.currChord) |chord| {
                     if (chord.func) |action| {
@@ -560,8 +579,17 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
                 const axisIdx = helpers.getIndexForAxis(binding.axis);
                 currAxes.axes[axisIdx] += val;
             }
+        }
 
-            return false;
+        /// Advances one tick as if nothing were held: every action is up,
+        /// every axis is 0 and any partial chord is dropped. Actions held on
+        /// the previous tick report `released`. The engine calls this instead
+        /// of `update` while its console is open.
+        pub fn updateSuppressed(self: *Self) void {
+            self.swapBuffers();
+            self.currDigitalPtr().clear();
+            self.currAxisPtr().clear();
+            self.chordMap.reset();
         }
 
         /// True when the action is not held this tick.

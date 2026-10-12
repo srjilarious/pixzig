@@ -17,10 +17,10 @@ const Mover = pixzig.tile.Mover;
 const layer = self.mapRenderer.tileMap().layerByName("walls").?;
 
 const speed: f32 = 2;
-if (self.actions.down(.left)) _ = Mover.moveLeft(&self.box, speed, layer, pixzig.tile.BlocksAll);
-if (self.actions.down(.right)) _ = Mover.moveRight(&self.box, speed, layer, pixzig.tile.BlocksAll);
-if (self.actions.down(.up)) _ = Mover.moveUp(&self.box, speed, layer, pixzig.tile.BlocksAll);
-if (self.actions.down(.down)) _ = Mover.moveDown(&self.box, speed, layer, pixzig.tile.BlocksAll);
+if (eng.actions.down(.left)) _ = Mover.moveLeft(&self.box, speed, layer, pixzig.tile.BlocksAll);
+if (eng.actions.down(.right)) _ = Mover.moveRight(&self.box, speed, layer, pixzig.tile.BlocksAll);
+if (eng.actions.down(.up)) _ = Mover.moveUp(&self.box, speed, layer, pixzig.tile.BlocksAll);
+if (eng.actions.down(.down)) _ = Mover.moveDown(&self.box, speed, layer, pixzig.tile.BlocksAll);
 ```
 
 Each call returns true when it hit something. In that case the rect is moved flush against the tile's edge rather than overlapping it. The last argument is a mask of tile flags that count as solid, so a platformer can pass `tile.BlocksTop` when falling to get one-way platforms.

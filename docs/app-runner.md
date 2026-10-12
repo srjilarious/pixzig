@@ -37,6 +37,7 @@ const AppRunner = pixzig.AppRunner(App, .{
 | `rendererOpts` | `.{}` | `shapeRendering`, `textRendering` (both on) and the batch size `maxSprites`. |
 | `audioOpts` | off | Set `.enabled = true` to get `eng.audio`. See [Audio](page:audio). |
 | `inputOpts` | mouse on | Mouse, gamepad slots and OS text input. See [Input](page:input). |
+| `actionOpts` | `null` | Set `.Action` (and optionally `.Axes`) to get an action map as `eng.actions`. See [Input](page:input). |
 | `manifestOpts` | `null` | Load an asset manifest during init. See [Assets](page:assets). |
 | `scripting` | `false` | Create a Lua state as `eng.scripts`. See [Scripting](page:scripting). |
 | `console` | `null` | Create a Lua console as `eng.console`. Needs `scripting`. |
@@ -86,6 +87,7 @@ Both app methods get the engine. It's how you reach every system:
 | `eng.renderer` | Sprites, shapes and text. See [Rendering](page:rendering). |
 | `eng.resources` | The `ResourceManager`: textures, atlases, fonts, maps and shaders. |
 | `eng.inputs` | Keyboard, mouse and gamepads. |
+| `eng.actions` | The action map, when `actionOpts` is set. |
 | `eng.viewport` | The logical size and how it maps to the window. |
 | `eng.audio` | Sound playback, when enabled. |
 | `eng.rng` | A seeded random source. See [Math and Gameplay Helpers](page:math). |
@@ -108,6 +110,7 @@ eng.pollEvents();
 while (lag > UpdateStepMs) {
     lag -= UpdateStepMs;
     eng.inputs.update(...);          // latch this tick's input
+    eng.updateActions(UpdateStepMs); // when actionOpts is set
     eng.resources.checkHotReload();  // debug builds: pick up changed files
     const keepRunning = app.update(eng, UpdateStepMs);
     eng.inputs.finishTick();         // so pressed/released are one-tick edges

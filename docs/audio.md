@@ -22,7 +22,7 @@ try eng.audio.loadSound("shoot", "assets/laserShoot.wav");
 try eng.audio.loadSound("boom", "assets/explosion.wav");
 
 // In update:
-if (self.actions.pressed(.fire)) {
+if (eng.actions.pressed(.fire)) {
     eng.audio.playSound("shoot") catch |err| std.log.warn("shoot: {}", .{err});
 }
 ```

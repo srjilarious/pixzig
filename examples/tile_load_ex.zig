@@ -5,7 +5,10 @@ const Color = pixzig.common.Color;
 
 const tile = pixzig.tile;
 const FpsCounter = pixzig.utils.FpsCounter;
-const AppRunner = pixzig.AppRunner(App, .{});
+
+// The engine owns the action map (`eng.actions`) and updates it each tick.
+const Action = enum { left, right, up, down, quit };
+const AppRunner = pixzig.AppRunner(App, .{ .actionOpts = .{ .Action = Action } });
 
 pub const App = struct {
     alloc: std.mem.Allocator,
@@ -17,6 +20,17 @@ pub const App = struct {
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         std.log.info("Loading tile map", .{});
         _ = try eng.resources.loadTileMap("level1a", "assets/level1a.tmx");
+
+        // Arrows and WASD both move; any binding of an action counts.
+        try eng.actions.bind(.left, .{ .key = .left });
+        try eng.actions.bind(.left, .{ .key = .a });
+        try eng.actions.bind(.right, .{ .key = .right });
+        try eng.actions.bind(.right, .{ .key = .d });
+        try eng.actions.bind(.up, .{ .key = .up });
+        try eng.actions.bind(.up, .{ .key = .w });
+        try eng.actions.bind(.down, .{ .key = .down });
+        try eng.actions.bind(.down, .{ .key = .s });
+        try eng.actions.bind(.quit, .{ .key = .escape });
 
         // The renderer takes it from here: it holds the map, borrows the
         // texture shader, and loads the tileset image the .tmx names.
@@ -66,7 +80,7 @@ pub const App = struct {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        if (eng.inputs.keyboard.pressed(.escape)) return false;
+        if (eng.actions.pressed(.quit)) return false;
 
         // The renderer rebuilds itself on a hot-reload; all we have to do is
         // refresh what we derived from the map ourselves.
@@ -76,7 +90,7 @@ pub const App = struct {
         }
 
         const MoveAmount = 3;
-        if (eng.inputs.keyboard.down(.left)) {
+        if (eng.actions.down(.left)) {
             _ = pixzig.tile.Mover.moveLeft(
                 &self.guy,
                 MoveAmount,
@@ -84,7 +98,7 @@ pub const App = struct {
                 pixzig.tile.BlocksAll,
             );
         }
-        if (eng.inputs.keyboard.down(.right)) {
+        if (eng.actions.down(.right)) {
             _ = pixzig.tile.Mover.moveRight(
                 &self.guy,
                 MoveAmount,
@@ -92,7 +106,7 @@ pub const App = struct {
                 pixzig.tile.BlocksAll,
             );
         }
-        if (eng.inputs.keyboard.down(.up)) {
+        if (eng.actions.down(.up)) {
             _ = pixzig.tile.Mover.moveUp(
                 &self.guy,
                 MoveAmount,
@@ -100,7 +114,7 @@ pub const App = struct {
                 pixzig.tile.BlocksAll,
             );
         }
-        if (eng.inputs.keyboard.down(.down)) {
+        if (eng.actions.down(.down)) {
             _ = pixzig.tile.Mover.moveDown(
                 &self.guy,
                 MoveAmount,

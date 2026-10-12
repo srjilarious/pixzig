@@ -11,7 +11,10 @@ const States = enum {
     //StateC
 };
 
-const AppRunner = pixzig.AppRunner(App, .{});
+// The engine owns the action map, so every state reads the same
+// `eng.actions` through the engine it's handed.
+const Action = enum { show_a, show_b, quit };
+const AppRunner = pixzig.AppRunner(App, .{ .actionOpts = .{ .Action = Action } });
 
 const StateA = struct {
     pub fn update(self: *StateA, eng: *AppRunner.Engine, delta: f64) bool {
@@ -58,7 +61,11 @@ pub const App = struct {
     fps: FpsCounter,
     states: AppStateMgr,
 
-    pub fn init(alloc: std.mem.Allocator, appStates: AppStateMgr.StatePtrs) !*App {
+    pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine, appStates: AppStateMgr.StatePtrs) !*App {
+        try eng.actions.bind(.show_a, .{ .key = .one });
+        try eng.actions.bind(.show_b, .{ .key = .two });
+        try eng.actions.bind(.quit, .{ .key = .escape });
+
         const app = try alloc.create(App);
         app.* = .{
             .alloc = alloc,
@@ -77,17 +84,16 @@ pub const App = struct {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        if (eng.inputs.keyboard.pressed(.one)) {
+        if (eng.actions.pressed(.show_a)) {
             std.log.info("one!\n", .{});
             self.states.setCurrState(.StateA);
         }
-        if (eng.inputs.keyboard.pressed(.two)) {
+        if (eng.actions.pressed(.show_b)) {
             std.log.info("two!\n", .{});
             self.states.setCurrState(.StateB);
         }
-        if (eng.inputs.keyboard.pressed(.three)) std.log.info("three!\n", .{});
 
-        if (eng.inputs.keyboard.pressed(.escape)) {
+        if (eng.actions.pressed(.quit)) {
             return false;
         }
 
@@ -107,7 +113,7 @@ pub fn main(init: std.process.Init) !void {
     var stateA = StateA{};
     var paramState = ParamState{};
 
-    const app = try App.init(init.gpa, .{ &stateA, &paramState });
+    const app = try App.init(init.gpa, appRunner.engine, .{ &stateA, &paramState });
     defer app.deinit();
 
     appRunner.run(app);

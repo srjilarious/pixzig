@@ -123,6 +123,7 @@ pub const TileLayer = tile.TileLayer;
 pub const TileMapRenderer = tile.TileMapRenderer;
 
 pub const ActionMap = input.ActionMap;
+pub const ActionOptions = input.ActionOptions;
 pub const ScriptEngine = scripting.ScriptEngine;
 pub const AudioOptions = audio.AudioOptions;
 
@@ -163,6 +164,12 @@ pub const EngineOptions = struct {
 
     /// Input options.
     inputOpts: input.InputOptions = .{},
+
+    /// Create an action map the engine owns, reached as `eng.actions`, for
+    /// the given `Action` and `Axes` enums. `AppRunner` updates it each tick
+    /// before `App.update`, and suppresses it while the engine console is
+    /// open. Bind it in `App.init`.
+    actionOpts: ?input.ActionOptions = null,
 
     /// Optional manifest module to load automatically during engine init.
     /// Set to `@import("manifest_options")` to wire in the build-generated
@@ -293,6 +300,7 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
                     self.engine.windowState.scaleFactor,
                     &self.engine.viewport,
                 );
+                self.engine.updateActions(UpdateStepMs);
                 self.engine.resources.checkHotReload();
                 const keepRunning = app.update(self.engine, UpdateStepMs);
                 // Roll this tick's input into the previous-tick buffers only
@@ -364,6 +372,8 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
         scripts: if (engOpts.scripting) ScriptEngine else void,
         /// The engine's script console when `console` is set. Bound to `scripts`.
         console: if (engOpts.console != null) *console.Console else void,
+        /// The engine's action map when `actionOpts` is set.
+        actions: if (engOpts.actionOpts != null) *Actions else void,
 
         const Self = @This();
 
@@ -374,6 +384,9 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
         }
         pub const Renderer = renderer.Renderer(engOpts.rendererOpts);
         pub const Inputs = input.InputManager;
+        /// The `ActionMap` type behind `eng.actions`, or void when
+        /// `actionOpts` is null.
+        pub const Actions = if (engOpts.actionOpts) |ao| input.ActionMap(ao.Action, ao.Axes) else void;
 
         /// Initializes the engine and its components.  In particular it creates the application
         /// window and rendering context, loads the OpenGL profile, and sets up the default
@@ -462,11 +475,15 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
                 .manifest = if (engOpts.manifestOpts != null) undefined else {},
                 .scripts = if (engOpts.scripting) undefined else {},
                 .console = if (engOpts.console != null) undefined else {},
+                .actions = if (engOpts.actionOpts != null) undefined else {},
             };
             errdefer {
                 eng.resources.deinit();
                 allocator.destroy(eng);
             }
+
+            if (engOpts.actionOpts != null) eng.actions = try Actions.init(allocator);
+            errdefer if (engOpts.actionOpts != null) eng.actions.deinit();
 
             // ----------------------------------------------------------------
             if (engOpts.manifestOpts) |ManifestMod| {
@@ -528,11 +545,25 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
             self.resources.deinit();
             stbi.deinit();
 
+            if (engOpts.actionOpts != null) self.actions.deinit();
             self.inputs.deinit();
             self.window.destroy();
             platform.quit();
 
             self.allocator.destroy(self);
+        }
+
+        /// Advances `eng.actions` one tick from `eng.inputs`. `AppRunner`
+        /// calls this after updating the inputs; call it yourself only when
+        /// driving the engine without a runner. While the engine console is
+        /// open every action reads as up, so typing doesn't trigger them.
+        pub fn updateActions(self: *Self, deltaMs: f64) void {
+            if (engOpts.actionOpts == null) return;
+            if (engOpts.console != null and self.console.enabled) {
+                self.actions.updateSuppressed();
+            } else {
+                self.actions.update(&self.inputs, deltaMs);
+            }
         }
 
         /// Sets the application window icon. The provided `icon_data` should be a reader for

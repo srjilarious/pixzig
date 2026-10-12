@@ -779,8 +779,8 @@ export fn pz_action_map_destroy(am: *PzActionMap) callconv(.c) void {
     am.eng.alloc.destroy(am);
 }
 
-export fn pz_action_map_update(am: *PzActionMap, elapsed_us: f64) callconv(.c) void {
-    _ = am.map.update(&am.eng.engine.inputs, elapsed_us);
+export fn pz_action_map_update(am: *PzActionMap, delta_ms: f64) callconv(.c) void {
+    am.map.update(&am.eng.engine.inputs, delta_ms);
 }
 
 export fn pz_action_bind_key(am: *PzActionMap, action_slot: i32, key: c_int) callconv(.c) i32 {

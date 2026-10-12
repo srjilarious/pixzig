@@ -3,7 +3,13 @@ const pixzig = @import("pixzig");
 const zaudio = pixzig.zaudio;
 
 const FpsCounter = pixzig.utils.FpsCounter;
-const AppRunner = pixzig.AppRunner(App, .{ .audioOpts = .{ .enabled = true } });
+
+// Audio and the action map are both engine systems the app opts into.
+const Action = enum { shoot, next, show, quit };
+const AppRunner = pixzig.AppRunner(App, .{
+    .audioOpts = .{ .enabled = true },
+    .actionOpts = .{ .Action = Action },
+});
 
 pub const App = struct {
     alloc: std.mem.Allocator,
@@ -14,6 +20,11 @@ pub const App = struct {
         engine.audio.loadSound("laserShoot", "assets/laserShoot.wav") catch |err| {
             std.log.err("Error loading sound: {}\n", .{err});
         };
+
+        try engine.actions.bind(.shoot, .{ .key = .left });
+        try engine.actions.bind(.next, .{ .key = .right });
+        try engine.actions.bind(.show, .{ .key = .space });
+        try engine.actions.bind(.quit, .{ .key = .escape });
 
         const app = try allocator.create(App);
         app.* = .{
@@ -38,10 +49,7 @@ pub const App = struct {
             std.log.info("FPS: {}", .{self.fps.fps()});
         }
 
-        if (eng.inputs.keyboard.pressed(.one)) std.log.info("one!\n", .{});
-        if (eng.inputs.keyboard.pressed(.two)) std.log.info("two!\n", .{});
-        if (eng.inputs.keyboard.pressed(.three)) std.log.info("three!\n", .{});
-        if (eng.inputs.keyboard.pressed(.left)) {
+        if (eng.actions.pressed(.shoot)) {
             std.log.info("Left!\n", .{});
             eng.audio.playSound("laserShoot") catch |err| {
                 std.log.err("Error playing sound: {}\n", .{err});
@@ -52,14 +60,14 @@ pub const App = struct {
             // };
             self.testVal -= 1;
         }
-        if (eng.inputs.keyboard.pressed(.right)) {
+        if (eng.actions.pressed(.next)) {
             std.log.info("Right!\n", .{});
             self.testVal += 1;
         }
-        if (eng.inputs.keyboard.pressed(.space)) {
+        if (eng.actions.pressed(.show)) {
             std.log.info("Context: {}\n", .{self.testVal});
         }
-        if (eng.inputs.keyboard.pressed(.escape)) {
+        if (eng.actions.pressed(.quit)) {
             return false;
         }
         return true;

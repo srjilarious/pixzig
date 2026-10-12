@@ -15,8 +15,14 @@ pub const Velocity = struct { speed: Vec2F };
 
 pub const Dot = struct {};
 
+// The engine owns the action map (`eng.actions`) and updates it each tick.
+// Scrolling uses two axes, each driven by a pair of arrow keys.
+const Action = enum { pause, quit };
+const Axis = enum { scroll_x, scroll_y };
+
 const AppRunner = pixzig.AppRunner(App, .{
     .updateStepHz = 60.0,
+    .actionOpts = .{ .Action = Action, .Axes = Axis },
 });
 
 pub const App = struct {
@@ -32,6 +38,17 @@ pub const App = struct {
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const bigtex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
         _ = try eng.resources.addSubTexture(bigtex, "guy", RectI.init(192, 64, 32, 32));
+
+        try eng.actions.bind(.pause, .{ .key = .p });
+        try eng.actions.bind(.quit, .{ .key = .escape });
+        try eng.actions.bindAxis(.scroll_x, .{ .buttons = .{
+            .negative = .{ .key = .left },
+            .positive = .{ .key = .right },
+        } });
+        try eng.actions.bindAxis(.scroll_y, .{ .buttons = .{
+            .negative = .{ .key = .up },
+            .positive = .{ .key = .down },
+        } });
 
         std.log.info("Initializing world.\n", .{});
 
@@ -118,26 +135,14 @@ pub const App = struct {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        if (eng.inputs.keyboard.pressed(.one)) std.log.info("one!\n", .{});
-        if (eng.inputs.keyboard.pressed(.two)) std.log.info("two!\n", .{});
-        if (eng.inputs.keyboard.pressed(.three)) std.log.info("three!\n", .{});
+        // The view moves opposite to the scroll direction.
         const ScrollAmount = 3;
-        if (eng.inputs.keyboard.down(.left)) {
-            self.scrollOffset.x += ScrollAmount;
-        }
-        if (eng.inputs.keyboard.down(.right)) {
-            self.scrollOffset.x -= ScrollAmount;
-        }
-        if (eng.inputs.keyboard.down(.up)) {
-            self.scrollOffset.y += ScrollAmount;
-        }
-        if (eng.inputs.keyboard.down(.down)) {
-            self.scrollOffset.y -= ScrollAmount;
-        }
-        if (eng.inputs.keyboard.pressed(.p)) {
+        self.scrollOffset.x -= eng.actions.axis(.scroll_x) * ScrollAmount;
+        self.scrollOffset.y -= eng.actions.axis(.scroll_y) * ScrollAmount;
+        if (eng.actions.pressed(.pause)) {
             self.paused = !self.paused;
         }
-        if (eng.inputs.keyboard.pressed(.escape)) {
+        if (eng.actions.pressed(.quit)) {
             return false;
         }
 

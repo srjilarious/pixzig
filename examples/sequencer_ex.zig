@@ -11,7 +11,10 @@ const Sprite = pixzig.sprites.Sprite;
 const Actor = pixzig.sprites.Actor;
 const FpsCounter = pixzig.utils.FpsCounter;
 const Vec2F = pixzig.common.Vec2F;
-const AppRunner = pixzig.AppRunner(App, .{});
+
+// The engine owns the action map (`eng.actions`) and updates it each tick.
+const Action = enum { move_right, move_left, move_down, move_up, circle, quit };
+const AppRunner = pixzig.AppRunner(App, .{ .actionOpts = .{ .Action = Action } });
 
 // Maps a 0-1 color channel to the 0-255 range `renderer.clear` takes.
 fn unit8(v: f32) u8 {
@@ -86,6 +89,13 @@ pub const App = struct {
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         _ = try eng.resources.loadAtlas("assets/pac-tiles");
+
+        try eng.actions.bind(.move_right, .{ .key = .right });
+        try eng.actions.bind(.move_left, .{ .key = .left });
+        try eng.actions.bind(.move_down, .{ .key = .down });
+        try eng.actions.bind(.move_up, .{ .key = .up });
+        try eng.actions.bind(.circle, .{ .key = .c });
+        try eng.actions.bind(.quit, .{ .key = .escape });
 
         var app = try alloc.create(App);
         app.alloc = alloc;
@@ -199,22 +209,22 @@ pub const App = struct {
 
         // Only process input if no sequences are running.
         if (self.seqPlayer.sequences.items.len == 0) {
-            if (eng.inputs.keyboard.pressed(.right)) {
+            if (eng.actions.pressed(.move_right)) {
                 self.queueMove("right", 16, 0) catch {};
-            } else if (eng.inputs.keyboard.pressed(.left)) {
+            } else if (eng.actions.pressed(.move_left)) {
                 self.queueMove("left", -16, 0) catch {};
-            } else if (eng.inputs.keyboard.pressed(.down)) {
+            } else if (eng.actions.pressed(.move_down)) {
                 self.queueMove("down", 0, 16) catch {};
-            } else if (eng.inputs.keyboard.pressed(.up)) {
+            } else if (eng.actions.pressed(.move_up)) {
                 self.queueMove("up", 0, -16) catch {};
-            } else if (eng.inputs.keyboard.pressed(.c)) {
+            } else if (eng.actions.pressed(.circle)) {
                 self.runCircle() catch |err| {
                     std.log.err("circle_move.lua error: {}", .{err});
                 };
             }
         }
 
-        if (eng.inputs.keyboard.pressed(.escape)) return false;
+        if (eng.actions.pressed(.quit)) return false;
         return true;
     }
 

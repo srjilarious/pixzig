@@ -89,13 +89,13 @@ pub fn simpleChordTreeUpdateTest(io: std.Io, alloc: std.mem.Allocator) !void {
     var kbState = KeyboardState.init();
     kbState.set(.a, true);
     {
-        const res = kmap.update(&kbState, 1000);
+        const res = kmap.update(&kbState, 1);
         try testz.expectEqual(res, .none);
     }
 
     kbState.set(.right_control, true);
     {
-        const res = kmap.update(&kbState, 1000);
+        const res = kmap.update(&kbState, 1);
         const func = res.triggered.func;
         try testz.expectEqualStr(func.?, "testThing");
     }
@@ -110,25 +110,25 @@ pub fn twoKeyChordUpdateTest(io: std.Io, alloc: std.mem.Allocator) !void {
     var kbState = KeyboardState.init();
     kbState.set(.k, true);
     {
-        const res = kmap.update(&kbState, 1000);
+        const res = kmap.update(&kbState, 1);
         try testz.expectEqual(res, .none);
     }
 
     kbState.set(.right_control, true);
     {
-        const res = kmap.update(&kbState, 1000);
+        const res = kmap.update(&kbState, 1);
         try testz.expectEqual(res, .none);
     }
 
     kbState.set(.k, false);
     {
-        const res = kmap.update(&kbState, 1000);
+        const res = kmap.update(&kbState, 1);
         try testz.expectEqual(res, .none);
     }
 
     kbState.set(.l, true);
     {
-        const res = kmap.update(&kbState, 1000);
+        const res = kmap.update(&kbState, 1);
         const func = res.triggered.func;
         try testz.expectEqualStr(func.?, "testThing");
     }
@@ -150,37 +150,37 @@ pub fn twoKeyChordUpdateDifferentModsTest(io: std.Io, alloc: std.mem.Allocator) 
     var kbState = KeyboardState.init();
     kbState.set(.k, true);
     {
-        const res = kmap.update(&kbState, 1000);
+        const res = kmap.update(&kbState, 1);
         try testz.expectEqual(res, .none);
     }
 
     kbState.set(.right_control, true);
     {
-        const res = kmap.update(&kbState, 1000);
+        const res = kmap.update(&kbState, 1);
         try testz.expectEqual(res, .none);
     }
 
     kbState.set(.k, false);
     {
-        const res = kmap.update(&kbState, 1000);
+        const res = kmap.update(&kbState, 1);
         try testz.expectEqual(res, .none);
     }
 
     kbState.set(.left_super, true);
     {
-        const res = kmap.update(&kbState, 1000);
+        const res = kmap.update(&kbState, 1);
         try testz.expectEqual(res, .none);
     }
 
     kbState.set(.right_control, false);
     {
-        const res = kmap.update(&kbState, 1000);
+        const res = kmap.update(&kbState, 1);
         try testz.expectEqual(res, .none);
     }
 
     kbState.set(.F1, true);
     {
-        const res = kmap.update(&kbState, 1000);
+        const res = kmap.update(&kbState, 1);
         const func = res.triggered.func;
         try testz.expectEqualStr(func.?, "testThing");
     }
@@ -195,24 +195,24 @@ pub fn repeatKeyChordTrigger(io: std.Io, alloc: std.mem.Allocator) !void {
     var kbState = KeyboardState.init();
     kbState.set(.a, true);
     {
-        const res = kmap.update(&kbState, 1000);
+        const res = kmap.update(&kbState, 1);
         try testz.expectEqual(res, .none);
     }
 
     kbState.set(.right_control, true);
     {
-        const res = kmap.update(&kbState, 1000);
+        const res = kmap.update(&kbState, 1);
         const func = res.triggered.func;
         try testz.expectEqualStr(func.?, "testThing");
     }
 
     {
-        const res = kmap.update(&kbState, keychord.InitialRepeatRate - 1000);
+        const res = kmap.update(&kbState, keychord.InitialRepeatRateMs - 1);
         try testz.expectEqual(res, .none);
     }
 
     {
-        const res = kmap.update(&kbState, 2000);
+        const res = kmap.update(&kbState, 2);
         const func = res.triggered.func;
         try testz.expectEqualStr(func.?, "testThing");
     }
@@ -320,7 +320,7 @@ pub fn resetStopsRepeatTest(io: std.Io, alloc: std.mem.Allocator) !void {
     kbState.set(.a, true);
     kbState.set(.right_control, true);
 
-    const res = kmap.update(&kbState, 1000);
+    const res = kmap.update(&kbState, 1);
     try testz.expectEqualStr(res.triggered.func.?, "testThing");
 
     // Release key, then explicitly reset.
@@ -328,7 +328,7 @@ pub fn resetStopsRepeatTest(io: std.Io, alloc: std.mem.Allocator) !void {
     kmap.reset();
 
     // Should be .none — not a spurious repeat or re-trigger.
-    const res2 = kmap.update(&kbState, 1000);
+    const res2 = kmap.update(&kbState, 1);
     try testz.expectEqual(res2, .none);
 }
 
@@ -345,7 +345,7 @@ pub fn resetMidSequenceTest(io: std.Io, alloc: std.mem.Allocator) !void {
     // Advance to intermediate node with Ctrl+K.
     kbState.set(.k, true);
     kbState.set(.right_control, true);
-    const res1 = kmap.update(&kbState, 1000);
+    const res1 = kmap.update(&kbState, 1);
     try testz.expectEqual(res1, .none);
 
     // Reset mid-sequence.
@@ -354,12 +354,12 @@ pub fn resetMidSequenceTest(io: std.Io, alloc: std.mem.Allocator) !void {
 
     // Ctrl+L alone should not trigger — back at root, not the intermediate node.
     kbState.set(.l, true);
-    const res2 = kmap.update(&kbState, 1000);
+    const res2 = kmap.update(&kbState, 1);
     try testz.expectEqual(res2, .none);
 }
 
 // After triggering and calling reset() while the key is still held, the next
-// update should trigger immediately without waiting for InitialRepeatRate.
+// update should trigger immediately without waiting for InitialRepeatRateMs.
 // This distinguishes reset from the normal hold-to-repeat path.
 pub fn resetAllowsImmediateRetriggerTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
@@ -372,14 +372,14 @@ pub fn resetAllowsImmediateRetriggerTest(io: std.Io, alloc: std.mem.Allocator) !
     kbState.set(.right_control, true);
 
     // Initial trigger.
-    const res1 = kmap.update(&kbState, 1000);
+    const res1 = kmap.update(&kbState, 1);
     try testz.expectEqualStr(res1.triggered.func.?, "testThing");
 
     // Reset while key still held.
     kmap.reset();
 
-    // Should trigger immediately on the next update — no InitialRepeatRate wait.
-    const res2 = kmap.update(&kbState, 1000);
+    // Should trigger immediately on the next update — no InitialRepeatRateMs wait.
+    const res2 = kmap.update(&kbState, 1);
     try testz.expectEqualStr(res2.triggered.func.?, "testThing");
 }
 
@@ -396,16 +396,16 @@ pub fn timeoutReturnsResetResultTest(io: std.Io, alloc: std.mem.Allocator) !void
     // Advance to intermediate node.
     kbState.set(.k, true);
     kbState.set(.right_control, true);
-    _ = kmap.update(&kbState, 1000);
+    _ = kmap.update(&kbState, 1);
     kbState.set(.k, false);
 
     // Burn past the timeout with a single large elapsed value.
-    const res = kmap.update(&kbState, keychord.DefaultChordTimeoutUs + 1);
+    const res = kmap.update(&kbState, keychord.DefaultChordTimeoutMs + 1);
     try testz.expectEqual(res, .reset);
 
     // After timeout, the second key alone should not trigger (back at root).
     kbState.set(.l, true);
-    const res2 = kmap.update(&kbState, 1000);
+    const res2 = kmap.update(&kbState, 1);
     try testz.expectEqual(res2, .none);
 }
 

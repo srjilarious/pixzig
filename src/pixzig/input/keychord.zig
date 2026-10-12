@@ -9,12 +9,12 @@ const keyboard = @import("./keyboard.zig");
 const KeyModifier = keyboard.KeyModifier;
 const KeyboardState = keyboard.KeyboardState;
 
-/// How long (microseconds) a partial chord can sit unfinished before it resets.
-pub const DefaultChordTimeoutUs: f64 = 2e6;
-/// Delay (microseconds) before a held key starts repeating.
-pub const InitialRepeatRate: f64 = 1e5;
-/// Interval (microseconds) between subsequent repeats once a key is held.
-pub const DownRepeatRate: f64 = 2e4;
+/// How long (milliseconds) a partial chord can sit unfinished before it resets.
+pub const DefaultChordTimeoutMs: f64 = 2000.0;
+/// Delay (milliseconds) before a held key starts repeating.
+pub const InitialRepeatRateMs: f64 = 100.0;
+/// Interval (milliseconds) between subsequent repeats once a key is held.
+pub const DownRepeatRateMs: f64 = 20.0;
 
 /// One key + modifier combination within a chord sequence.
 pub const KeyChordPiece = struct {
@@ -125,7 +125,7 @@ pub fn ChordTree(comptime T: type) type {
         downKey: keys.Key,
         currChord: ?*KeyChord(T),
         rootChord: *KeyChord(T),
-        elapsedUsCounter: f64,
+        elapsedMsCounter: f64,
         repeatCounter: f64,
 
         const Self = @This();
@@ -144,7 +144,7 @@ pub fn ChordTree(comptime T: type) type {
                 .downKey = .unknown,
                 .currChord = root,
                 .rootChord = root,
-                .elapsedUsCounter = 0,
+                .elapsedMsCounter = 0,
                 .repeatCounter = 0,
             };
         }
@@ -160,7 +160,7 @@ pub fn ChordTree(comptime T: type) type {
 
         pub fn reset(self: *Self) void {
             self.currChord = self.rootChord;
-            self.elapsedUsCounter = 0;
+            self.elapsedMsCounter = 0;
             self.downKey = .unknown;
         }
 
@@ -171,21 +171,21 @@ pub fn ChordTree(comptime T: type) type {
                 chordMods.super == kbMods.super;
         }
 
-        pub fn update(self: *Self, kbState: *const KeyboardState, elapsedUs: f64) ChordUpdateResult(T) {
+        pub fn update(self: *Self, kbState: *const KeyboardState, deltaMs: f64) ChordUpdateResult(T) {
             if (self.downKey != .unknown) {
                 if (!checkExpectedModsDown(self.currChord.?.piece.mod, kbState.modifiers()) or kbState.up(self.downKey)) {
                     self.reset();
                     return .reset;
                 } else {
-                    self.repeatCounter -= elapsedUs;
+                    self.repeatCounter -= deltaMs;
                     if (self.repeatCounter <= 0) {
-                        self.repeatCounter = DownRepeatRate;
+                        self.repeatCounter = DownRepeatRateMs;
                         return .{ .triggered = self.currChord.? };
                     }
                 }
             } else {
-                self.elapsedUsCounter += elapsedUs;
-                if (self.elapsedUsCounter > DefaultChordTimeoutUs) {
+                self.elapsedMsCounter += deltaMs;
+                if (self.elapsedMsCounter > DefaultChordTimeoutMs) {
                     self.reset();
                     return .reset;
                 }
@@ -194,11 +194,11 @@ pub fn ChordTree(comptime T: type) type {
                 while (it.next()) |k| {
                     if (kbState.down(k.key)) {
                         if (checkExpectedModsDown(k.mod, kbState.modifiers())) {
-                            self.elapsedUsCounter = 0.0;
+                            self.elapsedMsCounter = 0.0;
                             self.currChord = self.currChord.?.children.get(k.*).?;
                             if (self.currChord.?.children.count() == 0) {
                                 self.downKey = k.key;
-                                self.repeatCounter = InitialRepeatRate;
+                                self.repeatCounter = InitialRepeatRateMs;
                                 return .{ .triggered = self.currChord.? };
                             }
                         }
@@ -300,8 +300,8 @@ pub fn KeyMap(comptime T: type) type {
             return true;
         }
 
-        pub fn update(self: *Self, kbState: *const KeyboardState, elapsedUs: f64) ChordUpdateResult(T) {
-            return self.chords.update(kbState, elapsedUs);
+        pub fn update(self: *Self, kbState: *const KeyboardState, deltaMs: f64) ChordUpdateResult(T) {
+            return self.chords.update(kbState, deltaMs);
         }
 
         pub fn reset(self: *Self) void {

@@ -81,7 +81,14 @@ const BaseX: i32 = 100;
 const BaseY: i32 = 40;
 
 
-const AppRunner =  pixzig.AppRunner(Natetris, .{});
+// The engine owns the action map (`eng.actions`) and updates it each tick,
+// so the keyboard and a gamepad drive the same actions.
+const Action = enum { prev_shape, next_shape, rotate_ccw, rotate_cw, left, right, drop, quit };
+
+const AppRunner =  pixzig.AppRunner(Natetris, .{
+    .inputOpts = .{ .numGamepads = 1 },
+    .actionOpts = .{ .Action = Action },
+});
 
 pub const Natetris = struct {
     alloc: std.mem.Allocator,
@@ -99,6 +106,21 @@ pub const Natetris = struct {
     // states: AppStateMgr,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*Natetris {
+        const actions = eng.actions;
+        try actions.bind(.prev_shape, .{ .key = .one });
+        try actions.bind(.next_shape, .{ .key = .two });
+        try actions.bind(.rotate_ccw, .{ .key = .z });
+        try actions.bind(.rotate_ccw, .{ .gamepad_button = .b });
+        try actions.bind(.rotate_cw, .{ .key = .x });
+        try actions.bind(.rotate_cw, .{ .gamepad_button = .a });
+        try actions.bind(.left, .{ .key = .left });
+        try actions.bind(.left, .{ .gamepad_button = .dpad_left });
+        try actions.bind(.right, .{ .key = .right });
+        try actions.bind(.right, .{ .gamepad_button = .dpad_right });
+        try actions.bind(.drop, .{ .key = .down });
+        try actions.bind(.drop, .{ .gamepad_button = .dpad_down });
+        try actions.bind(.quit, .{ .key = .escape });
+        try actions.bind(.quit, .{ .gamepad_button = .back });
 
         const app = try alloc.create(Natetris);
 
@@ -211,41 +233,41 @@ pub const Natetris = struct {
             std.log.debug("FPS: {}\n", .{self.fps.fps()});
         }
 
-        if (eng.inputs.keyboard.pressed(.one)) {
+        if (eng.actions.pressed(.prev_shape)) {
             if(self.currIdx > 0) self.currIdx -= 1;
             @memcpy(self.shape, Shapes[self.currIdx]);
         } 
-        if (eng.inputs.keyboard.pressed(.two)) {
+        if (eng.actions.pressed(.next_shape)) {
             if(self.currIdx < (Shapes.len - 1)) self.currIdx += 1;
             @memcpy(self.shape, Shapes[self.currIdx]);
         }
-        if (eng.inputs.keyboard.pressed(.z)) {
+        if (eng.actions.pressed(.rotate_ccw)) {
             self.rotateCounterClockwise();
             if(!self.checkShape(self.shapePos)) {
                 // Undo our attempt.
                 self.rotateClockwise();
             }
         }
-        if (eng.inputs.keyboard.pressed(.x)) {
+        if (eng.actions.pressed(.rotate_cw)) {
             self.rotateClockwise();
             if(!self.checkShape(self.shapePos)) {
                 self.rotateCounterClockwise();
             }
         }
 
-        if (eng.inputs.keyboard.pressed(.left)) {
+        if (eng.actions.pressed(.left)) {
             self.shapePos.x -= 1;
             if(!self.checkShape(self.shapePos)) {
                 self.shapePos.x += 1;
             }
         }
-        else if(eng.inputs.keyboard.pressed(.right)) {
+        else if(eng.actions.pressed(.right)) {
             self.shapePos.x += 1;
             if(!self.checkShape(self.shapePos)) {
                 self.shapePos.x -= 1;
             }
         }
-        else if(eng.inputs.keyboard.pressed(.down)) {
+        else if(eng.actions.pressed(.drop)) {
             self.shapePos.y += 1;
 
             if(!self.checkShape(self.shapePos)) {
@@ -255,7 +277,7 @@ pub const Natetris = struct {
             }
         }
 
-        if(eng.inputs.keyboard.pressed(.escape)) {
+        if(eng.actions.pressed(.quit)) {
             return false;
         }
 

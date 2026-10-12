@@ -1,7 +1,13 @@
 const std = @import("std");
 const pixzig = @import("pixzig");
 
-const AppRunner = pixzig.AppRunner(App, .{});
+/// Named game controls. The engine owns the action map (`eng.actions`) and
+/// updates it every tick; bind the actions in `App.init`.
+const Action = enum { quit };
+
+const AppRunner = pixzig.AppRunner(App, .{
+    .actionOpts = .{ .Action = Action },
+});
 
 pub const App = struct {
     alloc: std.mem.Allocator,
@@ -10,7 +16,8 @@ pub const App = struct {
     vel: pixzig.Vec2F,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
-        _ = eng;
+        try eng.actions.bind(.quit, .{ .key = .escape });
+
         const app = try alloc.create(App);
         app.* = .{
             .alloc = alloc,
@@ -27,7 +34,7 @@ pub const App = struct {
     /// Runs at a fixed 120 Hz; `deltaMs` is the step length in milliseconds.
     /// Return false to quit.
     pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) bool {
-        if (eng.inputs.keyboard.pressed(.escape)) return false;
+        if (eng.actions.pressed(.quit)) return false;
 
         const dt: f32 = @floatCast(deltaMs);
         self.pos.x += self.vel.x * dt;

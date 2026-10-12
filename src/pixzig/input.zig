@@ -31,6 +31,8 @@ pub const KeyMap = keychord.KeyMap;
 
 pub const action = @import("./input/action.zig");
 pub const ActionMap = action.ActionMap;
+pub const ActionOptions = action.ActionOptions;
+pub const NoAxes = action.NoAxes;
 
 pub const manager = @import("./input/manager.zig");
 pub const InputOptions = manager.InputOptions;
