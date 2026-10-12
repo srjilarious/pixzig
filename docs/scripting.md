@@ -20,7 +20,7 @@ var scripts = try pixzig.ScriptEngine.init(alloc);
 defer scripts.deinit();
 ```
 
-The Lua standard libraries (string, table, math and so on) are open.
+The Lua standard libraries (string, table, math and so on) are open. With audio on (the default), the engine also registers its audio functions, like `audio_play` and `music_play`; see [Audio](page:audio).
 
 ## Running Lua
 

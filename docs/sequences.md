@@ -121,7 +121,7 @@ pub const PlaySoundStep = struct {
 
     fn update(step: *seq.Step, _: f64) f64 {
         const self: *PlaySoundStep = @ptrCast(@alignCast(step.ptr));
-        self.eng.audio.playSound(self.name) catch {};
+        _ = self.eng.audio.play(self.name, .{}) catch {};
         step.done = true;
         return -1.0;
     }

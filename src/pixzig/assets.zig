@@ -21,11 +21,13 @@ fn logAssetIoError(err: anyerror, kind: []const u8, path: []const u8) void {
     std.log.err("Failed to load {s} '{s}' (base dir: '{s}'): {s}", .{ kind, path, base, @errorName(err) });
 }
 
-/// Asset kinds for use in manifests. `raw` marks files that must be present
-/// at runtime but are not loaded through `ResourceManager` (e.g. audio files,
+/// Asset kinds for use in manifests. `sound` and `music` load through
+/// `ResourceManager.loadSound` / `loadMusic`, and are skipped (with a log
+/// line) when the engine has audio off. `raw` marks files that must be
+/// present at runtime but are not loaded through `ResourceManager` (e.g.
 /// Lua scripts, fonts consumed directly by the renderer). `loadGroup` skips
 /// raw assets.
-pub const AssetKind = enum { texture, atlas, font, tilemap, raw };
+pub const AssetKind = enum { texture, atlas, font, tilemap, sound, music, raw };
 
 const AssetDef = struct {
     kind: AssetKind,
@@ -266,6 +268,20 @@ pub const AssetManifest = struct {
                         return err;
                     };
                 },
+                .sound => {
+                    if (self.skipAudio(def.kind, id)) continue;
+                    _ = self.res.loadSound(id, full_path) catch |err| {
+                        logAssetIoError(err, "sound", full_path);
+                        return err;
+                    };
+                },
+                .music => {
+                    if (self.skipAudio(def.kind, id)) continue;
+                    _ = self.res.loadMusic(id, full_path) catch |err| {
+                        logAssetIoError(err, "music", full_path);
+                        return err;
+                    };
+                },
             }
         }
 
@@ -307,12 +323,15 @@ pub const AssetManifest = struct {
         return std.fs.path.joinZ(alloc, &.{ self.rootDir, def.path });
     }
 
+    /// True (after logging it) when an audio asset can't load because the
+    /// engine has audio off, so one manifest serves builds with and without.
+    fn skipAudio(self: *const Self, kind: AssetKind, id: []const u8) bool {
+        if (self.res.audio != null) return false;
+        std.log.info("AssetManifest: audio is off, skipping {s} '{s}'", .{ @tagName(kind), id });
+        return true;
+    }
+
     fn parseKind(s: []const u8) ?AssetKind {
-        if (std.mem.eql(u8, s, "texture")) return .texture;
-        if (std.mem.eql(u8, s, "atlas")) return .atlas;
-        if (std.mem.eql(u8, s, "font")) return .font;
-        if (std.mem.eql(u8, s, "tilemap")) return .tilemap;
-        if (std.mem.eql(u8, s, "raw")) return .raw;
-        return null;
+        return std.meta.stringToEnum(AssetKind, s);
     }
 };

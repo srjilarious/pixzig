@@ -109,6 +109,8 @@ pub const TextureHandle = resources.TextureHandle;
 pub const ShaderHandle = resources.ShaderHandle;
 pub const FontAtlasHandle = resources.FontAtlasHandle;
 pub const TileMapHandle = resources.TileMapHandle;
+pub const SoundHandle = resources.SoundHandle;
+pub const MusicHandle = resources.MusicHandle;
 
 // `Renderer` itself is reached as `AppRunner.Engine.Renderer` (it is
 // generic over `RendererOptions`), so only its plain option/value types are
@@ -127,6 +129,7 @@ pub const ActionMap = input.ActionMap;
 pub const ActionOptions = input.ActionOptions;
 pub const ScriptEngine = scripting.ScriptEngine;
 pub const AudioOptions = audio.AudioOptions;
+pub const Voice = audio.Voice;
 
 pub const Vec2I = common.Vec2I;
 pub const Vec2F = common.Vec2F;
@@ -351,6 +354,7 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
                 self.lag -= UpdateStepMs;
                 if (!self.updateTick(app)) return false;
             }
+            self.engine.updateAudio();
 
             app.render(self.engine);
             self.engine.window.swapBuffers();
@@ -369,6 +373,7 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
             shot.applyInput(&self.engine.inputs, tickStartMs);
             if (!self.updateTick(app)) return false;
             self.shotTicks += 1;
+            self.engine.updateAudio();
 
             app.render(self.engine);
             if (shot.due(tickStartMs + UpdateStepMs)) {
@@ -554,6 +559,14 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
             errdefer if (engOpts.actionOpts != null) eng.actions.deinit();
 
             // ----------------------------------------------------------------
+            // Before the manifest, so its sound and music assets can load.
+            if (engOpts.audioOpts.enabled) {
+                std.log.info("Initializing Audio Engine.", .{});
+                eng.audio = try audio.AudioEngine.init(allocator, engOpts.audioOpts, &eng.resources);
+            }
+            errdefer if (engOpts.audioOpts.enabled) eng.audio.deinit();
+
+            // ----------------------------------------------------------------
             if (engOpts.manifestOpts) |ManifestMod| {
                 std.log.info("Loading asset manifest.", .{});
                 eng.manifest = try assets.ManifestSource.fromOptions(ManifestMod).load(allocator, &eng.resources);
@@ -586,10 +599,8 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
             }
             errdefer if (engOpts.console != null) eng.console.deinit();
 
-            // ----------------------------------------------------------------
-            if (engOpts.audioOpts.enabled) {
-                std.log.info("Initializing Audio Engine.", .{});
-                eng.audio = try audio.AudioEngine.init(allocator, engOpts.audioOpts);
+            if (engOpts.scripting and engOpts.audioOpts.enabled) {
+                try eng.audio.bindToLua(&eng.scripts);
             }
 
             std.log.info("Pixzig Engine Initialized.", .{});
@@ -600,6 +611,8 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
         /// Frees engine resources and deinitializes subsystems.  This includes destroying the
         /// application window.
         pub fn deinit(self: *Self) void {
+            // Also frees the sounds and music in `resources`, which point
+            // into the audio engine.
             if (engOpts.audioOpts.enabled) {
                 self.audio.deinit();
             }
@@ -632,6 +645,14 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
             } else {
                 self.actions.update(&self.inputs, deltaMs);
             }
+        }
+
+        /// Per-frame audio housekeeping (music hot reload, finished
+        /// streams). `AppRunner` calls this once a frame; call it yourself
+        /// only when driving the engine without a runner. A no-op with
+        /// audio off.
+        pub fn updateAudio(self: *Self) void {
+            if (engOpts.audioOpts.enabled) self.audio.update();
         }
 
         /// Sets the application window icon. The provided `icon_data` should be a reader for

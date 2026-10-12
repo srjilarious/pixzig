@@ -496,6 +496,11 @@ pub const DataSource = opaque {
     pub const destroy = zaudioDataSourceDestroy;
     extern fn zaudioDataSourceDestroy(handle: *DataSource) void;
 
+    /// Uninitializes a data source created over caller-owned memory with
+    /// `create`, without freeing that memory (`destroy` frees it).
+    pub const uninit = ma_data_source_uninit;
+    extern fn ma_data_source_uninit(handle: *DataSource) void;
+
     pub const Config = extern struct {
         vtable: *const VTable,
 
@@ -2732,6 +2737,11 @@ pub const Sound = opaque {
 
     pub const setStopTimeInMilliseconds = ma_sound_set_stop_time_in_milliseconds;
     extern fn ma_sound_set_stop_time_in_milliseconds(sound: *Sound, abs_global_time_in_ms: u64) void;
+
+    pub fn stopWithFadeInMilliseconds(sound: *Sound, fade_len_in_ms: u64) Error!void {
+        try maybeError(ma_sound_stop_with_fade_in_milliseconds(sound, fade_len_in_ms));
+    }
+    extern fn ma_sound_stop_with_fade_in_milliseconds(sound: *Sound, fade_len_in_ms: u64) Result;
 
     pub fn isPlaying(sound: *const Sound) bool {
         return ma_sound_is_playing(sound) != .false32;

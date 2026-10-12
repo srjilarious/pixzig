@@ -2,7 +2,7 @@ from ._native import Error
 from .action import ActionMap
 from .anim import Actor
 from .app import App
-from .audio import Audio
+from .audio import Audio, Bus
 from .camera import Camera
 from .constants import GamepadAxis, GamepadButton, Key, MouseAxis, MouseButton
 from .input import Gamepad, Keyboard, Mouse
@@ -34,6 +34,7 @@ __all__ = [
     "Text",
     "Window",
     # Enums and value types
+    "Bus",
     "Flip",
     "GamepadAxis",
     "GamepadButton",

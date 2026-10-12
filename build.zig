@@ -421,8 +421,11 @@ pub fn build(b: *std.Build) void {
             .name = "audio_ex",
             .path = "examples/audio_ex.zig",
             .manifest_def = .{
+                .groups = &.{.{ .name = "boot", .assets = &.{ "laserShoot", "explosion", "theme" } }},
                 .assets = &.{
-                    .{ .id = "laserShoot", .kind = "raw", .path = "laserShoot.wav" },
+                    .{ .id = "laserShoot", .kind = "sound", .path = "laserShoot.wav" },
+                    .{ .id = "explosion", .kind = "sound", .path = "explosion.wav" },
+                    .{ .id = "theme", .kind = "music", .path = "music_loop.wav" },
                 },
             },
         },

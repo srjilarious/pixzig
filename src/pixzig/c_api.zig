@@ -157,6 +157,8 @@ const PzEngine = struct {
     manifests: std.ArrayList(*PzAssetManifest),
     actionMaps: std.ArrayList(*PzActionMap),
     actors: std.ArrayList(*PzActor),
+    /// Adapters for streams started with `pz_audio_play_stream`.
+    streams: std.ArrayList(*PzStream),
     /// Shared frame-sequence/actor-state store, created on the first
     /// `pz_anim_*` call. Referenced by every `Actor`'s states, so it is torn
     /// down only after all actors in `pz_deinit`.
@@ -265,6 +267,7 @@ export fn pz_init(opts: *const PzInitOptions) callconv(.c) ?*PzEngine {
         .manifests = .empty,
         .actionMaps = .empty,
         .actors = .empty,
+        .streams = .empty,
         .anim = null,
     };
     return pz;
@@ -308,6 +311,12 @@ export fn pz_deinit(eng: *PzEngine) callconv(.c) void {
     if (eng.anim) |*m| m.deinit();
 
     eng.engine.deinit();
+
+    // After the engine: the audio thread may call a stream's adapter until
+    // the audio engine is gone.
+    for (eng.streams.items) |st| eng.alloc.destroy(st);
+    eng.streams.deinit(eng.alloc);
+
     eng.alloc.destroy(eng);
 }
 
@@ -323,6 +332,8 @@ export fn pz_should_close(eng: *PzEngine) callconv(.c) bool {
 export fn pz_poll_events(eng: *PzEngine) callconv(.c) void {
     eng.engine.pollEvents();
     eng.engine.refreshWindowState();
+    eng.engine.updateAudio();
+    pruneStreams(eng);
 }
 
 export fn pz_update_input(eng: *PzEngine) callconv(.c) void {
@@ -965,26 +976,247 @@ export fn pz_font_line_height(eng: *PzEngine) callconv(.c) i32 {
 }
 
 // ---------------------------------------------------------------------------
-// Audio. Sounds are named and loaded from a file once, then played by name.
+// Audio. Sounds and music tracks are named resources loaded from a file once,
+// then played by name. Plays return a `PzVoice` handle for stop/volume/pan/
+// pitch; a stale handle (its voice reused, or the stream ended) is ignored.
 // The audio engine is always initialised for the FFI build.
 // ---------------------------------------------------------------------------
 
+/// A `pixzig.Voice` by value. Treat it as opaque; zero-initialised it is a
+/// stale handle every call ignores.
+pub const PzVoice = extern struct {
+    sound: ?*anyopaque,
+    index: u32,
+    gen: u32,
+};
+
+fn voiceFromPz(v: PzVoice) pixzig.Voice {
+    return .{ .sound = @ptrCast(@alignCast(v.sound)), .index = v.index, .gen = v.gen };
+}
+
+fn voiceToPz(v: pixzig.Voice) PzVoice {
+    return .{ .sound = v.sound, .index = v.index, .gen = v.gen };
+}
+
+/// Maps a Python-side bus integer: 0=master, 1=sfx, 2=music.
+fn busFromInt(v: c_int) ?pixzig.audio.Bus {
+    return enumArg(pixzig.audio.Bus, v);
+}
+
+/// Loads a sound effect, decoded into memory, under `name`. Loading a name
+/// again replaces it.
 export fn pz_audio_load(eng: *PzEngine, name: [*:0]const u8, path: [*:0]const u8) callconv(.c) i32 {
-    eng.engine.audio.loadSound(std.mem.span(name), std.mem.span(path)) catch |err| {
+    _ = eng.engine.resources.loadSound(std.mem.span(name), std.mem.span(path)) catch |err| {
         setLastErrorErr(err);
         return -1;
     };
     return 0;
 }
 
-/// Plays a previously loaded sound. Overlapping plays of the same name spin
-/// up extra voices up to the engine's concurrent-sound cap.
-export fn pz_audio_play(eng: *PzEngine, name: [*:0]const u8) callconv(.c) i32 {
-    eng.engine.audio.playSound(std.mem.span(name)) catch |err| {
+/// Plays a loaded sound. When every voice of it is busy, the one playing
+/// longest is restarted. Writes the voice handle to `out_voice` (may be null).
+export fn pz_audio_play(
+    eng: *PzEngine,
+    name: [*:0]const u8,
+    volume: f32,
+    pan: f32,
+    pitch: f32,
+    loop: bool,
+    out_voice: ?*PzVoice,
+) callconv(.c) i32 {
+    const voice = eng.engine.audio.play(std.mem.span(name), .{
+        .volume = volume,
+        .pan = pan,
+        .pitch = pitch,
+        .loop = loop,
+    }) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    if (out_voice) |out| out.* = voiceToPz(voice);
+    return 0;
+}
+
+/// Stops one voice, fading out over `fade_ms` (0 = at once).
+export fn pz_audio_stop(eng: *PzEngine, voice: PzVoice, fade_ms: u32) callconv(.c) void {
+    eng.engine.audio.stop(voiceFromPz(voice), .{ .fadeOutMs = fade_ms });
+}
+
+/// Stops every voice of a loaded sound.
+export fn pz_audio_stop_sound(eng: *PzEngine, name: [*:0]const u8, fade_ms: u32) callconv(.c) i32 {
+    eng.engine.audio.stopSound(std.mem.span(name), .{ .fadeOutMs = fade_ms }) catch |err| {
         setLastErrorErr(err);
         return -1;
     };
     return 0;
+}
+
+/// Whether the handle still refers to a voice or stream (playing, paused,
+/// or finished but not yet reused).
+export fn pz_audio_voice_valid(eng: *PzEngine, voice: PzVoice) callconv(.c) bool {
+    return eng.engine.audio.isValid(voiceFromPz(voice));
+}
+
+export fn pz_audio_is_playing(eng: *PzEngine, voice: PzVoice) callconv(.c) bool {
+    return eng.engine.audio.isPlaying(voiceFromPz(voice));
+}
+
+export fn pz_audio_set_voice_volume(eng: *PzEngine, voice: PzVoice, volume: f32) callconv(.c) void {
+    eng.engine.audio.setVolume(voiceFromPz(voice), volume);
+}
+
+export fn pz_audio_set_voice_pan(eng: *PzEngine, voice: PzVoice, pan: f32) callconv(.c) void {
+    eng.engine.audio.setPan(voiceFromPz(voice), pan);
+}
+
+export fn pz_audio_set_voice_pitch(eng: *PzEngine, voice: PzVoice, pitch: f32) callconv(.c) void {
+    eng.engine.audio.setPitch(voiceFromPz(voice), pitch);
+}
+
+/// Sets a bus volume (bus: 0=master, 1=sfx, 2=music). Returns -1 for an
+/// unknown bus.
+export fn pz_audio_set_bus_volume(eng: *PzEngine, bus: c_int, volume: f32) callconv(.c) i32 {
+    const b = busFromInt(bus) orelse {
+        setLastErrorMsg("UnknownBus");
+        return -1;
+    };
+    eng.engine.audio.setBusVolume(b, volume);
+    return 0;
+}
+
+/// A bus volume, or -1 for an unknown bus.
+export fn pz_audio_bus_volume(eng: *PzEngine, bus: c_int) callconv(.c) f32 {
+    const b = busFromInt(bus) orelse return -1.0;
+    return eng.engine.audio.busVolume(b);
+}
+
+/// Pauses everything playing right now (sounds, streams, music). Sounds
+/// played afterwards still play.
+export fn pz_audio_pause_all(eng: *PzEngine) callconv(.c) void {
+    eng.engine.audio.pauseAll();
+}
+
+export fn pz_audio_resume_all(eng: *PzEngine) callconv(.c) void {
+    eng.engine.audio.resumeAll();
+}
+
+/// The engine's output sample rate in Hz.
+export fn pz_audio_sample_rate(eng: *PzEngine) callconv(.c) u32 {
+    return eng.engine.audio.sampleRate();
+}
+
+/// Loads a music track for streaming under `name`.
+export fn pz_music_load(eng: *PzEngine, name: [*:0]const u8, path: [*:0]const u8) callconv(.c) i32 {
+    _ = eng.engine.resources.loadMusic(std.mem.span(name), std.mem.span(path)) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    return 0;
+}
+
+/// Makes a loaded track the current music. A different track already
+/// playing crossfades out over `fade_ms`; the same track keeps playing.
+export fn pz_music_play(eng: *PzEngine, name: [*:0]const u8, loop: bool, volume: f32, fade_ms: u32) callconv(.c) i32 {
+    eng.engine.audio.playMusic(std.mem.span(name), .{
+        .loop = loop,
+        .volume = volume,
+        .fadeMs = fade_ms,
+    }) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    return 0;
+}
+
+export fn pz_music_stop(eng: *PzEngine, fade_ms: u32) callconv(.c) void {
+    eng.engine.audio.stopMusic(.{ .fadeOutMs = fade_ms });
+}
+
+export fn pz_music_pause(eng: *PzEngine) callconv(.c) void {
+    eng.engine.audio.pauseMusic();
+}
+
+export fn pz_music_resume(eng: *PzEngine) callconv(.c) void {
+    eng.engine.audio.resumeMusic();
+}
+
+export fn pz_music_playing(eng: *PzEngine) callconv(.c) bool {
+    return eng.engine.audio.musicPlaying();
+}
+
+/// Fills `out` with `frames * channels` interleaved f32 samples and returns
+/// the frames written; fewer than `frames` ends the stream. Called on the
+/// audio thread.
+pub const PzStreamFn = *const fn (ctx: ?*anyopaque, out: [*]f32, frames: u32, channels: u32) callconv(.c) u32;
+
+/// Adapts a C stream callback to `pixzig.audio.StreamFn`. Owned by the
+/// `PzEngine`, and freed in `pz_poll_events` once its stream is gone.
+const PzStream = struct {
+    callback: PzStreamFn,
+    ctx: ?*anyopaque,
+    voice: pixzig.Voice = undefined,
+
+    fn fill(ctx: ?*anyopaque, out: []f32, channels: u32) usize {
+        const self: *PzStream = @ptrCast(@alignCast(ctx.?));
+        const frames: u32 = @intCast(out.len / channels);
+        return self.callback(self.ctx, out.ptr, frames, channels);
+    }
+};
+
+/// Starts a stream whose samples `callback` generates (bus: 0=master,
+/// 1=sfx, 2=music; sample_rate 0 = the engine's rate). `ctx` is passed back
+/// to every call and must outlive the stream. Stop it with `pz_audio_stop`.
+export fn pz_audio_play_stream(
+    eng: *PzEngine,
+    callback: PzStreamFn,
+    ctx: ?*anyopaque,
+    channels: u32,
+    sample_rate: u32,
+    volume: f32,
+    bus: c_int,
+    out_voice: ?*PzVoice,
+) callconv(.c) i32 {
+    const b = busFromInt(bus) orelse {
+        setLastErrorMsg("UnknownBus");
+        return -1;
+    };
+    const adapter = eng.alloc.create(PzStream) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    adapter.* = .{ .callback = callback, .ctx = ctx };
+    eng.streams.append(eng.alloc, adapter) catch |err| {
+        eng.alloc.destroy(adapter);
+        setLastErrorErr(err);
+        return -1;
+    };
+    adapter.voice = eng.engine.audio.playStream(PzStream.fill, adapter, .{
+        .channels = channels,
+        .sampleRate = sample_rate,
+        .volume = volume,
+        .bus = b,
+    }) catch |err| {
+        _ = eng.streams.pop();
+        eng.alloc.destroy(adapter);
+        setLastErrorErr(err);
+        return -1;
+    };
+    if (out_voice) |out| out.* = voiceToPz(adapter.voice);
+    return 0;
+}
+
+/// Frees stream adapters whose stream the audio engine has let go of.
+fn pruneStreams(eng: *PzEngine) void {
+    var i: usize = 0;
+    while (i < eng.streams.items.len) {
+        const s = eng.streams.items[i];
+        if (eng.engine.audio.isValid(s.voice)) {
+            i += 1;
+        } else {
+            eng.alloc.destroy(s);
+            _ = eng.streams.swapRemove(i);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

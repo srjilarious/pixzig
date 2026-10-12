@@ -24,6 +24,7 @@ const Tests = blk: {
     testz.Group{ .name = "Viewport Tests", .tag = "viewport", .mod = @import("./viewport_tests.zig") },
     testz.Group{ .name = "Camera Tests", .tag = "camera", .mod = @import("./camera_tests.zig") },
     testz.Group{ .name = "Resources Tests", .tag = "resources", .mod = @import("./resources_tests.zig") },
+    testz.Group{ .name = "Audio Tests", .tag = "audio", .mod = @import("./audio_tests.zig") },
     testz.Group{ .name = "GL Renderer Tests", .tag = "gl", .mod = @import("./gl_renderer_tests.zig") },
     testz.Group{ .name = "Screenshot Hook Tests", .tag = "screenshot", .mod = @import("./screenshot_tests.zig") },
 }, .{});

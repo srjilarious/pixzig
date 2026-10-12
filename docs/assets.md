@@ -88,18 +88,21 @@ The same pattern covers the other asset types:
 | `loadFontFromBitmap(name, path, cellW, cellH, perRow, chars)` | `*FontAtlasHandle` |
 | `loadTileMap(name, path)` | `*TileMapHandle`. See [Tile Maps](page:tile-rendering). |
 | `loadShader(name, vertexSrc, fragmentSrc)` | `*ShaderHandle` |
+| `loadSound(name, path)` | `*SoundHandle`. See [Audio](page:audio). |
+| `loadMusic(name, path)` | `*MusicHandle`, streamed as it plays. |
 
 Loading a name that already exists replaces the asset in place, so existing handles see the new one.
 
 ## Hot Reload
 
-In a debug build, the resource manager watches the files behind every texture, atlas, TTF font and tile map. When one changes, it reloads it in place between updates: the handle you already hold now holds the new asset. Sprites, actors, text and tile renderers all draw the new version on their next draw with no code from you.
+In a debug build, the resource manager watches the files behind every texture, atlas, TTF font, tile map, sound and music track. When one changes, it reloads it in place between updates: the handle you already hold now holds the new asset. Sprites, actors, text and tile renderers all draw the new version on their next draw with no code from you.
 
 A few details:
 
 - A reloaded image is uploaded into the same GPU texture, so its atlas frames and subtextures keep working.
 - An atlas reload checks the new PNG and JSON before touching anything, so a broken file leaves the old atlas drawing.
 - A frame that disappears from an atlas's JSON keeps its last image rather than going away, so a handle to it never dangles.
+- A reloaded sound stops its playing voices; reloaded music that was playing restarts. See [Audio](page:audio).
 - Release builds don't watch files at all.
 
 If you built something from an asset, like spawn points read from a map, check the handle's `version`. It goes up by one on every reload:
@@ -126,12 +129,13 @@ const manifest = pixzig_build.manifestFromDef(b, .{
     .root = "assets",
     .groups = &.{
         .{ .name = "boot", .assets = &.{"ui_font"} },
-        .{ .name = "game", .assets = &.{ "sprites", "level1" } },
+        .{ .name = "game", .assets = &.{ "sprites", "level1", "jump" } },
     },
     .assets = &.{
         .{ .id = "sprites", .kind = "atlas", .path = "sprites" },
         .{ .id = "level1", .kind = "tilemap", .path = "level1.tmx" },
         .{ .id = "ui_font", .kind = "font", .path = "Roboto-Medium.ttf", .font_size = 16 },
+        .{ .id = "jump", .kind = "sound", .path = "jump.wav" },
         .{ .id = "intro", .kind = "raw", .path = "intro.lua" },
     },
 });
@@ -156,7 +160,7 @@ Pass it as `.manifest` to `buildGame`. If you'd rather keep it in a JSON file, u
 }
 ```
 
-Asset paths are relative to `root`, which for a manifest file is relative to the manifest's own folder. The kinds are `texture`, `atlas`, `font`, `tilemap` and `raw`. Each asset is registered under its `id`, so you look it up with `getTexture("sprites")` and so on. Atlas frames keep their own names. A `font` needs a `font_size`. A `raw` asset isn't loaded by the manifest; it just marks a file the game reads itself, like a Lua script or a sound, so a web build preloads it.
+Asset paths are relative to `root`, which for a manifest file is relative to the manifest's own folder. The kinds are `texture`, `atlas`, `font`, `tilemap`, `sound`, `music` and `raw`. Each asset is registered under its `id`, so you look it up with `getTexture("sprites")`, `getSound("jump")` and so on. Atlas frames keep their own names. A `font` needs a `font_size`. A game with audio turned off skips `sound` and `music` assets (it logs each one), so the same manifest works either way. A `raw` asset isn't loaded by the manifest; it just marks a file the game reads itself, like a Lua script, so a web build preloads it.
 
 ### Loading at Runtime
 

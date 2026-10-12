@@ -12,6 +12,7 @@ const file_watcher_mod = @import("./file_watcher.zig");
 const tilemap_mod = @import("./tile/tilemap.zig");
 const tiled_loader_mod = @import("./tile/tiled_loader.zig");
 const paths = @import("./paths.zig");
+const audio = @import("./audio.zig");
 
 const TextureImage = textures.TextureImage;
 const Texture = textures.Texture;
@@ -82,6 +83,12 @@ pub const FontAtlasHandle = Resource(FontAtlas, freeFontAtlas);
 /// A TileMap owns allocated tile/layer/tileset data.
 pub const TileMapHandle = Resource(TileMap, freeTileMap);
 
+/// A sound effect: decoded samples plus the voices playing them.
+pub const SoundHandle = Resource(audio.Sound, freeSound);
+
+/// A music track, streamed from its file while it plays.
+pub const MusicHandle = Resource(audio.Music, freeMusic);
+
 fn freeTextureView(_: *Texture) void {}
 
 fn freeTextureImage(t: *TextureImage) void {
@@ -100,19 +107,31 @@ fn freeTileMap(t: *TileMap) void {
     t.deinit();
 }
 
+fn freeSound(s: *audio.Sound) void {
+    s.deinit();
+}
+
+fn freeMusic(m: *audio.Music) void {
+    m.deinit();
+}
+
 // ---------------------------------------------------------------------------
 // Hot-reload support (active in debug builds only)
 // ---------------------------------------------------------------------------
 
 /// State needed to reload a specific resource from disk. All string fields
 /// are owned by the enclosing `HotReload` instance.
+const NamedPath = struct { name: []const u8, path: []const u8 };
+
 const ReloadInfo = union(enum) {
     texture: struct { name: []const u8, path: []const u8 },
     /// `name` is the resource key the caller chose; `basePath` is the
     /// resolved on-disk path base, without the .png/.json extension.
     atlas: struct { name: []const u8, basePath: []const u8 },
     font_ttf: struct { name: []const u8, path: []const u8, faceIndex: i32 = 0, fontSize: f32 },
-    tilemap: struct { name: []const u8, path: []const u8 },
+    tilemap: NamedPath,
+    sound: NamedPath,
+    music: NamedPath,
 
     /// Deep-copy all owned strings into `alloc`. The original slices are
     /// not freed; the caller decides when to release them.
@@ -136,6 +155,14 @@ const ReloadInfo = union(enum) {
                 .name = try alloc.dupe(u8, t.name),
                 .path = try alloc.dupe(u8, t.path),
             } },
+            .sound => |t| .{ .sound = .{
+                .name = try alloc.dupe(u8, t.name),
+                .path = try alloc.dupe(u8, t.path),
+            } },
+            .music => |t| .{ .music = .{
+                .name = try alloc.dupe(u8, t.name),
+                .path = try alloc.dupe(u8, t.path),
+            } },
         };
     }
 
@@ -153,7 +180,7 @@ const ReloadInfo = union(enum) {
                 alloc.free(f.name);
                 alloc.free(f.path);
             },
-            .tilemap => |t| {
+            .tilemap, .sound, .music => |t| {
                 alloc.free(t.name);
                 alloc.free(t.path);
             },
@@ -215,13 +242,14 @@ const HotReload = struct {
 // ResourceManager
 // ---------------------------------------------------------------------------
 
-/// Owns all loaded game assets: textures, shaders, atlases, fonts, and tilemaps.
+/// Owns all loaded game assets: textures, shaders, atlases, fonts, tilemaps,
+/// sounds and music.
 ///
 /// Every asset lives in a `Resource` slot keyed by name. The `load*`
 /// functions, `addSubTexture*`, and the `getX(name)` family (`getTexture`,
-/// `getShader`, `getFontAtlas`, `getTileMap`) all return a pointer to that
-/// slot. It stays valid until the manager deinits and is never released:
-/// load, draw, forget.
+/// `getShader`, `getFontAtlas`, `getTileMap`, `getSound`, `getMusic`) all
+/// return a pointer to that slot. It stays valid until the manager deinits
+/// and is never released: load, draw, forget.
 ///
 /// Loading a name that is already registered replaces the value in its
 /// slot (see `Resource`), so a `Sprite`, batch or tile renderer holding the
@@ -246,6 +274,12 @@ pub const ResourceManager = struct {
     atlasManifests: std.StringHashMap(std.ArrayListUnmanaged([]const u8)),
     fonts: std.StringHashMap(*FontAtlasHandle),
     tilemaps: std.StringHashMap(*TileMapHandle),
+    sounds: std.StringHashMap(*SoundHandle),
+    music: std.StringHashMap(*MusicHandle),
+    /// The audio engine's miniaudio state, needed to load sounds and music.
+    /// Set by `AudioEngine.init`; null while audio is off, when
+    /// `loadSound`/`loadMusic` return `error.AudioDisabled`.
+    audio: ?audio.Backend,
     alloc: std.mem.Allocator,
     /// File-change watcher used in debug builds for hot-reload. Always null
     /// in release builds (never initialised). The field type is always
@@ -263,6 +297,9 @@ pub const ResourceManager = struct {
             .atlasManifests = std.StringHashMap(std.ArrayListUnmanaged([]const u8)).init(alloc),
             .fonts = std.StringHashMap(*FontAtlasHandle).init(alloc),
             .tilemaps = std.StringHashMap(*TileMapHandle).init(alloc),
+            .sounds = std.StringHashMap(*SoundHandle).init(alloc),
+            .music = std.StringHashMap(*MusicHandle).init(alloc),
+            .audio = null,
             .alloc = alloc,
             .hotReload = null,
         };
@@ -276,6 +313,8 @@ pub const ResourceManager = struct {
         self.freeSlots(ShaderHandle, &self.shaders);
         self.freeSlots(FontAtlasHandle, &self.fonts);
         self.freeSlots(TileMapHandle, &self.tilemaps);
+        self.freeSlots(SoundHandle, &self.sounds);
+        self.freeSlots(MusicHandle, &self.music);
 
         var amit = self.atlasManifests.iterator();
         while (amit.next()) |entry| {
@@ -347,6 +386,8 @@ pub const ResourceManager = struct {
                 errdefer map.deinit();
                 _ = try self.putSlot(TileMapHandle, &self.tilemaps, t.name, map);
             },
+            .sound => |t| _ = try self.loadSoundImpl(t.name, t.path),
+            .music => |t| _ = try self.loadMusicImpl(t.name, t.path),
         }
     }
 
@@ -375,6 +416,8 @@ pub const ResourceManager = struct {
                     .atlas => "atlas",
                     .font_ttf => "font",
                     .tilemap => "tilemap",
+                    .sound => "sound",
+                    .music => "music",
                 };
                 std.log.info("Hot reloading {s} (watch id {})", .{ type_name, id });
                 self.reloadResource(info) catch |err| {
@@ -980,5 +1023,114 @@ pub const ResourceManager = struct {
         var shader = try Shader.init(vs, fs);
         errdefer shader.deinit();
         return self.putSlot(ShaderHandle, &self.shaders, name, shader);
+    }
+
+    // -----------------------------------------------------------------------
+    // Sound and music loading
+    // -----------------------------------------------------------------------
+
+    /// Hands the manager the audio engine's miniaudio state, so it can load
+    /// sounds and music. `AudioEngine.init` calls this.
+    pub fn attachAudio(self: *Self, backend: audio.Backend) void {
+        self.audio = backend;
+    }
+
+    /// Frees every sound and music value (their slots stay, so handles
+    /// remain valid but play nothing) and forgets the audio backend.
+    /// `AudioEngine.deinit` calls this before destroying miniaudio, which
+    /// every loaded sound points into.
+    pub fn detachAudio(self: *Self) void {
+        var sit = self.sounds.valueIterator();
+        while (sit.next()) |slot| slot.*.replace(audio.Sound.empty(self.alloc));
+        var mit = self.music.valueIterator();
+        while (mit.next()) |slot| slot.*.replace(audio.Music.empty());
+        self.audio = null;
+    }
+
+    /// Loads a sound effect (WAV, FLAC or MP3), decoded into memory up
+    /// front, and registers it under `name`. Play it with
+    /// `eng.audio.play(name, .{})`. A second call with the same name
+    /// replaces the sound in place, stopping its voices.
+    ///
+    /// In debug builds, the file is watched and the sound is reloaded in
+    /// place when it changes.
+    pub fn loadSound(self: *Self, name: []const u8, path: []const u8) !*SoundHandle {
+        const resolved = try paths.resolve(self.alloc, path);
+        defer self.alloc.free(resolved);
+
+        const handle = try self.loadSoundImpl(name, resolved);
+        self.watchAudioFile(resolved, .{ .sound = .{ .name = name, .path = resolved } });
+        return handle;
+    }
+
+    /// Internal: loads a sound from a resolved path without adding a watch.
+    fn loadSoundImpl(self: *Self, name: []const u8, resolved: []const u8) !*SoundHandle {
+        const backend = self.audio orelse return error.AudioDisabled;
+        const pathZ = try std.mem.concatWithSentinel(self.alloc, u8, &.{resolved}, 0);
+        defer self.alloc.free(pathZ);
+
+        if (self.sounds.get(name)) |slot| {
+            // Free first, unlike other reloads: miniaudio caches decoded
+            // samples by path while any copy of the sound is alive, so
+            // loading before freeing would hand back the old samples. A
+            // failed load leaves the slot empty until the next good one.
+            slot.replace(audio.Sound.empty(self.alloc));
+            slot.val = try audio.Sound.load(self.alloc, backend, pathZ);
+            return slot;
+        }
+
+        var snd = try audio.Sound.load(self.alloc, backend, pathZ);
+        errdefer snd.deinit();
+        return self.putSlot(SoundHandle, &self.sounds, name, snd);
+    }
+
+    /// Opens a music track (WAV, FLAC or MP3) for streaming and registers
+    /// it under `name`. Only the start is read now; the rest is decoded as
+    /// it plays, so long tracks cost little memory. Play it with
+    /// `eng.audio.playMusic(name, .{})`. A second call with the same name
+    /// replaces the track in place.
+    ///
+    /// In debug builds, the file is watched and the track is reloaded in
+    /// place when it changes; if it was the current music, it restarts.
+    pub fn loadMusic(self: *Self, name: []const u8, path: []const u8) !*MusicHandle {
+        const resolved = try paths.resolve(self.alloc, path);
+        defer self.alloc.free(resolved);
+
+        const handle = try self.loadMusicImpl(name, resolved);
+        self.watchAudioFile(resolved, .{ .music = .{ .name = name, .path = resolved } });
+        return handle;
+    }
+
+    /// Internal: loads a music track from a resolved path without adding a
+    /// watch. Streams aren't cached, so this loads before freeing the old
+    /// track, and a failed reload keeps the old one.
+    fn loadMusicImpl(self: *Self, name: []const u8, resolved: []const u8) !*MusicHandle {
+        const backend = self.audio orelse return error.AudioDisabled;
+        const pathZ = try std.mem.concatWithSentinel(self.alloc, u8, &.{resolved}, 0);
+        defer self.alloc.free(pathZ);
+
+        var music = try audio.Music.load(backend, pathZ);
+        errdefer music.deinit();
+        return self.putSlot(MusicHandle, &self.music, name, music);
+    }
+
+    fn watchAudioFile(self: *Self, resolved: []const u8, info: ReloadInfo) void {
+        if (comptime builtin.mode != .debug) return;
+        self.ensureHotReload();
+        if (self.hotReload) |*hr| {
+            hr.registerWatch(resolved, info) catch |err| {
+                std.log.warn("Could not register audio watch for '{s}': {}", .{ resolved, err });
+            };
+        }
+    }
+
+    /// The sound registered as `name`.
+    pub fn getSound(self: *Self, name: []const u8) !*SoundHandle {
+        return self.sounds.get(name) orelse error.NoSoundWithThatName;
+    }
+
+    /// The music track registered as `name`.
+    pub fn getMusic(self: *Self, name: []const u8) !*MusicHandle {
+        return self.music.get(name) orelse error.NoMusicWithThatName;
     }
 };

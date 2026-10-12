@@ -25,8 +25,8 @@ Game logic goes in `update` and drawing goes in `render`. Keep them apart: `upda
 
 ```zig
 const AppRunner = pixzig.AppRunner(App, .{
-    .audioOpts = .{ .enabled = true },
     .inputOpts = .{ .numGamepads = 1 },
+    .scripting = true,
 });
 ```
 
@@ -35,7 +35,7 @@ const AppRunner = pixzig.AppRunner(App, .{
 | `updateStepHz` | `120` | How often `update` runs. |
 | `maxLagMs` | `250` | The most time one frame will catch up on. See below. |
 | `rendererOpts` | `.{}` | `shapeRendering`, `textRendering` (both on) and the batch size `maxSprites`. |
-| `audioOpts` | off | Set `.enabled = true` to get `eng.audio`. See [Audio](page:audio). |
+| `audioOpts` | on | Sound, music and streams as `eng.audio`; `.enabled = false` turns it off. See [Audio](page:audio). |
 | `inputOpts` | mouse on | Mouse, gamepad slots and OS text input. See [Input](page:input). |
 | `actionOpts` | `null` | Set `.Action` (and optionally `.Axes`) to get an action map as `eng.actions`. See [Input](page:input). |
 | `manifestOpts` | `null` | Load an asset manifest during init. See [Assets](page:assets). |
@@ -44,7 +44,7 @@ const AppRunner = pixzig.AppRunner(App, .{
 | `defaultIcon` | `true` | Set pixzig's window icon. |
 | `screenshotHook` | `false` | Let `PIXZIG_SCREENSHOT` capture a frame and exit. See [Building and Shipping](page:building). |
 
-Turning a feature off removes its code paths. Using it anyway is a compile error that names the option, e.g. calling `eng.audio.playSound` without `audioOpts.enabled`. It doesn't change which native libraries get linked, though: every build still links SDL3, OpenGL, flecs, miniaudio, Lua and the rest.
+Turning a feature off removes its code paths. Using it anyway is a compile error that names the option, e.g. calling `eng.audio.play` with `audioOpts.enabled = false`. It doesn't change which native libraries get linked, though: every build still links SDL3, OpenGL, flecs, miniaudio, Lua and the rest.
 
 ## Starting It Up
 
@@ -86,11 +86,11 @@ Both app methods get the engine. It's how you reach every system:
 | Member | What it is |
 |---|---|
 | `eng.renderer` | Sprites, shapes and text. See [Rendering](page:rendering). |
-| `eng.resources` | The `ResourceManager`: textures, atlases, fonts, maps and shaders. |
+| `eng.resources` | The `ResourceManager`: textures, atlases, fonts, maps, shaders, sounds and music. |
 | `eng.inputs` | Keyboard, mouse and gamepads. |
 | `eng.actions` | The action map, when `actionOpts` is set. |
 | `eng.viewport` | The logical size and how it maps to the window. |
-| `eng.audio` | Sound playback, when enabled. |
+| `eng.audio` | Sound, music and stream playback. See [Audio](page:audio). |
 | `eng.rng` | A seeded random source. See [Math and Gameplay Helpers](page:math). |
 | `eng.scripts`, `eng.console` | Lua state and console, when enabled. |
 | `eng.manifest` | The asset manifest, when `manifestOpts` is set. |

@@ -79,7 +79,7 @@ Relative paths resolve against the directory of your main script, not the workin
 | `app.keyboard`, `app.mouse`, `app.gamepad(i)` | Raw input. |
 | `app.shapes` | `filled_rect`, `rect` and `enclosing_rect`. |
 | `app.text` | `load_font`, `set_font`, `draw`, `draw_colored`, `draw_scaled`, `measure`. |
-| `app.audio` | `load` and `play`. |
+| `app.audio` | Sounds (`load`, `play` with volume/pan/pitch/loop, `stop`), music (`load_music`, `play_music` with fades, `stop_music`), `set_bus_volume`, `pause_all`, and `play_stream` for generated audio. |
 | `app.window` | Size, title, fullscreen and vsync. |
 
 Colors are `(r, g, b)` or `(r, g, b, a)` tuples of 0-255 values. Keys and buttons are the `Key`, `MouseButton`, `GamepadButton` and `GamepadAxis` enums, generated from the engine's own.

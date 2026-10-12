@@ -198,8 +198,52 @@ pz_sprite_get_size = _sig(
 )
 
 # --- Audio -----------------------------------------------------------------
+class PzVoice(ctypes.Structure):
+    """Mirror of `PzVoice` in src/pixzig/c_api.zig: a voice handle passed
+    by value. Opaque to Python; zero-initialised it is a stale handle."""
+
+    _fields_ = [
+        ("sound", ctypes.c_void_p),
+        ("index", ctypes.c_uint32),
+        ("gen", ctypes.c_uint32),
+    ]
+
+
+#: `PzStreamFn`: (ctx, out float*, frames, channels) -> frames written.
+PzStreamFn = ctypes.CFUNCTYPE(
+    ctypes.c_uint32, ctypes.c_void_p, ctypes.POINTER(c_float), ctypes.c_uint32, ctypes.c_uint32
+)
+
+c_uint32 = ctypes.c_uint32
+PzVoicePtr = ctypes.POINTER(PzVoice)
+
 pz_audio_load = _sig("pz_audio_load", [PzEnginePtr, c_char_p, c_char_p], c_int32)
-pz_audio_play = _sig("pz_audio_play", [PzEnginePtr, c_char_p], c_int32)
+pz_audio_play = _sig(
+    "pz_audio_play", [PzEnginePtr, c_char_p, c_float, c_float, c_float, c_bool, PzVoicePtr], c_int32
+)
+pz_audio_stop = _sig("pz_audio_stop", [PzEnginePtr, PzVoice, c_uint32], None)
+pz_audio_stop_sound = _sig("pz_audio_stop_sound", [PzEnginePtr, c_char_p, c_uint32], c_int32)
+pz_audio_voice_valid = _sig("pz_audio_voice_valid", [PzEnginePtr, PzVoice], c_bool)
+pz_audio_is_playing = _sig("pz_audio_is_playing", [PzEnginePtr, PzVoice], c_bool)
+pz_audio_set_voice_volume = _sig("pz_audio_set_voice_volume", [PzEnginePtr, PzVoice, c_float], None)
+pz_audio_set_voice_pan = _sig("pz_audio_set_voice_pan", [PzEnginePtr, PzVoice, c_float], None)
+pz_audio_set_voice_pitch = _sig("pz_audio_set_voice_pitch", [PzEnginePtr, PzVoice, c_float], None)
+pz_audio_set_bus_volume = _sig("pz_audio_set_bus_volume", [PzEnginePtr, c_int, c_float], c_int32)
+pz_audio_bus_volume = _sig("pz_audio_bus_volume", [PzEnginePtr, c_int], c_float)
+pz_audio_pause_all = _sig("pz_audio_pause_all", [PzEnginePtr], None)
+pz_audio_resume_all = _sig("pz_audio_resume_all", [PzEnginePtr], None)
+pz_audio_sample_rate = _sig("pz_audio_sample_rate", [PzEnginePtr], c_uint32)
+pz_audio_play_stream = _sig(
+    "pz_audio_play_stream",
+    [PzEnginePtr, PzStreamFn, ctypes.c_void_p, c_uint32, c_uint32, c_float, c_int, PzVoicePtr],
+    c_int32,
+)
+pz_music_load = _sig("pz_music_load", [PzEnginePtr, c_char_p, c_char_p], c_int32)
+pz_music_play = _sig("pz_music_play", [PzEnginePtr, c_char_p, c_bool, c_float, c_uint32], c_int32)
+pz_music_stop = _sig("pz_music_stop", [PzEnginePtr, c_uint32], None)
+pz_music_pause = _sig("pz_music_pause", [PzEnginePtr], None)
+pz_music_resume = _sig("pz_music_resume", [PzEnginePtr], None)
+pz_music_playing = _sig("pz_music_playing", [PzEnginePtr], c_bool)
 
 # --- Sprite animation ----------------------------------------------------
 pz_anim_load_file = _sig("pz_anim_load_file", [PzEnginePtr, c_char_p], c_int32)

@@ -1,88 +1,158 @@
 const std = @import("std");
 const pixzig = @import("pixzig");
-const zaudio = pixzig.zaudio;
 
-const FpsCounter = pixzig.utils.FpsCounter;
+const Color = pixzig.Color;
+const manifest_options = @import("manifest_options");
 
-// Audio and the action map are both engine systems the app opts into.
-const Action = enum { shoot, next, show, quit };
+// Audio is on by default; the sounds and the music track come from the
+// manifest's boot group (see `audio_ex` in build.zig).
+const Action = enum { laser, boom, music, synth, pause, volUp, volDown, quit };
 const AppRunner = pixzig.AppRunner(App, .{
-    .audioOpts = .{ .enabled = true },
+    .manifestOpts = manifest_options,
     .actionOpts = .{ .Action = Action },
 });
 
+/// A tiny synth for `playStream`: a square-wave arpeggio. Once the stream
+/// starts, only the audio thread touches it, so it needs no locking; the
+/// game just stops the stream when it's done.
+const Synth = struct {
+    sampleRate: f32,
+    phase: f32 = 0,
+    frame: u64 = 0,
+
+    const notes = [_]f32{ 220.0, 277.18, 329.63, 440.0 };
+    const noteFrames = 6000;
+
+    fn fill(ctx: ?*anyopaque, out: []f32, channels: u32) usize {
+        const self: *Synth = @ptrCast(@alignCast(ctx.?));
+        const frames = out.len / channels;
+        for (0..frames) |i| {
+            const freq = notes[@intCast((self.frame / noteFrames) % notes.len)];
+            self.phase = @mod(self.phase + freq / self.sampleRate, 1.0);
+            const sample: f32 = if (self.phase < 0.5) 0.08 else -0.08;
+            for (0..channels) |c| out[i * channels + c] = sample;
+            self.frame += 1;
+        }
+        return frames;
+    }
+};
+
 pub const App = struct {
     alloc: std.mem.Allocator,
-    testVal: i32,
-    fps: FpsCounter,
+    synth: Synth,
+    synthVoice: ?pixzig.Voice = null,
+    paused: bool = false,
+    last: []const u8 = "(nothing yet)",
 
-    pub fn init(allocator: std.mem.Allocator, engine: *AppRunner.Engine) !*App {
-        engine.audio.loadSound("laserShoot", "assets/laserShoot.wav") catch |err| {
-            std.log.err("Error loading sound: {}\n", .{err});
-        };
-
-        try engine.actions.bind(.shoot, .{ .key = .left });
-        try engine.actions.bind(.next, .{ .key = .right });
-        try engine.actions.bind(.show, .{ .key = .space });
-        try engine.actions.bind(.quit, .{ .key = .escape });
+    pub fn init(allocator: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
+        try eng.actions.bind(.laser, .{ .key = .space });
+        try eng.actions.bind(.boom, .{ .key = .b });
+        try eng.actions.bind(.music, .{ .key = .m });
+        try eng.actions.bind(.synth, .{ .key = .s });
+        try eng.actions.bind(.pause, .{ .key = .p });
+        try eng.actions.bind(.volUp, .{ .key = .up });
+        try eng.actions.bind(.volDown, .{ .key = .down });
+        try eng.actions.bind(.quit, .{ .key = .escape });
 
         const app = try allocator.create(App);
         app.* = .{
             .alloc = allocator,
-            .testVal = 123,
-            // .audioEngine = engine, .sample = sample,
-            .fps = FpsCounter.init(),
+            .synth = .{ .sampleRate = @floatFromInt(eng.audio.sampleRate()) },
         };
-
-        return app; //.{ .testVal = 123, .audioEngine = engine, .sample = sample, .fps = FpsCounter.init() };
+        try eng.audio.playMusic("theme", .{ .fadeMs = 1000 });
+        return app;
     }
 
     pub fn deinit(self: *App) void {
-        // self.sample.destroy();
-        // self.audioEngine.destroy();
-        // zaudio.deinit();
         self.alloc.destroy(self);
     }
 
-    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
-        if (self.fps.update(delta)) {
-            std.log.info("FPS: {}", .{self.fps.fps()});
-        }
+    pub fn update(self: *App, eng: *AppRunner.Engine, _: f64) bool {
+        const audio = &eng.audio;
 
-        if (eng.actions.pressed(.shoot)) {
-            std.log.info("Left!\n", .{});
-            eng.audio.playSound("laserShoot") catch |err| {
-                std.log.err("Error playing sound: {}\n", .{err});
-            };
-
-            // self.sample.start() catch |err| {
-            //     std.log.info("Error playing sound: {}\n", .{err});
-            // };
-            self.testVal -= 1;
+        if (eng.actions.pressed(.laser)) {
+            // A little random pan and pitch keeps rapid fire from sounding
+            // like one sample on repeat.
+            _ = audio.play("laserShoot", .{
+                .pan = eng.rng.floatRange(-0.6, 0.6),
+                .pitch = eng.rng.floatRange(0.9, 1.1),
+            }) catch |err| std.log.err("laser: {}", .{err});
+            self.last = "laser";
         }
-        if (eng.actions.pressed(.next)) {
-            std.log.info("Right!\n", .{});
-            self.testVal += 1;
+        if (eng.actions.pressed(.boom)) {
+            _ = audio.play("explosion", .{ .volume = 0.8 }) catch |err| std.log.err("boom: {}", .{err});
+            self.last = "explosion";
         }
-        if (eng.actions.pressed(.show)) {
-            std.log.info("Context: {}\n", .{self.testVal});
+        if (eng.actions.pressed(.music)) {
+            if (audio.musicPlaying()) {
+                audio.stopMusic(.{ .fadeOutMs = 1000 });
+            } else {
+                audio.playMusic("theme", .{ .fadeMs = 1000 }) catch |err| std.log.err("music: {}", .{err});
+            }
         }
-        if (eng.actions.pressed(.quit)) {
-            return false;
+        if (eng.actions.pressed(.synth)) {
+            if (self.synthVoice) |v| {
+                audio.stop(v, .{ .fadeOutMs = 200 });
+                self.synthVoice = null;
+            } else {
+                // The synth is only touched by the audio thread while it
+                // plays; resetting it here is safe because it's stopped.
+                self.synth.frame = 0;
+                self.synthVoice = audio.playStream(Synth.fill, &self.synth, .{ .channels = 1 }) catch |err| blk: {
+                    std.log.err("synth: {}", .{err});
+                    break :blk null;
+                };
+            }
         }
-        return true;
+        if (eng.actions.pressed(.pause)) {
+            self.paused = !self.paused;
+            if (self.paused) audio.pauseAll() else audio.resumeAll();
+        }
+        if (eng.actions.pressed(.volUp)) {
+            audio.setBusVolume(.music, @min(1.0, audio.busVolume(.music) + 0.1));
+        }
+        if (eng.actions.pressed(.volDown)) {
+            audio.setBusVolume(.music, @max(0.0, audio.busVolume(.music) - 0.1));
+        }
+        return !eng.actions.pressed(.quit);
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        eng.renderer.clear(0, 0, 255, 255);
-        self.fps.renderTick();
+        eng.renderer.clear(20, 20, 60, 255);
+        eng.renderer.begin(.logical);
+
+        const white = Color.from(255, 255, 255, 255);
+        const dim = Color.from(160, 160, 200, 255);
+        var buf: [96]u8 = undefined;
+        var y: i32 = 30;
+        const lines = [_][]const u8{
+            "Space = laser   B = explosion",
+            "M = music on/off (1s fades)   S = synth stream",
+            "P = pause/resume all   Up/Down = music volume",
+            "Esc = quit",
+        };
+        for (lines) |line| {
+            _ = eng.renderer.drawStringColored(line, .{ .x = 30, .y = y }, dim);
+            y += 30;
+        }
+
+        y += 20;
+        const status = std.fmt.bufPrint(&buf, "last: {s}   music: {s}   volume: {d:.1}", .{
+            self.last,
+            if (eng.audio.musicPlaying()) "playing" else "stopped",
+            eng.audio.busVolume(.music),
+        }) catch "";
+        _ = eng.renderer.drawStringColored(status, .{ .x = 30, .y = y }, white);
+        y += 30;
+        const state = if (self.paused) "PAUSED" else if (self.synthVoice != null) "synth on" else "";
+        _ = eng.renderer.drawStringColored(state, .{ .x = 30, .y = y }, white);
+
+        eng.renderer.end();
     }
 };
 
 pub fn main(init: std.process.Init) !void {
-    std.log.info("Pixzig Game Loop Example", .{});
-
-    const appRunner = try AppRunner.init("Pixzig Game Loop Example.", init.gpa, .{});
+    const appRunner = try AppRunner.init("Pixzig Audio Example", init.gpa, .{});
     defer appRunner.deinit();
 
     const app = try App.init(init.gpa, appRunner.engine);

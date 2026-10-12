@@ -76736,6 +76736,9 @@ MA_API ma_result ma_sound_init_from_file_internal(ma_engine* pEngine, const ma_s
 
         result = ma_resource_manager_data_source_init_ex(pEngine->pResourceManager, &resourceManagerDataSourceConfig, pSound->pResourceManagerDataSource);
         if (result != MA_SUCCESS) {
+            /* pixzig patch: 0.11.22 leaked this allocation on every failed load (missing or undecodable file). */
+            ma_free(pSound->pResourceManagerDataSource, &pEngine->allocationCallbacks);
+            pSound->pResourceManagerDataSource = NULL;
             goto done;
         }
 
