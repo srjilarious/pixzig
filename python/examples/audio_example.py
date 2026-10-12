@@ -28,7 +28,7 @@ class AudioApp(App):
 
         self.audio.load("laser", "assets/laserShoot.wav")
         self.audio.load("boom", "assets/explosion.wav")
-        self.audio.load_music("theme", "assets/music_loop.wav")
+        self.audio.load_music("theme", "assets/music_loop.ogg")
         self.audio.play_music("theme", fade_ms=1000)
 
         self.last = "(nothing yet)"

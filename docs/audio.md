@@ -23,7 +23,9 @@ _ = try eng.resources.loadSound("boom", "assets/explosion.wav");
 _ = try eng.resources.loadMusic("theme", "assets/theme.wav");
 ```
 
-A **sound** is decoded into memory when it loads, so it starts instantly. Use it for effects. A **music** track is streamed from disk as it plays, so a long track costs little memory. miniaudio reads WAV, FLAC and MP3.
+A **sound** is decoded into memory when it loads, so it starts instantly. Use it for effects. A **music** track is streamed from disk as it plays, so a long track costs little memory.
+
+Pixzig reads WAV, FLAC, MP3 and Ogg Vorbis. For music that loops, use Ogg or FLAC: both loop seamlessly. MP3 doesn't, because the decoder keeps the encoder's padding (about 100 ms), and you'll hear it as a gap each time the track wraps.
 
 Both return a handle (`*SoundHandle`, `*MusicHandle`) and can be looked up later with `getSound(name)` and `getMusic(name)`. Paths resolve like every other asset (see [Assets](page:assets)), and a manifest can declare them with the `sound` and `music` kinds.
 

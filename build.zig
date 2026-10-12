@@ -425,7 +425,7 @@ pub fn build(b: *std.Build) void {
                 .assets = &.{
                     .{ .id = "laserShoot", .kind = "sound", .path = "laserShoot.wav" },
                     .{ .id = "explosion", .kind = "sound", .path = "explosion.wav" },
-                    .{ .id = "theme", .kind = "music", .path = "music_loop.wav" },
+                    .{ .id = "theme", .kind = "music", .path = "music_loop.ogg" },
                 },
             },
         },

@@ -1047,8 +1047,8 @@ pub const ResourceManager = struct {
         self.audio = null;
     }
 
-    /// Loads a sound effect (WAV, FLAC or MP3), decoded into memory up
-    /// front, and registers it under `name`. Play it with
+    /// Loads a sound effect (WAV, FLAC, MP3 or Ogg Vorbis), decoded into
+    /// memory up front, and registers it under `name`. Play it with
     /// `eng.audio.play(name, .{})`. A second call with the same name
     /// replaces the sound in place, stopping its voices.
     ///
@@ -1084,9 +1084,9 @@ pub const ResourceManager = struct {
         return self.putSlot(SoundHandle, &self.sounds, name, snd);
     }
 
-    /// Opens a music track (WAV, FLAC or MP3) for streaming and registers
-    /// it under `name`. Only the start is read now; the rest is decoded as
-    /// it plays, so long tracks cost little memory. Play it with
+    /// Opens a music track (WAV, FLAC, MP3 or Ogg Vorbis) for streaming
+    /// and registers it under `name`. Only the start is read now; the rest
+    /// is decoded as it plays, so long tracks cost little memory. Play it with
     /// `eng.audio.playMusic(name, .{})`. A second call with the same name
     /// replaces the track in place.
     ///

@@ -22,6 +22,8 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(miniaudio_lib);
 
     miniaudio.addIncludePath(b.path("libs/miniaudio"));
+    // PIXZIG addition: Ogg Vorbis support, included by libs/miniaudio/miniaudio.c.
+    miniaudio.addIncludePath(b.path("libs/stb_vorbis"));
     miniaudio_lib.root_module.link_libc = true;
 
     if (target.result.os.tag == .macos) {

@@ -101,7 +101,7 @@ pub fn loadWithoutAudioIsAnErrorTest(io: std.Io, alloc: std.mem.Allocator) !void
     var res = ResourceManager.init(alloc);
     defer res.deinit();
     try testz.expectError(res.loadSound("laser", "assets/laserShoot.wav"), error.AudioDisabled);
-    try testz.expectError(res.loadMusic("theme", "assets/music_loop.wav"), error.AudioDisabled);
+    try testz.expectError(res.loadMusic("theme", "assets/music_loop.ogg"), error.AudioDisabled);
 }
 
 pub fn fullPoolStealsOldestVoiceTest(io: std.Io, alloc: std.mem.Allocator) !void {
@@ -255,7 +255,7 @@ pub fn musicPlaysAndCrossfadesTest(io: std.Io, alloc: std.mem.Allocator) !void {
     const otherPath = try writeWav(io, alloc, "other_track.wav", 48000);
     defer alloc.free(otherPath);
 
-    const theme = try f.res.loadMusic("theme", "assets/music_loop.wav");
+    const theme = try f.res.loadMusic("theme", "assets/music_loop.ogg");
     const other = try f.res.loadMusic("other", otherPath);
 
     try f.eng.playMusic("theme", .{});
@@ -281,13 +281,43 @@ pub fn musicPlaysAndCrossfadesTest(io: std.Io, alloc: std.mem.Allocator) !void {
     try testz.expectFalse(other.val.snd.?.isPlaying());
 }
 
+pub fn oggMusicLoopsPastItsEndTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var f: Fixture = undefined;
+    try f.init(alloc, .{});
+    defer f.deinit();
+
+    // stb_vorbis runs in push mode, so the stream's length is unknown and
+    // looping relies on seeking back at the end. The track is 8 s long.
+    _ = try f.res.loadMusic("theme", "assets/music_loop.ogg");
+    try f.eng.playMusic("theme", .{ .loop = true });
+    try f.pump(9000);
+    try testz.expectTrue(f.eng.musicPlaying());
+
+    try f.eng.playMusic("theme", .{ .loop = false });
+    try f.pump(8000);
+    try testz.expectFalse(f.eng.musicPlaying());
+}
+
+pub fn oggDecodesWithoutPaddingTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var f: Fixture = undefined;
+    try f.init(alloc, .{});
+    defer f.deinit();
+
+    // Exactly 8 s at the engine's 48 kHz: no encoder delay or padding
+    // that would put a gap in the loop (MP3 through dr_mp3 adds ~100 ms).
+    const h = try f.res.loadSound("theme", "assets/music_loop.ogg");
+    try testz.expectEqual(try h.val.template.?.getLengthInPcmFrames(), 8 * 48000);
+}
+
 pub fn musicPauseResumeKeepsPositionTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     var f: Fixture = undefined;
     try f.init(alloc, .{});
     defer f.deinit();
 
-    const theme = try f.res.loadMusic("theme", "assets/music_loop.wav");
+    const theme = try f.res.loadMusic("theme", "assets/music_loop.ogg");
     try f.eng.playMusic("theme", .{});
     try f.pump(50);
 
@@ -396,7 +426,7 @@ pub fn pauseAllPausesOnlyWhatWasPlayingTest(io: std.Io, alloc: std.mem.Allocator
 
     _ = try f.res.loadSound("laser", "assets/laserShoot.wav");
     _ = try f.res.loadSound("boom", "assets/explosion.wav");
-    _ = try f.res.loadMusic("theme", "assets/music_loop.wav");
+    _ = try f.res.loadMusic("theme", "assets/music_loop.ogg");
 
     const laser = try f.eng.play("laser", .{ .loop = true });
     try f.eng.playMusic("theme", .{});
@@ -438,7 +468,7 @@ pub fn manifestLoadsSoundAndMusicKindsTest(io: std.Io, alloc: std.mem.Allocator)
         \\  "groups": { "boot": ["laser", "theme"] },
         \\  "assets": [
         \\    { "id": "laser", "kind": "sound", "path": "assets/laserShoot.wav" },
-        \\    { "id": "theme", "kind": "music", "path": "assets/music_loop.wav" }
+        \\    { "id": "theme", "kind": "music", "path": "assets/music_loop.ogg" }
         \\  ]
         \\}
     ;
@@ -476,7 +506,7 @@ pub fn luaBindingsDriveTheEngineTest(io: std.Io, alloc: std.mem.Allocator) !void
     try f.eng.bindToLua(&script);
 
     const laser = try f.res.loadSound("laser", "assets/laserShoot.wav");
-    _ = try f.res.loadMusic("theme", "assets/music_loop.wav");
+    _ = try f.res.loadMusic("theme", "assets/music_loop.ogg");
 
     try script.run("audio_play('laser', 0.5, 0.2, 1.1)");
     try testz.expectEqual(laser.val.voices.items.len, 1);
