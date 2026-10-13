@@ -351,7 +351,6 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
                 &self.engine.viewport,
             );
             self.engine.updateActions(UpdateStepMs);
-            self.engine.resources.checkHotReload();
             const keepRunning = app.update(self.engine, UpdateStepMs);
             // Roll this tick's input into the previous-tick buffers only
             // after the app has read it, so a press that lands between
@@ -371,6 +370,7 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
             self.currTime = newCurrTime;
 
             self.pumpEvents(app);
+            self.engine.resources.checkHotReload();
 
             while (self.lag > UpdateStepMs) {
                 self.lag -= UpdateStepMs;
