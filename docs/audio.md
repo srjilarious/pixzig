@@ -109,6 +109,8 @@ eng.audio.setBusVolume(.master, settings.masterVolume);
 
 `pauseAll` pauses every voice, stream and the music that's playing right then, keeping their positions. Sounds played after it still play, so a pause menu's own clicks work. `resumeAll` resumes what it paused.
 
+The engine calls both itself when the app goes to the background and comes back (the `will_enter_background` and `did_enter_foreground` events). `resumeAll` doesn't know who paused what, so coming back also resumes audio a pause menu had paused. A game that keeps its pause menu up across that should call `pauseAll` again from `onEvent` on `.did_enter_foreground`, which runs after the engine's resume. See [The Game Loop](page:app-runner).
+
 ## Generated Audio
 
 `playStream` plays audio your code generates: a tracker module player, a synth, procedural effects. You give it a callback that fills a buffer of interleaved `f32` samples and returns how many frames it wrote:

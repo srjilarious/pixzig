@@ -77,11 +77,14 @@ pub const Event = union(enum) {
     // and this arrives through the pump a frame late at best, so treat
     // these as advisory until mobile support registers an event watch.
 
-    /// The OS is about to background the app: pause audio, save state.
+    /// The OS is about to background the app: save state. The engine has
+    /// already paused audio with `pauseAll`.
     will_enter_background,
     did_enter_background,
     will_enter_foreground,
-    /// The app is in the foreground again: resume.
+    /// The app is in the foreground again. The engine has already resumed
+    /// the audio it paused, so an app showing its own pause screen should
+    /// pause again here.
     did_enter_foreground,
     /// The OS is low on memory. Free caches you can rebuild.
     low_memory,

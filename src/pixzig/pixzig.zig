@@ -461,6 +461,9 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
         /// The audio engine. When `audioOpts.enabled` is false this is a
         /// `DisabledAudioEngine`, whose methods are compile errors naming the flag.
         audio: if (engOpts.audioOpts.enabled) audio.AudioEngine else audio.DisabledAudioEngine = undefined,
+        /// Set while the engine has audio paused because the app went to
+        /// the background, so coming back only resumes what it paused.
+        audioPausedForBackground: bool = false,
         manifest: if (engOpts.manifestOpts != null) assets.AssetManifest else void,
         /// The engine's Lua state when `scripting` is set.
         scripts: if (engOpts.scripting) ScriptEngine else void,
@@ -755,6 +758,22 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
                     // Event-driven key state latches, so anything held when
                     // the window loses focus would otherwise stay down.
                     sdl.SDL_EVENT_WINDOW_FOCUS_LOST => self.inputs.clear(),
+                    // A backgrounded app shouldn't keep playing. Pausing on
+                    // `will` gives the best chance of stopping before the
+                    // OS suspends us; resuming waits for `did`, once the
+                    // app is actually back.
+                    sdl.SDL_EVENT_WILL_ENTER_BACKGROUND => {
+                        if (engOpts.audioOpts.enabled and !self.audioPausedForBackground) {
+                            self.audio.pauseAll();
+                            self.audioPausedForBackground = true;
+                        }
+                    },
+                    sdl.SDL_EVENT_DID_ENTER_FOREGROUND => {
+                        if (engOpts.audioOpts.enabled and self.audioPausedForBackground) {
+                            self.audio.resumeAll();
+                            self.audioPausedForBackground = false;
+                        }
+                    },
                     else => self.inputs.handleEvent(event),
                 }
 
