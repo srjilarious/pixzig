@@ -5,7 +5,8 @@
 //! ints, so the two sides have to agree on the numbering. These are pixzig's
 //! own dense enum values, and this generator is what keeps the copy honest.
 //! Run it after adding, removing or reordering anything in
-//! `src/pixzig/input/keys.zig`:
+//! `src/pixzig/input/keys.zig` or the `Event` union in
+//! `src/pixzig/platform/event.zig`:
 //!
 //!     zig build py-constants
 //!
@@ -16,16 +17,18 @@ const pixzig = @import("pixzig");
 
 const keys = pixzig.input.keys;
 const MouseAxis = pixzig.input.action.MouseAxis;
+const EventKind = pixzig.Event.Kind;
 
 const header =
-    \\"""Key, mouse, and gamepad codes.
+    \\"""Key, mouse, gamepad, and event codes.
     \\
     \\GENERATED FILE -- do not edit by hand. Regenerate with `zig build
-    \\py-constants`, which reads the enums in `src/pixzig/input/keys.zig`.
+    \\py-constants`, which reads the enums in `src/pixzig/input/keys.zig`
+    \\and the `Event` kinds in `src/pixzig/platform/event.zig`.
     \\
     \\The values are pixzig's own dense indices into the engine's
-    \\Key/MouseButton/Gamepad enums. They are plain ints under the hood, but
-    \\code should always use these names rather than the numbers.
+    \\Key/MouseButton/Gamepad/Event enums. They are plain ints under the
+    \\hood, but code should always use these names rather than the numbers.
     \\"""
     \\
 ;
@@ -34,10 +37,11 @@ const header =
 /// with their integer values.
 fn writeEnum(out: *std.ArrayList(u8), alloc: std.mem.Allocator, comptime name: []const u8, comptime Enum: type) !void {
     try out.appendSlice(alloc, "\n\nclass " ++ name ++ ":\n");
-    inline for (@typeInfo(Enum).@"enum".fields) |field| {
+    const info = @typeInfo(Enum).@"enum";
+    inline for (info.field_names, info.field_values) |fieldName, value| {
         var buf: [64]u8 = undefined;
-        const upper = std.ascii.upperString(buf[0..field.name.len], field.name);
-        try out.print(alloc, "    {s} = {d}\n", .{ upper, field.value });
+        const upper = std.ascii.upperString(buf[0..fieldName.len], fieldName);
+        try out.print(alloc, "    {s} = {d}\n", .{ upper, value });
     }
 }
 
@@ -58,6 +62,7 @@ pub fn main(init: std.process.Init) !void {
     try writeEnum(&out, alloc, "GamepadButton", keys.GamepadButton);
     try writeEnum(&out, alloc, "GamepadAxis", keys.GamepadAxis);
     try writeEnum(&out, alloc, "MouseAxis", MouseAxis);
+    try writeEnum(&out, alloc, "EventKind", EventKind);
 
     try std.Io.Dir.cwd().writeFile(init.io, .{ .sub_path = out_path, .data = out.items });
     std.log.info("Wrote {s} ({d} bytes).", .{ out_path, out.items.len });

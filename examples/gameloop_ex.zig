@@ -6,7 +6,9 @@
 //* by AppRunner, and in this example we just print out the FPS and some
 //* keyboard input to demonstrate that the game loop is working while clearing
 //* the screen. Its controls go through the engine-owned action map, so
-//* `update` asks about named actions instead of physical keys.
+//* `update` asks about named actions instead of physical keys. It also
+//* hears about window, drag-and-drop and lifecycle events through the
+//* optional `onEvent` hook, and uses it to confirm before closing.
 
 //* -- collapsed: Imports --
 const std = @import("std");
@@ -37,6 +39,7 @@ const AppRunner = pixzig.AppRunner(App, .{
 pub const App = struct {
     testVal: i32,
     fps: FpsCounter,
+    closeAsked: bool = false,
 
     //* Binds each action to a key. An action can take several bindings,
     //* for example a key and a gamepad button.
@@ -79,6 +82,26 @@ pub const App = struct {
             return false;
         }
         return true;
+    }
+
+    //* `onEvent` is optional. The runner calls it for everything the OS
+    //* reports that isn't keyboard, mouse or text input, during the event
+    //* pump and before this frame's `update` calls. Here the first close
+    //* request is cancelled and the second one goes through.
+    pub fn onEvent(self: *App, eng: *AppRunner.Engine, event: pixzig.Event) void {
+        switch (event) {
+            .close_requested => {
+                if (!self.closeAsked) {
+                    std.log.info("Close again to quit.", .{});
+                    self.closeAsked = true;
+                    eng.cancelClose();
+                }
+            },
+            .window_resized => |size| std.log.info("Resized to {}x{}", .{ size.x, size.y }),
+            .drop_file => |drop| std.log.info("Dropped {s} at {d},{d}", .{ drop.path, drop.pos.x, drop.pos.y }),
+            .drop_text => |drop| std.log.info("Dropped text: {s}", .{drop.text}),
+            else => std.log.info("Event: {t}", .{event}),
+        }
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {

@@ -3,6 +3,7 @@
 //! mapping.
 
 const window = @import("./platform/window.zig");
+pub const event = @import("./platform/event.zig");
 
 pub const Window = window.Window;
 pub const WindowCreateOptions = window.WindowCreateOptions;

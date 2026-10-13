@@ -1,11 +1,12 @@
-"""Key, mouse, and gamepad codes.
+"""Key, mouse, gamepad, and event codes.
 
 GENERATED FILE -- do not edit by hand. Regenerate with `zig build
-py-constants`, which reads the enums in `src/pixzig/input/keys.zig`.
+py-constants`, which reads the enums in `src/pixzig/input/keys.zig`
+and the `Event` kinds in `src/pixzig/platform/event.zig`.
 
 The values are pixzig's own dense indices into the engine's
-Key/MouseButton/Gamepad enums. They are plain ints under the hood, but
-code should always use these names rather than the numbers.
+Key/MouseButton/Gamepad/Event enums. They are plain ints under the
+hood, but code should always use these names rather than the numbers.
 """
 
 
@@ -168,3 +169,25 @@ class GamepadAxis:
 class MouseAxis:
     X = 0
     Y = 1
+
+
+class EventKind:
+    CLOSE_REQUESTED = 0
+    WINDOW_RESIZED = 1
+    FOCUS_GAINED = 2
+    FOCUS_LOST = 3
+    MINIMIZED = 4
+    MAXIMIZED = 5
+    RESTORED = 6
+    DROP_BEGIN = 7
+    DROP_FILE = 8
+    DROP_TEXT = 9
+    DROP_COMPLETE = 10
+    GAMEPAD_ADDED = 11
+    GAMEPAD_REMOVED = 12
+    WILL_ENTER_BACKGROUND = 13
+    DID_ENTER_BACKGROUND = 14
+    WILL_ENTER_FOREGROUND = 15
+    DID_ENTER_FOREGROUND = 16
+    LOW_MEMORY = 17
+    TERMINATING = 18

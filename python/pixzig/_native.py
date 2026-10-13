@@ -109,6 +109,27 @@ class PzInitOptions(ctypes.Structure):
     ]
 
 
+class PzEvent(ctypes.Structure):
+    """Mirror of `PzEvent` in src/pixzig/c_api.zig. `kind` is an
+    `EventKind`; the other fields are only set for some kinds."""
+
+    _fields_ = [
+        ("kind", ctypes.c_int32),
+        ("width", ctypes.c_int32),
+        ("height", ctypes.c_int32),
+        ("x", ctypes.c_float),
+        ("y", ctypes.c_float),
+        ("gamepad_id", ctypes.c_uint32),
+        # Borrowed: only valid during the callback, so copy it there.
+        ("text", ctypes.c_char_p),
+    ]
+
+
+#: `void (*)(void *user, const PzEvent *event)`, the `pz_poll_events_cb`
+#: callback.
+PzEventFn = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.POINTER(PzEvent))
+
+
 def _sig(name, argtypes, restype):
     fn = getattr(_lib, name)
     fn.argtypes = argtypes
@@ -144,6 +165,8 @@ pz_deinit = _sig("pz_deinit", [PzEnginePtr], None)
 # --- Frame stepping ------------------------------------------------------
 pz_should_close = _sig("pz_should_close", [PzEnginePtr], c_bool)
 pz_poll_events = _sig("pz_poll_events", [PzEnginePtr], None)
+pz_poll_events_cb = _sig("pz_poll_events_cb", [PzEnginePtr, PzEventFn, ctypes.c_void_p], None)
+pz_cancel_close = _sig("pz_cancel_close", [PzEnginePtr], None)
 pz_update_input = _sig("pz_update_input", [PzEnginePtr], None)
 pz_finish_tick = _sig("pz_finish_tick", [PzEnginePtr], None)
 pz_swap_buffers = _sig("pz_swap_buffers", [PzEnginePtr], None)

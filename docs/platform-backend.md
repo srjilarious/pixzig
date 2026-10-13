@@ -29,6 +29,8 @@ A `Key` is a physical position: `.w` is where W sits on a US QWERTY keyboard, wh
 
 Each frame, `Engine.pollEvents` drains the OS event queue. It handles window events itself (close, resize, focus) and passes device events to `InputManager.handleEvent`.
 
+`Engine.pollEventsWith(handler)` does the same and also translates every non-input event into a `pixzig.Event` (`platform/event.zig`, `fromSdl`) and calls `handler.onEvent(eng, event)` with it. The engine's own handling runs first, so by the time the handler sees `focus_lost` the input is already cleared and by `window_resized` the viewport is already rebuilt. `AppRunner` passes the app as the handler when it declares `onEvent` (see [The Game Loop](page:app-runner)). The C API's version is `pz_poll_events_cb(eng, callback, user)`, which hands the callback a flat `PzEvent`; `pz_cancel_close` keeps the window open after a close request.
+
 Input state is built from events, so a key-up that never arrives would leave a key stuck down. To avoid that, the engine clears all input state when the window loses focus.
 
 Each update tick has two halves. `inputs.update()` opens it: it latches the text typed since the last tick and maps the cursor into logical coordinates. `inputs.finishTick()` closes it, copying the current state to the previous state so that `pressed` and `released` are edges across exactly one tick. `AppRunner` does both around `app.update`. Anything driving the loop by hand, like the Python bindings, has to call both; the C API's versions are `pz_update_input` and `pz_finish_tick`.

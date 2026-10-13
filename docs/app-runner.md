@@ -19,6 +19,40 @@ pub const App = struct {
 
 Game logic goes in `update` and drawing goes in `render`. Keep them apart: `update` runs at a steady rate no matter how fast the screen refreshes, so movement and timers behave the same on every machine.
 
+## Events
+
+An app can also declare `onEvent` to hear about things the OS reports that aren't keyboard, mouse or text input. It's optional; the runner only calls it when the method exists.
+
+```zig
+pub fn onEvent(self: *App, eng: *AppRunner.Engine, event: pixzig.Event) void {
+    switch (event) {
+        .close_requested => if (self.unsavedChanges) {
+            eng.cancelClose();
+            self.showSavePrompt = true;
+        },
+        .drop_file => |drop| self.loadLevel(drop.path),
+        .focus_lost => self.paused = true,
+        else => {},
+    }
+}
+```
+
+| Event | When |
+|---|---|
+| `close_requested` | The close button, Alt+F4, Cmd+Q, or SIGINT/SIGTERM. The window closes afterwards unless `onEvent` calls `eng.cancelClose()`. |
+| `window_resized` | The window changed size. Carries the new size in window coordinates; `eng.viewport` already matches it. |
+| `focus_gained`, `focus_lost` | Keyboard focus moved. Input state is already cleared on `focus_lost`. |
+| `minimized`, `maximized`, `restored` | The window's state changed. |
+| `drop_begin`, `drop_file`, `drop_text`, `drop_complete` | Drag-and-drop onto the window. `drop_file` carries a `path` and `drop_text` a `text`, plus the drop `pos` in window coordinates. Both strings are only valid during the call, so copy them to keep them. |
+| `gamepad_added`, `gamepad_removed` | A pad was plugged in or out. Only reported with `inputOpts.numGamepads` above zero. See [Input](page:input). |
+| `will_enter_background`, `did_enter_background`, `will_enter_foreground`, `did_enter_foreground`, `low_memory`, `terminating` | App lifecycle, mostly from mobile platforms. |
+
+`onEvent` runs during the event pump at the start of each frame, before that frame's `update` calls. Input isn't delivered here on purpose: keys and buttons are latched per tick so `pressed` stays a one-update edge, and reading them in `update` keeps that true.
+
+A close request is reported once per frame even though SDL reports closing the last window twice (a window close, then a quit), so cancelling it once is enough. To close later, after the prompt is answered, call `eng.window.requestClose()` or return false from `update`.
+
+The lifecycle events come through the same once-per-frame pump. That's too late for iOS and Android, which expect `will_enter_background` to be handled before the OS suspends the app, so treat them as advisory for now.
+
 ## Creating the Runner
 
 `AppRunner` takes your app type and a set of compile-time [](sym:EngineOptions):
@@ -107,7 +141,7 @@ Each frame, the runner measures how much time passed and runs `update` in fixed 
 ```zig
 // AppRunner.gameLoopCore, simplified:
 lag = @min(lag + elapsed, maxLagMs);
-eng.pollEvents();
+eng.pollEventsWith(app);             // app.onEvent, when it has one
 while (lag > UpdateStepMs) {
     lag -= UpdateStepMs;
     eng.inputs.update(...);          // latch this tick's input

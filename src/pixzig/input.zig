@@ -21,6 +21,7 @@ pub const Mouse = mouse.Mouse;
 pub const gamepad = @import("./input/gamepad.zig");
 pub const GamepadState = gamepad.GamepadState;
 pub const Gamepad = gamepad.Gamepad;
+pub const GamepadId = gamepad.GamepadId;
 
 pub const keychord = @import("./input/keychord.zig");
 pub const KeyChord = keychord.KeyChord;

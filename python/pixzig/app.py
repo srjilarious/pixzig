@@ -15,6 +15,7 @@ from .action import ActionMap
 from .anim import Actor
 from .audio import Audio
 from .camera import Camera
+from .event import Event
 from .input import Gamepad, Keyboard, Mouse
 from .manifest import AssetManifest
 from .paths import AssetPaths
@@ -135,6 +136,17 @@ class App:
         self._lag = 0.0
         self._curr_time = time.perf_counter() * 1000.0
         self._running = True
+        # The engine calls this during the event pump. It only copies each
+        # event into `_pending_events`; `run()` hands them to `on_event`
+        # once the pump returns, so an exception in `on_event` propagates
+        # normally instead of being swallowed at the ctypes boundary. Held
+        # on self so ctypes doesn't free the trampoline while it's in use.
+        # It closes over the list rather than `self`: a bound method would
+        # make a reference cycle, and a half-built app would then wait for
+        # the cycle collector instead of closing as soon as it's dropped.
+        pending = []
+        self._pending_events = pending
+        self._event_cb = _n.PzEventFn(lambda _user, event: pending.append(Event._from_native(event.contents)))
 
         self.keyboard = Keyboard(eng)
         self.mouse = Mouse(eng)
@@ -326,6 +338,21 @@ class App:
     def render_end(self) -> None:
         _n.pz_render_end(self._eng)
 
+    # --- Events --------------------------------------------------------
+
+    def _pump_events(self) -> None:
+        _n.pz_poll_events_cb(self._eng, self._event_cb, None)
+        events = list(self._pending_events)
+        self._pending_events.clear()
+        for event in events:
+            self.on_event(event)
+
+    def cancel_close(self) -> None:
+        """Keeps the window open after a close request. Call it from
+        `on_event` while handling `EventKind.CLOSE_REQUESTED`, e.g. to ask
+        about unsaved changes first."""
+        _n.pz_cancel_close(self._eng)
+
     # --- Overridable hooks -----------------------------------------------
 
     def update(self, dt_ms: float) -> None:
@@ -335,6 +362,13 @@ class App:
 
     def render(self) -> None:
         """Called once per displayed frame, after the screen is cleared."""
+        pass
+
+    def on_event(self, event: Event) -> None:
+        """Called for each window, drag-and-drop, gamepad hot-plug and
+        lifecycle event (see `pixzig.Event`), once per frame before the
+        frame's updates. A close request closes the window afterwards unless
+        this calls `cancel_close()`."""
         pass
 
     # --- Loop --------------------------------------------------------------
@@ -396,7 +430,7 @@ class App:
                 self._lag = min(self._lag + now - self._curr_time, self._max_lag_ms)
                 self._curr_time = now
 
-                _n.pz_poll_events(self._eng)
+                self._pump_events()
 
                 while self._lag > self._update_step_ms and self._running:
                     self._lag -= self._update_step_ms

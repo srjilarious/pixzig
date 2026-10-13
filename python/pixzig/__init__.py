@@ -4,7 +4,8 @@ from .anim import Actor
 from .app import App
 from .audio import Audio, Bus
 from .camera import Camera
-from .constants import GamepadAxis, GamepadButton, Key, MouseAxis, MouseButton
+from .constants import EventKind, GamepadAxis, GamepadButton, Key, MouseAxis, MouseButton
+from .event import Event
 from .input import Gamepad, Keyboard, Mouse
 from .manifest import AssetManifest
 from .paths import AssetPaths
@@ -35,6 +36,8 @@ __all__ = [
     "Window",
     # Enums and value types
     "Bus",
+    "Event",
+    "EventKind",
     "Flip",
     "GamepadAxis",
     "GamepadButton",

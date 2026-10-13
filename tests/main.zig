@@ -14,6 +14,7 @@ const Tests = blk: {
     testz.Group{ .name = "Scripting Tests", .tag = "script", .mod = @import("./scripting_tests.zig") },
     testz.Group{ .name = "Font Tests", .tag = "font", .mod = @import("./font_tests.zig") },
     testz.Group{ .name = "Event Tests", .tag = "event", .mod = @import("./event_tests.zig") },
+    testz.Group{ .name = "Engine Event Tests", .tag = "engine_event", .mod = @import("./engine_event_tests.zig") },
     testz.Group{ .name = "Common Tests", .tag = "common", .mod = @import("./common_tests.zig") },
     testz.Group{ .name = "Sequencer Tests", .tag = "seq", .mod = @import("./sequencer_tests.zig") },
     testz.Group{ .name = "Utils Tests", .tag = "utils", .mod = @import("./utils_tests.zig") },

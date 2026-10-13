@@ -3,7 +3,8 @@
 //! `EngineOptions` instantiation so the engine's comptime-generic
 //! API can be called from a C ABI. Python (or any other C-caller) owns the
 //! game loop and drives it by calling the frame-stepping functions below in
-//! sequence; nothing here calls back into the caller.
+//! sequence. The one call back into the caller is the optional event
+//! callback passed to `pz_poll_events_cb`.
 const std = @import("std");
 const pixzig = @import("pixzig");
 
@@ -334,6 +335,77 @@ export fn pz_poll_events(eng: *PzEngine) callconv(.c) void {
     eng.engine.refreshWindowState();
     eng.engine.updateAudio();
     pruneStreams(eng);
+}
+
+/// One engine-level event (`pixzig.Event`) flattened for C. `kind` is the
+/// `Event` tag's index, which `zig build py-constants` publishes as
+/// `EventKind`; the other fields are only meaningful for some kinds and
+/// zero otherwise.
+pub const PzEvent = extern struct {
+    kind: i32,
+    /// `window_resized`: the new size in window coordinates.
+    width: i32,
+    height: i32,
+    /// `drop_file` / `drop_text`: where it was dropped, in window
+    /// coordinates.
+    x: f32,
+    y: f32,
+    /// `gamepad_added` / `gamepad_removed`: the pad's id.
+    gamepadId: u32,
+    /// `drop_file`: the path. `drop_text`: the text. Null otherwise.
+    /// Borrowed, and only valid during the callback.
+    text: ?[*:0]const u8,
+};
+
+pub const PzEventFn = *const fn (user: ?*anyopaque, event: *const PzEvent) callconv(.c) void;
+
+/// Forwards `pollEventsWith` events to a C callback.
+const PzEventSink = struct {
+    callback: PzEventFn,
+    user: ?*anyopaque,
+
+    pub fn onEvent(self: *PzEventSink, _: *Engine, event: pixzig.Event) void {
+        var out = std.mem.zeroes(PzEvent);
+        out.kind = @intFromEnum(std.meta.activeTag(event));
+        switch (event) {
+            .window_resized => |size| {
+                out.width = size.x;
+                out.height = size.y;
+            },
+            .drop_file => |drop| {
+                out.text = drop.path.ptr;
+                out.x = drop.pos.x;
+                out.y = drop.pos.y;
+            },
+            .drop_text => |drop| {
+                out.text = drop.text.ptr;
+                out.x = drop.pos.x;
+                out.y = drop.pos.y;
+            },
+            .gamepad_added, .gamepad_removed => |id| out.gamepadId = id,
+            else => {},
+        }
+        self.callback(self.user, &out);
+    }
+};
+
+/// `pz_poll_events`, calling `callback(user, &event)` for each
+/// engine-level event as it is drained. A null `callback` behaves like
+/// `pz_poll_events`. Call `pz_cancel_close` from the callback to veto a
+/// close request.
+export fn pz_poll_events_cb(eng: *PzEngine, callback: ?PzEventFn, user: ?*anyopaque) callconv(.c) void {
+    if (callback) |cb| {
+        var sink = PzEventSink{ .callback = cb, .user = user };
+        eng.engine.pollEventsWith(&sink);
+    } else {
+        eng.engine.pollEvents();
+    }
+    eng.engine.refreshWindowState();
+}
+
+/// Keeps the window open after a close request. See `Engine.cancelClose`.
+export fn pz_cancel_close(eng: *PzEngine) callconv(.c) void {
+    eng.engine.cancelClose();
 }
 
 export fn pz_update_input(eng: *PzEngine) callconv(.c) void {

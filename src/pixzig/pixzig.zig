@@ -36,6 +36,9 @@ pub const Rng = random.Rng;
 pub const easing = @import("./easing.zig");
 pub const Ease = easing.Ease;
 pub const platform = @import("./platform.zig");
+/// An engine-level OS event, handed to the app's optional `onEvent`. See
+/// `platform/event.zig`.
+pub const Event = platform.event.Event;
 pub const shaders = @import("./renderer/shaders.zig");
 pub const textures = @import("./renderer/textures.zig");
 pub const input = @import("./input.zig");
@@ -254,6 +257,14 @@ var g_EmscriptenAppRef: ?*anyopaque = null;
 ///     fn update(self: *AppData, eng: *Engine, deltaTimeMs: f64) bool
 ///     fn render(self: *AppData, eng: *Engine) void
 /// ```
+///
+/// An app may also declare an `onEvent` to hear about window, drag-and-drop,
+/// gamepad hot-plug and lifecycle events. It's called during the event
+/// pump, before the frame's updates:
+///
+/// ```zig
+///     fn onEvent(self: *AppData, eng: *Engine, event: pixzig.Event) void
+/// ```
 pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
     // Bound outside the struct below so the struct's own `Engine` decl can
     // carry the engine type without shadowing the `Engine` function itself.
@@ -271,6 +282,7 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
         shotTicks: u64 = 0,
 
         const UpdateStepMs = 1000.0 / engOpts.updateStepHz;
+        const HasOnEvent = @hasDecl(AppData, "onEvent");
         const HasScreenshotHook = engOpts.screenshotHook and builtin.target.os.tag != .emscripten;
         const Self = @This();
 
@@ -321,6 +333,17 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
             self.lag = 0;
         }
 
+        /// Drains the OS event queue, handing engine-level events to the
+        /// app's `onEvent` when it has one.
+        fn pumpEvents(self: *Self, app: *AppData) void {
+            if (HasOnEvent) {
+                self.engine.pollEventsWith(app);
+            } else {
+                self.engine.pollEvents();
+            }
+            self.engine.refreshWindowState();
+        }
+
         /// Runs one fixed update step. Returns false when the app asks to quit.
         fn updateTick(self: *Self, app: *AppData) bool {
             self.engine.inputs.update(
@@ -347,8 +370,7 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
             self.lag = @min(self.lag + delta, engOpts.maxLagMs);
             self.currTime = newCurrTime;
 
-            self.engine.pollEvents();
-            self.engine.refreshWindowState();
+            self.pumpEvents(app);
 
             while (self.lag > UpdateStepMs) {
                 self.lag -= UpdateStepMs;
@@ -366,8 +388,7 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
         /// reached. The captured frame is read back before the swap and the
         /// loop then stops as if the app had quit.
         fn screenshotLoopCore(self: *Self, app: *AppData, shot: *screenshot.ScreenshotHook) bool {
-            self.engine.pollEvents();
-            self.engine.refreshWindowState();
+            self.pumpEvents(app);
 
             const tickStartMs = @as(f64, @floatFromInt(self.shotTicks)) * UpdateStepMs;
             shot.applyInput(&self.engine.inputs, tickStartMs);
@@ -697,14 +718,36 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
         }
 
         /// Drains the OS event queue, handling window-level events here and
-        /// routing everything else to the input manager.
+        /// routing everything else to the input manager. Engine-level
+        /// events are dropped; use `pollEventsWith` to receive them.
         pub fn pollEvents(self: *Self) void {
+            self.pollEventsWith({});
+        }
+
+        /// `pollEvents`, plus each engine-level `Event` handed to
+        /// `handler.onEvent(self, event)` as it is drained. `handler` is a
+        /// pointer to anything with that method (the `AppRunner` passes
+        /// the app), or `{}` for none.
+        ///
+        /// The engine's own handling of an event (closing, clearing input
+        /// on focus loss, rebuilding the viewport on resize) is done before
+        /// the handler sees it, so the handler can observe or undo it.
+        pub fn pollEventsWith(self: *Self, handler: anytype) void {
+            const HasHandler = @TypeOf(handler) != void;
+            // SDL reports closing the last window twice, as a window close
+            // and then a quit. Treat them as one request per pump, so an app
+            // that cancels the first isn't closed by the second.
+            var closeSeen = false;
             var event: sdl.SDL_Event = undefined;
             while (sdl.SDL_PollEvent(&event)) {
                 switch (event.type) {
                     sdl.SDL_EVENT_QUIT,
                     sdl.SDL_EVENT_WINDOW_CLOSE_REQUESTED,
-                    => self.window.closeRequested = true,
+                    => {
+                        if (closeSeen) continue;
+                        closeSeen = true;
+                        self.window.closeRequested = true;
+                    },
                     sdl.SDL_EVENT_WINDOW_RESIZED,
                     sdl.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED,
                     sdl.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED,
@@ -714,7 +757,21 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
                     sdl.SDL_EVENT_WINDOW_FOCUS_LOST => self.inputs.clear(),
                     else => self.inputs.handleEvent(event),
                 }
+
+                if (!HasHandler) continue;
+                const engEvent = platform.event.fromSdl(&event) orelse continue;
+                // Bring the window state and viewport up to date first, so
+                // a handler that re-lays out its UI reads the new size.
+                if (engEvent == .window_resized) self.refreshWindowState();
+                handler.onEvent(self, engEvent);
             }
+        }
+
+        /// Keeps the window open after a close request. Call it from
+        /// `onEvent` while handling `.close_requested`, e.g. to ask about
+        /// unsaved changes first; close later with `window.requestClose()`.
+        pub fn cancelClose(self: *Self) void {
+            self.window.closeRequested = false;
         }
 
         /// The engine's live default font atlas, or null when text rendering

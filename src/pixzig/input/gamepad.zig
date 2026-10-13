@@ -7,6 +7,11 @@ pub const GamepadAxis = keys.GamepadAxis;
 pub const NumGamepadButtons = keys.NumGamepadButtons;
 pub const NumGamepadAxes = keys.NumGamepadAxes;
 
+/// Identifies one connected gamepad for as long as it stays connected. The
+/// `gamepad_added`/`gamepad_removed` engine events carry it; a reconnect
+/// gets a new one.
+pub const GamepadId = u32;
+
 /// Brings up SDL's gamepad subsystem. `InputManager.init` calls this only
 /// when the app asked for at least one gamepad, so a keyboard-only game
 /// pays nothing for it.
@@ -162,6 +167,15 @@ pub const Gamepad = struct {
 
     fn prevState(self: *const Gamepad) *const GamepadState {
         return &self.stateBuffers[self.prevIdx];
+    }
+
+    /// The id of the pad in this slot, matching what the
+    /// `gamepad_added`/`gamepad_removed` events report, or null when the
+    /// slot is empty.
+    pub fn id(self: *const Gamepad) ?GamepadId {
+        const gp = self.handle orelse return null;
+        const gid = sdl.SDL_GetGamepadID(gp);
+        return if (gid == 0) null else gid;
     }
 
     /// Returns true if the gamepad is currently connected, false otherwise.

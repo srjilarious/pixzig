@@ -55,6 +55,7 @@ It's the same model as the Zig side (see [The Game Loop](page:app-runner)): `upd
 - Call `self.quit()` to stop. `update`'s return value is ignored.
 - The screen is cleared to `self.clear_color` before `render` is called.
 - Draw between `self.render_begin()` and `self.render_end()`. Pass a camera, `render_begin(camera)`, to draw in world space.
+- Override `on_event(self, event)` for window, drag-and-drop, gamepad hot-plug and lifecycle events. `event.kind` is an `EventKind`, and `event.size`, `event.pos`, `event.path`, `event.text` and `event.gamepad_id` are filled in for the kinds that have them. Call `self.cancel_close()` while handling `EventKind.CLOSE_REQUESTED` to keep the window open.
 
 `App`'s constructor takes the same window options as `EngineInitOptions`: `width`, `height`, `logical_size`, `scale_policy`, `fullscreen`, `resizable`, `vsync`, plus `update_hz` and `max_lag_ms`.
 
@@ -112,4 +113,4 @@ The examples in `python/examples/` cover action maps, animation, audio and tile 
 
 ## Updating the Bindings
 
-The bindings are a C API in `src/pixzig/c_api.zig` with Python wrappers in `python/pixzig/`. `python/pixzig/constants.py` is generated from the engine's input enums. After changing `src/pixzig/input/keys.zig`, regenerate it with `zig build py-constants` and commit the result.
+The bindings are a C API in `src/pixzig/c_api.zig` with Python wrappers in `python/pixzig/`. `python/pixzig/constants.py` is generated from the engine's input enums and event kinds. After changing `src/pixzig/input/keys.zig` or the `Event` union in `src/pixzig/platform/event.zig`, regenerate it with `zig build py-constants` and commit the result.

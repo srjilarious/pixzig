@@ -202,7 +202,7 @@ if (eng.inputs.gamepad(0)) |pad| {
 }
 ```
 
-`gamepad(index)` is null past the last slot you asked for. Pads can be plugged in and out while the game runs. Buttons use positional names (`.a` is the bottom face button) and axes are `.left_x`, `.left_y`, `.right_x`, `.right_y`, `.left_trigger` and `.right_trigger`.
+`gamepad(index)` is null past the last slot you asked for. Pads can be plugged in and out while the game runs. To react when that happens, for example to pause when the player's pad drops out, handle `gamepad_added` and `gamepad_removed` in the app's `onEvent` (see [The Game Loop](page:app-runner)). They carry a `GamepadId`; `pad.id()` gives the id of the pad in a slot, or null when the slot is empty. Buttons use positional names (`.a` is the bottom face button) and axes are `.left_x`, `.left_y`, `.right_x`, `.right_y`, `.left_trigger` and `.right_trigger`.
 
 When the window loses focus, all input state is cleared so no key gets stuck down.
 
