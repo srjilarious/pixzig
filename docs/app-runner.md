@@ -110,6 +110,7 @@ pub fn main(init: std.process.Init) !void {
 | `vsync` | `true` | Change it later with `eng.enableVSync(bool)`. |
 | `rngSeed` | `null` | Seed for `eng.rng`. Null seeds from the clock. |
 | `renderInitOpts` | embedded font | The renderer's default font. See [Text and Fonts](page:text). |
+| `scripts` | `null` | A `ScriptEngine` the engine adopts as `eng.scripts`, e.g. one that already ran a config script. Needs `.scripting = true`. See [Scripting](page:scripting). |
 
 `run` owns the loop and returns when `update` returns false or the window closes. The `defer`s then tear down your app first and the engine second, which is the order you want: your app may still hold handles into engine resources.
 

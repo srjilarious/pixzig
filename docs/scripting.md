@@ -13,7 +13,26 @@ const AppRunner = pixzig.AppRunner(App, .{ .scripting = true });
 try eng.scripts.runScript("assets/config.lua");
 ```
 
-The engine creates it after the renderer and closes it on shutdown. Tools and tests that don't start an engine can make their own:
+The engine creates it after the renderer and closes it on shutdown.
+
+To read a config script before the window exists, for settings like `fullscreen` that `AppRunner.init` needs, make the script engine yourself and hand it to the engine with `EngineInitOptions.scripts`. The engine adopts it as `eng.scripts`, so the config's globals stay visible to the console and game scripts:
+
+```zig
+var scripts = try pixzig.ScriptEngine.init(alloc);
+const conf = conf: {
+    errdefer scripts.deinit();
+    try scripts.runScript("assets/config.lua");
+    break :conf try scripts.loadStruct(Config, "config");
+};
+
+// From here the engine owns `scripts`, even if init fails.
+const appRunner = try AppRunner.init("My Game", alloc, .{
+    .fullscreen = conf.fullscreen,
+    .scripts = scripts,
+});
+```
+
+Tools and tests that don't start an engine can make their own:
 
 ```zig
 var scripts = try pixzig.ScriptEngine.init(alloc);
@@ -53,7 +72,7 @@ const cfg = try scripts.loadStruct(Config, "config");
 defer if (cfg.title) |t| alloc.free(t);
 ```
 
-Fields can be `bool`, integers, floats and `?[]u8` strings. Every field has to be in the table with the right type. A missing or mistyped field returns `error.InvalidFieldType` rather than falling back to the default, so treat the defaults as documentation. Strings are copied with the allocator the script engine was created with, and you free them. A missing global returns `error.InvalidConfigTable`.
+Fields can be `bool`, integers, floats and `?[]u8` strings. A field the table leaves out keeps its Zig default, so a config file only needs the settings it changes. A field with the wrong type returns `error.InvalidFieldType`. Strings are copied with the allocator the script engine was created with, and you free them. A missing global returns `error.InvalidConfigTable`.
 
 Key bindings have their own loader, `ActionMap.loadFromLua`. See [Input](page:input).
 

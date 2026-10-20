@@ -227,6 +227,13 @@ pub const EngineInitOptions = struct {
     /// differs; set it for reproducible runs (replays, tests, lockstep).
     rngSeed: ?u64 = null,
     renderInitOpts: renderer.RendererInitOpts = .{},
+    /// A script engine for the engine to adopt as `eng.scripts` instead of
+    /// creating its own. Lets `main` run a config script before the window
+    /// exists (e.g. to pick `fullscreen`) and keep the same Lua state for
+    /// the game. Requires `EngineOptions.scripting`, or init returns
+    /// `error.ScriptingDisabled`. The engine owns it from the moment it is
+    /// passed to `init`, and closes it even if init fails.
+    scripts: ?ScriptEngine = null,
 };
 
 pub const web = if (builtin.os.tag == .emscripten) @import("./web.zig") else {};
@@ -291,10 +298,17 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
             alloc: std.mem.Allocator,
             engInitOpts: EngineInitOptions,
         ) !*Self {
+            var initOpts = engInitOpts;
+            // Engine.init owns `initOpts.scripts` once called, so only free
+            // it here if we fail before handing it off.
+            var scriptsHandedOff = false;
+            errdefer if (!scriptsHandedOff) {
+                if (initOpts.scripts) |*scripts| scripts.deinit();
+            };
+
             var appRunner = try alloc.create(Self);
             errdefer alloc.destroy(appRunner);
 
-            var initOpts = engInitOpts;
             if (HasScreenshotHook) {
                 appRunner.shot = try screenshot.ScreenshotHook.fromEnv(alloc, UpdateStepMs);
                 appRunner.shotTicks = 0;
@@ -312,6 +326,7 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
                 if (appRunner.shot) |*shot| shot.deinit();
             };
 
+            scriptsHandedOff = true;
             appRunner.engine = try EngineType.init(title, alloc, initOpts);
             appRunner.alloc = alloc;
             appRunner.currTime = platform.timeMs();
@@ -490,6 +505,12 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
         /// projection matrix. The engine will be configured based on the provided `engInitOpts`
         /// and `engOpts` parameters.
         pub fn init(title: [:0]const u8, allocator: std.mem.Allocator, options: EngineInitOptions) !*Self {
+            // The engine owns `options.scripts` from here on. It is cleared
+            // once adopted into `eng.scripts`, which has its own errdefer.
+            var givenScripts = options.scripts;
+            errdefer if (givenScripts) |*scripts| scripts.deinit();
+            if (!engOpts.scripting and givenScripts != null) return error.ScriptingDisabled;
+
             const gl_major, const gl_minor = try platform.initVideo();
             errdefer platform.quit();
 
@@ -611,8 +632,14 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
 
             // ----------------------------------------------------------------
             if (engOpts.scripting) {
-                std.log.info("Initializing Script Engine.", .{});
-                eng.scripts = try ScriptEngine.init(allocator);
+                if (givenScripts) |scripts| {
+                    std.log.info("Adopting the given Script Engine.", .{});
+                    eng.scripts = scripts;
+                    givenScripts = null;
+                } else {
+                    std.log.info("Initializing Script Engine.", .{});
+                    eng.scripts = try ScriptEngine.init(allocator);
+                }
             }
             errdefer if (engOpts.scripting) eng.scripts.deinit();
 

@@ -63,6 +63,41 @@ pub fn structFromLuaLoadingTest(io: std.Io, alloc: std.mem.Allocator) !void {
     try testz.expectEqual(settings.music_volume, 0.8);
 }
 
+// loadStruct keeps a field's Zig default when the table leaves it out.
+pub fn loadStructMissingFieldsKeepDefaultsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var eng = try ScriptEngine.init(alloc);
+    defer eng.deinit();
+
+    try eng.run("config = { scale = 3 }");
+
+    const top = eng.lua.getTop();
+    const conf = try eng.loadStruct(TestConfig, "config");
+    defer conf.deinit(alloc);
+
+    try testz.expectEqual(conf.scale, 3);
+    try testz.expectFalse(conf.fullscreen);
+    try testz.expectTrue(conf.title == null);
+    try testz.expectEqual(eng.lua.getTop(), top);
+}
+
+// loadStruct still rejects a field that is present with the wrong type,
+// and leaves the Lua stack balanced.
+pub fn loadStructWrongTypeTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var eng = try ScriptEngine.init(alloc);
+    defer eng.deinit();
+
+    try eng.run("config = { fullscreen = 1 }");
+    const top = eng.lua.getTop();
+    try testz.expectError(eng.loadStruct(TestConfig, "config"), error.InvalidFieldType);
+    try testz.expectEqual(eng.lua.getTop(), top);
+
+    try eng.run("config = { title = 5 }");
+    try testz.expectError(eng.loadStruct(TestConfig, "config"), error.InvalidFieldType);
+    try testz.expectEqual(eng.lua.getTop(), top);
+}
+
 // --- run ---
 
 // run executes Lua code and the result is visible in subsequent calls.

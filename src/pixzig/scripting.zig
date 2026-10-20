@@ -136,13 +136,13 @@ pub const ScriptEngine = struct {
     }
 
     /// Reads the global Lua table named `globalName` into a Zig struct `T`.
-    /// `T` must be default-constructible (`.{}`) and every field must be
-    /// present in the Lua table with a matching type — a missing field or a
-    /// type mismatch returns `error.InvalidFieldType`, it does not fall back
-    /// to the Zig default. Supported field types: `bool`, `int`, `float`,
-    /// and `?[]u8` (heap-allocated with the Lua allocator; caller frees it,
-    /// e.g. via the struct's own `deinit`). Any other field type returns
-    /// `error.UnsupportedFieldType`; a missing or non-table global returns
+    /// `T` must be default-constructible (`.{}`). A field missing from the
+    /// Lua table (or set to nil) keeps its Zig default; a field present with
+    /// the wrong type returns `error.InvalidFieldType`. Supported field
+    /// types: `bool`, `int`, `float`, and `?[]u8` (heap-allocated with the
+    /// Lua allocator; caller frees it, e.g. via the struct's own `deinit`).
+    /// A field of any other type returns `error.UnsupportedFieldType` when
+    /// the table sets it. A missing or non-table global returns
     /// `error.InvalidConfigTable`.
     pub fn loadStruct(
         self: *const ScriptEngine,
@@ -162,11 +162,11 @@ pub const ScriptEngine = struct {
         // Iterate over fields of the struct at comptime
         inline for (@typeInfo(T).@"struct".field_names, @typeInfo(T).@"struct".field_types) |field_name, field_type| {
 
-            // Get the value from Lua
-            _ = self.lua.getField(-1, field_name); // Pushes `config.<field_name>` onto the stack
+            // Get the value from Lua, pushing `config.<field_name>` onto the
+            // stack. A nil (absent) field keeps the struct's default.
+            const luaType = self.lua.getField(-1, field_name);
 
-            // Match the field type and retrieve the value
-            switch (@typeInfo(field_type)) {
+            if (luaType != .nil) switch (@typeInfo(field_type)) {
                 // Handle booleans
                 .bool => {
                     if (!self.lua.isBoolean(-1)) {
@@ -194,7 +194,12 @@ pub const ScriptEngine = struct {
                         .pointer => |ptr_info| switch (ptr_info.size) {
                             .slice => {
                                 if (ptr_info.child != u8) {
+                                    self.lua.pop(2); // Pop the value and table
                                     return error.UnsupportedFieldType;
+                                }
+                                if (luaType != .string) {
+                                    self.lua.pop(2); // Pop the value and table
+                                    return error.InvalidFieldType;
                                 }
 
                                 const lua_str = try self.lua.toString(-1);
@@ -204,10 +209,12 @@ pub const ScriptEngine = struct {
                                 @field(myStruct, field_name) = buffer;
                             },
                             else => {
+                                self.lua.pop(2); // Pop the value and table
                                 return error.UnsupportedFieldType;
                             },
                         },
                         else => {
+                            self.lua.pop(2); // Pop the value and table
                             return error.UnsupportedFieldType;
                         },
                     }
@@ -217,7 +224,7 @@ pub const ScriptEngine = struct {
                     self.lua.pop(2); // Pop the value and table
                     return error.UnsupportedFieldType;
                 },
-            }
+            };
 
             // Pop the value, keep the table
             self.lua.pop(1);
