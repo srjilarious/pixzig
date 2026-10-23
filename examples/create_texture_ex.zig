@@ -46,10 +46,10 @@ pub const App = struct {
         self.alloc.destroy(self);
     }
 
-    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) void {
         _ = self;
         _ = delta;
-        return !eng.inputs.keyboard.pressed(.escape);
+        if (eng.inputs.keyboard.pressed(.escape)) eng.quit();
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {

@@ -17,11 +17,10 @@ const Action = enum { show_a, show_b, quit };
 const AppRunner = pixzig.AppRunner(App, .{ .actionOpts = .{ .Action = Action } });
 
 const StateA = struct {
-    pub fn update(self: *StateA, eng: *AppRunner.Engine, delta: f64) bool {
+    pub fn update(self: *StateA, eng: *AppRunner.Engine, delta: f64) void {
         _ = delta;
         _ = eng;
         _ = self;
-        return true;
     }
 
     pub fn render(self: *StateA, eng: *AppRunner.Engine) void {
@@ -41,11 +40,10 @@ const StateA = struct {
 };
 
 const ParamState = struct {
-    pub fn update(self: *ParamState, eng: *AppRunner.Engine, delta: f64) bool {
+    pub fn update(self: *ParamState, eng: *AppRunner.Engine, delta: f64) void {
         _ = delta;
         _ = eng;
         _ = self;
-        return true;
     }
 
     pub fn render(self: *ParamState, eng: *AppRunner.Engine) void {
@@ -79,7 +77,7 @@ pub const App = struct {
         self.alloc.destroy(self);
     }
 
-    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) void {
         if (self.fps.update(delta)) {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
@@ -94,10 +92,11 @@ pub const App = struct {
         }
 
         if (eng.actions.pressed(.quit)) {
-            return false;
+            eng.quit();
+            return;
         }
 
-        return self.states.update(eng, delta);
+        self.states.update(eng, delta);
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {

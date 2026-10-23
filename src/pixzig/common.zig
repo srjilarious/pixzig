@@ -196,17 +196,18 @@ pub const RectF = struct {
 
     /// Creates a RectF from the coordinates of the top-left corner (x, y) and
     /// the width and height (w, h), as absolute coords.
-    pub fn fromPosSize(x: i32, y: i32, w: i32, h: i32) RectF {
-        const xF = @as(f32, @floatFromInt(x));
-        const yF = @as(f32, @floatFromInt(y));
-        const wF = @as(f32, @floatFromInt(w));
-        const hF = @as(f32, @floatFromInt(h));
+    pub fn fromPosSize(x: f32, y: f32, w: f32, h: f32) RectF {
         return .{
-            .l = xF,
-            .r = xF + wF,
-            .t = yF,
-            .b = yF + hF,
+            .l = x,
+            .r = x + w,
+            .t = y,
+            .b = y + h,
         };
+    }
+
+    /// Creates a RectF from a top-left position and a size.
+    pub fn fromPosSizeV(pos: Vec2F, size: Vec2F) RectF {
+        return fromPosSize(pos.x, pos.y, size.x, size.y);
     }
 
     /// Shrinks the rectangle from all sides by the given amount. This is
@@ -266,6 +267,13 @@ pub const RectF = struct {
         self.t = y;
         self.r = x + w;
         self.b = y + h;
+    }
+
+    /// Returns true when `p` lies inside the rectangle. The left and top
+    /// edges are inside, the right and bottom edges are not, so rects that
+    /// tile a grid never both claim a point.
+    pub fn contains(self: *const RectF, p: Vec2F) bool {
+        return p.x >= self.l and p.x < self.r and p.y >= self.t and p.y < self.b;
     }
 
     /// Checks if this rectangle intersects with another rectangle. Returns
@@ -344,6 +352,48 @@ pub const Color = struct {
 
     /// Alpha component of the color, from 0 to 1
     a: f32,
+
+    pub const white: Color = .{ .r = 1, .g = 1, .b = 1, .a = 1 };
+    pub const black: Color = .{ .r = 0, .g = 0, .b = 0, .a = 1 };
+    pub const transparent: Color = .{ .r = 0, .g = 0, .b = 0, .a = 0 };
+    pub const red: Color = .{ .r = 1, .g = 0, .b = 0, .a = 1 };
+    pub const green: Color = .{ .r = 0, .g = 1, .b = 0, .a = 1 };
+    pub const blue: Color = .{ .r = 0, .g = 0, .b = 1, .a = 1 };
+    pub const yellow: Color = .{ .r = 1, .g = 1, .b = 0, .a = 1 };
+    pub const cyan: Color = .{ .r = 0, .g = 1, .b = 1, .a = 1 };
+    pub const magenta: Color = .{ .r = 1, .g = 0, .b = 1, .a = 1 };
+    pub const gray: Color = .{ .r = 0.5, .g = 0.5, .b = 0.5, .a = 1 };
+
+    /// Creates an opaque Color from 8-bit components (0-255).
+    pub fn rgb(r: u8, g: u8, b: u8) Color {
+        return from(r, g, b, 255);
+    }
+
+    /// Creates a Color from a packed 0xRRGGBBAA value, e.g.
+    /// `Color.hex(0x1a1a33ff)`.
+    pub fn hex(rgba: u32) Color {
+        return from(
+            @truncate(rgba >> 24),
+            @truncate(rgba >> 16),
+            @truncate(rgba >> 8),
+            @truncate(rgba),
+        );
+    }
+
+    /// Returns this colour with its alpha replaced by `a` (0 to 1).
+    pub fn withAlpha(self: Color, a: f32) Color {
+        return .{ .r = self.r, .g = self.g, .b = self.b, .a = a };
+    }
+
+    /// Linearly interpolates every component from `a` to `b` by `t`.
+    pub fn lerp(a: Color, b: Color, t: f32) Color {
+        return .{
+            .r = a.r + (b.r - a.r) * t,
+            .g = a.g + (b.g - a.g) * t,
+            .b = a.b + (b.b - a.b) * t,
+            .a = a.a + (b.a - a.a) * t,
+        };
+    }
 
     /// Creates a Color from 8-bit integer components (0-255)
     pub fn from(_r: u8, _g: u8, _b: u8, _a: u8) Color {

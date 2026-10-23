@@ -294,7 +294,7 @@ pub const Console = struct {
     }
 
     fn scrollToBottomForArea(self: *Console, ui: anytype, areaHeight: f32) void {
-        const line_h: f32 = @floatFromInt(ui.renderer.lineHeight() orelse 16);
+        const line_h: f32 = ui.renderer.lineHeight() orelse 16;
         const pad_y: f32 = @floatFromInt(ui.style.padding.y);
         const usable_h = @max(0.0, areaHeight - pad_y * 2.0);
         const visible: usize = @max(1, @as(usize, @intFromFloat(@floor(usable_h / line_h))));

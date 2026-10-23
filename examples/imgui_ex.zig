@@ -121,12 +121,14 @@ pub const App = struct {
         self.alloc.destroy(self);
     }
 
-    pub fn update(self: *App, eng: *AppRunner.Engine, _delta: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.Engine, _delta: f64) void {
         _ = _delta;
-        if (eng.inputs.keyboard.pressed(.escape)) return false;
+        if (eng.inputs.keyboard.pressed(.escape)) {
+            eng.quit();
+            return;
+        }
 
         self.ui.update();
-        return true;
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {

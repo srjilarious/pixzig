@@ -17,6 +17,7 @@
 //! and STB TrueType into every engine build regardless of `EngineOptions`.
 const std = @import("std");
 const builtin = @import("builtin");
+const comp = @import("./comp.zig");
 pub const stbi = @import("zstbi");
 const sdl = @import("sdl3");
 
@@ -261,9 +262,13 @@ var g_EmscriptenAppRef: ?*anyopaque = null;
 /// render functions that will be called each frame.  Those functions should have the signatures:
 ///
 /// ```zig
-///     fn update(self: *AppData, eng: *Engine, deltaTimeMs: f64) bool
+///     fn update(self: *AppData, eng: *Engine, deltaTimeMs: f64) void
 ///     fn render(self: *AppData, eng: *Engine) void
 /// ```
+///
+/// `update` may also return `!void`; an error is logged and quits the app.
+/// Call `eng.quit()` from `update` or `onEvent` to stop the loop after the
+/// current tick.
 ///
 /// An app may also declare an `onEvent` to hear about window, drag-and-drop,
 /// gamepad hot-plug and lifecycle events. It's called during the event
@@ -290,6 +295,10 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
 
         const UpdateStepMs = 1000.0 / engOpts.updateStepHz;
         const HasOnEvent = @hasDecl(AppData, "onEvent");
+
+        comptime {
+            comp.checkUpdateReturn(AppData, "AppData.update");
+        }
         const HasScreenshotHook = engOpts.screenshotHook and builtin.target.os.tag != .emscripten;
         const Self = @This();
 
@@ -359,19 +368,20 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
             self.engine.refreshWindowState();
         }
 
-        /// Runs one fixed update step. Returns false when the app asks to quit.
+        /// Runs one fixed update step. Returns false once the app has asked
+        /// to quit (`eng.quit()`, or an error returned from `update`).
         fn updateTick(self: *Self, app: *AppData) bool {
             self.engine.inputs.update(
                 self.engine.windowState.scaleFactor,
                 &self.engine.viewport,
             );
             self.engine.updateActions(UpdateStepMs);
-            const keepRunning = app.update(self.engine, UpdateStepMs);
+            comp.callUpdate(app, self.engine, UpdateStepMs, "update");
             // Roll this tick's input into the previous-tick buffers only
             // after the app has read it, so a press that lands between
             // two ticks is still an edge for exactly one of them.
             self.engine.inputs.finishTick();
-            return keepRunning;
+            return !self.engine.quitRequested;
         }
 
         pub fn gameLoopCore(self: *Self, app: *AppData) bool {
@@ -385,6 +395,7 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
             self.currTime = newCurrTime;
 
             self.pumpEvents(app);
+            if (self.engine.quitRequested) return false;
             self.engine.resources.checkHotReload();
 
             while (self.lag > UpdateStepMs) {
@@ -404,6 +415,7 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
         /// loop then stops as if the app had quit.
         fn screenshotLoopCore(self: *Self, app: *AppData, shot: *screenshot.ScreenshotHook) bool {
             self.pumpEvents(app);
+            if (self.engine.quitRequested) return false;
 
             const tickStartMs = @as(f64, @floatFromInt(self.shotTicks)) * UpdateStepMs;
             shot.applyInput(&self.engine.inputs, tickStartMs);
@@ -434,7 +446,9 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
         export fn mainLoop() void {
             const appRunner: *Self = @ptrCast(@alignCast(g_EmscriptenRunnerRef.?));
             const app: *AppData = @ptrCast(@alignCast(g_EmscriptenAppRef.?));
-            _ = appRunner.gameLoopCore(app);
+            if (!appRunner.gameLoopCore(app)) {
+                if (builtin.os.tag == .emscripten) web.cancelMainLoop();
+            }
         }
 
         pub fn run(self: *Self, app: *AppData) void {
@@ -479,6 +493,8 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
         /// Set while the engine has audio paused because the app went to
         /// the background, so coming back only resumes what it paused.
         audioPausedForBackground: bool = false,
+        /// Set by `quit()`; the runner stops after the current tick.
+        quitRequested: bool = false,
         manifest: if (engOpts.manifestOpts != null) assets.AssetManifest else void,
         /// The engine's Lua state when `scripting` is set.
         scripts: if (engOpts.scripting) ScriptEngine else void,
@@ -720,6 +736,12 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
 
                 self.window.setIcon(&icon_image);
             }
+        }
+
+        /// Asks the app runner to stop. The current tick finishes, then the
+        /// loop exits without rendering again. Safe to call more than once.
+        pub fn quit(self: *Self) void {
+            self.quitRequested = true;
         }
 
         /// Sets whether vsync is enabled or not on the graphics context.

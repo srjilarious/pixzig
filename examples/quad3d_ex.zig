@@ -115,13 +115,13 @@ pub const App = struct {
         self.alloc.destroy(self);
     }
 
-    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) void {
         self.timeMs += delta;
 
         if (eng.inputs.keyboard.pressed(.escape)) {
-            return false;
+            eng.quit();
+            return;
         }
-        return true;
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {

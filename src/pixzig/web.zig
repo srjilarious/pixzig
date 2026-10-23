@@ -12,6 +12,12 @@ pub fn setMainLoop(cb: MainLoopCallback, maybe_fps: ?i16, simulate_infinite_loop
     emscripten_set_main_loop(cb, if (maybe_fps) |fps| fps else -1, @intFromBool(simulate_infinite_loop));
 }
 
+extern fn emscripten_cancel_main_loop() void;
+/// Stops the loop started by `setMainLoop`; the callback isn't called again.
+pub fn cancelMainLoop() void {
+    emscripten_cancel_main_loop();
+}
+
 /// std.panic impl
 pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_addr: ?usize) noreturn {
     _ = error_return_trace;

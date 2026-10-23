@@ -131,7 +131,7 @@ pub const App = struct {
         }
     }
 
-    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) void {
         if (self.fps.update(delta)) {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
@@ -144,7 +144,8 @@ pub const App = struct {
             self.paused = !self.paused;
         }
         if (eng.actions.pressed(.quit)) {
-            return false;
+            eng.quit();
+            return;
         }
 
         if (!self.paused) {
@@ -172,8 +173,6 @@ pub const App = struct {
                 }
             }
         }
-
-        return true;
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {

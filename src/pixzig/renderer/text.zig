@@ -5,7 +5,7 @@ const resources = @import("../resources.zig");
 const font_atlas = @import("./font_atlas.zig");
 const sprite_batch = @import("./sprite_batch.zig");
 
-const Vec2I = common.Vec2I;
+const Vec2F = common.Vec2F;
 const RectF = common.RectF;
 const Color = common.Color;
 const SpriteBatch = sprite_batch.SpriteBatch;
@@ -20,8 +20,10 @@ pub const measureFontFile = font_atlas.measureFontFile;
 pub const measureFontFileIndexed = font_atlas.measureFontFileIndexed;
 pub const findFaceIndexByName = font_atlas.findFaceIndexByName;
 
-fn scaleInt(value: i32, scale: f32) i32 {
-    return @as(i32, @intFromFloat(@as(f32, @floatFromInt(value)) * scale));
+/// Scales an integer glyph metric, truncated to whole pixels so glyphs
+/// stay on the pixel grid when the pen starts on it.
+fn scaleInt(value: i32, scale: f32) f32 {
+    return @trunc(@as(f32, @floatFromInt(value)) * scale);
 }
 
 /// Iterates the UTF-8 codepoints of a byte slice, yielding U+FFFD for any
@@ -97,17 +99,17 @@ pub const TextRenderer = struct {
             "Set one with Renderer.setDefaultFont, or EngineInitOptions.renderInitOpts.font.", .{});
     }
 
-    pub fn drawString(self: *TextRenderer, text: []const u8, pos: Vec2I) Vec2I {
+    pub fn drawString(self: *TextRenderer, text: []const u8, pos: Vec2F) Vec2F {
         return self.drawGlyphs(text, pos, 1.0, white, null);
     }
 
     /// Like `drawString`, but tints every glyph by `color` instead of
     /// rendering plain white.
-    pub fn drawStringColored(self: *TextRenderer, text: []const u8, pos: Vec2I, color: Color) Vec2I {
+    pub fn drawStringColored(self: *TextRenderer, text: []const u8, pos: Vec2F, color: Color) Vec2F {
         return self.drawGlyphs(text, pos, 1.0, color, null);
     }
 
-    pub fn drawScaledString(self: *TextRenderer, text: []const u8, pos: Vec2I, scale: f32) Vec2I {
+    pub fn drawScaledString(self: *TextRenderer, text: []const u8, pos: Vec2F, scale: f32) Vec2F {
         return self.drawGlyphs(text, pos, scale, white, null);
     }
 
@@ -115,14 +117,14 @@ pub const TextRenderer = struct {
     /// draw coordinate space. Partially-visible edge characters have their
     /// source UV rect trimmed to match so no bleed from adjacent font glyphs
     /// appears.
-    pub fn drawClippedString(self: *TextRenderer, text: []const u8, pos: Vec2I, clip: RectF) Vec2I {
+    pub fn drawClippedString(self: *TextRenderer, text: []const u8, pos: Vec2F, clip: RectF) Vec2F {
         return self.drawGlyphs(text, pos, 1.0, white, clip);
     }
 
     /// The one glyph loop behind every draw call. Returns the drawn size:
     /// the summed advances, and the tallest glyph.
-    fn drawGlyphs(self: *TextRenderer, text: []const u8, pos: Vec2I, scale: f32, color: Color, clip: ?RectF) Vec2I {
-        var drawSize: Vec2I = .{ .x = 0, .y = 0 };
+    fn drawGlyphs(self: *TextRenderer, text: []const u8, pos: Vec2F, scale: f32, color: Color, clip: ?RectF) Vec2F {
+        var drawSize: Vec2F = .{ .x = 0, .y = 0 };
         const handle = self.font orelse {
             self.warnNoFont();
             return drawSize;
@@ -131,7 +133,7 @@ pub const TextRenderer = struct {
         self.syncAtlasForText(fa, text);
 
         const mode: DrawMode = if (fa.isAlpha) .mask else .texture;
-        var currX: i32 = pos.x;
+        var currX: f32 = pos.x;
         const posY = pos.y + scaleInt(fa.ascent, scale);
         var it = CodepointIter{ .text = text };
         while (it.next()) |cp| {
@@ -181,9 +183,9 @@ pub const TextRenderer = struct {
     }
 
     /// Measures `text` without drawing it.
-    pub fn measureString(self: *TextRenderer, text: []const u8) Vec2I {
-        var width: i32 = 0;
-        var height: i32 = 0;
+    pub fn measureString(self: *TextRenderer, text: []const u8) Vec2F {
+        var width: f32 = 0;
+        var height: f32 = 0;
 
         const handle = self.font orelse {
             self.warnNoFont();
@@ -197,10 +199,10 @@ pub const TextRenderer = struct {
         var it = CodepointIter{ .text = text };
         while (it.next()) |cp| {
             const ch = handle.val.getChar(cp) orelse continue;
-            width += ch.advance;
-            height = @max(height, ch.size.y);
+            width += @floatFromInt(ch.advance);
+            height = @max(height, @as(f32, @floatFromInt(ch.size.y)));
         }
 
-        return Vec2I{ .x = width, .y = height };
+        return .{ .x = width, .y = height };
     }
 };

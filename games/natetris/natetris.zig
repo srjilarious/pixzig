@@ -5,10 +5,10 @@ const std = @import("std");
 
 const pixzig = @import("pixzig");
 const gl = pixzig.gl;
-const zmath = pixzig.zmath;
 const RectF = pixzig.common.RectF;
 
 const FpsCounter = pixzig.utils.FpsCounter;
+const Timer = pixzig.utils.Timer;
 const Engine = pixzig.Engine;
 
 const Color8 = pixzig.Color8;
@@ -22,6 +22,9 @@ const BoardWidth = 18;
 
 const PieceStartX = 8;
 const PieceStartY = -1;
+
+// How often the falling piece steps down one row, in milliseconds.
+const DropPeriodMs = 1000.0;
 
 const Shapes: []const []const u8 = &.{
       "     " ++
@@ -96,12 +99,11 @@ pub const Natetris = struct {
     tex: *pixzig.TextureHandle,
     lockedTex: *pixzig.TextureHandle,
     wallTex: *pixzig.TextureHandle,
-    projMat: zmath.Mat,
     currIdx: usize,
     shape: []u8,
     shapePos: Vec2I,
     board: []BoardSpace,
-    timeTillDrop: f64,
+    dropTimer: Timer(f64),
 
     // states: AppStateMgr,
 
@@ -175,8 +177,6 @@ pub const Natetris = struct {
 
         std.log.debug("Created texture from characters.\n", .{});
 
-        const projMat = zmath.orthographicOffCenterLhGl(0, 800, 0, 600, -0.1, 1000);
-
         var board = try alloc.alloc(BoardSpace, BoardWidth*BoardHeight);
         for(0..BoardHeight) |bh| {
             for(0..BoardWidth) |bw| {
@@ -206,19 +206,13 @@ pub const Natetris = struct {
             .tex = tex,
             .lockedTex = lockedTex,
             .wallTex = wallTex,
-            .projMat = projMat,
             .currIdx = 0,
             .shape = try alloc.alloc(u8, ShapeWidth*ShapeHeight),
             .shapePos = .{ .x = 1, .y = 0 },
             .board = board,
-            .timeTillDrop = 0.0,
+            .dropTimer = .{ .period = DropPeriodMs },
         };
-        app.currIdx = 0;
-
-        // for(0..15) |idx| {
-        //     app.shape[idx] = Shapes[0][idx];
-        // }
-        @memcpy(app.shape, Shapes[0]);
+        app.spawnNewPiece(&eng.rng);
         return app;
     }
 
@@ -228,7 +222,7 @@ pub const Natetris = struct {
         self.alloc.destroy(self);
     }
 
-    pub fn update(self: *Natetris, eng: *AppRunner.Engine, delta: f64) bool {
+    pub fn update(self: *Natetris, eng: *AppRunner.Engine, delta: f64) void {
         if(self.fps.update(delta)) {
             std.log.debug("FPS: {}\n", .{self.fps.fps()});
         }
@@ -273,28 +267,24 @@ pub const Natetris = struct {
             if(!self.checkShape(self.shapePos)) {
                 self.shapePos.y -= 1;
             } else {
-                self.timeTillDrop = 0.0;
+                self.dropTimer.reset();
             }
         }
 
         if(eng.actions.pressed(.quit)) {
-            return false;
+            eng.quit();
+            return;
         }
 
-        self.timeTillDrop += delta;
-        if(self.timeTillDrop > 1.0) {
-            self.tryDropAndLock();
-            self.timeTillDrop = 0.0;
+        if(self.dropTimer.update(delta)) {
+            self.tryDropAndLock(&eng.rng);
         }
-
-        return true;
     }
 
     pub fn render(self: *Natetris, eng: *AppRunner.Engine) void {
         eng.renderer.clear(0, 0, 26, 255);
         
-        // const fb_size = eng.window.getFramebufferSize();
-        eng.renderer.begin(.{ .matrix = self.projMat });
+        eng.renderer.begin(.logical);
         
         self.drawBoard(eng, .{ .x = 32, .y = 32});
         self.drawShape(eng, self.shapePos, .{ .x = 32, .y = 32}, self.shape);
@@ -303,7 +293,7 @@ pub const Natetris = struct {
         self.fps.renderTick();
     }
 
-    fn tryDropAndLock(self: *Natetris) void {
+    fn tryDropAndLock(self: *Natetris, rng: *pixzig.Rng) void {
         self.shapePos.y += 1;
         if(!self.checkShape(self.shapePos)) {
             // Put it back to the original position.
@@ -329,14 +319,15 @@ pub const Natetris = struct {
             // try finding finished lines.
             self.checkBoard();
             // Now we need to spawn a new piece.
-            self.spawnNewPiece();
+            self.spawnNewPiece(rng);
         }
     }
 
-    fn spawnNewPiece(self: *Natetris) void {
+    fn spawnNewPiece(self: *Natetris, rng: *pixzig.Rng) void {
         self.shapePos = .{ .x = PieceStartX, .y = PieceStartY };
-        @memcpy(self.shape, Shapes[2]);
-        self.timeTillDrop = 0.0;
+        self.currIdx = rng.intRange(usize, 0, Shapes.len - 1);
+        @memcpy(self.shape, Shapes[self.currIdx]);
+        self.dropTimer.reset();
     }
 
     fn rotateClockwise(self: *Natetris) void {
@@ -435,9 +426,9 @@ pub const Natetris = struct {
                 const h: i32 = @intCast(bh);
                 if(self.board[bidx] != .Empty) {
                     const dest = RectF.fromPosSize(
-                        BaseX+w*size.x, 
-                        BaseY+h*size.y, 
-                        size.x, size.y);
+                        @floatFromInt(BaseX+w*size.x),
+                        @floatFromInt(BaseY+h*size.y),
+                        @floatFromInt(size.x), @floatFromInt(size.y));
                     const tex = which: {
                         if(self.board[bidx] == .Wall) {
                             break :which self.wallTex;
@@ -477,9 +468,9 @@ pub const Natetris = struct {
 
                 if(shape[hu*ShapeWidth+wu] == 'x') {
                     const dest = RectF.fromPosSize(
-                        BaseX+(pos.x+w)*size.x, 
-                        BaseY+(pos.y+h)*size.y, 
-                        size.x, size.y);
+                        @floatFromInt(BaseX+(pos.x+w)*size.x),
+                        @floatFromInt(BaseY+(pos.y+h)*size.y),
+                        @floatFromInt(size.x), @floatFromInt(size.y));
                     eng.renderer.drawTexture(self.tex, dest, source);
                     
                 }
@@ -490,7 +481,11 @@ pub const Natetris = struct {
 
 pub fn main() !void {
     const alloc = std.heap.c_allocator;
-    const appRunner = try AppRunner.init("Natetris", alloc, .{});
+    // The board is laid out for 800x600; the viewport scales that to the window.
+    const appRunner = try AppRunner.init("Natetris", alloc, .{
+        .windowSize = .{ .x = 800, .y = 600 },
+        .logicalSize = .{ .x = 800, .y = 600 },
+    });
     defer appRunner.deinit();
 
     const app = try Natetris.init(alloc, appRunner.engine);

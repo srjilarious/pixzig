@@ -2,8 +2,15 @@ const std = @import("std");
 const testz = @import("testz");
 const pixzig = @import("pixzig");
 
-// Minimal engine stub — GameStateMgr only passes it by pointer to state methods.
-const MockEngine = struct {};
+// Minimal engine stub. GameStateMgr passes it by pointer to state methods,
+// and calls `quit` when a state's update returns an error.
+const MockEngine = struct {
+    quitCalled: bool = false,
+
+    pub fn quit(self: *MockEngine) void {
+        self.quitCalled = true;
+    }
+};
 
 // Module-level counters for lifecycle tracking.  Reset at the start of each test.
 var activateCountA: i32 = 0;
@@ -22,7 +29,7 @@ fn resetCounters() void {
     lastRenderState = 99;
 }
 
-// StateA — has full lifecycle hooks. update returns true.
+// StateA — has full lifecycle hooks. update keeps running.
 const StateA = struct {
     pub fn activate(self: *StateA) void {
         _ = self;
@@ -32,12 +39,11 @@ const StateA = struct {
         _ = self;
         deactivateCountA += 1;
     }
-    pub fn update(self: *StateA, eng: *MockEngine, delta: f64) bool {
+    pub fn update(self: *StateA, eng: *MockEngine, delta: f64) void {
         _ = self;
         _ = eng;
         _ = delta;
         lastUpdateState = 0;
-        return true;
     }
     pub fn render(self: *StateA, eng: *MockEngine) void {
         _ = self;
@@ -56,12 +62,11 @@ const StateB = struct {
         _ = self;
         deactivateCountB += 1;
     }
-    pub fn update(self: *StateB, eng: *MockEngine, delta: f64) bool {
+    pub fn update(self: *StateB, eng: *MockEngine, delta: f64) void {
         _ = self;
-        _ = eng;
         _ = delta;
         lastUpdateState = 1;
-        return false;
+        eng.quit();
     }
     pub fn render(self: *StateB, eng: *MockEngine) void {
         _ = self;
@@ -70,14 +75,28 @@ const StateB = struct {
     }
 };
 
+// StateErr — update fails, which the manager turns into eng.quit().
+const StateErr = struct {
+    pub fn update(self: *StateErr, eng: *MockEngine, delta: f64) !void {
+        _ = self;
+        _ = eng;
+        _ = delta;
+        lastUpdateState = 3;
+        return error.Boom;
+    }
+    pub fn render(self: *StateErr, eng: *MockEngine) void {
+        _ = self;
+        _ = eng;
+    }
+};
+
 // StateC — no lifecycle hooks, so missing activate/deactivate is handled silently.
 const StateC = struct {
-    pub fn update(self: *StateC, eng: *MockEngine, delta: f64) bool {
+    pub fn update(self: *StateC, eng: *MockEngine, delta: f64) void {
         _ = self;
         _ = eng;
         _ = delta;
         lastUpdateState = 2;
-        return true;
     }
     pub fn render(self: *StateC, eng: *MockEngine) void {
         _ = self;
@@ -91,6 +110,9 @@ const Mgr2 = pixzig.gamestate.GameStateMgr(MockEngine, States2, &[_]type{ StateA
 
 const States3 = enum { A, B, C };
 const Mgr3 = pixzig.gamestate.GameStateMgr(MockEngine, States3, &[_]type{ StateA, StateB, StateC });
+
+const StatesErr = enum { A, Err };
+const MgrErr = pixzig.gamestate.GameStateMgr(MockEngine, StatesErr, &[_]type{ StateA, StateErr });
 
 // setCurrState activates the newly selected state.
 pub fn gameStateActivateCalledOnSetTest(io: std.Io, alloc: std.mem.Allocator) !void {
@@ -145,15 +167,31 @@ pub fn gameStateUpdateDelegatesToActiveStateTest(io: std.Io, alloc: std.mem.Allo
 
     mgr.setCurrState(.A);
     lastUpdateState = 99;
-    const resultA = mgr.update(&eng, 16.0);
-    try testz.expectTrue(resultA); // StateA.update returns true
+    mgr.update(&eng, 16.0);
+    try testz.expectFalse(eng.quitCalled); // StateA keeps running
     try testz.expectEqual(lastUpdateState, 0);
 
     mgr.setCurrState(.B);
     lastUpdateState = 99;
-    const resultB = mgr.update(&eng, 16.0);
-    try testz.expectFalse(resultB); // StateB.update returns false
+    mgr.update(&eng, 16.0);
+    try testz.expectTrue(eng.quitCalled); // StateB calls eng.quit()
     try testz.expectEqual(lastUpdateState, 1);
+}
+
+// A state whose update returns an error quits the engine.
+pub fn gameStateUpdateErrorQuitsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    resetCounters();
+    var stateA = StateA{};
+    var stateErr = StateErr{};
+    var mgr = MgrErr.init(.{ &stateA, &stateErr });
+    var eng = MockEngine{};
+
+    mgr.setCurrState(.Err);
+    mgr.update(&eng, 16.0);
+    try testz.expectEqual(lastUpdateState, 3);
+    try testz.expectTrue(eng.quitCalled);
 }
 
 // render delegates to the active state.
@@ -192,7 +230,7 @@ pub fn gameStateNoLifecycleHooksTest(io: std.Io, alloc: std.mem.Allocator) !void
     mgr.setCurrState(.C);
 
     lastUpdateState = 99;
-    _ = mgr.update(&eng, 16.0);
+    mgr.update(&eng, 16.0);
     try testz.expectEqual(lastUpdateState, 2);
 
     lastRenderState = 99;

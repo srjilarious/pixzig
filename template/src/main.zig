@@ -32,9 +32,12 @@ pub const App = struct {
     }
 
     /// Runs at a fixed 120 Hz; `deltaMs` is the step length in milliseconds.
-    /// Return false to quit.
-    pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) bool {
-        if (eng.actions.pressed(.quit)) return false;
+    /// Call `eng.quit()` to stop.
+    pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) void {
+        if (eng.actions.pressed(.quit)) {
+            eng.quit();
+            return;
+        }
 
         const dt: f32 = @floatCast(deltaMs);
         self.pos.x += self.vel.x * dt;
@@ -43,7 +46,6 @@ pub const App = struct {
         const size = eng.viewport.logicalSize;
         if (self.pos.x < 0 or self.pos.x + 16 > @as(f32, @floatFromInt(size.x))) self.vel.x = -self.vel.x;
         if (self.pos.y < 0 or self.pos.y + 16 > @as(f32, @floatFromInt(size.y))) self.vel.y = -self.vel.y;
-        return true;
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {

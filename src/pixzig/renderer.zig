@@ -20,7 +20,7 @@ const Sprite = @import("./renderer/sprites.zig").Sprite;
 const Viewport = @import("./window.zig").Viewport;
 const Camera2D = @import("./camera.zig").Camera2D;
 const TextureHandle = resources.TextureHandle;
-const Vec2I = common.Vec2I;
+const Vec2F = common.Vec2F;
 const white: common.Color = .{ .r = 1, .g = 1, .b = 1, .a = 1 };
 const Vec2U = common.Vec2U;
 const RectF = common.RectF;
@@ -364,11 +364,11 @@ pub fn Renderer(opts: RendererOptions) type {
         }
 
         /// Draws the whole texture (frame) at `pos`, scaled uniformly by `scale`.
-        pub fn drawFullTexture(self: *Self, texture: *TextureHandle, pos: Vec2I, scale: f32) void {
+        pub fn drawFullTexture(self: *Self, texture: *TextureHandle, pos: Vec2F, scale: f32) void {
             const tex = &texture.val;
             const tsx = @as(f32, @floatFromInt(tex.size.x)) * scale;
             const tsy = @as(f32, @floatFromInt(tex.size.y)) * scale;
-            const dest = RectF.fromPosSize(pos.x, pos.y, @intFromFloat(tsx), @intFromFloat(tsy));
+            const dest = RectF.fromPosSize(pos.x, pos.y, tsx, tsy);
             self.implMut().batch.draw(tex, dest, tex.src, .none, white, .texture);
         }
 
@@ -396,20 +396,20 @@ pub fn Renderer(opts: RendererOptions) type {
         /// Requires `RendererOptions.textRendering == true`; calling it with
         /// text rendering compiled out is a compile error. Draws nothing (and
         /// logs an error) if no default font has been set (see `setDefaultFont`).
-        pub fn drawString(self: *Self, text: []const u8, pos: Vec2I) Vec2I {
+        pub fn drawString(self: *Self, text: []const u8, pos: Vec2F) Vec2F {
             requireFlag("drawString", "textRendering");
             return self.implMut().text.drawString(text, pos);
         }
 
         /// Requires `RendererOptions.textRendering == true`; see `drawString()`.
-        pub fn drawScaledString(self: *Self, text: []const u8, pos: Vec2I, scale: f32) Vec2I {
+        pub fn drawScaledString(self: *Self, text: []const u8, pos: Vec2F, scale: f32) Vec2F {
             requireFlag("drawScaledString", "textRendering");
             return self.implMut().text.drawScaledString(text, pos, scale);
         }
 
         /// Like `drawString`, but tints every glyph by `color` instead of
         /// rendering plain white. Requires `RendererOptions.textRendering == true`.
-        pub fn drawStringColored(self: *Self, text: []const u8, pos: Vec2I, color: Color) Vec2I {
+        pub fn drawStringColored(self: *Self, text: []const u8, pos: Vec2F, color: Color) Vec2F {
             requireFlag("drawStringColored", "textRendering");
             return self.implMut().text.drawStringColored(text, pos, color);
         }
@@ -417,21 +417,21 @@ pub fn Renderer(opts: RendererOptions) type {
         /// Like `drawString`, but only the parts of glyphs inside `clip` are
         /// drawn (edge glyphs are trimmed, not dropped). Requires
         /// `RendererOptions.textRendering == true`.
-        pub fn drawClippedString(self: *Self, text: []const u8, pos: Vec2I, clip: RectF) Vec2I {
+        pub fn drawClippedString(self: *Self, text: []const u8, pos: Vec2F, clip: RectF) Vec2F {
             requireFlag("drawClippedString", "textRendering");
             return self.implMut().text.drawClippedString(text, pos, clip);
         }
 
         /// The default font's line height in pixels, or null when no font is
         /// set. Requires `RendererOptions.textRendering == true`.
-        pub fn lineHeight(self: *const Self) ?i32 {
+        pub fn lineHeight(self: *const Self) ?f32 {
             requireFlag("lineHeight", "textRendering");
             const font = self.implConst().text.font orelse return null;
-            return font.val.maxY;
+            return @floatFromInt(font.val.maxY);
         }
 
         /// Measures `text` without drawing it. Requires `RendererOptions.textRendering == true`.
-        pub fn measureString(self: *Self, text: []const u8) Vec2I {
+        pub fn measureString(self: *Self, text: []const u8) Vec2F {
             requireFlag("measureString", "textRendering");
             return self.implMut().text.measureString(text);
         }

@@ -25,6 +25,8 @@ pub fn GameStateMgr(
         }
     }
 
+    for (States) |State| comp.checkUpdateReturn(State, @typeName(State) ++ ".update");
+
     // Generate the GameState Manager
     return struct {
         currState: StateKeysType,
@@ -74,10 +76,11 @@ pub fn GameStateMgr(
         }
 
         /// Calls the update method on the current state, passing along the
-        /// engine and delta time, and returns its result.
-        pub fn update(self: *Self, eng: *Engine, deltaMs: f64) bool {
+        /// engine and delta time. A state's `update` returns `void` or
+        /// `!void`; an error is logged and calls `eng.quit()`.
+        pub fn update(self: *Self, eng: *Engine, deltaMs: f64) void {
             switch (self.currState) {
-                inline else => |curr| return self.states[@intFromEnum(curr)].update(eng, deltaMs),
+                inline else => |curr| comp.callUpdate(self.states[@intFromEnum(curr)], eng, deltaMs, @tagName(curr) ++ " state update"),
             }
         }
 

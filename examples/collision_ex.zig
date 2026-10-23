@@ -137,7 +137,7 @@ pub const App = struct {
 
     }
 
-    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) void {
         if(self.fps.update(delta)) {
             std.log.debug("FPS: {}\n", .{self.fps.fps()});
         }
@@ -162,7 +162,8 @@ pub const App = struct {
         //     self.paused = !self.paused;
         // }
         if(eng.inputs.keyboard.pressed(.escape)) {
-            return false;
+            eng.quit();
+            return;
         }
 
         
@@ -209,13 +210,11 @@ pub const App = struct {
             if(num > 0) {
                 for(0..num) |idx| {
                     std.log.debug("Hit {?}\n", .{hits[idx]});
-                    _ = try self.collideGrid.removeRect(RectF.fromPosSize(mousePos.x, mousePos.y, 16, 16), hits[idx].?);
+                    _ = try self.collideGrid.removeRect(RectF.fromPosSize(pos.x, pos.y, 16, 16), hits[idx].?);
                     flecs.delete(self.world, hits[idx].?);
                 }
             }
         }
-        
-        return true;
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {

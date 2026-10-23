@@ -71,11 +71,11 @@ pub const GridRenderer = struct {
     }
 
     fn drawVertLine(inner: *Inner, x: i32, w: i32, h: i32, color: Color) !void {
-        try drawFilledRect(inner, RectF.fromPosSize(x, 0, w, h), color);
+        try drawFilledRect(inner, RectF.fromPosSize(@floatFromInt(x), 0, @floatFromInt(w), @floatFromInt(h)), color);
     }
 
     fn drawHorzLine(inner: *Inner, y: i32, w: i32, h: i32, color: Color) !void {
-        try drawFilledRect(inner, RectF.fromPosSize(0, y, w, h), color);
+        try drawFilledRect(inner, RectF.fromPosSize(0, @floatFromInt(y), @floatFromInt(w), @floatFromInt(h)), color);
     }
 
     fn buildGrid(inner: *Inner, mapSize: Vec2I, tileSize: Vec2I, borderSize: usize, color: Color) !void {

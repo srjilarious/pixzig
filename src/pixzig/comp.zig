@@ -11,6 +11,36 @@ pub fn numEnumFields(comptime T: type) usize {
     return info.@"enum".field_names.len;
 }
 
+/// Fails compilation unless `T.update` returns `void` or `!void`. Apps used
+/// to return `bool` to keep running; that now has to be `eng.quit()`.
+pub fn checkUpdateReturn(comptime T: type, comptime what: []const u8) void {
+    if (!@hasDecl(T, "update")) return;
+    const ret = @typeInfo(@TypeOf(T.update)).@"fn".return_type orelse return;
+    const ok = ret == void or switch (@typeInfo(ret)) {
+        .error_union => |eu| eu.payload == void,
+        else => false,
+    };
+    if (!ok) {
+        @compileError(what ++ " must return void or !void, not " ++ @typeName(ret) ++
+            "; call eng.quit() to stop instead of returning false");
+    }
+}
+
+/// Calls `target.update(eng, deltaMs)`, which returns `void` or `!void`
+/// (see `checkUpdateReturn`). An error is logged and quits the engine.
+pub fn callUpdate(target: anytype, eng: anytype, deltaMs: f64, comptime what: []const u8) void {
+    const T = @typeInfo(@TypeOf(target)).pointer.child;
+    const ret = @typeInfo(@TypeOf(T.update)).@"fn".return_type.?;
+    if (ret == void) {
+        target.update(eng, deltaMs);
+    } else {
+        target.update(eng, deltaMs) catch |err| {
+            std.log.err("{s} failed: {}; quitting", .{ what, err });
+            eng.quit();
+        };
+    }
+}
+
 // Taken from zimpl for testing
 // https://github.com/permutationlock/zimpl/blob/8b98b8587846037b5a1037c303603c0d55b6f349/src/zimpl.zig
 // pub fn Impl(comptime Ifc: fn (type) type, comptime T: type) type {

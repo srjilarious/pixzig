@@ -67,7 +67,7 @@ pub const App = struct {
         self.alloc.destroy(self);
     }
 
-    pub fn update(self: *App, eng: *AppRunner.Engine, _: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.Engine, _: f64) void {
         const audio = &eng.audio;
 
         if (eng.actions.pressed(.laser)) {
@@ -114,7 +114,7 @@ pub const App = struct {
         if (eng.actions.pressed(.volDown)) {
             audio.setBusVolume(.music, @max(0.0, audio.busVolume(.music) - 0.1));
         }
-        return !eng.actions.pressed(.quit);
+        if (eng.actions.pressed(.quit)) eng.quit();
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
@@ -124,7 +124,7 @@ pub const App = struct {
         const white = Color.from(255, 255, 255, 255);
         const dim = Color.from(160, 160, 200, 255);
         var buf: [96]u8 = undefined;
-        var y: i32 = 30;
+        var y: f32 = 30;
         const lines = [_][]const u8{
             "Space = laser   B = explosion",
             "M = music on/off (1s fades)   S = synth stream",

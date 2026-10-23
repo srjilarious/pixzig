@@ -40,6 +40,7 @@ const Vec2F = common.Vec2F;
 const RectF = common.RectF;
 const Color = common.Color;
 const Keyboard = input.Keyboard;
+const keyboard = input.keyboard;
 const Mouse = input.Mouse;
 
 // ============================================================
@@ -194,7 +195,9 @@ pub fn UiContext(comptime Engine: type) type {
         // ----------------------------------------------------------
 
         /// Typed characters accumulated across all update() calls this frame.
-        textInput: [64]u8,
+        /// Sized like the keyboard's own per-tick buffer, so one tick's text
+        /// (an IME commit of several kanji, say) always fits.
+        textInput: [keyboard.TextBufLen]u8,
         textInputLen: usize,
         /// Number of backspace presses accumulated this frame.
         backspaceCount: usize,
@@ -346,14 +349,14 @@ pub fn UiContext(comptime Engine: type) type {
             // Accumulate typed characters. Modified key chords are handled below
             // as commands, so they should not also type their letter.
             if (!ctrl_down and !alt_down and !super_down) {
-                var buf: [8]u8 = undefined;
+                var buf: [keyboard.TextBufLen]u8 = undefined;
                 const n = self.keyboard.text(&buf);
-                for (buf[0..n]) |c| {
-                    if (self.textInputLen < self.textInput.len) {
-                        self.textInput[self.textInputLen] = c;
-                        self.textInputLen += 1;
-                    }
-                }
+                // Cut on a UTF-8 boundary if earlier ticks this frame have
+                // already filled most of the buffer.
+                const room = self.textInput.len - self.textInputLen;
+                const take = if (n <= room) n else keyboard.utf8Boundary(buf[0..n], room);
+                @memcpy(self.textInput[self.textInputLen..][0..take], buf[0..take]);
+                self.textInputLen += take;
             }
 
             // Accumulate special key presses
@@ -606,10 +609,10 @@ pub fn UiContext(comptime Engine: type) type {
             );
 
             // Title text — vertically centered in title bar
-            const line_h: f32 = @floatFromInt(self.renderer.lineHeight() orelse 16);
+            const line_h: f32 = self.renderer.lineHeight() orelse 16;
             _ = self.renderer.drawString(title, .{
-                .x = @intFromFloat(rect.l + pad_x),
-                .y = @intFromFloat(rect.t + (title_h - line_h) / 2.0),
+                .x = @trunc(rect.l + pad_x),
+                .y = @trunc(rect.t + (title_h - line_h) / 2.0),
             });
 
             // Push window context
@@ -646,7 +649,7 @@ pub fn UiContext(comptime Engine: type) type {
                 const rect = win.rect;
                 const mp = self.mousePos;
                 if (mp.x >= rect.l and mp.x < rect.r and mp.y >= rect.t and mp.y < rect.b) {
-                    const line_h: f32 = @floatFromInt(self.renderer.lineHeight() orelse 16);
+                    const line_h: f32 = self.renderer.lineHeight() orelse 16;
                     state.scrollY = std.math.clamp(
                         state.scrollY - self.scrollDelta * line_h * 3.0,
                         0.0,
@@ -813,13 +816,13 @@ pub fn UiContext(comptime Engine: type) type {
 
         pub fn label(self: *Self, str: []const u8) void {
             const s = &self.style;
-            const line_h: i32 = self.renderer.lineHeight() orelse 16;
-            const h: f32 = @floatFromInt(line_h + s.itemSpacing);
+            const line_h: f32 = self.renderer.lineHeight() orelse 16;
+            const h: f32 = line_h + @as(f32, @floatFromInt(s.itemSpacing));
             const w: f32 = self.contentWidth();
             const rect = self.allocWidget(w, h);
             _ = self.renderer.drawString(str, .{
-                .x = @intFromFloat(rect.l),
-                .y = @intFromFloat(rect.t),
+                .x = @trunc(rect.l),
+                .y = @trunc(rect.t),
             });
         }
 
@@ -900,9 +903,9 @@ pub fn UiContext(comptime Engine: type) type {
             self.renderer.drawEnclosingRect(rect, s.windowBorder, 1);
 
             const ts = self.renderer.measureString(lbl);
-            const line_h: f32 = @floatFromInt(self.renderer.lineHeight() orelse 16);
-            const tx: i32 = @intFromFloat(rect.l + (width - @as(f32, @floatFromInt(ts.x))) / 2.0);
-            const ty: i32 = @intFromFloat(rect.t + (h - line_h) / 2.0);
+            const line_h: f32 = self.renderer.lineHeight() orelse 16;
+            const tx: f32 = @trunc(rect.l + (width - ts.x) / 2.0);
+            const ty: f32 = @trunc(rect.t + (h - line_h) / 2.0);
             _ = self.renderer.drawString(lbl, .{ .x = tx, .y = ty });
 
             return .{ .clicked = clicked, .state = state };
@@ -959,9 +962,9 @@ pub fn UiContext(comptime Engine: type) type {
 
             // Centered label
             const ts = self.renderer.measureString(lbl);
-            const line_h: f32 = @floatFromInt(self.renderer.lineHeight() orelse 16);
-            const tx: i32 = @intFromFloat(rect.l + (w - @as(f32, @floatFromInt(ts.x))) / 2.0);
-            const ty: i32 = @intFromFloat(rect.t + (h - line_h) / 2.0);
+            const line_h: f32 = self.renderer.lineHeight() orelse 16;
+            const tx: f32 = @trunc(rect.l + (w - ts.x) / 2.0);
+            const ty: f32 = @trunc(rect.t + (h - line_h) / 2.0);
             _ = self.renderer.drawString(lbl, .{ .x = tx, .y = ty });
 
             return .{ .clicked = clicked, .state = state };
@@ -1001,11 +1004,11 @@ pub fn UiContext(comptime Engine: type) type {
             self.renderer.drawFilledRect(rect, bg);
 
             const pad_x: f32 = @floatFromInt(s.padding.x);
-            const line_h: f32 = @floatFromInt(self.renderer.lineHeight() orelse 16);
+            const line_h: f32 = self.renderer.lineHeight() orelse 16;
             const text_clip = RectF{ .l = rect.l + pad_x, .t = rect.t, .r = rect.r - pad_x, .b = rect.b };
             _ = self.renderer.drawClippedString(lbl, .{
-                .x = @intFromFloat(rect.l + pad_x),
-                .y = @intFromFloat(rect.t + (rect.height() - line_h) / 2.0),
+                .x = @trunc(rect.l + pad_x),
+                .y = @trunc(rect.t + (rect.height() - line_h) / 2.0),
             }, text_clip);
 
             return clicked;
@@ -1157,10 +1160,10 @@ pub fn UiContext(comptime Engine: type) type {
             }
 
             const item_sp: f32 = @floatFromInt(s.itemSpacing);
-            const line_h: f32 = @floatFromInt(self.renderer.lineHeight() orelse 16);
+            const line_h: f32 = self.renderer.lineHeight() orelse 16;
             _ = self.renderer.drawString(lbl, .{
-                .x = @intFromFloat(box.r + item_sp * 2.0),
-                .y = @intFromFloat(rect.t + (h - line_h) / 2.0),
+                .x = @trunc(box.r + item_sp * 2.0),
+                .y = @trunc(rect.t + (h - line_h) / 2.0),
             });
 
             return changed;
@@ -1352,11 +1355,11 @@ pub fn UiContext(comptime Engine: type) type {
             self.renderer.drawEnclosingRect(rect, border_col, 1);
 
             const pad_x: f32 = @floatFromInt(s.padding.x);
-            const line_h: f32 = @floatFromInt(self.renderer.lineHeight() orelse 16);
-            const ty: i32 = @intFromFloat(rect.t + (h - line_h) / 2.0);
+            const line_h: f32 = self.renderer.lineHeight() orelse 16;
+            const ty: f32 = @trunc(rect.t + (h - line_h) / 2.0);
             const text_clip = RectF{ .l = rect.l + pad_x, .t = rect.t, .r = rect.r - pad_x, .b = rect.b };
             _ = self.renderer.drawClippedString(buf[0..len.*], .{
-                .x = @intFromFloat(rect.l + pad_x),
+                .x = @trunc(rect.l + pad_x),
                 .y = ty,
             }, text_clip);
 
@@ -1366,7 +1369,7 @@ pub fn UiContext(comptime Engine: type) type {
                 if (blink_on) {
                     const cursor_pos = if (self.editCursorId == uid) self.editCursorPos else len.*;
                     const pre_sz = self.renderer.measureString(buf[0..cursor_pos]);
-                    const cx: f32 = rect.l + pad_x + @as(f32, @floatFromInt(pre_sz.x));
+                    const cx: f32 = rect.l + pad_x + pre_sz.x;
                     const cy: f32 = rect.t + (h - line_h) / 2.0;
                     self.renderer.drawFilledRect(RectF{
                         .l = cx,
@@ -1501,11 +1504,11 @@ pub fn UiContext(comptime Engine: type) type {
             else
                 std.fmt.bufPrint(&display_buf, "{}", .{value.*}) catch "?";
             const pad_x: f32 = @floatFromInt(s.padding.x);
-            const line_h: f32 = @floatFromInt(self.renderer.lineHeight() orelse 16);
-            const ty: i32 = @intFromFloat(rect.t + (h - line_h) / 2.0);
+            const line_h: f32 = self.renderer.lineHeight() orelse 16;
+            const ty: f32 = @trunc(rect.t + (h - line_h) / 2.0);
             const text_clip = RectF{ .l = rect.l + pad_x, .t = rect.t, .r = rect.r - pad_x, .b = rect.b };
             _ = self.renderer.drawClippedString(value_str, .{
-                .x = @intFromFloat(rect.l + pad_x),
+                .x = @trunc(rect.l + pad_x),
                 .y = ty,
             }, text_clip);
 
@@ -1513,7 +1516,7 @@ pub fn UiContext(comptime Engine: type) type {
             if (focused and (self.frame / 30) % 2 == 0) {
                 const cursor_pos = if (self.editCursorId == uid) self.editCursorPos else self.intEditLen;
                 const pre_sz = self.renderer.measureString(value_str[0..cursor_pos]);
-                const cx: f32 = rect.l + pad_x + @as(f32, @floatFromInt(pre_sz.x));
+                const cx: f32 = rect.l + pad_x + pre_sz.x;
                 const cy: f32 = rect.t + (h - line_h) / 2.0;
                 self.renderer.drawFilledRect(RectF{
                     .l = cx,
@@ -1546,8 +1549,7 @@ pub fn UiContext(comptime Engine: type) type {
             const w: f32 = self.contentWidth();
             const rect = self.allocWidget(w, areaHeight);
 
-            const line_h: i32 = self.renderer.lineHeight() orelse 16;
-            const line_hf: f32 = @floatFromInt(line_h);
+            const line_hf: f32 = self.renderer.lineHeight() orelse 16;
             const pad_y: f32 = @floatFromInt(s.padding.y);
             const pad_x: f32 = @floatFromInt(s.padding.x);
             const usable_h: f32 = @max(0.0, areaHeight - pad_y * 2.0);
@@ -1608,15 +1610,15 @@ pub fn UiContext(comptime Engine: type) type {
             // Draw visible lines clipped to the text column so long lines don't
             // bleed into the scrollbar or past the border.
             const line_clip = RectF{ .l = rect.l + pad_x, .t = rect.t, .r = text_r - pad_x, .b = rect.b };
-            var draw_y: i32 = @intFromFloat(rect.t + pad_y);
+            var draw_y: f32 = @trunc(rect.t + pad_y);
             const start = scroll.*;
             const end_idx = @min(start + lines_visible, lines.len);
             for (start..end_idx) |i| {
                 _ = self.renderer.drawClippedString(lines[i], .{
-                    .x = @intFromFloat(rect.l + pad_x),
+                    .x = @trunc(rect.l + pad_x),
                     .y = draw_y,
                 }, line_clip);
-                draw_y += line_h;
+                draw_y += line_hf;
             }
 
             // Draw scrollbar
@@ -1726,10 +1728,10 @@ pub fn UiContext(comptime Engine: type) type {
             var val_buf: [24]u8 = undefined;
             const val_str = std.fmt.bufPrint(&val_buf, "{d:.2}", .{value.*}) catch "?";
             const ts = self.renderer.measureString(val_str);
-            const line_h: f32 = @floatFromInt(self.renderer.lineHeight() orelse 16);
+            const line_h: f32 = self.renderer.lineHeight() orelse 16;
             _ = self.renderer.drawString(val_str, .{
-                .x = @intFromFloat(rect.r - @as(f32, @floatFromInt(ts.x)) - @as(f32, @floatFromInt(s.padding.x))),
-                .y = @intFromFloat(track_cy - line_h / 2.0),
+                .x = @trunc(rect.r - ts.x - @as(f32, @floatFromInt(s.padding.x))),
+                .y = @trunc(track_cy - line_h / 2.0),
             });
 
             return changed;

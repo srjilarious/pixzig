@@ -185,7 +185,7 @@ pub const App = struct {
         try self.seqPlayer.add(sequence);
     }
 
-    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) void {
         if (self.fps.update(delta)) {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
@@ -224,8 +224,10 @@ pub const App = struct {
             }
         }
 
-        if (eng.actions.pressed(.quit)) return false;
-        return true;
+        if (eng.actions.pressed(.quit)) {
+            eng.quit();
+            return;
+        }
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {

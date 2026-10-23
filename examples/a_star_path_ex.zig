@@ -336,7 +336,7 @@ pub const App = struct {
         std.log.info("Path is {} nodes long", .{self.path.items.len});
     }
 
-    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) void {
         if (self.fps.update(delta)) {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
@@ -382,9 +382,9 @@ pub const App = struct {
         }
 
         if (eng.actions.pressed(.quit)) {
-            return false;
+            eng.quit();
+            return;
         }
-        return true;
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
@@ -396,7 +396,7 @@ pub const App = struct {
         //eng.renderer.drawFullTexture(self.tex, .{ .x = 0, .y = 0 }, 8);
 
         eng.renderer.drawFilledRect(
-            RectF.fromPosSize(self.cursorPos.x * TileWidth, self.cursorPos.y * TileHeight, TileWidth, TileHeight),
+            RectF.fromPosSize(@floatFromInt(self.cursorPos.x * TileWidth), @floatFromInt(self.cursorPos.y * TileHeight), TileWidth, TileHeight),
             Color.from(255, 255, 0, 255),
         );
         eng.renderer.end();

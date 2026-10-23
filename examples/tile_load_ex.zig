@@ -75,12 +75,15 @@ pub const App = struct {
         };
     }
 
-    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) void {
         if (self.fps.update(delta)) {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
 
-        if (eng.actions.pressed(.quit)) return false;
+        if (eng.actions.pressed(.quit)) {
+            eng.quit();
+            return;
+        }
 
         // The renderer rebuilds itself on a hot-reload; all we have to do is
         // refresh what we derived from the map ourselves.
@@ -124,7 +127,6 @@ pub const App = struct {
         }
 
         self.camera.pos = self.guy.centerF();
-        return true;
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {

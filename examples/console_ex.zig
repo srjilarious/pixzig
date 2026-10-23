@@ -50,7 +50,7 @@ pub const App = struct {
         self.alloc.destroy(self);
     }
 
-    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) void {
         if (self.fps.update(delta)) {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
@@ -59,7 +59,8 @@ pub const App = struct {
         // action map is suppressed while the console is open, so an action
         // couldn't close it.
         if (eng.inputs.keyboard.pressed(.escape)) {
-            return false;
+            eng.quit();
+            return;
         }
         if (eng.inputs.keyboard.pressed(.F1)) eng.console.toggle();
 
@@ -67,7 +68,6 @@ pub const App = struct {
         self.flashMs = @max(0, self.flashMs - delta);
 
         self.ui.update();
-        return true;
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {

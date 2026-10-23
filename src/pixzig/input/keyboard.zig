@@ -160,7 +160,7 @@ pub const PreeditBufLen = 256;
 /// trailing sequence is dropped. Cutting typed text on a raw byte count
 /// would hand callers half an encoded codepoint, which for CJK input
 /// (3 bytes per character) is not hypothetical.
-fn utf8Boundary(bytes: []const u8, n: usize) usize {
+pub fn utf8Boundary(bytes: []const u8, n: usize) usize {
     var end = @min(n, bytes.len);
     if (end == bytes.len) return end; // nothing dropped, nothing to split
     // `bytes[end]` is the first byte that would be dropped. A continuation

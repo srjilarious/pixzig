@@ -41,7 +41,7 @@ pub const App = struct {
         self.alloc.destroy(self);
     }
 
-    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) void {
         if (self.fps.update(delta)) {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
@@ -51,9 +51,9 @@ pub const App = struct {
         if (eng.inputs.keyboard.pressed(.three)) std.log.debug("three!\n", .{});
 
         if (eng.inputs.keyboard.pressed(.escape)) {
-            return false;
+            eng.quit();
+            return;
         }
-        return true;
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {

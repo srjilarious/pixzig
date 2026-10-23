@@ -21,15 +21,14 @@ pub const App = struct {
         self.pixBuff.deinit();
     }
 
-    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) void {
         _ = delta;
         _ = self;
 
         if (eng.inputs.keyboard.pressed(.escape)) {
-            return false;
+            eng.quit();
+            return;
         }
-
-        return true;
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
