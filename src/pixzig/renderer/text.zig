@@ -113,6 +113,11 @@ pub const TextRenderer = struct {
         return self.drawGlyphs(text, pos, scale, white, null);
     }
 
+    /// Like `drawScaledString`, but tints every glyph by `color`.
+    pub fn drawScaledStringColored(self: *TextRenderer, text: []const u8, pos: Vec2F, scale: f32, color: Color) Vec2F {
+        return self.drawGlyphs(text, pos, scale, color, null);
+    }
+
     /// Like drawString but clips character quads to `clip` in the active
     /// draw coordinate space. Partially-visible edge characters have their
     /// source UV rect trimmed to match so no bleed from adjacent font glyphs

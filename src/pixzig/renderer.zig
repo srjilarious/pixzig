@@ -414,6 +414,13 @@ pub fn Renderer(opts: RendererOptions) type {
             return self.implMut().text.drawStringColored(text, pos, color);
         }
 
+        /// Like `drawScaledString`, but tints every glyph by `color`.
+        /// Requires `RendererOptions.textRendering == true`.
+        pub fn drawScaledStringColored(self: *Self, text: []const u8, pos: Vec2F, scale: f32, color: Color) Vec2F {
+            requireFlag("drawScaledStringColored", "textRendering");
+            return self.implMut().text.drawScaledStringColored(text, pos, scale, color);
+        }
+
         /// Like `drawString`, but only the parts of glyphs inside `clip` are
         /// drawn (edge glyphs are trimmed, not dropped). Requires
         /// `RendererOptions.textRendering == true`.
