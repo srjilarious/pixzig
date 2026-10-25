@@ -539,3 +539,318 @@ pub fn luaSeqMoveToEaseArgTest(io: std.Io, alloc: std.mem.Allocator) !void {
     player.update(50.0);
     try testz.expectEqual(flecs.get(world, entity, Sprite).?.dest.l, 25.0);
 }
+
+// ---------------------------------------------------------------------------
+// Value steps, tags and the extended Lua bridge
+// ---------------------------------------------------------------------------
+
+// TweenValueStep starts from whatever the value holds on its first tick, not
+// when the step was created.
+pub fn tweenValueStepStartsFromCurrentValueTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var value: f32 = 0;
+
+    var sequence = seq.Sequence.init(alloc);
+    defer sequence.deinit(alloc);
+    try sequence.add(alloc, try seq.TweenValueStep.init(alloc, &value, 20, 100.0, .linear));
+
+    value = 10;
+    try testz.expectFalse(sequence.update(50.0));
+    try testz.expectEqual(value, 15.0);
+
+    try testz.expectTrue(sequence.update(50.0));
+    try testz.expectEqual(value, 20.0);
+}
+
+// SetValueStep sets the value and finishes on its first tick.
+pub fn setValueStepSetsValueTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var value: f32 = 0;
+
+    var sequence = seq.Sequence.init(alloc);
+    defer sequence.deinit(alloc);
+    try sequence.add(alloc, try seq.SetValueStep.init(alloc, &value, 7));
+
+    try testz.expectTrue(sequence.update(16.0));
+    try testz.expectEqual(value, 7.0);
+}
+
+// A tagged sequence is running until it finishes or is cancelled, and
+// cancelling skips its remaining steps.
+pub fn playerCancelStopsTaggedSequenceTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var value: f32 = 0;
+
+    var player = seq.SequencePlayer.init(alloc);
+    defer player.deinit();
+
+    var tagged = seq.Sequence.init(alloc);
+    try tagged.add(alloc, try seq.WaitStep.init(alloc, 100.0));
+    try tagged.add(alloc, try seq.SetValueStep.init(alloc, &value, 1));
+    try player.addTagged(tagged, "door");
+
+    var other = seq.Sequence.init(alloc);
+    try other.add(alloc, try seq.WaitStep.init(alloc, 100.0));
+    try player.add(other);
+
+    try testz.expectTrue(player.isRunning("door"));
+    try testz.expectFalse(player.isRunning("window"));
+    try testz.expectFalse(player.isRunning(""));
+
+    try testz.expectEqual(player.cancel("door"), 1);
+    try testz.expectFalse(player.isRunning("door"));
+    try testz.expectEqual(player.sequences.items.len, 1);
+
+    player.update(200.0);
+    player.update(16.0);
+    try testz.expectEqual(value, 0.0);
+}
+
+// Tags that don't fit MAX_NAME_LEN are rejected, and the sequence freed.
+pub fn playerAddTaggedRejectsLongTagTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var player = seq.SequencePlayer.init(alloc);
+    defer player.deinit();
+
+    var s = seq.Sequence.init(alloc);
+    try s.add(alloc, try seq.WaitStep.init(alloc, 10.0));
+    const long: [seq.MAX_NAME_LEN + 1]u8 = @splat('x');
+    try testz.expectError(player.addTagged(s, &long), error.TagTooLong);
+    try testz.expectEqual(player.sequences.items.len, 0);
+}
+
+// Sets up a Lua VM with the sequencer bridge bound, plus one registered
+// value named "v", for the Lua bridge tests below.
+const LuaSeqHarness = struct {
+    world: *flecs.world_t,
+    player: seq.SequencePlayer,
+    ctx: seq.SeqScriptingContext,
+    script: ScriptEngine,
+    value: f32 = 0,
+
+    fn init(self: *LuaSeqHarness, alloc: std.mem.Allocator) !void {
+        self.world = makeWorld(.{Sprite});
+        self.player = seq.SequencePlayer.init(alloc);
+        self.ctx = seq.SeqScriptingContext.init(alloc, self.world, &self.player);
+        self.script = try ScriptEngine.init(alloc);
+        self.value = 0;
+        try self.ctx.bindToLua(&self.script);
+        try self.ctx.registerValue("v", &self.value);
+    }
+
+    // Sequences hold Lua function refs, so they go before the Lua state.
+    fn deinit(self: *LuaSeqHarness) void {
+        self.player.deinit();
+        self.ctx.deinit();
+        self.script.deinit();
+        _ = flecs.fini(self.world);
+    }
+
+    fn globalNumber(self: *LuaSeqHarness, name: []const u8) !f64 {
+        _ = self.script.getGlobal(name);
+        defer self.script.lua.pop(1);
+        return try self.script.lua.toNumber(-1);
+    }
+};
+
+// seq_tween and seq_set drive a registered value; value_get / value_set read
+// and write it right away.
+pub fn luaSeqTweenAndValuesTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var h: LuaSeqHarness = undefined;
+    try h.init(alloc);
+    defer h.deinit();
+
+    try h.script.run(
+        \\value_set("v", 10)
+        \\before = value_get("v")
+        \\local s = seq_new()
+        \\seq_tween(s, "v", 20, 100)
+        \\seq_set(s, "v", 3)
+        \\seq_play(s)
+    );
+    try testz.expectEqual(try h.globalNumber("before"), 10.0);
+
+    h.player.update(50.0);
+    try testz.expectEqual(h.value, 15.0);
+    h.player.update(50.0);
+    try testz.expectEqual(h.value, 20.0);
+    h.player.update(16.0);
+    try testz.expectEqual(h.value, 3.0);
+    try testz.expectEqual(h.player.sequences.items.len, 0);
+}
+
+// An unknown value name is ignored rather than adding a step.
+pub fn luaSeqTweenUnknownValueIgnoredTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var h: LuaSeqHarness = undefined;
+    try h.init(alloc);
+    defer h.deinit();
+
+    try h.script.run(
+        \\missing = value_get("nope")
+        \\local s = seq_new()
+        \\seq_tween(s, "nope", 1, 100)
+        \\seq_play(s)
+    );
+    _ = h.script.getGlobal("missing");
+    try testz.expectTrue(h.script.lua.isNil(-1));
+    h.script.lua.pop(1);
+
+    // With no steps, the sequence is done on its first update.
+    h.player.update(16.0);
+    try testz.expectEqual(h.player.sequences.items.len, 0);
+}
+
+// seq_call runs its function when the sequence reaches it, not before.
+pub fn luaSeqCallRunsFunctionInOrderTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var h: LuaSeqHarness = undefined;
+    try h.init(alloc);
+    defer h.deinit();
+
+    try h.script.run(
+        \\calls = 0
+        \\local s = seq_new()
+        \\seq_wait(s, 100)
+        \\seq_call(s, function() calls = calls + 1 end)
+        \\seq_play(s)
+    );
+
+    h.player.update(100.0);
+    try testz.expectEqual(try h.globalNumber("calls"), 0.0);
+    h.player.update(16.0);
+    try testz.expectEqual(try h.globalNumber("calls"), 1.0);
+    try testz.expectEqual(h.player.sequences.items.len, 0);
+}
+
+// A seq_call function that errors is logged and the sequence carries on.
+pub fn luaSeqCallErrorDoesNotStopSequenceTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var h: LuaSeqHarness = undefined;
+    try h.init(alloc);
+    defer h.deinit();
+
+    try h.script.run(
+        \\local s = seq_new()
+        \\seq_call(s, function() error("boom") end)
+        \\seq_set(s, "v", 5)
+        \\seq_play(s)
+    );
+
+    h.player.update(16.0);
+    h.player.update(16.0);
+    try testz.expectEqual(h.value, 5.0);
+    try testz.expectEqual(h.script.lua.getTop(), 0);
+}
+
+// seq_play with a tag makes the sequence visible to seq_running and
+// stoppable with seq_cancel.
+pub fn luaSeqPlayTaggedAndCancelTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var h: LuaSeqHarness = undefined;
+    try h.init(alloc);
+    defer h.deinit();
+
+    try h.script.run(
+        \\local s = seq_new()
+        \\seq_wait(s, 100)
+        \\seq_set(s, "v", 1)
+        \\seq_play(s, "stalker")
+        \\running = seq_running("stalker")
+        \\cancelled = seq_cancel("stalker")
+        \\after = seq_running("stalker")
+    );
+
+    _ = h.script.getGlobal("running");
+    try testz.expectTrue(h.script.lua.toBoolean(-1));
+    _ = h.script.getGlobal("after");
+    try testz.expectFalse(h.script.lua.toBoolean(-1));
+    h.script.lua.pop(2);
+    try testz.expectEqual(try h.globalNumber("cancelled"), 1.0);
+
+    h.player.update(200.0);
+    try testz.expectEqual(h.value, 0.0);
+}
+
+// A seq_call can cancel its own sequence and play a new one mid-update; the
+// cancel takes effect at once and the new sequence starts next update.
+pub fn luaSeqCallReentersPlayerTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var h: LuaSeqHarness = undefined;
+    try h.init(alloc);
+    defer h.deinit();
+
+    try h.script.run(
+        \\local s = seq_new()
+        \\seq_call(s, function()
+        \\  seq_cancel("first")
+        \\  local n = seq_new()
+        \\  seq_set(n, "v", 9)
+        \\  seq_play(n, "second")
+        \\end)
+        \\seq_set(s, "v", 1)
+        \\seq_play(s, "first")
+    );
+
+    h.player.update(16.0);
+    try testz.expectFalse(h.player.isRunning("first"));
+    try testz.expectTrue(h.player.isRunning("second"));
+    try testz.expectEqual(h.player.sequences.items.len, 1);
+    try testz.expectEqual(h.value, 0.0);
+
+    h.player.update(16.0);
+    try testz.expectEqual(h.value, 9.0);
+    try testz.expectEqual(h.player.sequences.items.len, 0);
+}
+
+// seq_parallel runs several pending sequences side by side and uses up
+// their handles.
+pub fn luaSeqParallelRunsTracksTogetherTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var h: LuaSeqHarness = undefined;
+    try h.init(alloc);
+    defer h.deinit();
+
+    try h.script.run(
+        \\calls = 0
+        \\local a = seq_new()
+        \\seq_tween(a, "v", 10, 100)
+        \\local b = seq_new()
+        \\seq_wait(b, 50)
+        \\seq_call(b, function() calls = calls + 1 end)
+        \\local s = seq_new()
+        \\seq_parallel(s, a, b)
+        \\seq_set(s, "v", -1)
+        \\seq_play(s)
+        \\reused = seq_new()
+    );
+
+    // Both of the parallel handles were freed for reuse.
+    try testz.expectTrue(try h.globalNumber("reused") <= 1.0);
+
+    h.player.update(50.0);
+    try testz.expectEqual(h.value, 5.0);
+    h.player.update(16.0);
+    try testz.expectEqual(try h.globalNumber("calls"), 1.0);
+    h.player.update(34.0);
+    try testz.expectEqual(h.value, 10.0);
+    h.player.update(16.0);
+    try testz.expectEqual(h.value, -1.0);
+    try testz.expectEqual(h.player.sequences.items.len, 0);
+}
+
+// clear() stops everything, including from inside an update.
+pub fn playerClearStopsAllTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var player = seq.SequencePlayer.init(alloc);
+    defer player.deinit();
+
+    for (0..3) |_| {
+        var s = seq.Sequence.init(alloc);
+        try s.add(alloc, try seq.WaitStep.init(alloc, 100.0));
+        try player.add(s);
+    }
+    player.clear();
+    try testz.expectEqual(player.sequences.items.len, 0);
+}

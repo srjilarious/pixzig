@@ -45,6 +45,26 @@ if (self.seqPlayer.sequences.items.len == 0 and eng.actions.pressed(.move_right)
 }
 ```
 
+## Tags and Cancelling
+
+Give a sequence a tag when you add it, and you can check on it or stop it later:
+
+```zig
+try self.seqPlayer.addTagged(s, "boulder_hit");
+
+if (!self.seqPlayer.isRunning("boulder_hit")) { ... }
+
+// Stops it where it is; its remaining steps never run.
+_ = self.seqPlayer.cancel("boulder_hit");
+
+// Stops everything, e.g. when the level changes.
+self.seqPlayer.clear();
+```
+
+Tags are at most `MAX_NAME_LEN` (64) bytes. Several sequences can share a tag, and `cancel` stops all of them.
+
+Steps can add, cancel or clear sequences while the player is updating, for example from a Lua `seq_call`. A cancel takes effect at once. A sequence added during an update starts on the next one.
+
 ## Built-in Steps
 
 ### WaitStep
@@ -91,9 +111,19 @@ try s.add(alloc, try seq.TweenStep.init(alloc, Game, self, setFade, 0.0, 1.0, 50
 
 The context pointer has to stay valid while the step runs, so point it at something stable like your game struct, not into a flecs component array.
 
+### TweenValueStep and SetValueStep
+
+When the thing you're animating is just an `f32` in your game struct, these skip the callback. `TweenValueStep` eases the value to a target, starting from whatever it holds when the step begins. A tween can then pick up where an earlier one, or a cancelled one, left off. `SetValueStep` sets it in one go:
+
+```zig
+try s.add(alloc, try seq.TweenValueStep.init(alloc, &self.doorOpen, 1.0, 400.0, .quad_out));
+try s.add(alloc, try seq.WaitStep.init(alloc, 1000.0));
+try s.add(alloc, try seq.SetValueStep.init(alloc, &self.doorOpen, 0.0));
+```
+
 ### ParallelStep
 
-Runs several steps at the same time, and finishes when all of them have:
+Runs several steps at the same time, and finishes when all of them have. A sub-step that finishes early isn't run again while the others catch up:
 
 ```zig
 var par = try seq.ParallelStep.init(alloc);
@@ -101,6 +131,19 @@ try seq.ParallelStep.add(&par, alloc, try seq.MoveToStep.init(alloc, world, hero
 try seq.ParallelStep.add(&par, alloc, try seq.MoveToStep.init(alloc, world, heroB, targetB, 400.0));
 try s.add(alloc, par);
 ```
+
+To run several steps in order as one track inside a `ParallelStep`, wrap them in a sequence and add it as a `SubSequenceStep`:
+
+```zig
+var track = seq.Sequence.init(alloc);
+try track.add(alloc, try seq.WaitStep.init(alloc, 200.0));
+try track.add(alloc, try seq.MoveToStep.init(alloc, world, heroB, targetB, 200.0));
+try seq.ParallelStep.add(&par, alloc, try seq.SubSequenceStep.init(alloc, track));
+```
+
+### LuaCallStep
+
+Calls a Lua function when the sequence reaches it. It's what `seq_call` adds (see below), and is rarely built from Zig. It holds the function in the Lua registry until it's freed, so free your `SequencePlayer` before closing the Lua state.
 
 ## Writing Your Own Steps
 
@@ -144,7 +187,7 @@ self.seqCtx = seq.SeqScriptingContext.init(alloc, world, &self.seqPlayer);
 try self.seqCtx.bindToLua(&eng.scripts);
 ```
 
-That adds five Lua functions:
+That adds these Lua functions:
 
 | Function | What it does |
 |---|---|
@@ -152,7 +195,47 @@ That adds five Lua functions:
 | `seq_wait(h, ms)` | Add a `WaitStep`. |
 | `seq_move_to(h, entity, x, y, ms [, ease])` | Add a `MoveToStep`. `ease` is a curve name like `"quad_out"`; linear when left out. |
 | `seq_set_actor_state(h, entity, name)` | Add a `SetActorStateStep`. |
-| `seq_play(h)` | Hand the sequence to the player. |
+| `seq_tween(h, value, to, ms [, ease])` | Add a `TweenValueStep` on a registered value (see below). |
+| `seq_set(h, value, v)` | Add a `SetValueStep` on a registered value. |
+| `seq_call(h, fn)` | Add a `LuaCallStep` that calls `fn` when reached. An error in `fn` is logged and the sequence carries on. |
+| `seq_parallel(h, h1, h2, ...)` | Add a `ParallelStep` that runs the sequences `h1`, `h2`, ... side by side. Like `seq_play`, it uses those handles up. |
+| `seq_play(h [, tag])` | Hand the sequence to the player, tagged if `tag` is given. |
+| `seq_running(tag) -> bool` | Whether a sequence with that tag is playing. |
+| `seq_cancel(tag) -> count` | Stop every sequence with that tag. |
+| `value_get(value) -> number` | Read a registered value right away (nil if there's no such value). |
+| `value_set(value, v)` | Set a registered value right away. |
+
+### Registered Values
+
+Scripts can't reach into your structs, so you hand them `f32`s by name. Anything you draw or simulate from one number can then be animated by a script:
+
+```zig
+try self.seqCtx.registerValue("door_open", &self.doorOpen);
+```
+
+```lua
+local h = seq_new()
+seq_tween(h, "door_open", 1, 400, "quad_out")
+seq_wait(h, 1000)
+seq_tween(h, "door_open", 0, 400)
+seq_play(h, "door")
+```
+
+The pointer has to outlive the context and any sequence tweening it. An unknown value name logs a warning and the step isn't added.
+
+### Hooks Into the Game
+
+`seq_call` runs any Lua function, so the game's own Lua functions (registered with `ScriptEngine.registerFunc` or `registerMethod`) become sequence steps without writing a Zig `Step` for each one:
+
+```lua
+local h = seq_new()
+seq_wait(h, 3000)
+seq_call(h, function() play_sound("scare") end)
+seq_tween(h, "scare", 1, 800)
+seq_play(h, "stalker")
+```
+
+A function called this way can play and cancel sequences itself, including the one it's part of. That's how a script chains one sequence into the next, or stops a cooldown.
 
 Lua doesn't know about your entities, so pass in what the script needs as globals before running it:
 

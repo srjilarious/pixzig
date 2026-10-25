@@ -111,6 +111,9 @@ pub const ParallelStep = struct {
         var maxTimeLeft: f64 = 0.0;
         const self: *ParallelStep = @ptrCast(@alignCast(step.ptr));
         for (self.subSteps.items) |*subStep| {
+            // A finished sub-step isn't run again, so one-shot steps (like
+            // a LuaCallStep) fire once while the others catch up.
+            if (subStep.done) continue;
             const currStepTimeLeft = subStep.vtable.update(subStep, deltaMs);
             if (currStepTimeLeft < minTimeLeft) {
                 minTimeLeft = currStepTimeLeft;
@@ -125,7 +128,9 @@ pub const ParallelStep = struct {
         }
 
         step.done = true;
-        return minTimeLeft;
+        // Every sub-step may have finished on an earlier tick, leaving
+        // minTimeLeft untouched; the step still has to report finishing.
+        return if (minTimeLeft <= 0) minTimeLeft else -1.0;
     }
 
     pub fn deinit(step: *Step, alloc: std.mem.Allocator) void {
@@ -355,12 +360,168 @@ pub const SetActorStateStep = struct {
     }
 };
 
+/// Tweens an f32 the game owns from whatever it holds when the step starts
+/// to `to`, over `durationMs` along an easing curve. Unlike `TweenStep`, the
+/// start value is read on the first tick, so a tween can pick up where an
+/// earlier (or cancelled) one left the value. `target` must outlive the step.
+pub const TweenValueStep = struct {
+    target: *f32,
+    from: ?f32,
+    to: f32,
+    durationMs: f64,
+    elapsedMs: f64,
+    ease: Ease,
+
+    const vtable: Step.VTable = .{
+        .update = update,
+        .deinit = deinit,
+    };
+
+    pub fn init(alloc: std.mem.Allocator, target: *f32, to: f32, durationMs: f64, ease: Ease) !Step {
+        const ptr = try alloc.create(TweenValueStep);
+        ptr.* = .{
+            .target = target,
+            .from = null,
+            .to = to,
+            .durationMs = durationMs,
+            .elapsedMs = 0,
+            .ease = ease,
+        };
+        return .{ .ptr = ptr, .vtable = &vtable, .done = false };
+    }
+
+    pub fn update(step: *Step, deltaMs: f64) f64 {
+        const self: *TweenValueStep = @ptrCast(@alignCast(step.ptr));
+        if (self.from == null) self.from = self.target.*;
+
+        self.elapsedMs += deltaMs;
+        // A zero duration jumps straight to the end value.
+        const t: f32 = if (self.durationMs <= 0) 1.0 else @floatCast(@min(self.elapsedMs / self.durationMs, 1.0));
+        self.target.* = easing.tween(self.ease, self.from.?, self.to, t);
+
+        const timeLeft = self.durationMs - self.elapsedMs;
+        step.done = timeLeft <= 0;
+        return timeLeft;
+    }
+
+    pub fn deinit(step: *Step, alloc: std.mem.Allocator) void {
+        const self: *TweenValueStep = @ptrCast(@alignCast(step.ptr));
+        alloc.destroy(self);
+    }
+};
+
+/// Sets an f32 the game owns to `value`. Fire-and-forget; completes in zero
+/// time. `target` must outlive the step.
+pub const SetValueStep = struct {
+    target: *f32,
+    value: f32,
+
+    const vtable: Step.VTable = .{
+        .update = update,
+        .deinit = deinit,
+    };
+
+    pub fn init(alloc: std.mem.Allocator, target: *f32, value: f32) !Step {
+        const ptr = try alloc.create(SetValueStep);
+        ptr.* = .{ .target = target, .value = value };
+        return .{ .ptr = ptr, .vtable = &vtable, .done = false };
+    }
+
+    pub fn update(step: *Step, deltaMs: f64) f64 {
+        _ = deltaMs;
+        const self: *SetValueStep = @ptrCast(@alignCast(step.ptr));
+        self.target.* = self.value;
+        step.done = true;
+        return -1.0;
+    }
+
+    pub fn deinit(step: *Step, alloc: std.mem.Allocator) void {
+        const self: *SetValueStep = @ptrCast(@alignCast(step.ptr));
+        alloc.destroy(self);
+    }
+};
+
+/// Runs a whole sequence as a single step, finishing when the inner sequence
+/// does. Mostly useful inside a `ParallelStep`, to run several multi-step
+/// tracks side by side. The step owns the inner sequence.
+pub const SubSequenceStep = struct {
+    seq: Sequence,
+
+    const vtable: Step.VTable = .{
+        .update = update,
+        .deinit = deinit,
+    };
+
+    pub fn init(alloc: std.mem.Allocator, seq: Sequence) !Step {
+        const ptr = try alloc.create(SubSequenceStep);
+        ptr.* = .{ .seq = seq };
+        return .{ .ptr = ptr, .vtable = &vtable, .done = false };
+    }
+
+    pub fn update(step: *Step, deltaMs: f64) f64 {
+        const self: *SubSequenceStep = @ptrCast(@alignCast(step.ptr));
+        step.done = self.seq.update(deltaMs);
+        return if (step.done) -1.0 else 1.0;
+    }
+
+    pub fn deinit(step: *Step, alloc: std.mem.Allocator) void {
+        const self: *SubSequenceStep = @ptrCast(@alignCast(step.ptr));
+        self.seq.deinit(alloc);
+        alloc.destroy(self);
+    }
+};
+
+/// Calls a Lua function when reached. Fire-and-forget; completes in zero
+/// time. The function is held in the Lua registry until the step is freed,
+/// so the step must be freed before the Lua state is closed. A Lua error in
+/// the function is logged and the sequence carries on.
+pub const LuaCallStep = struct {
+    lua: *Lua,
+    funcRef: i32,
+
+    const vtable: Step.VTable = .{
+        .update = update,
+        .deinit = deinit,
+    };
+
+    /// Takes the function on top of `lua`'s stack (popping it).
+    pub fn initFromStack(alloc: std.mem.Allocator, lua: *Lua) !Step {
+        const funcRef = try lua.ref(ziglua.registry_index);
+        errdefer lua.unref(ziglua.registry_index, funcRef);
+        const ptr = try alloc.create(LuaCallStep);
+        ptr.* = .{ .lua = lua, .funcRef = funcRef };
+        return .{ .ptr = ptr, .vtable = &vtable, .done = false };
+    }
+
+    pub fn update(step: *Step, deltaMs: f64) f64 {
+        _ = deltaMs;
+        const self: *LuaCallStep = @ptrCast(@alignCast(step.ptr));
+        _ = self.lua.rawGetIndex(ziglua.registry_index, self.funcRef);
+        self.lua.protectedCall(.{ .args = 0, .results = 0, .msg_handler = 0 }) catch {
+            std.log.err("seq_call: {s}", .{self.lua.toString(-1) catch "(non-string error)"});
+            self.lua.pop(1);
+        };
+        step.done = true;
+        return -1.0;
+    }
+
+    pub fn deinit(step: *Step, alloc: std.mem.Allocator) void {
+        const self: *LuaCallStep = @ptrCast(@alignCast(step.ptr));
+        self.lua.unref(ziglua.registry_index, self.funcRef);
+        alloc.destroy(self);
+    }
+};
+
 /// A linear set of steps, finished when it's iterated through all of the steps.
 pub const Sequence = struct {
     steps: std.ArrayList(Step),
     alloc: std.mem.Allocator,
     currStep: usize,
     done: bool,
+    /// Optional name for finding the sequence once it's playing (see
+    /// `SequencePlayer.cancel` and `isRunning`). Empty when untagged.
+    tagBuf: [MAX_NAME_LEN]u8 = undefined,
+    tagLen: usize = 0,
 
     pub fn init(alloc: std.mem.Allocator) Sequence {
         return .{
@@ -369,6 +530,23 @@ pub const Sequence = struct {
             .currStep = 0,
             .done = false,
         };
+    }
+
+    /// Names the sequence. Tags longer than `MAX_NAME_LEN` are rejected.
+    pub fn setTag(self: *Sequence, name: []const u8) !void {
+        if (name.len > MAX_NAME_LEN) return error.TagTooLong;
+        @memcpy(self.tagBuf[0..name.len], name);
+        self.tagLen = name.len;
+    }
+
+    /// The sequence's tag, empty when it has none.
+    pub fn tag(self: *const Sequence) []const u8 {
+        return self.tagBuf[0..self.tagLen];
+    }
+
+    /// Whether the sequence is tagged `name`. Never true for an empty name.
+    pub fn hasTag(self: *const Sequence, name: []const u8) bool {
+        return self.tagLen != 0 and std.mem.eql(u8, self.tag(), name);
     }
 
     pub fn deinit(self: *Sequence, alloc: std.mem.Allocator) void {
@@ -409,9 +587,17 @@ pub const Sequence = struct {
 /// Manages a list of sequences and handles updating each sequence and cleaning
 /// up finished ones. Games should have one global SequencePlayer that they
 /// update every tick and add sequences to as needed.
+///
+/// A step may add, cancel or clear sequences from inside `update` (e.g. a
+/// `LuaCallStep` whose script calls `seq_play` or `seq_cancel`). Sequences
+/// added then start on the next update; cancelled ones stop right away.
 pub const SequencePlayer = struct {
     alloc: std.mem.Allocator,
     sequences: std.ArrayList(Sequence),
+    /// Sequences added while `update` was running, moved into `sequences`
+    /// once it's done so that list never grows mid-iteration.
+    incoming: std.ArrayList(Sequence) = .empty,
+    updating: bool = false,
 
     pub fn init(alloc: std.mem.Allocator) SequencePlayer {
         return .{
@@ -425,36 +611,104 @@ pub const SequencePlayer = struct {
             seq.deinit(self.alloc);
         }
         self.sequences.deinit(self.alloc);
+        for (self.incoming.items) |*seq| {
+            seq.deinit(self.alloc);
+        }
+        self.incoming.deinit(self.alloc);
     }
 
-    /// Create a new sequence and return its handle.
+    /// Takes ownership of `seq` and starts playing it.
     pub fn add(self: *SequencePlayer, seq: Sequence) !void {
-        try self.sequences.append(self.alloc, seq);
+        if (self.updating) {
+            try self.incoming.append(self.alloc, seq);
+        } else {
+            try self.sequences.append(self.alloc, seq);
+        }
+    }
+
+    /// Like `add`, but tags the sequence first so it can be found with
+    /// `isRunning` or stopped with `cancel`. On error the sequence is freed.
+    pub fn addTagged(self: *SequencePlayer, seq: Sequence, tag: []const u8) !void {
+        var tagged = seq;
+        errdefer tagged.deinit(self.alloc);
+        try tagged.setTag(tag);
+        try self.add(tagged);
+    }
+
+    /// Whether any unfinished sequence is tagged `tag`.
+    pub fn isRunning(self: *const SequencePlayer, tag: []const u8) bool {
+        for (self.sequences.items) |*seq| {
+            if (!seq.done and seq.hasTag(tag)) return true;
+        }
+        for (self.incoming.items) |*seq| {
+            if (!seq.done and seq.hasTag(tag)) return true;
+        }
+        return false;
+    }
+
+    /// Stops every sequence tagged `tag` without running its remaining
+    /// steps, and returns how many were stopped.
+    pub fn cancel(self: *SequencePlayer, tag: []const u8) usize {
+        var count: usize = 0;
+        for (self.sequences.items) |*seq| {
+            if (!seq.done and seq.hasTag(tag)) {
+                seq.done = true;
+                count += 1;
+            }
+        }
+        for (self.incoming.items) |*seq| {
+            if (!seq.done and seq.hasTag(tag)) {
+                seq.done = true;
+                count += 1;
+            }
+        }
+        if (!self.updating) self.removeFinished();
+        return count;
+    }
+
+    /// Stops every sequence.
+    pub fn clear(self: *SequencePlayer) void {
+        for (self.sequences.items) |*seq| seq.done = true;
+        for (self.incoming.items) |*seq| seq.done = true;
+        if (!self.updating) self.removeFinished();
     }
 
     /// Update all sequences, and remove any that finished this tick
     /// calling deinit on each finished sequence to free its memory.
     pub fn update(self: *SequencePlayer, deltaMs: f64) void {
-        var seqFinished = false;
-        for (self.sequences.items) |*seq| {
-            //if (!seq.active or seq.done) continue;
-            const done = seq.update(deltaMs);
-            if (done) {
-                seqFinished = true;
-                seq.done = true;
-            }
+        self.updating = true;
+        // Indexed rather than iterated by pointer: nothing may resize
+        // `sequences` while updating, but this keeps that obvious.
+        var i: usize = 0;
+        while (i < self.sequences.items.len) : (i += 1) {
+            const seq = &self.sequences.items[i];
+            if (seq.done) continue;
+            if (seq.update(deltaMs)) seq.done = true;
         }
+        self.updating = false;
 
-        // If a sequence finished this tick, do a cleanup pass.
-        if (seqFinished) {
-            var i: usize = 0;
-            while (i < self.sequences.items.len) {
-                if (self.sequences.items[i].done) {
-                    self.sequences.items[i].deinit(self.alloc);
-                    _ = self.sequences.swapRemove(i);
-                } else {
-                    i += 1;
-                }
+        self.removeFinished();
+        self.sequences.appendSlice(self.alloc, self.incoming.items) catch |err| {
+            std.log.err("SequencePlayer: dropping {} sequence(s) added during update: {}", .{ self.incoming.items.len, err });
+            for (self.incoming.items) |*seq| seq.deinit(self.alloc);
+        };
+        self.incoming.clearRetainingCapacity();
+    }
+
+    /// Frees and drops every finished (or cancelled) sequence.
+    fn removeFinished(self: *SequencePlayer) void {
+        removeFinishedFrom(self.alloc, &self.sequences);
+        removeFinishedFrom(self.alloc, &self.incoming);
+    }
+
+    fn removeFinishedFrom(alloc: std.mem.Allocator, list: *std.ArrayList(Sequence)) void {
+        var i: usize = 0;
+        while (i < list.items.len) {
+            if (list.items[i].done) {
+                list.items[i].deinit(alloc);
+                _ = list.swapRemove(i);
+            } else {
+                i += 1;
             }
         }
     }
@@ -465,8 +719,10 @@ pub const SequencePlayer = struct {
 // ----------------------------------------------------------------------------
 
 /// Bridges Lua scripting with the sequence system. Bind it to a script engine
-/// via bindToLua(), then Lua scripts can call seq_new / seq_wait / seq_move_to /
-/// seq_set_actor_state / seq_play to build and queue sequences.
+/// via bindToLua(), then Lua scripts can build sequences step by step
+/// (seq_new, seq_wait, seq_move_to, seq_tween, ...), play them, and stop
+/// them by tag. Games expose their own state to those scripts as named f32
+/// values (see `registerValue`).
 pub const SeqScriptingContext = struct {
     alloc: std.mem.Allocator,
     world: *flecs.world_t,
@@ -474,6 +730,8 @@ pub const SeqScriptingContext = struct {
     /// In-progress sequences, indexed by the handle `seq_new` returned. A slot
     /// goes back to null once `seq_play` submits it, and is reused.
     pending: std.ArrayList(?Sequence),
+    /// Game-owned f32s scripts can read, set and tween by name.
+    values: std.StringHashMapUnmanaged(*f32) = .empty,
 
     pub fn init(
         alloc: std.mem.Allocator,
@@ -493,16 +751,41 @@ pub const SeqScriptingContext = struct {
             if (slot.*) |*s| s.deinit(self.alloc);
         }
         self.pending.deinit(self.alloc);
+        var it = self.values.keyIterator();
+        while (it.next()) |key| self.alloc.free(key.*);
+        self.values.deinit(self.alloc);
     }
 
-    /// Register seq_* globals into the script engine's Lua state. The context
-    /// must remain valid while Lua can call the registered functions.
+    /// Register seq_* and value_* globals into the script engine's Lua state.
+    /// The context must remain valid while Lua can call the registered
+    /// functions.
     pub fn bindToLua(self: *SeqScriptingContext, script: *ScriptEngine) !void {
         try script.registerMethod(SeqScriptingContext, self, "seq_new", luaSeqNew);
         try script.registerMethod(SeqScriptingContext, self, "seq_wait", luaSeqWait);
         try script.registerMethod(SeqScriptingContext, self, "seq_move_to", luaSeqMoveTo);
         try script.registerMethod(SeqScriptingContext, self, "seq_set_actor_state", luaSeqSetActorState);
+        try script.registerMethod(SeqScriptingContext, self, "seq_tween", luaSeqTween);
+        try script.registerMethod(SeqScriptingContext, self, "seq_set", luaSeqSet);
+        try script.registerMethod(SeqScriptingContext, self, "seq_call", luaSeqCall);
+        try script.registerMethod(SeqScriptingContext, self, "seq_parallel", luaSeqParallel);
         try script.registerMethod(SeqScriptingContext, self, "seq_play", luaSeqPlay);
+        try script.registerMethod(SeqScriptingContext, self, "seq_cancel", luaSeqCancel);
+        try script.registerMethod(SeqScriptingContext, self, "seq_running", luaSeqRunning);
+        try script.registerMethod(SeqScriptingContext, self, "value_get", luaValueGet);
+        try script.registerMethod(SeqScriptingContext, self, "value_set", luaValueSet);
+    }
+
+    /// Exposes `ptr` to scripts as the value `name`, for value_get /
+    /// value_set / seq_tween / seq_set. `ptr` must outlive the context and
+    /// any sequence that tweens it. Registering a name again repoints it.
+    pub fn registerValue(self: *SeqScriptingContext, name: []const u8, ptr: *f32) !void {
+        if (self.values.getPtr(name)) |existing| {
+            existing.* = ptr;
+            return;
+        }
+        const key = try self.alloc.dupe(u8, name);
+        errdefer self.alloc.free(key);
+        try self.values.put(self.alloc, key, ptr);
     }
 
     /// The pending sequence for a Lua handle, or null if it's out of range or
@@ -511,6 +794,28 @@ pub const SeqScriptingContext = struct {
         if (handle < 0 or handle >= self.pending.items.len) return null;
         const slot = &self.pending.items[@intCast(handle)];
         return if (slot.*) |*s| s else null;
+    }
+
+    /// Takes the pending sequence for a Lua handle out of its slot, freeing
+    /// the slot. Null if the handle is out of range or already played.
+    fn takePending(self: *SeqScriptingContext, handle: ziglua.Integer) ?Sequence {
+        const s = self.pendingSeq(handle) orelse return null;
+        const taken = s.*;
+        self.pending.items[@intCast(handle)] = null;
+        return taken;
+    }
+
+    /// The registered value named by the string at stack index `idx`, or
+    /// null (with a warning naming `func`) if there's none.
+    fn valueArg(self: *SeqScriptingContext, lua: *Lua, idx: i32, comptime func: []const u8) ?*f32 {
+        const name = lua.toString(idx) catch {
+            std.log.warn(func ++ ": value name must be a string", .{});
+            return null;
+        };
+        return self.values.get(name) orelse {
+            std.log.warn(func ++ ": no value named '{s}'", .{name});
+            return null;
+        };
     }
 };
 
@@ -564,9 +869,120 @@ fn luaEaseArg(lua: *Lua, idx: i32) Ease {
     if (lua.getTop() < idx or lua.isNil(idx)) return .linear;
     const name = lua.toString(idx) catch return .linear;
     return std.meta.stringToEnum(Ease, name) orelse {
-        std.log.warn("seq_move_to: unknown ease '{s}', using linear", .{name});
+        std.log.warn("seq: unknown ease '{s}', using linear", .{name});
         return .linear;
     };
+}
+
+/// seq_tween(handle, name, to, ms [, ease]): append a TweenValueStep that
+/// eases the value `name` from wherever it is when the step starts to `to`.
+fn luaSeqTween(ctx: *SeqScriptingContext, lua: *Lua) i32 {
+    const handle = lua.toInteger(1) catch return 0;
+    const target = ctx.valueArg(lua, 2, "seq_tween") orelse return 0;
+    const to: f32 = @floatCast(lua.toNumber(3) catch return 0);
+    const ms = lua.toNumber(4) catch return 0;
+    const ease = luaEaseArg(lua, 5);
+    if (ctx.pendingSeq(handle)) |s| {
+        s.add(ctx.alloc, TweenValueStep.init(ctx.alloc, target, to, ms, ease) catch return 0) catch {};
+    }
+    return 0;
+}
+
+/// seq_set(handle, name, value): append a SetValueStep.
+fn luaSeqSet(ctx: *SeqScriptingContext, lua: *Lua) i32 {
+    const handle = lua.toInteger(1) catch return 0;
+    const target = ctx.valueArg(lua, 2, "seq_set") orelse return 0;
+    const value: f32 = @floatCast(lua.toNumber(3) catch return 0);
+    if (ctx.pendingSeq(handle)) |s| {
+        s.add(ctx.alloc, SetValueStep.init(ctx.alloc, target, value) catch return 0) catch {};
+    }
+    return 0;
+}
+
+/// seq_call(handle, fn): append a LuaCallStep that calls `fn` (no
+/// arguments) when the sequence reaches it.
+fn luaSeqCall(ctx: *SeqScriptingContext, lua: *Lua) i32 {
+    const handle = lua.toInteger(1) catch return 0;
+    if (!lua.isFunction(2)) {
+        std.log.warn("seq_call: second argument must be a function", .{});
+        return 0;
+    }
+    const s = ctx.pendingSeq(handle) orelse return 0;
+    lua.pushValue(2);
+    const step = LuaCallStep.initFromStack(ctx.alloc, lua) catch return 0;
+    s.add(ctx.alloc, step) catch {
+        var dropped = step;
+        dropped.vtable.deinit(&dropped, ctx.alloc);
+    };
+    return 0;
+}
+
+/// seq_parallel(handle, h1, h2, ...): append a ParallelStep that runs the
+/// pending sequences h1, h2, ... side by side, finishing when all of them
+/// have. Those handles are used up, like seq_play.
+fn luaSeqParallel(ctx: *SeqScriptingContext, lua: *Lua) i32 {
+    const handle = lua.toInteger(1) catch return 0;
+    const s = ctx.pendingSeq(handle) orelse return 0;
+    var par = ParallelStep.init(ctx.alloc) catch return 0;
+
+    var arg: i32 = 2;
+    while (arg <= lua.getTop()) : (arg += 1) {
+        const sub = lua.toInteger(arg) catch continue;
+        if (sub == handle) {
+            std.log.warn("seq_parallel: a sequence can't run inside itself", .{});
+            continue;
+        }
+        var track = ctx.takePending(sub) orelse continue;
+        const step = SubSequenceStep.init(ctx.alloc, track) catch {
+            track.deinit(ctx.alloc);
+            continue;
+        };
+        ParallelStep.add(&par, ctx.alloc, step) catch {
+            var dropped = step;
+            dropped.vtable.deinit(&dropped, ctx.alloc);
+        };
+    }
+
+    s.add(ctx.alloc, par) catch par.vtable.deinit(&par, ctx.alloc);
+    return 0;
+}
+
+/// seq_cancel(tag) -> count: stop every playing sequence tagged `tag`.
+fn luaSeqCancel(ctx: *SeqScriptingContext, lua: *Lua) i32 {
+    const tag = lua.toString(1) catch {
+        lua.pushInteger(0);
+        return 1;
+    };
+    lua.pushInteger(@intCast(ctx.player.cancel(tag)));
+    return 1;
+}
+
+/// seq_running(tag) -> boolean: whether a sequence tagged `tag` is playing.
+fn luaSeqRunning(ctx: *SeqScriptingContext, lua: *Lua) i32 {
+    const tag = lua.toString(1) catch {
+        lua.pushBoolean(false);
+        return 1;
+    };
+    lua.pushBoolean(ctx.player.isRunning(tag));
+    return 1;
+}
+
+/// value_get(name) -> number: the current value `name`, or nil if there's
+/// no such value.
+fn luaValueGet(ctx: *SeqScriptingContext, lua: *Lua) i32 {
+    if (ctx.valueArg(lua, 1, "value_get")) |v| {
+        lua.pushNumber(v.*);
+    } else {
+        lua.pushNil();
+    }
+    return 1;
+}
+
+/// value_set(name, value): set the value `name` right away.
+fn luaValueSet(ctx: *SeqScriptingContext, lua: *Lua) i32 {
+    const target = ctx.valueArg(lua, 1, "value_set") orelse return 0;
+    target.* = @floatCast(lua.toNumber(2) catch return 0);
+    return 0;
 }
 
 /// seq_set_actor_state(handle, entity_id, state_name) — append a SetActorStateStep.
@@ -580,12 +996,21 @@ fn luaSeqSetActorState(ctx: *SeqScriptingContext, lua: *Lua) i32 {
     return 0;
 }
 
-/// seq_play(handle) — submit the sequence to the SequencePlayer and free the slot.
+/// seq_play(handle [, tag]): submit the sequence to the SequencePlayer and
+/// free the slot. A `tag` lets seq_running / seq_cancel find it later.
 fn luaSeqPlay(ctx: *SeqScriptingContext, lua: *Lua) i32 {
     const handle = lua.toInteger(1) catch return 0;
-    if (ctx.pendingSeq(handle)) |s| {
-        ctx.player.add(s.*) catch {};
-        ctx.pending.items[@intCast(handle)] = null;
+    var s = ctx.takePending(handle) orelse return 0;
+    if (lua.getTop() >= 2 and !lua.isNil(2)) {
+        const tag = lua.toString(2) catch {
+            s.deinit(ctx.alloc);
+            return 0;
+        };
+        ctx.player.addTagged(s, tag) catch |err| {
+            std.log.warn("seq_play: can't play sequence tagged '{s}': {}", .{ tag, err });
+        };
+    } else {
+        ctx.player.add(s) catch s.deinit(ctx.alloc);
     }
     return 0;
 }
