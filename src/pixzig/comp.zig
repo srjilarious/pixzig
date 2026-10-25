@@ -33,11 +33,16 @@ pub fn callUpdate(target: anytype, eng: anytype, deltaMs: f64, comptime what: []
     const ret = @typeInfo(@TypeOf(T.update)).@"fn".return_type.?;
     if (ret == void) {
         target.update(eng, deltaMs);
-    } else {
+    } else if (@typeInfo(ret) == .error_union) {
         target.update(eng, deltaMs) catch |err| {
             std.log.err("{s} failed: {}; quitting", .{ what, err });
             eng.quit();
         };
+    } else {
+        // Unreachable in a build that compiles: callers run
+        // `checkUpdateReturn` up front, which reports the bad return type
+        // once. Discarding here keeps that the only error.
+        _ = target.update(eng, deltaMs);
     }
 }
 

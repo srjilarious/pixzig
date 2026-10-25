@@ -299,7 +299,7 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
         const HasOnEvent = @hasDecl(AppData, "onEvent");
 
         comptime {
-            comp.checkUpdateReturn(AppData, "AppData.update");
+            comp.checkUpdateReturn(AppData, @typeName(AppData) ++ ".update");
         }
         const HasScreenshotHook = engOpts.screenshotHook and builtin.target.os.tag != .emscripten;
         const Self = @This();
