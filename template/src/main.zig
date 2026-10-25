@@ -53,7 +53,7 @@ pub const App = struct {
 
         eng.renderer.begin(.logical);
         eng.renderer.drawFilledRect(
-            pixzig.RectF.fromPosSize(@intFromFloat(self.pos.x), @intFromFloat(self.pos.y), 16, 16),
+            pixzig.RectF.fromPosSize(self.pos.x, self.pos.y, 16, 16),
             pixzig.Color.from(255, 200, 60, 255),
         );
         _ = eng.renderer.drawString("Hello from pixzig! Esc quits.", .{ .x = 8, .y = 8 });

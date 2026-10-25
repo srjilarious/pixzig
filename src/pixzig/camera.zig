@@ -82,6 +82,42 @@ pub const Camera2D = struct {
             .add(self.clampedPos(viewport));
     }
 
+    pub const FollowOptions = struct {
+        /// Half-size, in world units, of a box around the camera center
+        /// that the target can move inside without moving the camera.
+        /// Zero keeps the target exactly centered.
+        deadzone: Vec2F = .{ .x = 0, .y = 0 },
+        /// How fast the camera closes the gap, per second: after one
+        /// second `exp(-smoothing)` of the gap remains (5 is snappy, 2 is
+        /// floaty). Null jumps straight to the target. The curve doesn't
+        /// depend on the step size, so any tick rate follows the same way.
+        smoothing: ?f32 = null,
+    };
+
+    /// Moves the camera toward `target` (world space), e.g. the player's
+    /// center, once per update. `bounds` still applies on top, when the
+    /// matrix is built.
+    pub fn follow(self: *Camera2D, target: Vec2F, deltaMs: f64, opts: FollowOptions) void {
+        const goal: Vec2F = .{
+            .x = deadzoneAxis(self.pos.x, target.x, opts.deadzone.x),
+            .y = deadzoneAxis(self.pos.y, target.y, opts.deadzone.y),
+        };
+        const rate = opts.smoothing orelse {
+            self.pos = goal;
+            return;
+        };
+        const dt: f32 = @floatCast(deltaMs / 1000.0);
+        self.pos = self.pos.lerp(goal, 1.0 - @exp(-rate * dt));
+    }
+
+    /// Where the camera needs to be on one axis so `target` is no further
+    /// than `half` from it.
+    fn deadzoneAxis(pos: f32, target: f32, half: f32) f32 {
+        if (target > pos + half) return target - half;
+        if (target < pos - half) return target + half;
+        return pos;
+    }
+
     /// Half the logical viewport size, i.e. its center in logical space.
     fn halfLogical(viewport: *const Viewport) Vec2F {
         return .{

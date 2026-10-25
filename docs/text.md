@@ -14,7 +14,7 @@ _ = eng.renderer.drawScaledString("Big", .{ .x = 8, .y = 40 }, 2.0);
 eng.renderer.end();
 ```
 
-Each draw call returns the size of the text it drew, which is handy for boxes and backgrounds. To lay out text before drawing it, use `measureString(text)` and `lineHeight()`. `drawClippedString(text, pos, clipRect)` trims glyphs at the clip rect's edges, for text in a scrolling panel.
+Positions are `Vec2F`, like sprites and the mouse. Each draw call returns the size of the text it drew, also a `Vec2F`, which is handy for boxes and backgrounds. To lay out text before drawing it, use `measureString(text)` and `lineHeight()`. `drawClippedString(text, pos, clipRect)` trims glyphs at the clip rect's edges, for text in a scrolling panel.
 
 Glyphs are packed into the font atlas the first time they're drawn. Text is UTF-8, so Japanese, accented letters and symbols work as long as the font has them.
 

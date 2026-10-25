@@ -52,7 +52,7 @@ A `Camera2D` looks at a point in your world. Draw through it with `begin(.{ .cam
 camera: pixzig.Camera2D = .{},
 
 // In update, follow the player:
-self.camera.pos = self.player.pos();
+self.camera.follow(self.player.dest.centerF(), deltaMs, .{});
 
 // In render:
 eng.renderer.begin(.{ .camera = &self.camera });
@@ -67,6 +67,19 @@ eng.renderer.end();
 | `zoom` | 2.0 shows everything twice as big. Defaults to 1. |
 | `rotation` | Turns the view, in radians. Positive is clockwise on screen. |
 | `bounds` | A world rect the camera won't look outside of. Usually the map's size. |
+
+`follow(target, deltaMs, opts)` moves the camera toward a world point once per update. With the default options it jumps straight there. Two options soften that:
+
+| Option | What it does |
+|---|---|
+| `deadzone` | Half-size of a box around the screen center. The target can move inside it without moving the camera, like a platformer that only scrolls near the edges. |
+| `smoothing` | How fast the camera catches up, per second. After one second `exp(-smoothing)` of the gap is left: around 5 feels tight, 2 feels floaty. Null (the default) means no lag. |
+
+```zig
+self.camera.follow(target, deltaMs, .{ .deadzone = .{ .x = 32, .y = 24 }, .smoothing = 6 });
+```
+
+The smoothing doesn't depend on the step size, so changing `updateStepHz` doesn't change how the camera feels. For flecs games, `pixzig.ecs.followEntity` follows an entity's sprite.
 
 With `bounds` set, the camera stops at the edges instead of showing empty space past the end of the map. If the visible area is bigger than the bounds on an axis, it centers on them instead.
 

@@ -9,6 +9,7 @@ pub const Window = window.Window;
 pub const WindowCreateOptions = window.WindowCreateOptions;
 pub const showCursor = window.showCursor;
 pub const basePath = window.basePath;
+pub const prefPath = window.prefPath;
 pub const timeMs = window.timeMs;
 pub const setSwapInterval = window.setSwapInterval;
 pub const glProcAddress = window.glProcAddress;

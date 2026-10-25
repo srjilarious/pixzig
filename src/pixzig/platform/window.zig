@@ -252,6 +252,15 @@ pub fn basePath() ?[]const u8 {
     return std.mem.span(p);
 }
 
+/// The per-user writable directory for `org`/`app` (`SDL_GetPrefPath`),
+/// created if missing, with a trailing path separator. Caller owns the
+/// returned copy.
+pub fn prefPath(alloc: std.mem.Allocator, org: [:0]const u8, app: [:0]const u8) ![]u8 {
+    const p = sdl.SDL_GetPrefPath(org.ptr, app.ptr) orelse return sdlError(error.NoPrefPath);
+    defer sdl.SDL_free(p);
+    return alloc.dupe(u8, std.mem.span(p));
+}
+
 /// Milliseconds since SDL was initialised, as a float.
 pub fn timeMs() f64 {
     return @as(f64, @floatFromInt(sdl.SDL_GetTicksNS())) / 1_000_000.0;

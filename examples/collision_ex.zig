@@ -56,18 +56,8 @@ pub const App = struct {
         // flecs.COMPONENT(world, Velocity);
         // flecs.COMPONENT(world, DebugOutline);
 
-        const updateQuery = try flecs.query_init(world, &.{
-            .terms = [_]flecs.term_t{
-                .{ .id = flecs.id(Sprite) },
-                // .{ .id = flecs.id(Velocity) },
-            } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_COUNT_MAX - 1),
-        });
-
-        const query = try flecs.query_init(world, &.{
-            .terms = [_]flecs.term_t{
-                .{ .id = flecs.id(Sprite) },
-            } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_COUNT_MAX - 1),
-        });
+        const updateQuery = try pixzig.ecs.query(world, .{Sprite});
+        const query = try pixzig.ecs.query(world, .{Sprite});
 
 
         var app = try alloc.create(App);

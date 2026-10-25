@@ -10,13 +10,14 @@ Create a world, register your component types, and add entities:
 
 ```zig
 const flecs = pixzig.flecs;
+const ecs = pixzig.ecs;
 
 pub const Velocity = struct { v: pixzig.Vec2F };
 
 // In init:
 self.world = flecs.init();
-flecs.COMPONENT(self.world, pixzig.Sprite);
-flecs.COMPONENT(self.world, Velocity);
+ecs.registerEngineComponents(self.world); // Sprite, Actor, ecs.Outline
+ecs.registerComponents(self.world, .{Velocity});
 
 const e = flecs.new_id(self.world);
 var spr = try eng.resources.createSprite("guy");
@@ -28,7 +29,7 @@ flecs.set(self.world, e, Velocity, .{ .v = .{ .x = 1, .y = 0.5 } });
 _ = flecs.fini(self.world);
 ```
 
-Pixzig's own types work fine as components. `Sprite` and `Actor` are the common ones, and the [sequencer](page:sequences) looks for them on entities.
+Pixzig's own types work fine as components. `Sprite` and `Actor` are the common ones, and the [sequencer](page:sequences) looks for them on entities. `registerComponents` takes any tuple of types, registers zero-sized ones as tags, and is harmless to call twice. Register both `Sprite` and `Actor` even if you only use one, since the helpers below and `MoveToStep` query both; `registerEngineComponents` does that.
 
 ## Queries
 
@@ -36,12 +37,7 @@ A query finds every entity with a set of components. Create it once and iterate 
 
 ```zig
 // In init:
-self.moveQuery = try flecs.query_init(self.world, &.{
-    .terms = [_]flecs.term_t{
-        .{ .id = flecs.id(pixzig.Sprite) },
-        .{ .id = flecs.id(Velocity) },
-    } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_COUNT_MAX - 2),
-});
+self.moveQuery = try ecs.query(self.world, .{ pixzig.Sprite, Velocity });
 
 // In update:
 var it = flecs.query_iter(self.world, self.moveQuery);
@@ -58,9 +54,41 @@ while (flecs.query_next(&it)) {
 flecs.query_fini(self.moveQuery);
 ```
 
-The field index matches the term's position in the query. Pad the terms array out to `FLECS_TERM_COUNT_MAX` as shown, subtracting the number of terms you used.
+The field index matches the type's position in the tuple. For a term a bare type can't express, put a `flecs.term_t` in the tuple instead, e.g. `.{ Sprite, Velocity, flecs.term_t{ .id = flecs.id(Frozen), .oper = .Not } }`. Use `flecs.get(world, entity, T)` to read a component on one entity, which returns null if it doesn't have one.
 
-Drawing works the same way: a query over `Sprite`, and `eng.renderer.drawSprite(&sprites[i])` inside a `begin`/`end` pair. Use `flecs.get(world, entity, T)` to read a component on one entity, which returns null if it doesn't have one.
+## Helper Systems
+
+Every game needs to draw its sprites and animate its actors. `pixzig.ecs` has small systems for that, each owning one query. Call them from your own `update` and `render`:
+
+```zig
+// In App:
+sprites: ecs.SpriteSystem,
+actors: ecs.ActorSystem,
+outlines: ecs.DebugOutlines,
+
+// In init (each one registers Sprite, Actor and Outline for you):
+self.sprites = try ecs.SpriteSystem.init(self.world);
+self.actors = try ecs.ActorSystem.init(self.world);
+self.outlines = try ecs.DebugOutlines.init(self.world);
+try self.outlines.bindConsole(&eng.scripts, "toggleOutlines");
+
+// In update:
+self.actors.update(deltaMs);
+
+// In render, inside begin/end:
+self.sprites.draw(&eng.renderer);
+self.actors.draw(&eng.renderer);
+self.outlines.draw(&eng.renderer);
+
+// In deinit, before fini:
+self.sprites.deinit();
+self.actors.deinit();
+self.outlines.deinit();
+```
+
+`DebugOutlines` draws a box around every entity with an `ecs.Outline` component and a `Sprite` or `Actor`. It starts off; flip `enabled`, call `toggle()`, or type the bound function (`toggleOutlines()`) in the console. Set `lineWidth` for thicker boxes.
+
+To keep a camera on an entity, `ecs.followEntity(&cam, world, player, deltaMs, opts)` calls `Camera2D.follow` with the center of its sprite. See [Viewport and Cameras](page:viewport).
 
 For everything else, like systems, pipelines and relationships, see the flecs and zflecs docs. `examples/flecs_ex.zig` moves and draws sprite entities.
 

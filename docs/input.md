@@ -34,12 +34,11 @@ try eng.actions.bindAxis(.move_x, .{ .gamepad_axis = .{ .axis = .left_x } });
 The runner updates the map every tick, just before `update`, so all you do is query it:
 
 ```zig
-pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) bool {
-    if (eng.actions.pressed(.quit)) return false;
+pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) void {
+    if (eng.actions.pressed(.quit)) eng.quit();
     if (eng.actions.pressed(.jump)) self.jump();
     if (eng.actions.down(.fire)) self.fire();
     self.vel.x = eng.actions.axis(.move_x) * Speed;
-    return true;
 }
 ```
 

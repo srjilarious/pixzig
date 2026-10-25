@@ -4,6 +4,7 @@ const pixzig = @import("pixzig");
 
 const RectF = pixzig.RectF;
 const RectI = pixzig.RectI;
+const Color = pixzig.Color;
 
 pub fn rectFIntersectsOverlappingTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
@@ -277,4 +278,62 @@ pub fn vec2FRotateAndAngleTest(io: std.Io, alloc: std.mem.Allocator) !void {
 
     // cross is positive when the second vector is clockwise from the first.
     try testz.expectTrue((Vec2F{ .x = 1, .y = 0 }).cross(r) > 0);
+}
+
+pub fn rectFFloatConstructorsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    const r = RectF.fromPosSize(1.5, 2.25, 10, 4);
+    try testz.expectEqual(r.l, 1.5);
+    try testz.expectEqual(r.t, 2.25);
+    try testz.expectEqual(r.r, 11.5);
+    try testz.expectEqual(r.b, 6.25);
+
+    const v = RectF.fromPosSizeV(.{ .x = 1.5, .y = 2.25 }, .{ .x = 10, .y = 4 });
+    try testz.expectEqual(v.r, r.r);
+    try testz.expectEqual(v.b, r.b);
+}
+
+pub fn rectFContainsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    const r = RectF.fromPosSize(0, 0, 10, 10);
+    try testz.expectTrue(r.contains(.{ .x = 5, .y = 5 }));
+    try testz.expectTrue(r.contains(.{ .x = 0, .y = 0 })); // top-left edge is inside
+    try testz.expectFalse(r.contains(.{ .x = 10, .y = 5 })); // right edge is not
+    try testz.expectFalse(r.contains(.{ .x = 5, .y = 10 })); // bottom edge is not
+    try testz.expectFalse(r.contains(.{ .x = -0.5, .y = 5 }));
+}
+
+pub fn colorHexAndRgbTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    const c = Color.hex(0xff8000ff);
+    try testz.expectEqual(c.r, 1.0);
+    try testz.expectEqual(c.g, 128.0 / 255.0);
+    try testz.expectEqual(c.b, 0.0);
+    try testz.expectEqual(c.a, 1.0);
+
+    const t = Color.hex(0x00000000);
+    try testz.expectEqual(t.a, Color.transparent.a);
+
+    const g = Color.rgb(0, 255, 0);
+    try testz.expectEqual(g.g, Color.green.g);
+    try testz.expectEqual(g.a, 1.0);
+}
+
+pub fn colorWithAlphaAndLerpTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    const half = Color.white.withAlpha(0.5);
+    try testz.expectEqual(half.r, 1.0);
+    try testz.expectEqual(half.a, 0.5);
+
+    const mid = Color.black.lerp(Color.white, 0.5);
+    try testz.expectEqual(mid.r, 0.5);
+    try testz.expectEqual(mid.g, 0.5);
+    try testz.expectEqual(mid.a, 1.0);
+    const end = Color.red.lerp(Color.blue, 1.0);
+    try testz.expectEqual(end.r, 0.0);
+    try testz.expectEqual(end.b, 1.0);
 }

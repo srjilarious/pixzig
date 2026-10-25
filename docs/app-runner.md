@@ -9,13 +9,15 @@ An app is any struct with these two methods:
 ```zig
 pub const App = struct {
     // Called at a fixed rate (120 Hz by default). `deltaMs` is the step
-    // length in milliseconds. Return false to quit.
-    pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) bool { ... }
+    // length in milliseconds. Call `eng.quit()` to stop.
+    pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) void { ... }
 
     // Called once per displayed frame.
     pub fn render(self: *App, eng: *AppRunner.Engine) void { ... }
 };
 ```
+
+`update` may return `!void` instead. An error it returns is logged and quits the app, the same as calling `eng.quit()`. Returning `bool` is a compile error: older apps returned false to quit, which is now `eng.quit()`.
 
 Game logic goes in `update` and drawing goes in `render`. Keep them apart: `update` runs at a steady rate no matter how fast the screen refreshes, so movement and timers behave the same on every machine.
 
@@ -49,7 +51,7 @@ pub fn onEvent(self: *App, eng: *AppRunner.Engine, event: pixzig.Event) void {
 
 `onEvent` runs during the event pump at the start of each frame, before that frame's `update` calls. Input isn't delivered here on purpose: keys and buttons are latched per tick so `pressed` stays a one-update edge, and reading them in `update` keeps that true.
 
-A close request is reported once per frame even though SDL reports closing the last window twice (a window close, then a quit), so cancelling it once is enough. To close later, after the prompt is answered, call `eng.window.requestClose()` or return false from `update`.
+A close request is reported once per frame even though SDL reports closing the last window twice (a window close, then a quit), so cancelling it once is enough. To close later, after the prompt is answered, call `eng.window.requestClose()` or `eng.quit()`.
 
 The lifecycle events come through the same once-per-frame pump. That's too late for iOS and Android, which expect `will_enter_background` to be handled before the OS suspends the app, so treat them as advisory for now.
 
@@ -112,7 +114,7 @@ pub fn main(init: std.process.Init) !void {
 | `renderInitOpts` | embedded font | The renderer's default font. See [Text and Fonts](page:text). |
 | `scripts` | `null` | A `ScriptEngine` the engine adopts as `eng.scripts`, e.g. one that already ran a config script. Needs `.scripting = true`. See [Scripting](page:scripting). |
 
-`run` owns the loop and returns when `update` returns false or the window closes. The `defer`s then tear down your app first and the engine second, which is the order you want: your app may still hold handles into engine resources.
+`run` owns the loop and returns after `eng.quit()` or when the window closes. `quit` lets the current `update` finish and stops before the next `render`. The `defer`s then tear down your app first and the engine second, which is the order you want: your app may still hold handles into engine resources.
 
 ## The Engine
 
@@ -148,9 +150,9 @@ while (lag > UpdateStepMs) {
     eng.inputs.update(...);          // latch this tick's input
     eng.updateActions(UpdateStepMs); // when actionOpts is set
     eng.resources.checkHotReload();  // debug builds: pick up changed files
-    const keepRunning = app.update(eng, UpdateStepMs);
+    app.update(eng, UpdateStepMs);   // an error here calls eng.quit()
     eng.inputs.finishTick();         // so pressed/released are one-tick edges
-    if (!keepRunning) return false;
+    if (eng.quitRequested) return false;
 }
 app.render(eng);
 window.swapBuffers();

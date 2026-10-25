@@ -29,9 +29,9 @@ pub const App = struct {
 The UI reads input in `update` and draws in `render`. Call `ui.update()` once per tick, and wrap your widgets in `ui.begin()`/`ui.end()` inside a renderer pass:
 
 ```zig
-pub fn update(self: *App, eng: *AppRunner.Engine, _: f64) bool {
+pub fn update(self: *App, eng: *AppRunner.Engine, _: f64) void {
     self.ui.update();
-    return !eng.inputs.keyboard.pressed(.escape);
+    if (eng.inputs.keyboard.pressed(.escape)) eng.quit();
 }
 
 pub fn render(self: *App, eng: *AppRunner.Engine) void {

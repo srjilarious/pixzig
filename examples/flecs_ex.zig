@@ -2,6 +2,7 @@ const std = @import("std");
 
 const pixzig = @import("pixzig");
 const flecs = pixzig.flecs;
+const ecs = pixzig.ecs;
 const RectI = pixzig.common.RectI;
 const Color = pixzig.common.Color;
 
@@ -9,7 +10,6 @@ const Vec2F = pixzig.common.Vec2F;
 const FpsCounter = pixzig.utils.FpsCounter;
 const Sprite = pixzig.sprites.Sprite;
 pub const Player = struct { alive: bool };
-pub const DebugOutline = struct { color: Color };
 
 pub const Velocity = struct { speed: Vec2F };
 
@@ -17,7 +17,7 @@ pub const Dot = struct {};
 
 // The engine owns the action map (`eng.actions`) and updates it each tick.
 // Scrolling uses two axes, each driven by a pair of arrow keys.
-const Action = enum { pause, quit };
+const Action = enum { pause, outlines, quit };
 const Axis = enum { scroll_x, scroll_y };
 
 const AppRunner = pixzig.AppRunner(App, .{
@@ -34,13 +34,15 @@ pub const App = struct {
     paused: bool,
     world: *flecs.world_t,
     updateQuery: *flecs.query_t,
-    drawQuery: *flecs.query_t,
+    sprites: ecs.SpriteSystem,
+    outlines: ecs.DebugOutlines,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
         const bigtex = try eng.resources.loadTexture("tiles", "assets/mario_grassish2.png");
         _ = try eng.resources.addSubTexture(bigtex, "guy", RectI.init(192, 64, 32, 32));
 
         try eng.actions.bind(.pause, .{ .key = .p });
+        try eng.actions.bind(.outlines, .{ .key = .o });
         try eng.actions.bind(.quit, .{ .key = .escape });
         try eng.actions.bindAxis(.scroll_x, .{ .buttons = .{
             .negative = .{ .key = .left },
@@ -56,24 +58,14 @@ pub const App = struct {
         const world = flecs.init();
 
         std.log.info("Finished world init.", .{});
-        flecs.COMPONENT(world, Player);
-        flecs.COMPONENT(world, Sprite);
-        flecs.COMPONENT(world, Velocity);
-        flecs.COMPONENT(world, DebugOutline);
+        ecs.registerEngineComponents(world);
+        ecs.registerComponents(world, .{ Player, Velocity });
 
         std.log.info("Created components", .{});
-        const updateQuery = try flecs.query_init(world, &.{
-            .terms = [_]flecs.term_t{
-                .{ .id = flecs.id(Sprite) },
-                .{ .id = flecs.id(Velocity) },
-            } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_COUNT_MAX - 2),
-        });
-
-        const query = try flecs.query_init(world, &.{
-            .terms = [_]flecs.term_t{
-                .{ .id = flecs.id(Sprite) },
-            } ++ flecs.array(flecs.term_t, flecs.FLECS_TERM_COUNT_MAX - 1),
-        });
+        const updateQuery = try ecs.query(world, .{ Sprite, Velocity });
+        var outlines = try ecs.DebugOutlines.init(world);
+        outlines.enabled = true;
+        outlines.lineWidth = 2;
 
         std.log.info("Created queries.", .{});
 
@@ -86,7 +78,8 @@ pub const App = struct {
             .fps = FpsCounter.init(),
             .world = world,
             .updateQuery = updateQuery,
-            .drawQuery = query,
+            .sprites = try ecs.SpriteSystem.init(world),
+            .outlines = outlines,
         };
 
         std.log.info("Spawning 50 entities...", .{});
@@ -102,7 +95,9 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        flecs.query_fini(self.drawQuery);
+        flecs.query_fini(self.updateQuery);
+        self.sprites.deinit();
+        self.outlines.deinit();
         _ = flecs.fini(self.world);
         self.alloc.destroy(self);
     }
@@ -127,7 +122,7 @@ pub const App = struct {
 
         if (val) {
             std.log.info("  - Setting debug outline.", .{});
-            flecs.set(self.world, ent, DebugOutline, .{ .color = Color.from(100, 255, 200, 220) });
+            flecs.set(self.world, ent, ecs.Outline, .{ .color = Color.from(100, 255, 200, 220) });
         }
     }
 
@@ -143,6 +138,7 @@ pub const App = struct {
         if (eng.actions.pressed(.pause)) {
             self.paused = !self.paused;
         }
+        if (eng.actions.pressed(.outlines)) self.outlines.toggle();
         if (eng.actions.pressed(.quit)) {
             eng.quit();
             return;
@@ -182,22 +178,8 @@ pub const App = struct {
 
         eng.renderer.begin(.logical);
 
-        var it = flecs.query_iter(self.world, self.drawQuery);
-        while (flecs.query_next(&it)) {
-            const spr = flecs.field(&it, Sprite, 0).?;
-
-            const entities = it.entities();
-            for (0..it.count()) |idx| {
-                eng.renderer.drawSprite(&spr[idx]);
-                const e = entities[idx];
-
-                // Check for a DebugOutline component on the entity.
-                const outline = flecs.get(self.world, e, DebugOutline);
-                if (outline != null) {
-                    eng.renderer.drawEnclosingRect(spr[idx].dest, outline.?.color, 2);
-                }
-            }
-        }
+        self.sprites.draw(&eng.renderer);
+        self.outlines.draw(&eng.renderer);
 
         eng.renderer.end();
     }

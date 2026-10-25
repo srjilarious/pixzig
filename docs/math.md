@@ -15,15 +15,28 @@ The small building blocks most games need: points, rects and colors, vector math
 Rects are stored as edges, not as position and size, so build them with a helper:
 
 ```zig
-const box = RectF.fromPosSize(10, 20, 32, 16); // x, y, w, h
-const region = RectI.init(32, 32, 16, 16);      // x, y, w, h
+const box = RectF.fromPosSize(10, 20, 32, 16);       // x, y, w, h as f32
+const hit = RectF.fromPosSizeV(self.pos, size);      // from two Vec2Fs
+const region = RectI.init(32, 32, 16, 16);            // x, y, w, h
 
 box.width();       // 32
 box.centerF();     // .{ .x = 26, .y = 28 }
 box.intersects(&other);
+box.contains(mousePos); // left/top edges inside, right/bottom outside
 ```
 
-`RectF.fromCoords(x, y, w, h, texW, texH)` turns a pixel region of a texture into UV coordinates. Colors are usually written as bytes with `Color.from(255, 128, 0, 255)`.
+`RectF.fromCoords(x, y, w, h, texW, texH)` turns a pixel region of a texture into UV coordinates; it takes integers since those are texture pixels.
+
+Colors come from constants, bytes, or a hex literal:
+
+```zig
+Color.white, Color.black, Color.transparent, Color.red // also green, blue, yellow, cyan, magenta, gray
+Color.rgb(255, 128, 0)          // opaque
+Color.from(255, 128, 0, 128)    // with alpha
+Color.hex(0xff8000ff)           // 0xRRGGBBAA
+Color.red.withAlpha(0.5)
+Color.black.lerp(Color.white, t)
+```
 
 ## Vec2F Math
 

@@ -125,8 +125,8 @@ pub const App = struct {
         self.alloc.destroy(self);
     }
 
-    pub fn update(_: *App, eng: *AppRunner.Engine, _: f64) bool {
-        return !eng.inputs.keyboard.pressed(.escape);
+    pub fn update(_: *App, eng: *AppRunner.Engine, _: f64) void {
+        if (eng.inputs.keyboard.pressed(.escape)) eng.quit();
     }
 
     pub fn render(_: *App, eng: *AppRunner.Engine) void {

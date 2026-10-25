@@ -259,3 +259,47 @@ pub fn cameraFollowsViewportResizeTest(io: std.Io, alloc: std.mem.Allocator) !vo
     const r = cam.viewRect(&vp);
     try testz.expectTrue(approxEq(r.r - r.l, 1024.0));
 }
+
+pub fn cameraFollowSnapsWithoutSmoothingTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    var cam = Camera2D.init();
+    cam.follow(.{ .x = 120, .y = -40 }, 8.0, .{});
+    try testz.expectTrue(approxEq(cam.pos.x, 120.0));
+    try testz.expectTrue(approxEq(cam.pos.y, -40.0));
+}
+
+pub fn cameraFollowDeadzoneTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    var cam = Camera2D.init();
+    const opts: Camera2D.FollowOptions = .{ .deadzone = .{ .x = 20, .y = 10 } };
+
+    // Inside the deadzone: the camera stays put.
+    cam.follow(.{ .x = 15, .y = -8 }, 8.0, opts);
+    try testz.expectTrue(approxEq(cam.pos.x, 0.0));
+    try testz.expectTrue(approxEq(cam.pos.y, 0.0));
+
+    // Past it: the camera moves just enough to put the target on the edge.
+    cam.follow(.{ .x = 50, .y = -30 }, 8.0, opts);
+    try testz.expectTrue(approxEq(cam.pos.x, 30.0));
+    try testz.expectTrue(approxEq(cam.pos.y, -20.0));
+}
+
+pub fn cameraFollowSmoothingIsStepIndependentTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    const opts: Camera2D.FollowOptions = .{ .smoothing = 4.0 };
+    const target: Vec2F = .{ .x = 100, .y = 0 };
+
+    // One 500 ms step and fifty 10 ms steps land in the same place.
+    var coarse = Camera2D.init();
+    coarse.follow(target, 500.0, opts);
+    var fine = Camera2D.init();
+    for (0..50) |_| fine.follow(target, 10.0, opts);
+
+    const expected = 100.0 * (1.0 - @exp(@as(f32, -2.0)));
+    try testz.expectTrue(approxEq(coarse.pos.x, expected));
+    try testz.expectTrue(approxEq(fine.pos.x, expected));
+    try testz.expectTrue(coarse.pos.x < 100.0);
+}

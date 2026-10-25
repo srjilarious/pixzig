@@ -13,10 +13,10 @@ const TitleState = struct {
         std.log.info("showing title", .{});
     }
 
-    pub fn update(self: *TitleState, eng: *AppRunner.Engine, deltaMs: f64) bool {
+    pub fn update(self: *TitleState, eng: *AppRunner.Engine, deltaMs: f64) void {
         _ = self;
         _ = deltaMs;
-        return !eng.inputs.keyboard.pressed(.escape);
+        if (eng.inputs.keyboard.pressed(.escape)) eng.quit();
     }
 
     pub fn render(self: *TitleState, eng: *AppRunner.Engine) void {
@@ -64,11 +64,11 @@ pub const App = struct {
     playState: PlayState,
     states: StateMgr,
 
-    pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) bool {
+    pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) void {
         if (self.states.currState == .title and eng.inputs.keyboard.pressed(.enter)) {
             self.states.setCurrState(.play);
         }
-        return self.states.update(eng, deltaMs);
+        self.states.update(eng, deltaMs);
     }
 
     pub fn render(self: *App, eng: *AppRunner.Engine) void {
@@ -81,7 +81,7 @@ Some things to know:
 
 - The manager starts on the first state, without calling its `activate`.
 - `setCurrState` calls `deactivate` on the old state and `activate` on the new one, when they exist.
-- `update` returns whatever the active state's `update` returned, so a state can end the game by returning false.
+- A state's `update` returns `void` or `!void`, like the app's. A state ends the game with `eng.quit()`; an error it returns is logged and quits too.
 - There's no state stack. For a pause menu over gameplay, keep a stack of your own on top of `setCurrState`, or draw the menu from the play state.
 
 States often need to reach back into the game, e.g. to switch states themselves. Give them a pointer to the app, or to a shared game struct, when you create them.
