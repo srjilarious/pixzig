@@ -832,6 +832,17 @@ pub const FontAtlas = struct {
         };
     }
 
+    /// Switches the atlas texture between NEAREST (true) and LINEAR (false)
+    /// filtering. NEAREST keeps a pixel font's hard edges when its text is
+    /// drawn scaled up; LINEAR (the TTF default) suits smooth fonts. The
+    /// texture is reused across uploads and grows, so this sticks.
+    pub fn setPixelated(self: *FontAtlas, pixelated: bool) void {
+        const filter: c_int = if (pixelated) gl.NEAREST else gl.LINEAR;
+        gl.bindTexture(gl.TEXTURE_2D, self.texture.texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+    }
+
     pub fn deinit(self: *FontAtlas) void {
         gl.deleteTextures(1, &self.texture.texture);
         self.chars.deinit();

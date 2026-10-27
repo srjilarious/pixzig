@@ -55,7 +55,7 @@ pub const Quad3DBatchQueue = struct {
         const shader = try resMgr.loadShader(
             shaders.Quad3DShader,
             &shaders.Quad3DVertexShader,
-            &shaders.TexPixelShader,
+            &shaders.Quad3DPixelShader,
         );
         return .{ .inner = try Dynamic.init(alloc, shader, MaxQuads) };
     }
@@ -123,7 +123,7 @@ pub const Quad3DBatch = struct {
         const shader = try resMgr.loadShader(
             shaders.Quad3DShader,
             &shaders.Quad3DVertexShader,
-            &shaders.TexPixelShader,
+            &shaders.Quad3DPixelShader,
         );
         return .{ .inner = try Static.init(alloc, shader) };
     }

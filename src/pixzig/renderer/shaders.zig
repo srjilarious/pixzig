@@ -108,6 +108,25 @@ pub const Quad3DVertexShader: ShaderCode =
     \\}
 ;
 
+/// The fragment shader for 3d quads (see Quad3DBatchQueue/Quad3DBatch).
+/// Like TexPixelShader, but discards mostly transparent texels, so a
+/// sprite's empty pixels don't write depth and hide whatever is drawn
+/// behind them later in the frame.
+pub const Quad3DPixelShader: ShaderCode =
+    \\#version 300 es
+    \\precision mediump float;
+    \\
+    \\in vec2 Texcoord;
+    \\uniform sampler2D tex;
+    \\out vec4 fragColor;
+    \\
+    \\void main() {
+    \\    vec4 color = texture(tex, Texcoord);
+    \\    if (color.a < 0.5) discard;
+    \\    fragColor = color;
+    \\}
+;
+
 /// A 2d vertex shader that multiples by the projectionMAtrix and passes
 /// through the color value.
 pub const ColorVertexShader: ShaderCode =
