@@ -1,4 +1,5 @@
 const std = @import("std");
+const io = @import("./io.zig");
 const builtin = @import("builtin");
 const stbi = @import("zstbi");
 const gl = @import("zopengl").bindings;
@@ -364,6 +365,9 @@ pub const ResourceManager = struct {
     /// fails (watcher remains disabled for the session).
     fn ensureHotReload(self: *Self) void {
         if (comptime builtin.mode != .debug) return;
+        // An Android game's assets are inside its APK, which never changes
+        // under it.
+        if (comptime builtin.abi.isAndroid()) return;
         if (self.hotReload != null) return;
         self.hotReload = HotReload.init(self.alloc) catch |err| {
             std.log.err("Failed to init file watcher for hot reload: {}", .{err});
@@ -581,10 +585,10 @@ pub const ResourceManager = struct {
 
     fn decodeImage(self: *Self, name: []const u8, filePath: []const u8) !stbi.Image {
         std.log.info("Loading image '{s}' from '{s}'\n", .{ name, filePath });
-        const nt_file_path = try std.mem.concatWithSentinel(self.alloc, u8, &.{filePath}, 0);
-        defer self.alloc.free(nt_file_path);
+        const file_contents = try io.readFile(self.alloc, filePath);
+        defer self.alloc.free(file_contents);
 
-        const image = try stbi.Image.loadFromFile(nt_file_path, 4);
+        const image = try stbi.Image.loadFromMemory(file_contents, 4);
         std.log.info("Loaded image '{s}', width={}, height={}\n", .{ name, image.width, image.height });
         return image;
     }
@@ -637,8 +641,7 @@ pub const ResourceManager = struct {
         const jsonName = try utils.addExtension(self.alloc, basePath, ".json");
         defer self.alloc.free(jsonName);
 
-        const io = std.Io.Threaded.global_single_threaded.io();
-        const file_contents = try std.Io.Dir.cwd().readFileAlloc(io, jsonName, self.alloc, .unlimited);
+        const file_contents = try io.readFile(self.alloc, jsonName);
         defer self.alloc.free(file_contents);
 
         const parsed = try std.json.parseFromSlice(SpackFile, self.alloc, file_contents, .{});

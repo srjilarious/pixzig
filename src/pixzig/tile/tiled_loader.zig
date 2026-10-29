@@ -1,4 +1,5 @@
 const std = @import("std");
+const io = @import("../io.zig");
 const xml = @import("xml");
 
 const tilemap = @import("./tilemap.zig");
@@ -74,8 +75,11 @@ pub const TiledMapXmlLoader = struct {
     /// defined on tiles, layers, or objects will be stored as string key/value
     /// pairs in the `properties` field of the respective struct.
     pub fn initFromFile(filename: []const u8, alloc: std.mem.Allocator) !TileMap {
-        const io = std.Io.Threaded.global_single_threaded.io();
-        const fileContents = try std.Io.Dir.cwd().readFileAlloc(io, filename, alloc, .limited(MaxFilesize));
+        const fileContents = try io.readFile(alloc, filename);
+        if (fileContents.len > MaxFilesize) {
+            alloc.free(fileContents);
+            return error.StreamTooLong;
+        }
         defer alloc.free(fileContents);
 
         std.log.debug("Loaded tile map file contents.", .{});

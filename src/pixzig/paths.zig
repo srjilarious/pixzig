@@ -10,8 +10,13 @@
 //! Absolute paths are passed through untouched, so a game that computes its
 //! own paths (a mod directory, a save folder, a path from a config file)
 //! keeps full control.
+//!
+//! Android is the exception: there the assets live inside the APK, and SDL
+//! only looks there for a path that is still relative (`io.zig` reads every
+//! file through SDL), so relative paths are left as written.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const platform = @import("./platform.zig");
 
 /// The build's asset base directory, or null to use the executable's own
@@ -26,8 +31,10 @@ const asset_base: ?[]const u8 = @import("pixzig_asset_base").dir;
 /// borrowed from SDL for the life of the process).
 ///
 /// Null under Emscripten, where the virtual filesystem is rooted at `/` and
-/// a relative path is already correct as written.
+/// a relative path is already correct as written, and on Android, where a
+/// relative path is what finds the APK's assets.
 pub fn baseDir() ?[]const u8 {
+    if (builtin.abi.isAndroid()) return null;
     return asset_base orelse platform.basePath();
 }
 

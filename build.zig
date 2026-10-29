@@ -1,6 +1,7 @@
 const std = @import("std");
 const testz = @import("testz");
 const builtin = std.builtin;
+pub const android = @import("build/android.zig");
 
 // Zig 0.17 dropped --sysroot access from build.zig; the emscripten
 // sysroot comes from the EMSCRIPTEN_SYSROOT env var now.
@@ -15,6 +16,14 @@ fn fromRoot(b: *std.Build, sub: []const u8) []const u8 {
 }
 
 const assets_dir = "assets";
+
+/// `target` with the Android API level filled in (see
+/// `android.toolchain`), or `target` unchanged for everything else, so the
+/// engine and every C dependency agree on which bionic they build against.
+fn androidApiTarget(b: *std.Build, target: std.Build.ResolvedTarget) std.Build.ResolvedTarget {
+    if (!android.isAndroid(target)) return target;
+    return android.toolchain(b, target).ndk.target;
+}
 
 fn addArchIncludes(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, dep: *std.Build.Step.Compile) !void {
     _ = optimize;
@@ -53,6 +62,18 @@ pub const EngineData = struct {
 /// so a single slot is enough.
 var windows_sdl_module: ?*std.Build.Module = null;
 
+/// Memo for the Android `sdl3` module and the `libSDL3.so` behind it, for
+/// the same reason as `windows_sdl_module`; the APK packaging needs the
+/// library too.
+var android_sdl: ?struct {
+    module: *std.Build.Module,
+    lib: *std.Build.Step.Compile,
+    java_dir: std.Build.LazyPath,
+} = null;
+
+/// Memo for the `apkpack` host tool: one build of it serves every APK.
+var apkpack_tool: ?*std.Build.Step.Compile = null;
+
 /// Returns the `sdl3` module the engine imports.
 ///
 /// On desktop this is the `allyourcodebase/SDL` package's own module, which
@@ -81,6 +102,10 @@ var windows_sdl_module: ?*std.Build.Module = null;
 /// the type and constant declarations. So we translate the upstream SDL
 /// headers ourselves, reaching them through the package's own dependency on
 /// them, and produce a module that links nothing.
+///
+/// Android is a fourth case: the package knows no Android config either, so
+/// `build/android.zig` compiles the same upstream sources the way SDL's own
+/// `Android.mk` does, into the `libSDL3.so` that `SDLActivity` loads.
 fn sdlModule(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
@@ -110,6 +135,19 @@ fn sdlModule(
         mod.linkLibrary(sdl_dep.artifact("SDL3"));
         windows_sdl_module = mod;
         return mod;
+    }
+
+    if (android.isAndroid(target)) {
+        if (android_sdl == null) {
+            const sdl_pkg = b.dependency("sdl", .{
+                .target = target,
+                .optimize = optimize,
+                .default_target_config = false,
+            });
+            const built = android.sdlModule(b, android.toolchain(b, target).ndk, optimize, sdl_pkg);
+            android_sdl = .{ .module = built.module, .lib = built.lib, .java_dir = android.sdlJavaDir(sdl_pkg) };
+        }
+        return android_sdl.?.module;
     }
 
     if (target.result.os.tag != .emscripten) {
@@ -306,6 +344,33 @@ pub const ManifestHandle = struct {
 
         mod.addOptions("manifest_options", opts);
     }
+
+    /// Wire the manifest into an Android game module. Android reads assets
+    /// out of the APK, where `addApk` puts `assets/` at the same relative
+    /// path it has in the source tree, so the manifest resolves relative to
+    /// the APK's asset root. A file-based manifest outside `assets/` is
+    /// packaged too: the returned entries go in `ApkOptions.extra_assets`.
+    pub fn addToAndroidModule(self: ManifestHandle, mod: *std.Build.Module) []const android.ExtraAsset {
+        const b = self.b;
+        const opts = b.addOptions();
+        var extra: []const android.ExtraAsset = &.{};
+
+        if (self.file_rel_path) |rel| {
+            if (!std.mem.startsWith(u8, rel, assets_dir ++ "/")) {
+                extra = b.allocator.dupe(android.ExtraAsset, &.{.{ .dest = rel, .source = b.path(rel) }}) catch @panic("OOM");
+            }
+            opts.addOption([]const u8, "manifest_path", rel);
+            opts.addOption([]const u8, "manifest_json", "");
+            opts.addOption([]const u8, "manifest_base_dir", "");
+        } else {
+            opts.addOption([]const u8, "manifest_path", "");
+            opts.addOption([]const u8, "manifest_json", self.inline_json.?);
+            opts.addOption([]const u8, "manifest_base_dir", "");
+        }
+
+        mod.addOptions("manifest_options", opts);
+        return extra;
+    }
 };
 
 /// Reference an existing manifest JSON file in the repository.
@@ -393,8 +458,9 @@ fn generateManifestJson(alloc: std.mem.Allocator, def: ManifestDef) ![]u8 {
 }
 
 pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
+    const target = androidApiTarget(b, b.standardTargetOptions(.{}));
     const optimize = b.standardOptimizeOption(.{});
+    const is_android = android.isAndroid(target);
 
     const build_examples = b.option(bool, "build_examples", "Build the examples") orelse true;
     const is_package = b.option(bool, "package", "Package assets to the output directory") orelse false;
@@ -574,6 +640,10 @@ pub fn build(b: *std.Build) void {
             .path = "examples/pixel_buffer_ex.zig",
         },
         .{
+            .name = "touch_ex",
+            .path = "examples/touch_ex.zig",
+        },
+        .{
             .name = "mouse_ex",
             .path = "examples/mouse_ex.zig",
             .manifest_def = .{
@@ -627,6 +697,8 @@ pub fn build(b: *std.Build) void {
                 true,
             );
 
+            // On Android `buildExample` installs the APK instead.
+            if (is_android) continue;
             const install_exe = b.addInstallArtifact(exe, .{
                 .dest_dir = .{
                     .override = .{ .custom = b.pathJoin(&.{ "bin", example_info.name }) },
@@ -635,7 +707,7 @@ pub fn build(b: *std.Build) void {
             build_all_step.dependOn(&install_exe.step);
         }
 
-        if (target.result.os.tag != .emscripten) {
+        if (target.result.os.tag != .emscripten and !is_android) {
             const install_tests = buildTests(b, target, optimize, engDat.pixeng_mod, is_package);
             build_all_step.dependOn(&install_tests.step);
 
@@ -736,6 +808,8 @@ fn buildEngine(
             });
             //engine_lib.root_module.strip = false;
             _ = b.addInstallArtifact(lib, .{});
+            // Linked into a game's `libmain.so` on Android.
+            if (android.isAndroid(target)) lib.root_module.pic = true;
             break :blk lib;
         } else {
             const obj = b.addObject(.{
@@ -755,6 +829,10 @@ fn buildEngine(
     addArchIncludes(b, target, optimize, engine_lib) catch unreachable;
     engine_lib.root_module.link_libc = true;
 
+    // Every C compile for Android needs the NDK's bionic; see build/android.zig.
+    const ndk: ?android.Ndk = if (android.isAndroid(target)) android.toolchain(b, target).ndk else null;
+    if (ndk) |n| n.apply(engine_lib);
+
     // SDL3 (windowing, input, clipboard). The `sdl3` module carries the
     // static libSDL3 with it, so importing it is all a consumer needs.
     pixeng.addImport("sdl3", sdlModule(b, target, optimize));
@@ -770,6 +848,7 @@ fn buildEngine(
     pixeng.addImport("zflecs", zflecs_mod);
     const zflecs_lib = zflecs.artifact("flecs");
     addArchIncludes(b, target, optimize, zflecs_lib) catch unreachable;
+    if (ndk) |n| n.apply(zflecs_lib);
     engine_lib.root_module.linkLibrary(zflecs_lib);
 
     // Stbi
@@ -787,6 +866,7 @@ fn buildEngine(
     pixeng.addImport("zaudio", zaudio.module("root"));
     const miniaudio = zaudio.artifact("miniaudio");
     addArchIncludes(b, target, optimize, miniaudio) catch unreachable;
+    if (ndk) |n| n.apply(miniaudio);
     engine_lib.root_module.linkLibrary(miniaudio);
 
     // Lua
@@ -803,6 +883,7 @@ fn buildEngine(
 
     const lua_lib = ziglua.artifact("lua");
     addArchIncludes(b, target, optimize, lua_lib) catch unreachable;
+    if (ndk) |n| n.apply(lua_lib);
     engine_lib.root_module.linkLibrary(lua_lib);
 
     // XML for tilemap loading
@@ -822,7 +903,10 @@ fn buildEngine(
     }
 
     const stbtt = b.addModule("stb_truetype", .{ .root_source_file = b.path("libs/stb_truetype/stb_truetype.zig") });
-    stbtt.addImport("c", stbtt_translate.createModule());
+    stbtt.addImport("c", if (ndk) |n|
+        n.translateC(b, b.path("libs/stb_truetype/stb_truetype.h"), &.{b.path("libs/stb_truetype")}, &.{})
+    else
+        stbtt_translate.createModule());
     stbtt.addCSourceFile(.{ .file = b.path("libs/stb_truetype/stb_truetype.c"), .flags = &.{"-fno-sanitize=undefined"} });
     stbtt.addIncludePath(b.path("libs/stb_truetype"));
     if (target.result.os.tag == .emscripten) {
@@ -840,7 +924,10 @@ fn buildEngine(
         const em_inc = std.fs.path.join(b.allocator, &.{ emSysroot(b), "include" }) catch @panic("OOM");
         time_c_translate.addIncludePath(.{ .cwd_relative = em_inc });
     }
-    pixeng.addImport("c_time", time_c_translate.createModule());
+    pixeng.addImport("c_time", if (ndk) |n|
+        n.translateC(b, b.path("src/pixzig/time_c.h"), &.{}, &.{})
+    else
+        time_c_translate.createModule());
 
     // The renderer's default font. `buildGame` replaces this import when a
     // game picks a different `default_font`.
@@ -851,7 +938,7 @@ fn buildEngine(
     pixeng.addImport("pixzig_asset_base", assetBaseModule(b, devAssetBase(b, target, is_package)));
 
     // Install the engine library
-    if (target.result.os.tag != .emscripten) {
+    if (target.result.os.tag != .emscripten and !android.isAndroid(target)) {
         b.installArtifact(engine_lib);
     }
 
@@ -869,7 +956,7 @@ fn buildPythonFfi(
     optimize: std.builtin.OptimizeMode,
     pixeng_mod: *std.Build.Module,
 ) void {
-    if (target.result.os.tag == .emscripten) return;
+    if (target.result.os.tag == .emscripten or android.isAndroid(target)) return;
 
     const ffi_mod = b.createModule(.{
         .root_source_file = b.path("src/pixzig/c_api.zig"),
@@ -1032,6 +1119,8 @@ fn assetBaseModule(b: *std.Build, dir: ?[]const u8) *std.Build.Module {
 fn devAssetBase(b: *std.Build, target: std.Build.ResolvedTarget, is_package: bool) ?[]const u8 {
     if (is_package) return null;
     if (target.result.os.tag == .emscripten) return null;
+    // Android reads assets out of the APK by relative path.
+    if (android.isAndroid(target)) return null;
     return fromRoot(b, ".");
 }
 
@@ -1173,6 +1262,14 @@ fn wrappedRootModule(
         \\    }
         \\}
         \\
+        \\// On Android there is no process entry point: SDLActivity loads
+        \\// libmain.so and calls its SDL_main, which runs `main` above.
+        \\comptime {
+        \\    if (@import("builtin").abi.isAndroid()) {
+        \\        @export(&pixzig.internal.android_main.Entry(main).sdlMain, .{ .name = "SDL_main" });
+        \\    }
+        \\}
+        \\
     );
 
     const root_mod = b.createModule(.{
@@ -1183,6 +1280,74 @@ fn wrappedRootModule(
     root_mod.addImport("pixzig", pixeng_mod);
     root_mod.addImport("pixzig_game", game_mod);
     return root_mod;
+}
+
+/// The Android half of `buildExample`: links `libmain.so` against the NDK and
+/// packages it with `libSDL3.so`, SDL's Java glue and the `assets/`
+/// directory into `zig-out/android/<name>.apk`. The `<name>_apk` step only
+/// builds the APK; the `<name>` step also installs it on the connected device
+/// (or emulator) with `adb` and launches it.
+fn addAndroidApp(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    lib: *std.Build.Step.Compile,
+    exe_mod: *std.Build.Module,
+    pixeng_mod: *std.Build.Module,
+    name: []const u8,
+    manifest: ManifestHandle,
+) void {
+    const tc = android.toolchain(b, target);
+    tc.ndk.apply(lib);
+    lib.link_z_max_page_size = 16 * 1024;
+    lib.root_module.link_libc = true;
+    // std.log goes to logcat through liblog (see system.zig).
+    lib.root_module.linkSystemLibrary("log", .{});
+
+    // The engine's own build is where pixzig's tools and SDL live, so reach
+    // them through the engine module's builder: for a downstream game
+    // (`buildGame`) that's the pixzig dependency, not the game.
+    const engine_b = pixeng_mod.owner;
+    const extra = manifest.addToAndroidModule(exe_mod);
+
+    const sdl = android_sdl orelse @panic("addAndroidApp: the engine's sdl3 module was not built for Android");
+
+    const apkpack = apkpack_tool orelse blk: {
+        const tool = engine_b.addExecutable(.{
+            .name = "apkpack",
+            .root_module = engine_b.createModule(.{
+                .root_source_file = engine_b.path("tools/apkpack/apkpack.zig"),
+                .target = engine_b.graph.host,
+            }),
+        });
+        apkpack_tool = tool;
+        break :blk tool;
+    };
+
+    const has_assets = blk: {
+        var dir = b.root.openDir(b.graph.io, assets_dir, .{}) catch break :blk false;
+        dir.close(b.graph.io);
+        break :blk true;
+    };
+
+    const apk = android.addApk(b, tc, .{
+        .name = name,
+        .app_id = b.fmt("org.pixzig.{s}", .{name}),
+        .main_lib = lib,
+        .sdl_lib = sdl.lib,
+        .java_dir = sdl.java_dir,
+        .assets_dir = if (has_assets) b.path(assets_dir) else null,
+        .extra_assets = extra,
+        .icon = engine_b.path("src/pixzig/assets/pixzig_icon.png"),
+        .apkpack = apkpack,
+    });
+    b.getInstallStep().dependOn(&apk.install.step);
+
+    const apk_step = b.step(b.fmt("{s}_apk", .{name}), "Build the APK into zig-out/android/ without installing it");
+    apk_step.dependOn(&apk.install.step);
+
+    const run_step = b.step(name, "Install the APK on the connected Android device and launch it");
+    run_step.dependOn(&apk.install.step);
+    run_step.dependOn(&apk.run.step);
 }
 
 pub fn buildExample(
@@ -1205,12 +1370,23 @@ pub fn buildExample(
     else
         exe_mod;
 
+    if (android.isAndroid(target) and !wrap_root) {
+        @panic("buildExample: Android builds need wrap_root, which provides the SDL_main SDLActivity calls");
+    }
+
     const exe = blk: {
         if (target.result.os.tag == .emscripten) {
             break :blk b.addLibrary(.{
                 .name = name,
                 .root_module = root_mod,
                 .linkage = .static,
+            });
+        } else if (android.isAndroid(target)) {
+            // `SDLActivity` loads the game as `libmain.so`.
+            break :blk b.addLibrary(.{
+                .name = "main",
+                .root_module = root_mod,
+                .linkage = .dynamic,
             });
         } else {
             break :blk b.addExecutable(.{
@@ -1219,6 +1395,11 @@ pub fn buildExample(
             });
         }
     };
+
+    if (android.isAndroid(target)) {
+        addAndroidApp(b, target, exe, exe_mod, pixeng_mod, name, manifest);
+        return exe;
+    }
 
     // Handle platform-specific linking
     switch (target.result.os.tag) {

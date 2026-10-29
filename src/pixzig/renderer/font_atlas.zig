@@ -1,4 +1,5 @@
 const std = @import("std");
+const io = @import("../io.zig");
 const stbi = @import("zstbi");
 const gl = @import("zopengl").bindings;
 pub const stb_tt = @import("stb_truetype");
@@ -77,8 +78,7 @@ fn measureFontData(fontData: []const u8, faceIndex: i32, fontSize: f32) !FontMet
 /// `faceIndex` at `fontSize`. Use 0 for a plain font file. No GL context
 /// required -- safe to call before window/renderer creation.
 pub fn measureFontFileIndexed(fontPath: []const u8, faceIndex: i32, fontSize: f32, alloc: std.mem.Allocator) !FontMetrics {
-    const io = std.Io.Threaded.global_single_threaded.io();
-    const fontData = try std.Io.Dir.cwd().readFileAlloc(io, fontPath, alloc, .unlimited);
+    const fontData = try io.readFile(alloc, fontPath);
     defer alloc.free(fontData);
 
     return measureFontData(fontData, faceIndex, fontSize);
@@ -527,8 +527,7 @@ pub const FontAtlas = struct {
     /// Loads a TTF/OTF (or a `.ttc` collection face) from disk. `faceIndex`
     /// is 0 for a plain font file.
     pub fn initFromTtfFileIndexed(fontPath: []const u8, faceIndex: i32, fontSize: f32, alloc: std.mem.Allocator) !FontAtlas {
-        const io = std.Io.Threaded.global_single_threaded.io();
-        const owned = try std.Io.Dir.cwd().readFileAlloc(io, fontPath, alloc, .unlimited);
+        const owned = try io.readFile(alloc, fontPath);
         errdefer alloc.free(owned);
         return initFromOwnedData(owned, faceIndex, fontSize, alloc);
     }
@@ -561,8 +560,7 @@ pub const FontAtlas = struct {
     /// Appends a fallback face read from a font/collection file. `faceIndex`
     /// selects a face inside a `.ttc`; use 0 for a plain font file.
     pub fn addFallbackFaceFromFile(self: *FontAtlas, fontPath: []const u8, faceIndex: i32, alloc: std.mem.Allocator) !void {
-        const io = std.Io.Threaded.global_single_threaded.io();
-        const data = try std.Io.Dir.cwd().readFileAlloc(io, fontPath, alloc, .unlimited);
+        const data = try io.readFile(alloc, fontPath);
         defer alloc.free(data);
         try self.addFallbackFaceFromData(data, faceIndex);
     }
@@ -735,10 +733,10 @@ pub const FontAtlas = struct {
         chars: []const u8,
         alloc: std.mem.Allocator,
     ) !FontAtlas {
-        const fipz = try std.mem.concatWithSentinel(alloc, u8, &.{fontImagePath}, 0);
-        defer alloc.free(fipz);
+        const file_contents = try io.readFile(alloc, fontImagePath);
+        defer alloc.free(file_contents);
 
-        var image = try stbi.Image.loadFromFile(fipz, 0);
+        var image = try stbi.Image.loadFromMemory(file_contents, 0);
         defer image.deinit();
         if (image.width == 0 or image.height == 0) {
             return error.ImageLoadFailed;

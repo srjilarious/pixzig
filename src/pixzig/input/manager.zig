@@ -10,6 +10,14 @@ const KeyModifier = keyboard_mod.KeyModifier;
 const Mouse = @import("./mouse.zig").Mouse;
 const gamepad_mod = @import("./gamepad.zig");
 const Gamepad = gamepad_mod.Gamepad;
+const Touch = @import("./touch.zig").Touch;
+
+/// The `which` SDL gives mouse events it makes up from touches
+/// (`SDL_TOUCH_MOUSEID`), and the `touchID` of touches it makes up from a
+/// mouse (`SDL_MOUSE_TOUCHID`). Both are -1 in their C types; spelled out
+/// here because translate-c leaves the C casts as macros.
+const touch_mouse_id: sdl.SDL_MouseID = std.math.maxInt(sdl.SDL_MouseID);
+const mouse_touch_id: sdl.SDL_TouchID = std.math.maxInt(sdl.SDL_TouchID);
 
 /// Maximum number of gamepads that an InputManager can own.
 pub const MaxGamepads: u8 = 4;
@@ -33,15 +41,19 @@ pub const InputOptions = struct {
 };
 
 /// Owns and updates all input subsystems for a single player session.
-/// Keyboard is always present.  Mouse and gamepads are activated via the
-/// `opts` passed to `init()` and updated based on the runtime flags stored
-/// in `mouseEnabled` and `numGamepads`.
+/// Keyboard and touch are always present (touch just stays empty without a
+/// touchscreen).  Mouse and gamepads are activated via the `opts` passed to
+/// `init()` and updated based on the runtime flags stored in `mouseEnabled`
+/// and `numGamepads`.
 pub const InputManager = struct {
     mouseEnabled: bool,
     numGamepads: u8,
     keyboard: Keyboard,
     mouse: Mouse,
     gamepads: [MaxGamepads]Gamepad,
+    /// Fingers and the virtual pad. Declare a pad with
+    /// `touch.addButton`/`addStick` or `touch.loadFromLua`.
+    touch: Touch,
 
     const Self = @This();
 
@@ -53,6 +65,7 @@ pub const InputManager = struct {
             .keyboard = Keyboard.init(),
             .mouse = Mouse.init(),
             .gamepads = undefined,
+            .touch = Touch.init(),
         };
         for (0..MaxGamepads) |i| {
             result.gamepads[i] = Gamepad.init(i);
@@ -73,7 +86,46 @@ pub const InputManager = struct {
     ///
     /// SDL is polled, so the engine can hand events straight to whichever
     /// input manager it owns.
+    ///
+    /// Using a key, a real mouse or a gamepad hides the virtual pad until
+    /// the next touch. While a pad is declared, the mouse events SDL makes
+    /// up from touches are dropped: the pad owns those touches, and a tap on
+    /// one of its buttons shouldn't also click.
     pub fn handleEvent(self: *Self, event: sdl.SDL_Event) void {
+        switch (event.type) {
+            sdl.SDL_EVENT_FINGER_DOWN, sdl.SDL_EVENT_FINGER_MOTION => {
+                if (event.tfinger.touchID == mouse_touch_id) return;
+                const pos = self.touchPos(event.tfinger.x, event.tfinger.y);
+                if (event.type == sdl.SDL_EVENT_FINGER_DOWN) {
+                    self.touch.fingerDown(event.tfinger.fingerID, pos);
+                } else {
+                    self.touch.fingerMove(event.tfinger.fingerID, pos);
+                }
+                return;
+            },
+            sdl.SDL_EVENT_FINGER_UP, sdl.SDL_EVENT_FINGER_CANCELED => {
+                if (event.tfinger.touchID == mouse_touch_id) return;
+                self.touch.fingerUp(event.tfinger.fingerID);
+                return;
+            },
+            sdl.SDL_EVENT_KEY_DOWN, sdl.SDL_EVENT_GAMEPAD_BUTTON_DOWN => self.touch.active = false,
+            sdl.SDL_EVENT_MOUSE_MOTION => {
+                if (event.motion.which == touch_mouse_id) {
+                    if (self.touch.hasPad()) return;
+                } else {
+                    self.touch.active = false;
+                }
+            },
+            sdl.SDL_EVENT_MOUSE_BUTTON_DOWN, sdl.SDL_EVENT_MOUSE_BUTTON_UP => {
+                if (event.button.which == touch_mouse_id) {
+                    if (self.touch.hasPad()) return;
+                } else {
+                    self.touch.active = false;
+                }
+            },
+            else => {},
+        }
+
         switch (event.type) {
             sdl.SDL_EVENT_KEY_DOWN, sdl.SDL_EVENT_KEY_UP => {
                 self.keyboard.setKey(
@@ -165,6 +217,13 @@ pub const InputManager = struct {
     pub fn finishTick(self: *Self) void {
         self.keyboard.finishTick();
         if (self.mouseEnabled) self.mouse.finishTick();
+        self.touch.finishTick();
+    }
+
+    /// A finger position from SDL (0..1 across the window) in framebuffer
+    /// pixels, the space the virtual pad is laid out in.
+    fn touchPos(self: *const Self, x: f32, y: f32) Vec2F {
+        return .{ .x = x * self.touch.screen.x, .y = y * self.touch.screen.y };
     }
 
     /// Drops all key and button state. The engine calls this on window
@@ -173,6 +232,7 @@ pub const InputManager = struct {
     pub fn clear(self: *Self) void {
         self.keyboard.clear();
         self.mouse.clear();
+        self.touch.clear();
     }
 
     /// Returns the gamepad slot at `idx`, or null when `idx` is past the

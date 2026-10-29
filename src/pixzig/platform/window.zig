@@ -31,10 +31,25 @@ pub const WindowCreateOptions = struct {
     fullscreen: bool,
     /// Minimum window size in screen coordinates, or null for none.
     minSize: ?Vec2I = null,
+    /// Which way up a mobile game runs. Ignored on desktop.
+    orientation: Orientation = .auto,
     /// Arms SDL's text-input machinery on the window, which is what makes
     /// `SDL_EVENT_TEXT_INPUT` (and the IME composition events) arrive at
     /// all. See `InputOptions.textInput`.
     textInput: bool,
+};
+
+/// Which orientations a game allows on a phone or tablet.
+pub const Orientation = enum {
+    /// Landscape when the requested window size is wider than tall,
+    /// otherwise portrait.
+    auto,
+    /// Either landscape, following the device.
+    landscape,
+    /// Upright portrait.
+    portrait,
+    /// Whatever way the device is held.
+    any,
 };
 
 pub const Window = struct {
@@ -61,9 +76,24 @@ pub const Window = struct {
         // larger than the window on a HiDPI display, which is what
         // WindowState.scaleFactor and all the mouse coordinate math
         // assume. Without it SDL silently hands back a 1x framebuffer.
+        // SDL reads the allowed orientations when the window is created.
+        // Left to itself it allows any orientation for a resizable window,
+        // which is what every desktop window here is.
+        if (builtin.abi.isAndroid()) {
+            const hint: [:0]const u8 = switch (options.orientation) {
+                .auto => if (options.size.x >= options.size.y) "LandscapeLeft LandscapeRight" else "Portrait",
+                .landscape => "LandscapeLeft LandscapeRight",
+                .portrait => "Portrait",
+                .any => "LandscapeLeft LandscapeRight Portrait PortraitUpsideDown",
+            };
+            _ = sdl.SDL_SetHint(sdl.SDL_HINT_ORIENTATIONS, hint.ptr);
+        }
+
         var flags: sdl.SDL_WindowFlags = sdl.SDL_WINDOW_OPENGL | sdl.SDL_WINDOW_HIGH_PIXEL_DENSITY;
         if (options.resizable) flags |= sdl.SDL_WINDOW_RESIZABLE;
-        if (options.fullscreen) flags |= sdl.SDL_WINDOW_FULLSCREEN;
+        // A phone or tablet game always fills the screen; SDL then hides
+        // the status and navigation bars too.
+        if (options.fullscreen or builtin.abi.isAndroid()) flags |= sdl.SDL_WINDOW_FULLSCREEN;
 
         const handle = sdl.SDL_CreateWindow(title.ptr, options.size.x, options.size.y, flags) orelse
             return sdlError(error.SdlCreateWindowFailed);
@@ -163,6 +193,18 @@ pub const Window = struct {
         var h: c_int = 0;
         _ = sdl.SDL_GetWindowSizeInPixels(self.handle, &w, &h);
         return .{ .x = @intCast(w), .y = @intCast(h) };
+    }
+
+    /// The part of the window clear of notches, rounded corners and system
+    /// bars, in screen coordinates (x, y, w, h). The whole window when the
+    /// OS reports nothing in the way, as on desktop.
+    pub fn getSafeArea(self: *const Window) [4]i32 {
+        var rect: sdl.SDL_Rect = undefined;
+        if (!sdl.SDL_GetWindowSafeArea(self.handle, &rect)) {
+            const size = self.getSize();
+            return .{ 0, 0, size.x, size.y };
+        }
+        return .{ rect.x, rect.y, rect.w, rect.h };
     }
 
     /// The display's content scale. SDL reports one value, and
@@ -279,23 +321,30 @@ pub fn glProcAddress(proc_name: [*:0]const u8) callconv(.c) ?*const anyopaque {
     return @ptrCast(sdl.SDL_GL_GetProcAddress(proc_name));
 }
 
+/// Whether the target's GL is OpenGL ES (WebGL under Emscripten, GLES on
+/// Android) rather than desktop core GL.
+pub const gl_es = builtin.target.os.tag == .emscripten or builtin.abi.isAndroid();
+
 /// Brings up SDL's video subsystem and requests the GL context version the
-/// target needs (ES 2.0 under Emscripten, core 4.5 on desktop). Must run
-/// before any window is created. Returns the requested (major, minor).
+/// target needs (ES 2.0 under Emscripten, ES 3.0 on Android, core 4.5 on
+/// desktop). Must run before any window is created. Returns the requested
+/// (major, minor).
 pub fn initVideo() !struct { c_int, c_int } {
     if (!sdl.SDL_Init(sdl.SDL_INIT_VIDEO)) return sdlError(error.SdlInitFailed);
     errdefer sdl.SDL_Quit();
 
     const gl_major: c_int, const gl_minor: c_int = if (builtin.target.os.tag == .emscripten)
         .{ 2, 0 }
+    else if (builtin.abi.isAndroid())
+        .{ 3, 0 }
     else
         .{ 4, 5 };
 
     if (!sdl.SDL_GL_SetAttribute(sdl.SDL_GL_CONTEXT_MAJOR_VERSION, gl_major)) return sdlError(error.SdlGlAttributeFailed);
     if (!sdl.SDL_GL_SetAttribute(sdl.SDL_GL_CONTEXT_MINOR_VERSION, gl_minor)) return sdlError(error.SdlGlAttributeFailed);
-    if (builtin.target.os.tag == .emscripten) {
-        // WebGL comes through SDL's GLES profile; the core/forward-compat
-        // flags the desktop path sets are not valid there.
+    if (gl_es) {
+        // WebGL and Android GLES come through SDL's ES profile; the
+        // core/forward-compat flags the desktop path sets are not valid there.
         if (!sdl.SDL_GL_SetAttribute(sdl.SDL_GL_CONTEXT_PROFILE_MASK, sdl.SDL_GL_CONTEXT_PROFILE_ES)) return sdlError(error.SdlGlAttributeFailed);
     } else {
         if (!sdl.SDL_GL_SetAttribute(sdl.SDL_GL_CONTEXT_PROFILE_MASK, sdl.SDL_GL_CONTEXT_PROFILE_CORE)) return sdlError(error.SdlGlAttributeFailed);

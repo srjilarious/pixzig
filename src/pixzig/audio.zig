@@ -8,6 +8,7 @@
 //! `playStream`. Everything mixes through three buses: `sfx` and `music`
 //! feed `master`.
 const std = @import("std");
+const io = @import("./io.zig");
 const zaudio = @import("zaudio");
 const ziglua = @import("ziglua");
 const resources = @import("./resources.zig");
@@ -308,7 +309,7 @@ pub const AudioEngine = struct {
         const engine = if (opts.noDevice)
             try createDeviceless()
         else
-            zaudio.Engine.create(null) catch |err| blk: {
+            createWithDevice() catch |err| blk: {
                 std.log.warn("No audio device ({}); audio will be silent.", .{err});
                 break :blk try createDeviceless();
             };
@@ -331,8 +332,17 @@ pub const AudioEngine = struct {
         };
     }
 
+    /// The default engine on the default output device. Sounds load through
+    /// `io.vfs`, so they come out of the APK on Android like other assets.
+    fn createWithDevice() !*zaudio.Engine {
+        var config = zaudio.Engine.Config.init();
+        config.resource_manager_vfs = &io.vfs;
+        return zaudio.Engine.create(config);
+    }
+
     fn createDeviceless() !*zaudio.Engine {
         var config = zaudio.Engine.Config.init();
+        config.resource_manager_vfs = &io.vfs;
         config.no_device = .true32;
         config.channels = 2;
         config.sample_rate = 48000;

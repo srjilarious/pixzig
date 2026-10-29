@@ -372,6 +372,12 @@ pub fn Renderer(opts: RendererOptions) type {
             self.implMut().batch.draw(tex, dest, tex.src, .none, white, .texture);
         }
 
+        /// Draws the `srcCoords` region of `texture` into `dest`, multiplied
+        /// by `color` (alpha < 1 fades it, rgb < 1 tints it).
+        pub fn drawTextureColored(self: *Self, texture: *TextureHandle, dest: RectF, srcCoords: RectF, color: Color) void {
+            self.implMut().batch.draw(&texture.val, dest, srcCoords, .none, color, .texture);
+        }
+
         /// Requires `RendererOptions.shapeRendering == true`; calling it with
         /// shape rendering compiled out is a compile error.
         pub fn drawFilledRect(self: *Self, dest: RectF, color: Color) void {

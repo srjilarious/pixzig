@@ -61,6 +61,36 @@ A few things are different on the web:
 
 In the pixzig repo itself, the `justfile` wraps these: `just bweb render_ex` builds an example for the web (set `EMSCRIPTEN_SYSROOT` first) and `just rweb render_ex` runs it.
 
+## Android
+
+Android builds need the Android SDK (with build-tools and a platform) and NDK, as Android Studio installs them, plus a JDK 17 or newer for `javac`, `jar` and the SDK's Java tools. Then:
+
+```sh
+zig build my_game -Dtarget=aarch64-linux-android
+```
+
+builds `zig-out/android/my_game.apk`, installs it on the connected phone or tablet with `adb`, and launches it. `zig build my_game_apk` with the same target only builds the APK, and `zig build install` builds all of them. Use `-Dtarget=x86_64-linux-android` for the emulator. There's no Gradle project: the build compiles SDL3 and the game for Android, makes the APK with the SDK's own tools, and signs it with the debug key (`~/.android/debug.keystore`, which Android Studio creates).
+
+| Option | Default |
+|---|---|
+| `-Dandroid_sdk=<dir>` | `$ANDROID_HOME`, then `~/Android/Sdk` |
+| `-Dandroid_ndk=<dir>` | `$ANDROID_NDK_HOME`, then the newest under the SDK's `ndk/` |
+| `-Dandroid_api=<n>` | 26 (Android 8.0, the first with AAudio), or the level a triple names, e.g. `aarch64-linux-android.28` |
+| `-Dandroid_target_sdk=<n>` | 35 |
+| `-Dandroid_keystore=<file>` | `~/.android/debug.keystore` |
+
+The log goes to logcat: `adb logcat -s pixzig` shows the game's own lines, and `adb logcat -s pixzig SDL AndroidRuntime DEBUG` adds SDL's and any crash.
+
+On Android:
+
+- The `assets/` folder is packed into the APK, and relative asset paths read from there, so the game's code doesn't change. Everything the engine loads (textures, fonts, maps, sounds, Lua scripts) reads through SDL, which knows where to look. Saves go to `platform.prefPath`, the app's private storage.
+- The window always fills the screen. `EngineInitOptions.orientation` picks the way up: the default, `.auto`, is landscape for a `windowSize` wider than tall and portrait otherwise; `.landscape`, `.portrait` and `.any` say so outright.
+- Rendering uses OpenGL ES 3.0. The engine's shaders are GLSL ES 3.00 everywhere, so custom shaders written for the web work here too.
+- Touch drives the [virtual pad](page:input), and the back button closes the game.
+- There's no hot reload, and the launcher icon is pixzig's for now.
+
+In the pixzig repo, `just band render_ex` builds an example's APK (`just band` alone builds them all), `just rand render_ex` builds, installs and launches it, and `just logcat` follows the log. `band` targets `aarch64`; set `ANDROID_ABI=x86_64` to build for the emulator. `rand` builds for whichever device is connected, and with none it boots the emulator first (`just emu` does only that; `ANDROID_AVD` picks the image). With a phone and the emulator both connected, set `ANDROID_SERIAL` to the one `adb devices` lists that you want.
+
 ## Tests and Docs
 
 In the pixzig repo:

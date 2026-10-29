@@ -11,8 +11,12 @@ const InputManager = @import("./manager.zig").InputManager;
 const ScriptEngine = @import("../scripting.zig").ScriptEngine;
 const keychord = @import("./keychord.zig");
 pub const KeyChordPiece = keychord.KeyChordPiece;
+const touch = @import("./touch.zig");
 
 /// A single digital (on/off) input source for an action binding.
+/// `touch_button` names a button of the virtual pad (`InputManager.touch`);
+/// it reads as up when the pad has no button by that name, e.g. on a
+/// desktop with no pad declared.
 pub const Source = union(enum) {
     key: keys.Key,
     // key_with_mods: struct {
@@ -23,6 +27,7 @@ pub const Source = union(enum) {
     mouse_button: keys.MouseButton,
     // mouse_axis: MouseAxis,
     gamepad_button: keys.GamepadButton,
+    touch_button: touch.Name,
     // gamepad_axis: struct {
     //     // id: GamepadId = .any,
     //     axis: keys.GamepadAxis,
@@ -44,6 +49,11 @@ pub const MouseAxis = enum { x, y };
 /// the other sources, its natural range isn't [-1, +1] -- `sensitivity` and
 /// `clamp` together bound how far a single frame of mouse motion can turn or
 /// move the game's response.
+/// `touch_stick` reads one component of a virtual pad stick, in [-1, +1]
+/// (y is down positive, as on screen; `invert` flips it).
+/// `touch_drag` reads how far fingers dragged this tick across `region`
+/// (fingers that landed on no pad control), in dp, scaled and clamped like
+/// `mouse_axis`. Both read 0 where there's no such stick or no touchscreen.
 pub const AxisSource = union(enum) {
     buttons: struct {
         negative: Source,
@@ -58,7 +68,41 @@ pub const AxisSource = union(enum) {
         sensitivity: f32 = 1.0,
         clamp: f32 = 1.0,
     },
+    touch_stick: struct {
+        stick: touch.Name,
+        component: touch.Component,
+        invert: bool = false,
+        deadzone: f32 = 0.15,
+    },
+    touch_drag: struct {
+        region: touch.DragRegion = .full,
+        component: touch.Component,
+        sensitivity: f32 = 1.0,
+        clamp: f32 = 1.0,
+    },
 };
+
+/// A `touch_button` source for the pad button `name`, for binding from Zig:
+/// `try actions.bind(.jump, try touchButton("a"))`.
+pub fn touchButton(name: []const u8) !Source {
+    return .{ .touch_button = try touch.Name.init(name) };
+}
+
+/// Reads an optional number field, or returns `default` when it's nil.
+fn optNumber(lua: *Lua, entry_abs: i32, key: [:0]const u8, default: f32) !f32 {
+    _ = lua.getField(entry_abs, key);
+    defer lua.pop(1);
+    if (lua.isNil(-1)) return default;
+    return @floatCast(try lua.toNumber(-1));
+}
+
+/// Reads a required string field as an enum value.
+fn enumField(comptime E: type, lua: *Lua, entry_abs: i32, key: [:0]const u8, err: anyerror) !E {
+    _ = lua.getField(entry_abs, key);
+    defer lua.pop(1);
+    const text = try lua.toString(-1);
+    return std.meta.stringToEnum(E, text) orelse err;
+}
 
 fn parseSource(lua: *Lua, entry_abs: i32) !Source {
     _ = lua.getField(entry_abs, "type");
@@ -66,6 +110,7 @@ fn parseSource(lua: *Lua, entry_abs: i32) !Source {
     const is_key = std.mem.eql(u8, type_str, "key");
     const is_mouse = std.mem.eql(u8, type_str, "mouse_button");
     const is_gpad = std.mem.eql(u8, type_str, "gamepad_button");
+    const is_touch = std.mem.eql(u8, type_str, "touch_button");
     lua.pop(1);
 
     if (is_key) {
@@ -86,6 +131,10 @@ fn parseSource(lua: *Lua, entry_abs: i32) !Source {
         const btn_str = try lua.toString(-1);
         const btn = std.meta.stringToEnum(keys.GamepadButton, btn_str) orelse return error.UnknownGamepadButton;
         return .{ .gamepad_button = btn };
+    } else if (is_touch) {
+        _ = lua.getField(entry_abs, "button");
+        defer lua.pop(1);
+        return .{ .touch_button = try touch.Name.init(try lua.toString(-1)) };
     } else {
         return error.UnknownSourceType;
     }
@@ -126,6 +175,8 @@ fn parseAxisSource(lua: *Lua, entry_abs: i32) !AxisSource {
     const is_buttons = std.mem.eql(u8, type_str, "buttons");
     const is_gpad_axis = std.mem.eql(u8, type_str, "gamepad_axis");
     const is_mouse_axis = std.mem.eql(u8, type_str, "mouse_axis");
+    const is_touch_stick = std.mem.eql(u8, type_str, "touch_stick");
+    const is_touch_drag = std.mem.eql(u8, type_str, "touch_drag");
     lua.pop(1);
 
     if (is_buttons) {
@@ -197,6 +248,35 @@ fn parseAxisSource(lua: *Lua, entry_abs: i32) !AxisSource {
         lua.pop(1);
 
         return .{ .mouse_axis = .{ .axis = ax, .sensitivity = sensitivity, .clamp = clamp } };
+    } else if (is_touch_stick) {
+        _ = lua.getField(entry_abs, "stick");
+        const name = touch.Name.init(try lua.toString(-1));
+        lua.pop(1);
+
+        _ = lua.getField(entry_abs, "invert");
+        const invert = lua.toBoolean(-1);
+        lua.pop(1);
+
+        return .{ .touch_stick = .{
+            .stick = try name,
+            .component = try enumField(touch.Component, lua, entry_abs, "component", error.UnknownTouchComponent),
+            .invert = invert,
+            .deadzone = try optNumber(lua, entry_abs, "deadzone", 0.15),
+        } };
+    } else if (is_touch_drag) {
+        _ = lua.getField(entry_abs, "region");
+        const has_region = !lua.isNil(-1);
+        lua.pop(1);
+
+        return .{ .touch_drag = .{
+            .region = if (has_region)
+                try enumField(touch.DragRegion, lua, entry_abs, "region", error.UnknownTouchRegion)
+            else
+                .full,
+            .component = try enumField(touch.Component, lua, entry_abs, "component", error.UnknownTouchComponent),
+            .sensitivity = try optNumber(lua, entry_abs, "sensitivity", 1.0),
+            .clamp = try optNumber(lua, entry_abs, "clamp", 1.0),
+        } };
     } else {
         return error.UnknownAxisSourceType;
     }
@@ -374,7 +454,8 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
 
         /// Reads bindings from a Lua table stored in the global `global_name`.
         /// Each entry is a table with an `action` or `axis` string key and a `type` field.
-        /// Supported types: `"key"`, `"mouse_button"`, `"gamepad_button"`, `"chord"`, `"buttons"`, `"gamepad_axis"`, `"mouse_axis"`.
+        /// Supported types: `"key"`, `"mouse_button"`, `"gamepad_button"`, `"touch_button"`, `"chord"`,
+        /// `"buttons"`, `"gamepad_axis"`, `"mouse_axis"`, `"touch_stick"`, `"touch_drag"`.
         pub fn loadFromLua(self: *Self, script: *const ScriptEngine, global_name: []const u8) !void {
             const lua = script.lua;
 
@@ -508,6 +589,7 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
                     if (inputs.numGamepads == 0) return false;
                     return inputs.gamepads[0].down(btn);
                 },
+                .touch_button => |name| return inputs.touch.buttonDown(name.slice()),
             }
         }
 
@@ -570,6 +652,23 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
                             };
                             val = std.math.clamp(delta * ma.sensitivity, -ma.clamp, ma.clamp);
                         }
+                    },
+                    .touch_stick => |ts| {
+                        const v = inputs.touch.stick(ts.stick.slice());
+                        val = switch (ts.component) {
+                            .x => v.x,
+                            .y => v.y,
+                        };
+                        if (@abs(val) < ts.deadzone) val = 0;
+                        if (ts.invert) val = -val;
+                    },
+                    .touch_drag => |td| {
+                        const d = inputs.touch.drag(td.region);
+                        const delta: f32 = switch (td.component) {
+                            .x => d.x,
+                            .y => d.y,
+                        };
+                        val = std.math.clamp(delta * td.sensitivity, -td.clamp, td.clamp);
                     },
                 }
                 // Multiple bindings on the same axis (e.g. arrow keys and

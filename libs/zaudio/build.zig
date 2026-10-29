@@ -37,7 +37,9 @@ pub fn build(b: *std.Build) void {
         miniaudio_lib.root_module.linkFramework("AudioUnit", .{});
         miniaudio_lib.root_module.linkFramework("AudioToolbox", .{});
     } else if (target.result.os.tag == .linux) {
-        miniaudio_lib.root_module.linkSystemLibrary("pthread", .{});
+        // PIXZIG: bionic has pthreads in libc and no libpthread. miniaudio
+        // dlopens AAudio and OpenSL ES itself, so nothing more is linked.
+        if (!target.result.abi.isAndroid()) miniaudio_lib.root_module.linkSystemLibrary("pthread", .{});
         miniaudio_lib.root_module.linkSystemLibrary("m", .{});
         miniaudio_lib.root_module.linkSystemLibrary("dl", .{});
     }

@@ -66,6 +66,7 @@ pub const AssetManifest = assets.AssetManifest;
 pub const AssetKind = assets.AssetKind;
 pub const ManifestSource = assets.ManifestSource;
 pub const file_watcher = @import("./file_watcher.zig");
+const TouchOverlay = @import("./touch_overlay.zig").TouchOverlay;
 pub const FileWatcher = file_watcher.FileWatcher;
 
 /// Build and test plumbing, not game API: the root wrapper `buildGame`
@@ -76,6 +77,7 @@ pub const internal = struct {
     pub const system = @import("./system.zig");
     pub const comp = @import("./comp.zig");
     pub const GlTestContext = @import("./test_context.zig").GlTestContext;
+    pub const android_main = @import("./android_main.zig");
 };
 
 pub const windowing = @import("./window.zig");
@@ -223,6 +225,9 @@ pub const EngineInitOptions = struct {
     /// so `Engine.projection()` maps one unit to one framebuffer pixel.
     logicalSize: ?Vec2I = null,
     scalePolicy: windowing.ScalePolicy = .fit,
+    /// Which way up the game runs on a phone or tablet. The default picks
+    /// landscape for a `windowSize` wider than tall. Ignored on desktop.
+    orientation: platform.Orientation = .auto,
     /// Whether vsync is enabled on init. Change it later with
     /// `Engine.enableVSync`, e.g. from a settings menu.
     vsync: bool = true,
@@ -407,6 +412,7 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
             self.engine.updateAudio();
 
             app.render(self.engine);
+            self.engine.drawTouchOverlay();
             self.engine.window.swapBuffers();
             return true;
         }
@@ -504,6 +510,8 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
         console: if (engOpts.console != null) *console.Console else void,
         /// The engine's action map when `actionOpts` is set.
         actions: if (engOpts.actionOpts != null) *Actions else void,
+        /// Draws `inputs.touch`'s virtual pad; see `drawTouchOverlay`.
+        touchOverlay: TouchOverlay = .{},
 
         const Self = @This();
 
@@ -539,6 +547,7 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
                 .resizable = options.resizable,
                 .fullscreen = options.fullscreen,
                 .minSize = options.minWindowSize,
+                .orientation = options.orientation,
                 .textInput = engOpts.inputOpts.textInput,
             });
             errdefer window.destroy();
@@ -548,6 +557,9 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
             if (builtin.target.os.tag == .emscripten) {
                 try zopengl.loadEsProfile(platform.glProcAddress, @intCast(gl_major), @intCast(gl_minor));
                 try zopengl.loadEsExtension(platform.glProcAddress, .OES_vertex_array_object);
+            } else if (builtin.abi.isAndroid()) {
+                // ES 3.0 has vertex array objects built in.
+                try zopengl.loadEsProfile(platform.glProcAddress, @intCast(gl_major), @intCast(gl_minor));
             } else {
                 try zopengl.loadCoreProfile(platform.glProcAddress, @intCast(gl_major), @intCast(gl_minor));
             }
@@ -617,6 +629,8 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
                 eng.resources.deinit();
                 allocator.destroy(eng);
             }
+
+            eng.updateTouchLayout();
 
             if (engOpts.actionOpts != null) eng.actions = try Actions.init(allocator);
             errdefer if (engOpts.actionOpts != null) eng.actions.deinit();
@@ -729,7 +743,9 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
         /// and set as the window icon. This function is a no-op on web builds since setting
         /// the favicon is outside the scope of the engine.
         pub fn setIcon(self: *Self, icon_data: *std.Io.Reader) !void {
-            if (builtin.os.tag != .emscripten) {
+            // The web page's favicon and an Android app's launcher icon
+            // come from outside the game.
+            if (builtin.os.tag != .emscripten and !builtin.abi.isAndroid()) {
                 const data_buffer = try icon_data.readAlloc(self.allocator, icon_data.end);
                 defer self.allocator.free(data_buffer);
 
@@ -837,6 +853,35 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
             }
         }
 
+        /// Lays the virtual pad out for the current framebuffer, display
+        /// density and safe area. Called at init and on every resize.
+        fn updateTouchLayout(self: *Self) void {
+            const fb = self.windowState.framebufferSize;
+            const sf = self.windowState.scaleFactor;
+            const safe = self.window.getSafeArea();
+            const x: f32 = @floatFromInt(safe[0]);
+            const y: f32 = @floatFromInt(safe[1]);
+            const w: f32 = @floatFromInt(safe[2]);
+            const h: f32 = @floatFromInt(safe[3]);
+            self.inputs.touch.layout(
+                .{ .x = @floatFromInt(fb.x), .y = @floatFromInt(fb.y) },
+                // Pixels per dp: SDL's display scale is the pixel density
+                // times the content scale, i.e. framebuffer pixels per dp
+                // (the density on Android, the HiDPI factor on desktop).
+                self.windowState.contentScale.x,
+                .{ .l = x * sf.x, .t = y * sf.y, .r = (x + w) * sf.x, .b = (y + h) * sf.y },
+            );
+        }
+
+        /// Draws the virtual pad over the frame while touch is the input in
+        /// use (`inputs.touch.visible()`). `AppRunner` calls this after
+        /// `App.render`; call it yourself only when driving the engine
+        /// without a runner.
+        pub fn drawTouchOverlay(self: *Self) void {
+            if (!self.inputs.touch.visible()) return;
+            self.touchOverlay.draw(&self.renderer, &self.resources, &self.viewport, &self.inputs.touch, engOpts.rendererOpts.textRendering);
+        }
+
         /// Keeps the window open after a close request. Call it from
         /// `onEvent` while handling `.close_requested`, e.g. to ask about
         /// unsaved changes first; close later with `window.requestClose()`.
@@ -866,6 +911,7 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
             }
             const fbsz = self.windowState.framebufferSize;
             self.viewport.updateFramebufferSize(fbsz);
+            self.updateTouchLayout();
 
             // Clear the whole framebuffer, letterbox bars included, before
             // restoring the viewport's own scissor rect. The game's clear

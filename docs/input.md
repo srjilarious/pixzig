@@ -84,6 +84,9 @@ bindings = {
     { axis = "move_x", type = "buttons", neg = "a", pos = "d" },
     { axis = "move_x", type = "gamepad_axis", stick = "left_x", deadzone = 0.2 },
     { axis = "look_x", type = "mouse_axis", component = "x", sensitivity = 0.1 },
+    { action = "jump", type = "touch_button", button = "a" },
+    { axis = "move_x", type = "touch_stick", stick = "move", component = "x" },
+    { axis = "look_x", type = "touch_drag", region = "right_half", component = "x", sensitivity = 0.35 },
 }
 ```
 
@@ -204,6 +207,48 @@ if (eng.inputs.gamepad(0)) |pad| {
 `gamepad(index)` is null past the last slot you asked for. Pads can be plugged in and out while the game runs. To react when that happens, for example to pause when the player's pad drops out, handle `gamepad_added` and `gamepad_removed` in the app's `onEvent` (see [The Game Loop](page:app-runner)). They carry a `GamepadId`; `pad.id()` gives the id of the pad in a slot, or null when the slot is empty. Buttons use positional names (`.a` is the bottom face button) and axes are `.left_x`, `.left_y`, `.right_x`, `.right_y`, `.left_trigger` and `.right_trigger`.
 
 When the window loses focus, all input state is cleared so no key gets stuck down.
+
+## Touch
+
+On a phone or tablet, a game gets a virtual pad: on-screen sticks and buttons that feed the action map like any other device. Declare the pad once, next to the bindings:
+
+```lua
+touch = {
+    sticks  = { { name = "move", anchor = "bottom_left", x = 120, y = 120, radius = 80 } },
+    buttons = {
+        { name = "a", label = "A", anchor = "bottom_right", x = 70,  y = 130, radius = 40 },
+        { name = "pause", anchor = "top_right", x = 40, y = 40, radius = 24 },
+    },
+}
+bindings = {
+    { action = "jump",  type = "key", key = "space" },
+    { action = "jump",  type = "touch_button", button = "a" },
+    { action = "pause", type = "touch_button", button = "pause" },
+    { axis = "move_x", type = "buttons", neg = "left", pos = "right" },
+    { axis = "move_x", type = "touch_stick", stick = "move", component = "x" },
+    { axis = "move_y", type = "touch_stick", stick = "move", component = "y" },
+    { axis = "turn",   type = "touch_drag", region = "right_half", component = "x", sensitivity = 0.35, clamp = 3.5 },
+}
+```
+
+```zig
+try eng.inputs.touch.loadFromLua(&eng.scripts, "touch");
+try eng.actions.loadFromLua(&eng.scripts, "bindings");
+```
+
+or from Zig, with `eng.inputs.touch.addStick(.{ ... })`, `addButton(.{ ... })` and `eng.actions.bind(.jump, try pixzig.input.touchButton("a"))`.
+
+The same config works everywhere. On a desktop the pad is never drawn, and touch bindings read as up and 0, the same as a binding to a pad control that doesn't exist. A config without a `touch` table loads without error.
+
+- **Placement.** `anchor` is a screen corner (`top_left`, `bottom_right`, ...), edge (`top`, `left`, ...) or `center`. `x` and `y` are how far in from it the control's centre sits, and `radius` its size, all in dp (density-independent pixels), so the pad is the same physical size on a phone and a tablet. Controls stay inside the safe area, clear of notches and rounded corners, and move with the screen when it rotates.
+- **Sticks** read in [-1, +1] per `component`: `x` is right-positive, `y` is down-positive as on screen (`invert = true` flips it), with a `deadzone` (default 0.15).
+- **Buttons** are held while a finger is on them. A tap too quick to span a tick still reads as down for one tick, so `pressed` catches it.
+- **Drags.** A finger that lands on no control drags. `touch_drag` reads how far such fingers moved this tick in dp, within `region` (`full`, `left_half`, `right_half`, `top_half`, `bottom_half`), scaled by `sensitivity` and clamped to `clamp` like `mouse_axis`.
+- A finger belongs to whatever it first touched until it lifts, so a thumb that slides off a button keeps it held.
+
+The engine draws the pad over the frame, after `App.render`, while touch is the input in use: it appears with the first touch and hides once a key, a real mouse or a gamepad is used. With no pad declared, touches arrive as mouse clicks (SDL's emulation), so a mouse-driven game works by touch as it is. Once a pad is declared, those emulated clicks are dropped, so tapping a pad button doesn't also click under it.
+
+`eng.inputs.touch` also answers directly: `buttonDown("a")`, `stick("move")`, `drag(.full)` and `fingerCount()`.
 
 ## Command Key Maps
 

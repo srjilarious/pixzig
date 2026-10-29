@@ -1,4 +1,5 @@
 const std = @import("std");
+const io = @import("./io.zig");
 const paths = @import("./paths.zig");
 const resources = @import("./resources.zig");
 const ResourceManager = resources.ResourceManager;
@@ -120,12 +121,10 @@ pub const AssetManifest = struct {
         res: *ResourceManager,
         manifestPath: []const u8,
     ) !Self {
-        const io = std.Io.Threaded.global_single_threaded.io();
-
         const resolvedPath = try paths.resolve(alloc, manifestPath);
         defer alloc.free(resolvedPath);
 
-        const file_contents = std.Io.Dir.cwd().readFileAlloc(io, resolvedPath, alloc, .unlimited) catch |err| {
+        const file_contents = io.readFile(alloc, resolvedPath) catch |err| {
             logAssetIoError(err, "manifest", resolvedPath);
             return err;
         };

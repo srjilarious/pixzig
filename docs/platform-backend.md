@@ -10,7 +10,7 @@ Game code, the scripting bindings and the Python bindings all stay on pixzig's s
 - `eng.inputs` is the engine's `InputManager`.
 - `pixzig.Key`, `MouseButton`, `GamepadButton` and `GamepadAxis` are the device names used by game code, action maps and saved key bindings.
 
-The backend translates OS events into those types. That keeps the same code working on desktop and the web, and leaves room to change the backend without renaming anyone's inputs. Inside the engine, SDL is only used by the platform window, the input modules and the event loop.
+The backend translates OS events into those types. That keeps the same code working on desktop and the web, and leaves room to change the backend without renaming anyone's inputs. Inside the engine, SDL is only used by the platform window, the input modules, the event loop and `io.zig`, which every asset load reads through so the same relative paths reach files on disk and inside an Android APK.
 
 ## Input Names
 
@@ -58,5 +58,6 @@ Use `scaleFactor` for coordinate math rather than `contentScale`. The display sc
 |---|---|
 | Linux, Windows | SDL3, built and linked by pixzig's build. Games don't add platform libraries themselves. |
 | Web | Emscripten's own SDL3 port, with WebGL 2. The pixzig API is the same as on desktop. |
+| Android | SDL3 built from the same sources as desktop, as `libSDL3.so`, with SDL's Java activity and OpenGL ES 3.0. The game is `libmain.so`, whose `SDL_main` the build's root wrapper provides. |
 
 The desktop and web SDL builds can be slightly different versions, so a platform-specific bug is possible. Treat that as an engine problem to fix in the backend; game code should keep using pixzig's types.

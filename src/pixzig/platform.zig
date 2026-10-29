@@ -7,6 +7,7 @@ pub const event = @import("./platform/event.zig");
 
 pub const Window = window.Window;
 pub const WindowCreateOptions = window.WindowCreateOptions;
+pub const Orientation = window.Orientation;
 pub const showCursor = window.showCursor;
 pub const basePath = window.basePath;
 pub const prefPath = window.prefPath;
@@ -14,5 +15,6 @@ pub const timeMs = window.timeMs;
 pub const setSwapInterval = window.setSwapInterval;
 pub const glProcAddress = window.glProcAddress;
 pub const initVideo = window.initVideo;
+pub const gl_es = window.gl_es;
 pub const quit = window.quit;
 pub const sdlError = window.sdlError;

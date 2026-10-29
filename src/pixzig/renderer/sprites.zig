@@ -1,4 +1,5 @@
 const std = @import("std");
+const io = @import("../io.zig");
 const common = @import("../common.zig");
 const textures = @import("./textures.zig");
 const resources = @import("../resources.zig");
@@ -328,8 +329,7 @@ pub const FrameSequenceManager = struct {
         defer self.alloc.free(resolved);
 
         // Load file contents
-        const io = std.Io.Threaded.global_single_threaded.io();
-        const file_contents = try std.Io.Dir.cwd().readFileAlloc(io, resolved, self.alloc, .unlimited);
+        const file_contents = try io.readFile(self.alloc, resolved);
         defer self.alloc.free(file_contents);
 
         // Load sequence

@@ -1,4 +1,5 @@
 const std = @import("std");
+const io = @import("./io.zig");
 const ziglua = @import("ziglua");
 const paths = @import("./paths.zig");
 
@@ -114,15 +115,29 @@ pub const ScriptEngine = struct {
     /// on syntax or runtime failure, plus `error.ScriptFileError` when the
     /// file can't be opened or read.
     pub fn runScript(self: *ScriptEngine, file: []const u8) !void {
-        const resolved = try paths.resolveZ(self.alloc, file);
+        const resolved = try paths.resolve(self.alloc, file);
         defer self.alloc.free(resolved);
 
+        // Read through `io` rather than `luaL_loadfile`, so a script inside
+        // an Android APK loads like any other asset.
+        const source = io.readFile(self.alloc, resolved) catch |err| {
+            std.log.err("cannot open {s}: {}", .{ resolved, err });
+            return switch (err) {
+                error.OutOfMemory => error.OutOfMemory,
+                else => error.ScriptFileError,
+            };
+        };
+        defer self.alloc.free(source);
+        // The "@" prefix is Lua's convention for a chunk named after its
+        // file, so error messages read "path:line:" as luaL_loadfile's do.
+        const chunk_name = try std.fmt.allocPrintSentinel(self.alloc, "@{s}", .{resolved}, 0);
+        defer self.alloc.free(chunk_name);
+
         // Lua leaves an error message on the stack for every load failure.
-        self.lua.loadFile(resolved, .binary_text) catch |err| {
+        self.lua.loadBuffer(source, chunk_name, .binary_text) catch |err| {
             std.log.err("{s}\n", .{self.lua.toString(-1) catch unreachable});
             self.lua.pop(1);
             return switch (err) {
-                error.LuaFile => error.ScriptFileError,
                 error.OutOfMemory => error.OutOfMemory,
                 else => error.SyntaxError,
             };

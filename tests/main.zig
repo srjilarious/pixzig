@@ -22,6 +22,7 @@ const Tests = blk: {
     testz.Group{ .name = "GameState Tests", .tag = "gamestate", .mod = @import("./gamestate_tests.zig") },
     testz.Group{ .name = "ActionMap Tests", .tag = "actions", .mod = @import("./action_tests.zig") },
     testz.Group{ .name = "Input Tests", .tag = "input", .mod = @import("./input_tests.zig") },
+    testz.Group{ .name = "Touch Tests", .tag = "touch", .mod = @import("./touch_tests.zig") },
     testz.Group{ .name = "Viewport Tests", .tag = "viewport", .mod = @import("./viewport_tests.zig") },
     testz.Group{ .name = "Camera Tests", .tag = "camera", .mod = @import("./camera_tests.zig") },
     testz.Group{ .name = "Resources Tests", .tag = "resources", .mod = @import("./resources_tests.zig") },

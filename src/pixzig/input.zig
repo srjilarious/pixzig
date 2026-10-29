@@ -30,6 +30,10 @@ pub const ChordUpdateResult = keychord.ChordUpdateResult;
 pub const ChordTree = keychord.ChordTree;
 pub const KeyMap = keychord.KeyMap;
 
+pub const touch = @import("./input/touch.zig");
+pub const Touch = touch.Touch;
+pub const touchButton = action.touchButton;
+
 pub const action = @import("./input/action.zig");
 pub const ActionMap = action.ActionMap;
 pub const ActionOptions = action.ActionOptions;
