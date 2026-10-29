@@ -250,6 +250,8 @@ The engine draws the pad over the frame, after `App.render`, while touch is the 
 
 `eng.inputs.touch` also answers directly: `buttonDown("a")`, `stick("move")`, `drag(.full)` and `fingerCount()`.
 
+A screen that wants plain taps, like a title or pause menu, turns the pad off with `eng.inputs.touch.setPadEnabled(false)` and back on when play resumes. While it's off the pad isn't drawn, its controls read as up, and touches arrive as mouse clicks again, so `inputs.mouse.pressed(.left)` and `inputs.mouse.pos()` see taps. `inputs.touch.active` tells a tap from a real click.
+
 ## Command Key Maps
 
 For editor-style commands rather than game controls, `KeyMap(T)` maps key chords to any value you like, such as a command name:

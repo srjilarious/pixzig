@@ -183,6 +183,8 @@ pub const Touch = struct {
     /// Set when a finger lands, cleared when another kind of input is used.
     /// The pad is drawn only while this is set.
     active: bool = false,
+    /// Switched off by `setPadEnabled(false)`, e.g. on a menu screen.
+    padEnabled: bool = true,
     /// The screen in framebuffer pixels, density (framebuffer pixels per
     /// dp), and the safe area controls are kept inside. Refreshed by
     /// `layout` every tick.
@@ -196,10 +198,28 @@ pub const Touch = struct {
         return .{};
     }
 
-    /// Whether any pad control is declared. With none, touches go on to SDL's
-    /// mouse emulation, so mouse-driven games still work by touch.
+    /// Whether any pad control is declared and the pad is enabled. Without
+    /// one, touches go on to SDL's mouse emulation, so mouse-driven games
+    /// (and screens) still work by touch.
     pub fn hasPad(self: *const Self) bool {
-        return self.numButtons + self.numSticks > 0;
+        return self.padEnabled and self.numButtons + self.numSticks > 0;
+    }
+
+    /// Turns the pad off or back on, for screens that want plain taps, such
+    /// as a title or pause screen. While it's off it isn't drawn, its
+    /// controls read as up and centred, and touches arrive as mouse clicks
+    /// as if no pad were declared. Turning it off lets go of the controls
+    /// fingers are holding; those fingers stay drags until they lift.
+    pub fn setPadEnabled(self: *Self, on: bool) void {
+        if (self.padEnabled == on) return;
+        self.padEnabled = on;
+        if (!on) {
+            for (&self.fingers) |*slot| {
+                if (slot.*) |*f| f.owner = .none;
+            }
+            for (self.buttons[0..self.numButtons]) |*b| b.tapped = false;
+            self.refreshControls();
+        }
     }
 
     /// Whether the engine should draw the pad this frame.
@@ -403,6 +423,7 @@ pub const Touch = struct {
     }
 
     fn ownerAt(self: *const Self, pos: Vec2F) Owner {
+        if (!self.padEnabled) return .none;
         // Sticks first: their catch area is the larger, and a thumb resting
         // on the edge of a stick means the stick.
         for (self.stickSlice(), 0..) |*s, i| {

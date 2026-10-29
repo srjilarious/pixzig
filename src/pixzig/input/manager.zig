@@ -36,7 +36,8 @@ pub const InputOptions = struct {
     /// enables IME composition (`Keyboard.preedit()`). It is off by
     /// default: on some platforms an armed text input changes on-screen
     /// keyboard behaviour, and a game that only reads key bindings does
-    /// not want an IME candidate bar appearing over it.
+    /// not want an IME candidate bar appearing over it. On Android it is
+    /// never armed, since that raises the on-screen keyboard.
     textInput: bool = false,
 };
 
@@ -88,7 +89,7 @@ pub const InputManager = struct {
     /// input manager it owns.
     ///
     /// Using a key, a real mouse or a gamepad hides the virtual pad until
-    /// the next touch. While a pad is declared, the mouse events SDL makes
+    /// the next touch. While a pad is declared (and enabled), the mouse events SDL makes
     /// up from touches are dropped: the pad owns those touches, and a tap on
     /// one of its buttons shouldn't also click.
     pub fn handleEvent(self: *Self, event: sdl.SDL_Event) void {
@@ -118,7 +119,10 @@ pub const InputManager = struct {
             },
             sdl.SDL_EVENT_MOUSE_BUTTON_DOWN, sdl.SDL_EVENT_MOUSE_BUTTON_UP => {
                 if (event.button.which == touch_mouse_id) {
-                    if (self.touch.hasPad()) return;
+                    // Releases always go through: a tap that pressed while
+                    // the pad was off, then turned it back on (say, by
+                    // leaving a menu), would otherwise leave the button held.
+                    if (self.touch.hasPad() and event.button.down) return;
                 } else {
                     self.touch.active = false;
                 }

@@ -201,6 +201,27 @@ pub fn mouseEdgesTest(io: std.Io, alloc: std.mem.Allocator) !void {
     try testz.expectTrue(mouse.released(.left));
 }
 
+/// A click that presses and releases within one tick still reads as a
+/// press for that tick, then as released on the next.
+pub fn mouseQuickClickTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+
+    var mouse = Mouse.init();
+    mouse.currPtr().set(.left, true);
+    mouse.currPtr().set(.left, false);
+    try testz.expectTrue(mouse.down(.left));
+    try testz.expectTrue(mouse.pressed(.left));
+
+    mouse.finishTick();
+    try testz.expectFalse(mouse.down(.left));
+    try testz.expectFalse(mouse.pressed(.left));
+    try testz.expectTrue(mouse.released(.left));
+
+    mouse.finishTick();
+    try testz.expectFalse(mouse.released(.left));
+}
+
 /// Scroll accumulates across the events in a tick and is consumed by
 /// `finishTick`.
 pub fn mouseScrollTest(io: std.Io, alloc: std.mem.Allocator) !void {

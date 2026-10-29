@@ -9,6 +9,10 @@ pub const NumMouseButtons = keys.NumMouseButtons;
 
 pub const MouseState = struct {
     buttons: std.StaticBitSet(NumMouseButtons),
+    /// Buttons pressed during this tick. They read as down until the tick
+    /// ends even if already released, so a click quicker than a tick (a
+    /// tap on a touchscreen, say) is still seen as a press.
+    tapped: std.StaticBitSet(NumMouseButtons),
     /// Cursor position in window coordinates, as SDL reports it.
     rawPos: Vec2F,
     /// Cursor position in framebuffer pixels (rawPos * scaleFactor).
@@ -27,6 +31,7 @@ pub const MouseState = struct {
         const buttons = std.StaticBitSet(NumMouseButtons).empty;
         return .{
             .buttons = buttons,
+            .tapped = buttons,
             .rawPos = .{ .x = 0, .y = 0 },
             .fbPos = .{ .x = 0, .y = 0 },
             .logicalPos = null,
@@ -36,7 +41,7 @@ pub const MouseState = struct {
     }
 
     pub fn down(self: *const MouseState, keyIdx: usize) bool {
-        return self.buttons.isSet(keyIdx);
+        return self.buttons.isSet(keyIdx) or self.tapped.isSet(keyIdx);
     }
 
     pub fn set(self: *MouseState, btn: MouseButton, val: bool) void {
@@ -46,6 +51,7 @@ pub const MouseState = struct {
     pub fn setIdx(self: *MouseState, btnIdx: usize, val: bool) void {
         if (val) {
             self.buttons.set(btnIdx);
+            self.tapped.set(btnIdx);
         } else {
             self.buttons.unset(btnIdx);
         }
@@ -63,6 +69,7 @@ pub const MouseState = struct {
 
     pub fn clear(self: *MouseState) void {
         self.buttons.setRangeValue(.{ .start = 0, .end = NumMouseButtons }, false);
+        self.tapped.setRangeValue(.{ .start = 0, .end = NumMouseButtons }, false);
         self.rawPos = .{ .x = 0, .y = 0 };
         self.fbPos = .{ .x = 0, .y = 0 };
         self.logicalPos = null;
@@ -92,9 +99,11 @@ pub const Mouse = struct {
 
     /// Ends a tick: the current state becomes the previous state for the
     /// next tick's edge detection, and the accumulated scroll delta is
-    /// consumed.
+    /// consumed. A click that pressed and released within the tick ends
+    /// here, so the next tick sees it released.
     pub fn finishTick(self: *Mouse) void {
         self.mouseBuffers[self.prevIdx] = self.mouseBuffers[self.currIdx];
+        self.currPtr().tapped = .empty;
         self.currPtr().rawDelta = .{ .x = 0, .y = 0 };
         self.currPtr().scrollDelta = .{ .x = 0, .y = 0 };
     }

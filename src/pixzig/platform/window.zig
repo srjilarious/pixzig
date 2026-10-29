@@ -116,7 +116,9 @@ pub const Window = struct {
             .glContext = glContext,
         };
 
-        if (options.textInput) {
+        // On Android, starting text input raises the on-screen keyboard over
+        // the game, so it's left off there.
+        if (options.textInput and !builtin.abi.isAndroid()) {
             // A failure here costs typed text and IME support but leaves a
             // perfectly usable window, so warn rather than abort startup.
             if (sdl.SDL_StartTextInput(handle)) {

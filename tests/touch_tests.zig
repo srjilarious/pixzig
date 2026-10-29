@@ -206,6 +206,50 @@ pub fn touchLayoutAndBindingsLoadFromLua(io: std.Io, alloc: std.mem.Allocator) !
     try testz.expectFalse(empty.hasPad());
 }
 
+pub fn touchPadDisabledReleasesControlsAndClicks(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    var inputs = InputManager.init(.{ .mouse = true });
+    inputs.touch.layout(.{ .x = 1000, .y = 500 }, 2, .{ .l = 0, .t = 0, .r = 1000, .b = 500 });
+    try inputs.touch.addButton(.{ .name = "a", .anchor = .center, .x = 0, .y = 0, .radius = 20 });
+
+    inputs.touch.fingerDown(7, .{ .x = 505, .y = 245 });
+    try testz.expectTrue(inputs.touch.buttonDown("a"));
+    try testz.expectTrue(inputs.touch.visible());
+
+    // Off: the held button lets go, the pad hides, and the finger drags.
+    inputs.touch.setPadEnabled(false);
+    try testz.expectFalse(inputs.touch.buttonDown("a"));
+    try testz.expectFalse(inputs.touch.visible());
+    inputs.touch.fingerMove(7, .{ .x = 525, .y = 245 });
+    try testz.expectEqual(inputs.touch.drag(.full).x, 10);
+    inputs.touch.fingerUp(7);
+
+    // A new finger on the button doesn't press it, and SDL's touch-made
+    // clicks reach the mouse again.
+    inputs.touch.fingerDown(8, .{ .x = 505, .y = 245 });
+    try testz.expectFalse(inputs.touch.buttonDown("a"));
+    inputs.touch.fingerUp(8);
+    var event: sdl.SDL_Event = std.mem.zeroes(sdl.SDL_Event);
+    event.type = sdl.SDL_EVENT_MOUSE_BUTTON_DOWN;
+    event.button.which = std.math.maxInt(sdl.SDL_MouseID);
+    event.button.button = sdl.SDL_BUTTON_LEFT;
+    event.button.down = true;
+    inputs.handleEvent(event);
+    try testz.expectTrue(inputs.mouse.down(.left));
+
+    // Back on, that click's release still reaches the mouse, so it isn't
+    // left held, and the button works again.
+    inputs.finishTick();
+    inputs.touch.setPadEnabled(true);
+    event.type = sdl.SDL_EVENT_MOUSE_BUTTON_UP;
+    event.button.down = false;
+    inputs.handleEvent(event);
+    try testz.expectFalse(inputs.mouse.down(.left));
+    inputs.touch.fingerDown(9, .{ .x = 505, .y = 245 });
+    try testz.expectTrue(inputs.touch.buttonDown("a"));
+}
+
 pub fn touchPadSwallowsEmulatedMouse(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     _ = alloc;
