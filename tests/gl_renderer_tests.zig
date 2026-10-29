@@ -493,3 +493,180 @@ pub fn shaderLinkFailureErrorsTest(io: std.Io, alloc: std.mem.Allocator) !void {
     ;
     try testz.expectError(shaders.Shader.init(&shaders.TexVertexShader, &mismatched), error.ShaderLinkError);
 }
+
+// ---------------------------------------------------------------------------
+// Render targets, blend modes, shaders
+// ---------------------------------------------------------------------------
+
+const gl = pixzig.gl;
+const Color = pixzig.Color;
+
+/// The RGBA bytes at raster pixel (x, y) of the bound framebuffer, counting
+/// y down from the top of a target `height` pixels tall.
+fn pixelAt(x: i32, y: i32, height: i32) [4]u8 {
+    var px: [4]u8 = undefined;
+    gl.readPixels(x, height - 1 - y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, &px);
+    return px;
+}
+
+fn expectPixel(got: [4]u8, want: [4]u8) !void {
+    for (got, want) |g, w| {
+        if (@abs(@as(i32, g) - @as(i32, w)) > 2) {
+            std.debug.print("pixel {any}, wanted {any}\n", .{ got, want });
+            return error.WrongPixel;
+        }
+    }
+}
+
+pub fn renderTargetDrawsUprightTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = glCtx();
+
+    const Rndr = pixzig.renderer.Renderer(.{ .textRendering = false });
+    var rm = pixzig.resources.ResourceManager.init(alloc);
+    defer rm.deinit();
+    var r = try Rndr.init(alloc, &rm, &test_viewport, .{ .font = .none });
+    defer r.deinit();
+
+    // Half the logical size, so a `.logical` pass is scaled down 2x.
+    var target = try pixzig.RenderTarget.init(.{ .x = 400, .y = 240 }, .{});
+    defer target.deinit();
+    try testz.expectEqual(target.texture.val.src.t, 1);
+
+    r.setTarget(&target);
+    try testz.expectTrue(r.currentTarget() == &target);
+    r.begin(.logical);
+    r.clear(0, 0, 255, 255);
+    // Red over the logical top-left 100x100: target pixels 0..50.
+    r.drawFilledRect(RectF.fromPosSize(0, 0, 100, 100), Color.red);
+    r.end();
+
+    try expectPixel(pixelAt(10, 10, 240), .{ 255, 0, 0, 255 });
+    try expectPixel(pixelAt(60, 10, 240), .{ 0, 0, 255, 255 });
+    try expectPixel(pixelAt(10, 200, 240), .{ 0, 0, 255, 255 });
+
+    // A `.screen` pass inside a target draws in the target's own pixels.
+    r.begin(.screen);
+    r.drawFilledRect(RectF.fromPosSize(390, 230, 10, 10), Color.green);
+    r.end();
+    try expectPixel(pixelAt(395, 235, 240), .{ 0, 255, 0, 255 });
+
+    // A clip in logical coordinates lands on the matching target pixels.
+    r.begin(.logical);
+    r.setClip(RectF.fromPosSize(400, 0, 400, 480));
+    r.drawFilledRect(RectF.fromPosSize(0, 400, 800, 80), Color.white);
+    r.setClip(null);
+    r.end();
+    try expectPixel(pixelAt(150, 220, 240), .{ 0, 0, 255, 255 });
+    try expectPixel(pixelAt(250, 220, 240), .{ 255, 255, 255, 255 });
+
+    // Drawn as a texture into another target, it comes out upright: the
+    // red corner stays top-left.
+    var copy = try pixzig.RenderTarget.init(.{ .x = 400, .y = 240 }, .{});
+    defer copy.deinit();
+    r.setTarget(&copy);
+    r.begin(.screen);
+    r.drawTexture(&target.texture, RectF.fromPosSize(0, 0, 400, 240), target.texture.val.src);
+    r.end();
+    try expectPixel(pixelAt(10, 10, 240), .{ 255, 0, 0, 255 });
+    try expectPixel(pixelAt(10, 200, 240), .{ 0, 0, 255, 255 });
+
+    r.setTarget(null);
+    try testz.expectTrue(r.currentTarget() == null);
+
+    // Resizing keeps the handle and bumps its version.
+    const before = target.texture.version;
+    try target.resize(.{ .x = 64, .y = 32 });
+    try testz.expectEqual(target.size().x, 64);
+    try testz.expectTrue(target.texture.version != before);
+    try testz.expectError(target.resize(.{ .x = 0, .y = 32 }), error.InvalidRenderTargetSize);
+}
+
+pub fn blendModesTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = glCtx();
+
+    const Rndr = pixzig.renderer.Renderer(.{ .textRendering = false });
+    var rm = pixzig.resources.ResourceManager.init(alloc);
+    defer rm.deinit();
+    var r = try Rndr.init(alloc, &rm, &test_viewport, .{ .font = .none });
+    defer r.deinit();
+
+    var target = try pixzig.RenderTarget.init(.{ .x = 8, .y = 8 }, .{});
+    defer target.deinit();
+    r.setTarget(&target);
+    defer r.setTarget(null);
+
+    const gray = Color.from(100, 100, 100, 255);
+    const cases = [_]struct { mode: pixzig.BlendMode, want: u8 }{
+        .{ .mode = .alpha, .want = 150 }, // 100 + (200 - 100) / 2
+        .{ .mode = .additive, .want = 200 }, // 100 + 200 / 2
+        .{ .mode = .multiply, .want = 128 }, // 100 * 200/255 + 100 / 2
+        .{ .mode = .premultiplied, .want = 250 }, // 200 + 100 / 2
+    };
+    for (cases) |c| {
+        r.begin(.screen);
+        r.clear(100, 100, 100, 255);
+        r.drawFilledRect(RectF.fromPosSize(0, 0, 8, 8), gray);
+        r.setBlend(c.mode);
+        r.drawFilledRect(RectF.fromPosSize(0, 0, 8, 8), Color.from(200, 200, 200, 128));
+        r.end();
+        const px = pixelAt(4, 4, 8);
+        if (@abs(@as(i32, px[0]) - c.want) > 3) {
+            std.debug.print("{t}: got {d}, wanted {d}\n", .{ c.mode, px[0], c.want });
+            return error.WrongBlend;
+        }
+    }
+
+    // `begin` puts the mode back to alpha.
+    r.begin(.screen);
+    r.clear(100, 100, 100, 255);
+    r.drawFilledRect(RectF.fromPosSize(0, 0, 8, 8), Color.from(200, 200, 200, 128));
+    r.end();
+    try testz.expectTrue(@abs(@as(i32, pixelAt(4, 4, 8)[0]) - 150) <= 3);
+}
+
+pub fn customShaderAndFadeTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = glCtx();
+
+    const Rndr = pixzig.renderer.Renderer(.{ .textRendering = false });
+    var rm = pixzig.resources.ResourceManager.init(alloc);
+    defer rm.deinit();
+    var r = try Rndr.init(alloc, &rm, &test_viewport, .{ .font = .none });
+    defer r.deinit();
+
+    const tinted = try r.createShader(&rm, "tinted",
+        \\#version 300 es
+        \\precision mediump float;
+        \\in vec2 Texcoord;
+        \\in vec4 Col;
+        \\flat in float Mode;
+        \\uniform sampler2D tex;
+        \\uniform vec4 tint;
+        \\out vec4 fragColor;
+        \\void main() { fragColor = texture(tex, Texcoord) * Col * tint; }
+    );
+
+    var target = try pixzig.RenderTarget.init(.{ .x = 8, .y = 8 }, .{});
+    defer target.deinit();
+    r.setTarget(&target);
+    defer r.setTarget(null);
+
+    r.begin(.screen);
+    r.clear(0, 0, 0, 255);
+    r.setShader(tinted);
+    r.setUniform("tint", Color.from(0, 255, 0, 255));
+    r.drawFilledRect(RectF.fromPosSize(0, 0, 4, 8), Color.white);
+    r.setShader(null);
+    r.drawFilledRect(RectF.fromPosSize(4, 0, 4, 8), Color.white);
+    r.end();
+    try expectPixel(pixelAt(1, 4, 8), .{ 0, 255, 0, 255 });
+    try expectPixel(pixelAt(6, 4, 8), .{ 255, 255, 255, 255 });
+
+    // A fade covers the (logical) screen, which here is the whole target.
+    r.fade(Color.black, 1.0);
+    try expectPixel(pixelAt(6, 4, 8), .{ 0, 0, 0, 255 });
+    r.fade(Color.white, 0);
+    try expectPixel(pixelAt(6, 4, 8), .{ 0, 0, 0, 255 });
+}

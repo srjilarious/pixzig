@@ -141,6 +141,98 @@ eng.renderer.setClip(null);
 
 If you change any other OpenGL state in the middle of a pass, call `eng.renderer.flush()` first so the queued draws go out under the old state.
 
+## Fades and Flashes
+
+`fade(color, amount)` covers the logical screen with `color`, its alpha scaled by `amount` (0 draws nothing, 1 the color as given). It's a pass of its own, so call it between passes, usually last:
+
+```zig
+// A hit flash that fades out over 300 ms.
+eng.renderer.fade(Color.red, @floatCast(self.flashLeftMs / 300.0));
+```
+
+## Blend Modes
+
+`setBlend` changes how the rest of the pass's draws combine with what's behind them:
+
+| `BlendMode` | Effect |
+|---|---|
+| `.alpha` | Normal transparency (the default). |
+| `.additive` | Adds the color, brightening. Glows, fire, lasers. |
+| `.multiply` | Multiplies what's behind by the color, darkening. Shadows, tinting. |
+| `.premultiplied` | For colors already multiplied by their alpha, such as a render target cleared transparent. |
+
+```zig
+eng.renderer.begin(.logical);
+eng.renderer.drawSprite(&self.ship);
+eng.renderer.setBlend(.additive);
+eng.renderer.drawSprite(&self.engineGlow);
+eng.renderer.end();
+```
+
+Queued draws are flushed first, so they keep the old mode. Every pass starts at `.alpha`, and the mode ends with the pass.
+
+## Render Targets
+
+A `RenderTarget` is an offscreen image you draw into instead of the screen, then draw like any texture. Use one to render a low-resolution game and scale it up, to run a shader over the whole frame, or to draw something expensive once and reuse it.
+
+```zig
+// In init: a target a quarter of the logical size.
+self.target = try pixzig.RenderTarget.init(.{ .x = 160, .y = 90 }, .{ .filter = .nearest });
+
+// In render:
+eng.renderer.setTarget(&self.target);
+eng.renderer.begin(.logical);
+eng.renderer.clear(0, 0, 0, 255);
+// ... draw the scene as usual
+eng.renderer.end();
+eng.renderer.setTarget(null);
+
+eng.renderer.begin(.logical);
+eng.renderer.drawTexture(&self.target.texture, screenRect, self.target.texture.val.src);
+eng.renderer.end();
+
+// In deinit:
+self.target.deinit();
+```
+
+- `setTarget` goes between passes. Until `setTarget(null)`, every pass draws into the target.
+- Inside a target, `.logical` and `.camera` passes stretch the logical screen over the whole target, so the scene code doesn't change. A `.screen` pass draws in the target's own pixels. `setClip` takes logical coordinates as usual.
+- `target.texture` is a normal `TextureHandle`. Its `src` is already flipped (GL stores the image bottom row first), so pass `texture.val.src` and it draws upright; `drawFullTexture` works too.
+- `.nearest` keeps hard pixel edges when the target is scaled up; `.linear` smooths them.
+- `resize` reallocates the image, for a target that follows the window size. It starts transparent again.
+- A target cleared to a transparent color holds premultiplied colors, so draw it with `setBlend(.premultiplied)` to avoid dark edges.
+
+## Custom Shaders
+
+`createShader` compiles your own fragment shader against the batch's vertex shader, and `setShader` uses it for the rest of the pass. `setUniform` sets its uniforms (`f32`, `i32`, `Vec2F`, `Color` as a `vec4`, or a `zmath.Mat`):
+
+```zig
+// In init:
+self.wave = try eng.renderer.createShader(&eng.resources, "wave",
+    \\#version 300 es
+    \\precision mediump float;
+    \\in vec2 Texcoord;
+    \\in vec4 Col;
+    \\flat in float Mode;
+    \\uniform sampler2D tex;
+    \\uniform float time;
+    \\out vec4 fragColor;
+    \\void main() {
+    \\    vec2 uv = Texcoord + vec2(sin(Texcoord.y * 24.0 + time) * 0.006, 0.0);
+    \\    fragColor = texture(tex, uv) * Col;
+    \\}
+);
+
+// In render:
+eng.renderer.begin(.logical);
+eng.renderer.setShader(self.wave);
+eng.renderer.setUniform("time", seconds);
+eng.renderer.drawTexture(&self.target.texture, screenRect, self.target.texture.val.src);
+eng.renderer.end();
+```
+
+The shader receives `Texcoord`, the draw's color `Col`, its draw `Mode` (0 for textures and shapes, 1 for TTF text, 2 for silhouettes) and the texture `tex`, and writes `fragColor`. `texture(tex, Texcoord) * Col` is the ordinary result for sprites and render targets. Like the blend mode, the shader ends with the pass. `examples/render_target_ex.zig` puts a target, additive blending, a wave shader and a fade together.
+
 ## Mixing in Other Renderers
 
 A few renderers draw on their own rather than through the batch: `TileMapRenderer`, `PixelBuffer`, `GridRenderer` and the 3D quad batches. Call them outside a `begin`/`end` pair, between your own passes:

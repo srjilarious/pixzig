@@ -560,6 +560,10 @@ pub fn build(b: *std.Build) void {
             .path = "examples/gameloop_ex.zig",
         },
         .{
+            .name = "render_target_ex",
+            .path = "examples/render_target_ex.zig",
+        },
+        .{
             .name = "gamepad_ex",
             .path = "examples/gamepad_ex.zig",
         },

@@ -136,7 +136,7 @@ pub const Viewport = struct {
     /// Orthographic projection mapping (0,0)..(size) in raster convention:
     /// (0,0) is top-left, x grows right, y grows down. zmath signature:
     /// orthographicOffCenterLhGl(left, right, top, bottom, near, far).
-    fn rasterOrtho(size: Vec2I) zmath.Mat {
+    pub fn rasterOrtho(size: Vec2I) zmath.Mat {
         const w: f32 = @floatFromInt(size.x);
         const h: f32 = @floatFromInt(size.y);
         return zmath.orthographicOffCenterLhGl(0, w, 0, h, -0.1, 1000);

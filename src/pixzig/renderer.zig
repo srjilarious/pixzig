@@ -8,6 +8,7 @@ const zmath = @import("zmath");
 pub const constants = @import("./renderer/constants.zig");
 pub const quad_batch = @import("./renderer/quad_batch.zig");
 pub const sprite_batch = @import("./renderer/sprite_batch.zig");
+pub const render_target = @import("./renderer/render_target.zig");
 pub const stb_tt = @import("stb_truetype");
 
 const textMod = @import("./renderer/text.zig");
@@ -20,6 +21,7 @@ const Sprite = @import("./renderer/sprites.zig").Sprite;
 const Viewport = @import("./window.zig").Viewport;
 const Camera2D = @import("./camera.zig").Camera2D;
 const TextureHandle = resources.TextureHandle;
+const ShaderHandle = resources.ShaderHandle;
 const Vec2F = common.Vec2F;
 const white: common.Color = .{ .r = 1, .g = 1, .b = 1, .a = 1 };
 const Vec2U = common.Vec2U;
@@ -43,6 +45,9 @@ pub const BatchLayout = quad_batch.BatchLayout;
 pub const SpriteBatch = sprite_batch.SpriteBatch;
 pub const DrawMode = sprite_batch.DrawMode;
 pub const TextRenderer = textMod.TextRenderer;
+pub const RenderTarget = render_target.RenderTarget;
+pub const RenderTargetOptions = render_target.RenderTargetOptions;
+pub const TargetFilter = render_target.TargetFilter;
 pub const TextStyle = textMod.TextStyle;
 pub const TextAlign = textMod.TextAlign;
 
@@ -103,6 +108,22 @@ pub const Projection = union(enum) {
     matrix: zmath.Mat,
 };
 
+/// How a draw's color combines with what is already there.
+pub const BlendMode = enum {
+    /// Normal transparency: the draw covers what's behind by its alpha.
+    alpha,
+    /// Adds the draw's color (scaled by its alpha), brightening what's
+    /// behind. Glows, fire, lasers, light.
+    additive,
+    /// Multiplies what's behind by the draw's color, darkening it. Shadows,
+    /// tinting a scene.
+    multiply,
+    /// Like `alpha`, for colors already multiplied by their alpha. Use it
+    /// to draw a `RenderTarget` that was cleared transparent, whose
+    /// edges otherwise come out dark.
+    premultiplied,
+};
+
 /// Runtime initialization options for the renderer.
 pub const RendererInitOpts = struct {
     font: FontSource = .{ .embedded = .{} },
@@ -144,6 +165,12 @@ pub fn Renderer(opts: RendererOptions) type {
             /// True inside a `begin(.screen)` pass, which widens the GL
             /// viewport to the whole framebuffer until `end()`.
             screenPass: bool = false,
+
+            /// Where draws go instead of the screen (see `setTarget`).
+            target: ?*RenderTarget = null,
+            /// The framebuffer that was bound when a target was set, put
+            /// back by `setTarget(null)`.
+            screenFramebuffer: u32 = 0,
         };
 
         const DefaultFontName = "__pixzig_default_font";
@@ -265,19 +292,29 @@ pub fn Renderer(opts: RendererOptions) type {
             const impl = self.implMut();
             const mvp = switch (projection) {
                 .logical => self.viewport.projection(),
-                .screen => self.viewport.applyFullscreen(),
+                .screen => if (impl.target) |t|
+                    Viewport.rasterOrtho(t.size().asVec2I())
+                else
+                    self.viewport.applyFullscreen(),
                 .camera => |cam| cam.matrix(self.viewport),
                 .matrix => |m| m,
             };
 
-            impl.screenPass = projection == .screen;
+            impl.screenPass = projection == .screen and impl.target == null;
             impl.batch.begin(mvp);
+            impl.batch.setShader(null);
+            applyBlend(.alpha);
         }
 
         /// Flushes whatever is still queued and closes the pass.
         pub fn end(self: *Self) void {
             const impl = self.implMut();
             impl.batch.end();
+            // A pass's blend mode and shader end with it, so they never
+            // leak into the next pass or into renderers that draw outside
+            // one (tile maps, 3D quads).
+            impl.batch.setShader(null);
+            applyBlend(.alpha);
 
             if (impl.screenPass) {
                 self.viewport.apply();
@@ -293,11 +330,15 @@ pub fn Renderer(opts: RendererOptions) type {
 
         /// Clips subsequent draws to `rect`, given in logical coordinates
         /// (clamped to the logical screen). `null` restores the pass's own
-        /// clip: the letterboxed viewport, or the whole framebuffer inside a
-        /// `.screen` pass. Queued draws are flushed first, so they keep the
-        /// previous clip.
+        /// clip: the letterboxed viewport, the whole framebuffer inside a
+        /// `.screen` pass, or the whole target while one is set. Queued
+        /// draws are flushed first, so they keep the previous clip.
         pub fn setClip(self: *Self, rect: ?RectF) void {
             self.flush();
+            if (self.implMut().target) |t| {
+                clipTarget(t, self.viewport, rect);
+                return;
+            }
             const r = rect orelse {
                 if (self.implMut().screenPass) {
                     _ = self.viewport.applyFullscreen();
@@ -327,6 +368,149 @@ pub fn Renderer(opts: RendererOptions) type {
                 @max(0, right_px - left_px),
                 @max(0, bottom_px - top_px),
             );
+        }
+
+        /// Sends later passes to `target` instead of the screen, until
+        /// `setTarget(null)` puts the screen back. Call it between passes,
+        /// not inside a `begin`/`end`. Inside a target, `.logical` and
+        /// `.camera` passes stretch the logical screen over the whole
+        /// target (so a target the logical size gets it pixel for pixel),
+        /// and a `.screen` pass draws in the target's own pixels.
+        pub fn setTarget(self: *Self, target: ?*RenderTarget) void {
+            const impl = self.implMut();
+            std.debug.assert(!impl.batch.begun);
+            if (target) |t| {
+                if (impl.target == null) impl.screenFramebuffer = render_target.boundFramebuffer();
+                impl.target = t;
+                gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo);
+                const sz = t.size();
+                gl.viewport(0, 0, @intCast(sz.x), @intCast(sz.y));
+                clipTarget(t, self.viewport, null);
+            } else if (impl.target != null) {
+                impl.target = null;
+                gl.bindFramebuffer(gl.FRAMEBUFFER, impl.screenFramebuffer);
+                self.viewport.apply();
+            }
+        }
+
+        /// The target passes currently draw into, or null for the screen.
+        pub fn currentTarget(self: *const Self) ?*RenderTarget {
+            return self.implConst().target;
+        }
+
+        /// Sets how later draws in this pass blend with what's behind them
+        /// (see `BlendMode`). Queued draws are flushed first, so they keep
+        /// the previous mode. Lasts until the pass ends; every pass starts
+        /// at `.alpha`.
+        pub fn setBlend(self: *Self, mode: BlendMode) void {
+            self.flush();
+            applyBlend(mode);
+        }
+
+        /// Draws later quads in this pass with `shader`, or the default
+        /// one for null. Build it with `createShader`, so it takes the
+        /// batch's vertex layout. Queued draws are flushed first. Lasts
+        /// until the pass ends; every pass starts with the default shader.
+        pub fn setShader(self: *Self, shader: ?*ShaderHandle) void {
+            self.implMut().batch.setShader(shader);
+        }
+
+        /// Sets a uniform the active shader (see `setShader`) declares.
+        /// `value` is an `f32`, `i32`, `Vec2F`, `Color` (a `vec4`), or a
+        /// `zmath.Mat` (a `mat4`). Queued draws are flushed first, so they
+        /// keep the old value. A name the shader doesn't use is ignored, as
+        /// GL does. The value stays set on that shader until changed.
+        pub fn setUniform(self: *Self, name: [:0]const u8, value: anytype) void {
+            const batch = &self.implMut().batch;
+            if (batch.begun) batch.flush();
+            const program = batch.activeShader().val.program;
+            gl.useProgram(program);
+            const loc = gl.getUniformLocation(program, name.ptr);
+            const T = @TypeOf(value);
+            if (T == f32 or T == comptime_float) {
+                gl.uniform1f(loc, value);
+            } else if (T == i32 or T == comptime_int) {
+                gl.uniform1i(loc, value);
+            } else if (T == Vec2F) {
+                gl.uniform2f(loc, value.x, value.y);
+            } else if (T == Color) {
+                gl.uniform4f(loc, value.r, value.g, value.b, value.a);
+            } else if (T == zmath.Mat) {
+                const arr = zmath.matToArr(value);
+                gl.uniformMatrix4fv(loc, 1, gl.FALSE, &arr);
+            } else {
+                @compileError("Renderer.setUniform: unsupported uniform type " ++ @typeName(T));
+            }
+        }
+
+        /// Compiles a shader for `setShader` from your own GLSL ES 3.00
+        /// fragment shader, paired with the batch's vertex shader, and
+        /// stores it in `resMgr` under `name`. The fragment shader gets:
+        ///
+        /// ```glsl
+        /// in vec2 Texcoord;   // the texel to sample
+        /// in vec4 Col;        // the draw's color (white for plain sprites)
+        /// flat in float Mode; // DrawMode: 0 texture, 1 font mask, 2 fill
+        /// uniform sampler2D tex;
+        /// out vec4 fragColor;
+        /// ```
+        ///
+        /// For sprites and render targets, `texture(tex, Texcoord) * Col`
+        /// is the default result to build on. Text and silhouettes use the
+        /// other modes; see `shaders.SpritePixelShader`.
+        pub fn createShader(self: *Self, resMgr: *ResourceManager, name: []const u8, fragmentSource: [*:0]const u8) !*ShaderHandle {
+            _ = self;
+            const code: shaders.ShaderCode = fragmentSource;
+            return resMgr.loadShader(name, &shaders.SpriteVertexShader, &code);
+        }
+
+        /// Covers the logical screen with `color`, its alpha scaled by
+        /// `amount` (0 draws nothing, 1 is the color as given): a fade to
+        /// black, a hit flash, a dimmed pause screen. A pass of its own, so
+        /// call it between passes, usually last in `render`.
+        pub fn fade(self: *Self, color: Color, amount: f32) void {
+            requireFlag("fade", "shapeRendering");
+            const a = color.a * std.math.clamp(amount, 0, 1);
+            if (a <= 0) return;
+            const w: f32 = @floatFromInt(self.viewport.logicalSize.x);
+            const h: f32 = @floatFromInt(self.viewport.logicalSize.y);
+            self.begin(.logical);
+            self.implMut().batch.drawFilledRect(.{ .l = 0, .t = 0, .r = w, .b = h }, color.withAlpha(a));
+            self.end();
+        }
+
+        fn applyBlend(mode: BlendMode) void {
+            const src: gl.Enum, const dst: gl.Enum = switch (mode) {
+                .alpha => .{ gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA },
+                .additive => .{ gl.SRC_ALPHA, gl.ONE },
+                .multiply => .{ gl.DST_COLOR, gl.ONE_MINUS_SRC_ALPHA },
+                .premultiplied => .{ gl.ONE, gl.ONE_MINUS_SRC_ALPHA },
+            };
+            // Alpha always accumulates as coverage, so a target drawn into
+            // ends up with the alpha a later `.premultiplied` draw expects.
+            gl.blendFuncSeparate(src, dst, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        }
+
+        /// Scissors to `rect` (logical coordinates) mapped onto `target`,
+        /// or to the whole target for null.
+        fn clipTarget(target: *const RenderTarget, viewport: *const Viewport, rect: ?RectF) void {
+            const sz = target.size();
+            const tw: f32 = @floatFromInt(sz.x);
+            const th: f32 = @floatFromInt(sz.y);
+            gl.enable(gl.SCISSOR_TEST);
+            const r = rect orelse {
+                gl.scissor(0, 0, @intCast(sz.x), @intCast(sz.y));
+                return;
+            };
+            const sx = tw / @as(f32, @floatFromInt(viewport.logicalSize.x));
+            const sy = th / @as(f32, @floatFromInt(viewport.logicalSize.y));
+            const l = std.math.clamp(r.l * sx, 0, tw);
+            const t = std.math.clamp(r.t * sy, 0, th);
+            const right = std.math.clamp(r.r * sx, l, tw);
+            const b = std.math.clamp(r.b * sy, t, th);
+            // GL counts scissor rows from the bottom; a target's rows are
+            // stored bottom first, which `.logical` already accounts for.
+            gl.scissor(@intFromFloat(l), @intFromFloat(th - b), @intFromFloat(right - l), @intFromFloat(b - t));
         }
 
         /// Clears the color buffer (inside the current scissor) to a 0-255

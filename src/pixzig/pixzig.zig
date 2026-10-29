@@ -129,6 +129,8 @@ pub const Projection = renderer.Projection;
 pub const FontSource = renderer.FontSource;
 pub const FontAtlas = renderer.FontAtlas;
 pub const TextStyle = renderer.TextStyle;
+pub const RenderTarget = renderer.RenderTarget;
+pub const BlendMode = renderer.BlendMode;
 pub const TextAlign = renderer.TextAlign;
 
 pub const TileMap = tile.TileMap;

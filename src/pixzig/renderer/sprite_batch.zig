@@ -60,7 +60,12 @@ const white: Color = .{ .r = 1, .g = 1, .b = 1, .a = 1 };
 /// batch is full, or on `flush`/`end`.
 pub const SpriteBatch = struct {
     shader: *ShaderHandle,
-    /// `shader.version` the uniform locations below were looked up from.
+    /// Replaces `shader` for the quads flushed while it is set (see
+    /// `setShader`). Must be built on `SpriteVertexShader`.
+    override: ?*ShaderHandle = null,
+    /// The shader, and its `version`, the uniform locations below were
+    /// looked up from.
+    cachedShader: ?*ShaderHandle = null,
     shaderVersion: u32 = 0,
     uniformMVP: c_int = -1,
     uniformTex: c_int = -1,
@@ -141,7 +146,6 @@ pub const SpriteBatch = struct {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
-        batch.cacheUniforms();
         return batch;
     }
 
@@ -153,16 +157,32 @@ pub const SpriteBatch = struct {
         self.alloc.free(self.vertices);
     }
 
-    fn cacheUniforms(self: *SpriteBatch) void {
-        self.shaderVersion = self.shader.version;
-        self.uniformMVP = gl.getUniformLocation(self.shader.val.program, "projectionMatrix");
-        self.uniformTex = gl.getUniformLocation(self.shader.val.program, "tex");
+    /// The shader the next flush draws with.
+    pub fn activeShader(self: *const SpriteBatch) *ShaderHandle {
+        return self.override orelse self.shader;
+    }
+
+    /// Looks the uniform locations up again when the active shader, or its
+    /// program after a reload, changed since they were cached.
+    fn syncUniforms(self: *SpriteBatch) void {
+        const sh = self.activeShader();
+        if (self.cachedShader == sh and self.shaderVersion == sh.version) return;
+        self.cachedShader = sh;
+        self.shaderVersion = sh.version;
+        self.uniformMVP = gl.getUniformLocation(sh.val.program, "projectionMatrix");
+        self.uniformTex = gl.getUniformLocation(sh.val.program, "tex");
+    }
+
+    /// Draws the quads queued so far with the current shader, then uses
+    /// `shader` (or the default, for null) for the ones after.
+    pub fn setShader(self: *SpriteBatch, shader: ?*ShaderHandle) void {
+        if (self.begun) self.flush();
+        self.override = shader;
     }
 
     /// Opens the batch with the matrix positions are transformed by.
     pub fn begin(self: *SpriteBatch, mvp: zmath.Mat) void {
         if (self.begun) self.end();
-        if (self.shader.version != self.shaderVersion) self.cacheUniforms();
         self.begun = true;
         self.mvpArr = zmath.matToArr(mvp);
     }
@@ -205,7 +225,8 @@ pub const SpriteBatch = struct {
         std.debug.assert(self.begun);
         if (self.numQuads == 0) return;
 
-        gl.useProgram(self.shader.val.program);
+        self.syncUniforms();
+        gl.useProgram(self.activeShader().val.program);
         gl.uniformMatrix4fv(self.uniformMVP, 1, gl.FALSE, @ptrCast(&self.mvpArr[0]));
         gl.uniform1i(self.uniformTex, 0);
         gl.activeTexture(gl.TEXTURE0);
