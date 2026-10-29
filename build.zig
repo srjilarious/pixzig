@@ -1439,9 +1439,11 @@ pub fn buildExample(
                 // "-sWASM_WORKERS=1",
             });
             // Zig 0.17 removed LazyPath.getPath; addFileArg resolves the
-            // path at make time and passes it as its own argument.
+            // path at make time and passes it as its own argument. The shell
+            // ships with the engine, so resolve it against the engine's
+            // builder; `b` is the game's when called through `buildGame`.
             emcc_command.addArg("--shell-file");
-            emcc_command.addFileArg(b.path("src/shell.html"));
+            emcc_command.addFileArg(pixeng_mod.owner.path("src/shell.html"));
 
             // Preload assets: use explicit file list when available, else whole dir.
             if (manifest.emcc_files.len > 0) {

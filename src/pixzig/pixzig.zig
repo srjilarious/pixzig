@@ -467,7 +467,11 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
             if (builtin.target.os.tag == .emscripten) {
                 g_EmscriptenRunnerRef = @constCast(self);
                 g_EmscriptenAppRef = @constCast(app);
-                web.setMainLoop(mainLoop, null, false);
+                // Simulate an infinite loop so this never returns. Returning
+                // would run the caller's `defer app.deinit()` and
+                // `defer appRunner.deinit()`, freeing everything `mainLoop`
+                // uses on the next browser frame.
+                web.setMainLoop(mainLoop, null, true);
             } else {
                 self.gameLoop(app);
             }
