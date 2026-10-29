@@ -8,8 +8,10 @@
 //* - The target starts at a quarter of the logical size with nearest
 //*   filtering, so scaling it up keeps hard pixel edges. Key 3 switches it
 //*   to full size to compare.
-//* - The scaled-up frame goes through a blur shader whose `texel` and
-//*   `radius` uniforms are set every frame.
+//* - The blur is two passes through the same shader: across, from the
+//*   scene target into a second target of the same size, then down, from
+//*   that target onto the screen. Each pass reads every pixel along its
+//*   line, so a wide blur stays smooth.
 //* - Motion uses the render `alpha`, so it stays smooth between update
 //*   ticks.
 //* - Space flashes the screen white with `fade`.
@@ -33,10 +35,15 @@ const AppRunner = pixzig.AppRunner(App, .{
 });
 
 //* The fragment shader gets the batch's usual inputs (see
-//* `Renderer.createShader`) plus our own `texel` (the size of one target
-//* pixel in UVs) and `radius` (how many target pixels apart the samples
-//* are). It averages a 5x5 neighbourhood with Gaussian weights
-//* (1 4 6 4 1 in each direction, out of 256 in total).
+//* `Renderer.createShader`) plus our own:
+//* - `dir`: one source pixel in UVs along the blur's direction, so
+//*   `(1/width, 0)` blurs across and `(0, 1/height)` blurs down.
+//* - `sigma`: the Gaussian's spread in source pixels.
+//* - `taps`: how many pixels to read on each side of the center, about
+//*   three sigmas, past which the weights are too small to matter.
+//*
+//* Samples are one pixel apart and weighted by the Gaussian, then divided
+//* by the weights' total so the image keeps its brightness.
 const blur_shader: [*:0]const u8 =
     \\#version 300 es
     \\precision mediump float;
@@ -44,29 +51,33 @@ const blur_shader: [*:0]const u8 =
     \\in vec4 Col;
     \\flat in float Mode;
     \\uniform sampler2D tex;
-    \\uniform vec2 texel;
-    \\uniform float radius;
+    \\uniform vec2 dir;
+    \\uniform float sigma;
+    \\uniform int taps;
     \\out vec4 fragColor;
     \\void main() {
-    \\    float w[5] = float[5](1.0, 4.0, 6.0, 4.0, 1.0);
-    \\    vec4 sum = vec4(0.0);
-    \\    for (int y = 0; y < 5; y++) {
-    \\        for (int x = 0; x < 5; x++) {
-    \\            vec2 offset = vec2(float(x - 2), float(y - 2)) * texel * radius;
-    \\            sum += texture(tex, Texcoord + offset) * w[x] * w[y];
-    \\        }
+    \\    vec4 sum = texture(tex, Texcoord);
+    \\    float total = 1.0;
+    \\    for (int i = 1; i <= taps; i++) {
+    \\        float x = float(i);
+    \\        float w = exp(-(x * x) / (2.0 * sigma * sigma));
+    \\        sum += texture(tex, Texcoord + dir * x) * w;
+    \\        sum += texture(tex, Texcoord - dir * x) * w;
+    \\        total += 2.0 * w;
     \\    }
-    \\    fragColor = (sum / 256.0) * Col;
+    \\    fragColor = (sum / total) * Col;
     \\}
 ;
 
 const flash_ms: f64 = 400;
 const sprite_size: f32 = 96;
-const max_blur_radius: f32 = 4;
+const max_blur_radius: f32 = 8;
 
 pub const App = struct {
     alloc: std.mem.Allocator,
     target: pixzig.RenderTarget,
+    //* The across-blurred scene, between the two blur passes.
+    blurred: pixzig.RenderTarget,
     blur: *pixzig.resources.ShaderHandle,
     //* The three frames of the player's walk cycle, from the atlas.
     frames: [3]*TextureHandle,
@@ -77,7 +88,8 @@ pub const App = struct {
     stepMs: f64 = 0,
     flashLeftMs: f64 = 0,
     useBlur: bool = true,
-    blurRadius: f32 = 1,
+    //* The Gaussian's sigma, in target pixels.
+    blurRadius: f32 = 2,
     additive: bool = true,
     lowRes: bool = true,
 
@@ -94,10 +106,13 @@ pub const App = struct {
 
         var target = try pixzig.RenderTarget.init(targetSize(eng, true), .{ .filter = .nearest });
         errdefer target.deinit();
+        var blurred = try pixzig.RenderTarget.init(target.size(), .{ .filter = .nearest });
+        errdefer blurred.deinit();
 
         app.* = .{
             .alloc = alloc,
             .target = target,
+            .blurred = blurred,
             .blur = try eng.renderer.createShader(&eng.resources, "blur", blur_shader),
             .frames = frames,
             .sprites = undefined,
@@ -114,6 +129,7 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
+        self.blurred.deinit();
         self.target.deinit();
         self.alloc.destroy(self);
     }
@@ -129,12 +145,16 @@ pub const App = struct {
         if (kb.pressed(.two)) self.additive = !self.additive;
         if (kb.pressed(.three)) {
             self.lowRes = !self.lowRes;
-            self.target.resize(targetSize(eng, self.lowRes)) catch |err| {
+            const size = targetSize(eng, self.lowRes);
+            self.target.resize(size) catch |err| {
                 std.log.err("Couldn't resize the render target: {}", .{err});
+            };
+            self.blurred.resize(size) catch |err| {
+                std.log.err("Couldn't resize the blur target: {}", .{err});
             };
         }
         if (kb.pressed(.up)) self.blurRadius = @min(max_blur_radius, self.blurRadius + 0.5);
-        if (kb.pressed(.down)) self.blurRadius = @max(0, self.blurRadius - 0.5);
+        if (kb.pressed(.down)) self.blurRadius = @max(0.5, self.blurRadius - 0.5);
         if (kb.pressed(.space)) self.flashLeftMs = flash_ms;
     }
 
@@ -166,28 +186,38 @@ pub const App = struct {
         r.end();
         r.setTarget(null);
 
-        //* Pass 2: the target, scaled up to the whole logical screen.
-        //* `texture.val.src` is pre-flipped, so it draws upright.
+        //* Pass 2: the scene, blurred across, into `blurred`. Both
+        //* targets are the same size, so each output pixel lines up with
+        //* one source pixel. `texture.val.src` is pre-flipped, so the copy
+        //* comes out upright.
+        const screen = RectF.fromPosSize(0, 0, logical.x, logical.y);
+        const size = self.target.size();
+        const pixelU = 1 / @as(f32, @floatFromInt(size.x));
+        const pixelV = 1 / @as(f32, @floatFromInt(size.y));
+        var shown = &self.target;
+        if (self.useBlur) {
+            r.setTarget(&self.blurred);
+            r.begin(.logical);
+            self.useBlurShader(r, .{ .x = pixelU, .y = 0 });
+            r.drawTexture(&self.target.texture, screen, self.target.texture.val.src);
+            r.end();
+            r.setTarget(null);
+            shown = &self.blurred;
+        }
+
+        //* Pass 3: the result, blurred down when the blur is on, scaled up
+        //* to the whole logical screen.
         r.clear(0, 0, 0, 255);
         r.begin(.logical);
-        if (self.useBlur) {
-            const size = self.target.size();
-            r.setShader(self.blur);
-            r.setUniform("texel", Vec2F{
-                .x = 1 / @as(f32, @floatFromInt(size.x)),
-                .y = 1 / @as(f32, @floatFromInt(size.y)),
-            });
-            r.setUniform("radius", self.blurRadius);
-        }
-        const screen = RectF.fromPosSize(0, 0, logical.x, logical.y);
-        r.drawTexture(&self.target.texture, screen, self.target.texture.val.src);
+        if (self.useBlur) self.useBlurShader(r, .{ .x = 0, .y = pixelV });
+        r.drawTexture(&shown.texture, screen, shown.texture.val.src);
         r.end();
 
-        //* Pass 3: what's on, drawn straight to the screen. The shader and
+        //* Pass 4: what's on, drawn straight to the screen. The shader and
         //* blend mode were reset by the last `end`, so the text is sharp.
         r.begin(.logical);
         var buf: [160]u8 = undefined;
-        const status = std.fmt.bufPrint(&buf, "1 blur: {s} (radius {d:.1}, Up/Down)   2 additive: {s}   3 target: {d}x{d}", .{
+        const status = std.fmt.bufPrint(&buf, "1 blur: {s} (sigma {d:.1}, Up/Down)   2 additive: {s}   3 target: {d}x{d}", .{
             if (self.useBlur) "on" else "off",
             self.blurRadius,
             if (self.additive) "on" else "off",
@@ -197,8 +227,16 @@ pub const App = struct {
         _ = r.drawText(status, .{ .x = 8, .y = 8 }, .{ .shadow = Color.black });
         r.end();
 
-        //* Pass 4: the flash, fading out over `flash_ms`.
+        //* Pass 5: the flash, fading out over `flash_ms`.
         r.fade(Color.white, @floatCast(self.flashLeftMs / flash_ms));
+    }
+
+    //* Sets the blur shader for the current pass, blurring along `dir`.
+    fn useBlurShader(self: *App, r: *AppRunner.Engine.Renderer, dir: Vec2F) void {
+        r.setShader(self.blur);
+        r.setUniform("dir", dir);
+        r.setUniform("sigma", self.blurRadius);
+        r.setUniform("taps", @as(i32, @intFromFloat(@ceil(self.blurRadius * 3))));
     }
 
     fn logicalSizeF(eng: *AppRunner.Engine) Vec2F {

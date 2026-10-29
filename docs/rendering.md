@@ -231,7 +231,7 @@ eng.renderer.drawTexture(&self.target.texture, screenRect, self.target.texture.v
 eng.renderer.end();
 ```
 
-The shader receives `Texcoord`, the draw's color `Col`, its draw `Mode` (0 for textures and shapes, 1 for TTF text, 2 for silhouettes) and the texture `tex`, and writes `fragColor`. `texture(tex, Texcoord) * Col` is the ordinary result for sprites and render targets. Like the blend mode, the shader ends with the pass. `examples/render_target_ex.zig` puts a target, additive blending, a blur shader and a fade together.
+The shader receives `Texcoord`, the draw's color `Col`, its draw `Mode` (0 for textures and shapes, 1 for TTF text, 2 for silhouettes) and the texture `tex`, and writes `fragColor`. `texture(tex, Texcoord) * Col` is the ordinary result for sprites and render targets. Like the blend mode, the shader ends with the pass. `examples/render_target_ex.zig` puts a target, additive blending, a two-pass blur through a second target and a fade together.
 
 ## Mixing in Other Renderers
 
