@@ -70,7 +70,8 @@ pub const App = struct {
         self.ui.update();
     }
 
-    pub fn render(self: *App, eng: *AppRunner.Engine) void {
+    pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void {
+        _ = alpha;
         if (self.flashMs > 0) {
             eng.renderer.clear(230, 220, 255, 255);
         } else {

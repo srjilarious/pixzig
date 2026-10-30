@@ -122,7 +122,8 @@ pub const App = struct {
         self.spr.setPos(@intFromFloat(self.pos.x), @intFromFloat(self.pos.y));
     }
 
-    pub fn render(self: *App, eng: *AppRunner.Engine) void {
+    pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void {
+        _ = alpha;
         eng.renderer.clear(13, 13, 38, 255);
         self.fps.renderTick();
 

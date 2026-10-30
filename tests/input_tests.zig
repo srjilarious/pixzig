@@ -17,7 +17,7 @@ pub fn keyEnumIsDenseTest(io: std.Io, alloc: std.mem.Allocator) !void {
     inline for (@typeInfo(Key).@"enum".field_values, 0..) |field_value, i| {
         try testz.expectEqual(field_value, i);
     }
-    try testz.expectEqual(@intFromEnum(Key.unknown), 0);
+    try testz.expectEqual(@backingInt(Key.unknown), 0);
     try testz.expectEqual(keys.NumKeys, @typeInfo(Key).@"enum".field_names.len);
 
     inline for (@typeInfo(keys.MouseButton).@"enum".field_values, 0..) |field_value, i| {

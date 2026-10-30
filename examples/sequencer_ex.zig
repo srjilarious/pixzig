@@ -230,7 +230,8 @@ pub const App = struct {
         }
     }
 
-    pub fn render(self: *App, eng: *AppRunner.Engine) void {
+    pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void {
+        _ = alpha;
         // Blend clear color with flash color while flash is active.
         if (self.flashState.active) {
             const a = self.flashState.alpha();

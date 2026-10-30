@@ -19,6 +19,7 @@ var activateCountB: i32 = 0;
 var deactivateCountB: i32 = 0;
 var lastUpdateState: usize = 99;
 var lastRenderState: usize = 99;
+var lastRenderAlpha: f32 = -1;
 
 fn resetCounters() void {
     activateCountA = 0;
@@ -45,10 +46,11 @@ const StateA = struct {
         _ = delta;
         lastUpdateState = 0;
     }
-    pub fn render(self: *StateA, eng: *MockEngine) void {
+    pub fn render(self: *StateA, eng: *MockEngine, alpha: f32) void {
         _ = self;
         _ = eng;
         lastRenderState = 0;
+        lastRenderAlpha = alpha;
     }
 };
 
@@ -68,7 +70,8 @@ const StateB = struct {
         lastUpdateState = 1;
         eng.quit();
     }
-    pub fn render(self: *StateB, eng: *MockEngine) void {
+    pub fn render(self: *StateB, eng: *MockEngine, alpha: f32) void {
+        _ = alpha;
         _ = self;
         _ = eng;
         lastRenderState = 1;
@@ -84,7 +87,8 @@ const StateErr = struct {
         lastUpdateState = 3;
         return error.Boom;
     }
-    pub fn render(self: *StateErr, eng: *MockEngine) void {
+    pub fn render(self: *StateErr, eng: *MockEngine, alpha: f32) void {
+        _ = alpha;
         _ = self;
         _ = eng;
     }
@@ -98,7 +102,8 @@ const StateC = struct {
         _ = delta;
         lastUpdateState = 2;
     }
-    pub fn render(self: *StateC, eng: *MockEngine) void {
+    pub fn render(self: *StateC, eng: *MockEngine, alpha: f32) void {
+        _ = alpha;
         _ = self;
         _ = eng;
         lastRenderState = 2;
@@ -206,12 +211,13 @@ pub fn gameStateRenderDelegatesToActiveStateTest(io: std.Io, alloc: std.mem.Allo
 
     mgr.setCurrState(.A);
     lastRenderState = 99;
-    mgr.render(&eng);
+    mgr.render(&eng, 0.25);
     try testz.expectEqual(lastRenderState, 0);
+    try testz.expectEqual(lastRenderAlpha, 0.25);
 
     mgr.setCurrState(.B);
     lastRenderState = 99;
-    mgr.render(&eng);
+    mgr.render(&eng, 1.0);
     try testz.expectEqual(lastRenderState, 1);
 }
 
@@ -234,7 +240,7 @@ pub fn gameStateNoLifecycleHooksTest(io: std.Io, alloc: std.mem.Allocator) !void
     try testz.expectEqual(lastUpdateState, 2);
 
     lastRenderState = 99;
-    mgr.render(&eng);
+    mgr.render(&eng, 1.0);
     try testz.expectEqual(lastRenderState, 2);
 }
 

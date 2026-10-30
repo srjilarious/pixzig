@@ -270,8 +270,15 @@ var g_EmscriptenAppRef: ?*anyopaque = null;
 ///
 /// ```zig
 ///     fn update(self: *AppData, eng: *Engine, deltaTimeMs: f64) void
-///     fn render(self: *AppData, eng: *Engine) void
+///     fn render(self: *AppData, eng: *Engine, alpha: f32) void
 /// ```
+///
+/// `update` runs at a fixed rate (`EngineOptions.updateStepHz`) while
+/// `render` runs once per displayed frame, so a frame usually falls between
+/// two ticks. `alpha` (0 to 1) says where: 0 is the previous tick's state,
+/// 1 the latest. Drawing `prev.lerp(curr, alpha)` instead of `curr` keeps
+/// motion smooth when the display rate isn't a multiple of the tick rate.
+/// A game that keeps no previous state can ignore it (`_ = alpha;`).
 ///
 /// `update` may also return `!void`; an error is logged and quits the app.
 /// Call `eng.quit()` from `update` or `onEvent` to stop the loop after the
@@ -305,6 +312,7 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
 
         comptime {
             comp.checkUpdateReturn(AppData, @typeName(AppData) ++ ".update");
+            comp.checkRenderSignature(AppData, @typeName(AppData) ++ ".render");
         }
         const HasScreenshotHook = engOpts.screenshotHook and builtin.target.os.tag != .emscripten;
         const Self = @This();
@@ -411,7 +419,10 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
             }
             self.engine.updateAudio();
 
-            app.render(self.engine);
+            // The ticks above leave 0 < lag <= one step, so this is how far
+            // the frame sits past the previous tick, toward the latest.
+            const alpha: f32 = @floatCast(std.math.clamp(self.lag / UpdateStepMs, 0.0, 1.0));
+            app.render(self.engine, alpha);
             self.engine.drawTouchOverlay();
             self.engine.window.swapBuffers();
             return true;
@@ -431,7 +442,8 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
             self.shotTicks += 1;
             self.engine.updateAudio();
 
-            app.render(self.engine);
+            // Frames are paced one tick each, so draw the latest state.
+            app.render(self.engine, 1.0);
             if (shot.due(tickStartMs + UpdateStepMs)) {
                 if (self.engine.captureScreenshot(self.alloc, shot.path)) {
                     std.log.info("Screenshot written to {s}", .{shot.path});

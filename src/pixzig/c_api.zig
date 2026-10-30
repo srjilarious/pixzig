@@ -120,12 +120,12 @@ const FfiActionMap = pixzig.input.ActionMap(FfiAction, FfiAxis);
 
 fn ffiAction(slot: i32) ?FfiAction {
     if (slot < 0 or slot >= MaxFfiActions) return null;
-    return @enumFromInt(@as(std.meta.Tag(FfiAction), @intCast(slot)));
+    return @fromBackingInt(@intCast(@as(std.meta.Tag(FfiAction), @intCast(slot))));
 }
 
 fn ffiAxis(slot: i32) ?FfiAxis {
     if (slot < 0 or slot >= MaxFfiAxes) return null;
-    return @enumFromInt(@as(std.meta.Tag(FfiAxis), @intCast(slot)));
+    return @fromBackingInt(@intCast(@as(std.meta.Tag(FfiAxis), @intCast(slot))));
 }
 
 const PzActionMap = struct {
@@ -366,7 +366,7 @@ const PzEventSink = struct {
 
     pub fn onEvent(self: *PzEventSink, _: *Engine, event: pixzig.Event) void {
         var out = std.mem.zeroes(PzEvent);
-        out.kind = @intFromEnum(std.meta.activeTag(event));
+        out.kind = @backingInt(std.meta.activeTag(event));
         switch (event) {
             .window_resized => |size| {
                 out.width = size.x;

@@ -37,22 +37,22 @@ pub const GamepadState = struct {
 
     /// Returns true if the provided button is currently down in this state.
     pub fn buttonDown(self: *const GamepadState, btn: GamepadButton) bool {
-        return self.buttons.isSet(@intFromEnum(btn));
+        return self.buttons.isSet(@backingInt(btn));
     }
 
     /// Sets the provided button to the given value (true for down, false for
     /// up) in this state.
     pub fn setButton(self: *GamepadState, btn: GamepadButton, val: bool) void {
         if (val) {
-            self.buttons.set(@intFromEnum(btn));
+            self.buttons.set(@backingInt(btn));
         } else {
-            self.buttons.unset(@intFromEnum(btn));
+            self.buttons.unset(@backingInt(btn));
         }
     }
 
     /// Returns the value of the provided axis in this state.
     pub fn getAxis(self: *const GamepadState, ax: GamepadAxis) f32 {
-        return self.axes[@intFromEnum(ax)];
+        return self.axes[@backingInt(ax)];
     }
 
     /// Clears the gamepad state by setting all buttons to unpressed and all
@@ -143,13 +143,13 @@ pub const Gamepad = struct {
         var curr = self.currStatePtr();
         var anyPressed: bool = false;
         inline for (@typeInfo(GamepadButton).@"enum".field_values) |field_value| {
-            const btn: GamepadButton = @enumFromInt(field_value);
+            const btn: GamepadButton = @fromBackingInt(@intCast(field_value));
             const isDown = sdl.SDL_GetGamepadButton(gp, keys.toSdlGamepadButton(btn));
             curr.setButton(btn, isDown);
             anyPressed = anyPressed or isDown;
         }
         inline for (@typeInfo(GamepadAxis).@"enum".field_values) |field_value| {
-            const ax: GamepadAxis = @enumFromInt(field_value);
+            const ax: GamepadAxis = @fromBackingInt(@intCast(field_value));
             const raw = sdl.SDL_GetGamepadAxis(gp, keys.toSdlGamepadAxis(ax));
             curr.axes[field_value] = keys.axisValue(ax, raw);
         }

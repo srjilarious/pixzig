@@ -96,7 +96,8 @@ pub const App = struct {
     //* The square's size wobbles with its spin, since the renderer draws
     //* rectangles axis-aligned. The pad itself is drawn by the engine after
     //* `render`.
-    pub fn render(self: *App, eng: *AppRunner.Engine) void {
+    pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void {
+        _ = alpha;
         eng.renderer.clear(20, 24, 40, 255);
         eng.renderer.begin(.logical);
         const half = 40 + 20 * @sin(self.angle / 30);

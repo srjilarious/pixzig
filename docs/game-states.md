@@ -19,7 +19,7 @@ const TitleState = struct {
         if (eng.inputs.keyboard.pressed(.escape)) eng.quit();
     }
 
-    pub fn render(self: *TitleState, eng: *AppRunner.Engine) void {
+    pub fn render(self: *TitleState, eng: *AppRunner.Engine, _: f32) void {
         _ = self;
         eng.renderer.clear(0, 0, 80, 255);
     }
@@ -71,8 +71,8 @@ pub const App = struct {
         self.states.update(eng, deltaMs);
     }
 
-    pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        self.states.render(eng);
+    pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void {
+        self.states.render(eng, alpha);
     }
 };
 ```

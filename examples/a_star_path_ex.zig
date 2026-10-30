@@ -387,7 +387,8 @@ pub const App = struct {
         }
     }
 
-    pub fn render(self: *App, eng: *AppRunner.Engine) void {
+    pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void {
+        _ = alpha;
         self.fps.renderTick();
 
         eng.renderer.begin(.logical);

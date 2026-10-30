@@ -12,14 +12,33 @@ pub const App = struct {
     // length in milliseconds. Call `eng.quit()` to stop.
     pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) void { ... }
 
-    // Called once per displayed frame.
-    pub fn render(self: *App, eng: *AppRunner.Engine) void { ... }
+    // Called once per displayed frame. `alpha` (0 to 1) is where the frame
+    // falls between the last two updates; see Smooth Motion below.
+    pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void { ... }
 };
 ```
 
 `update` may return `!void` instead. An error it returns is logged and quits the app, the same as calling `eng.quit()`. Returning `bool` is a compile error: older apps returned false to quit, which is now `eng.quit()`.
 
 Game logic goes in `update` and drawing goes in `render`. Keep them apart: `update` runs at a steady rate no matter how fast the screen refreshes, so movement and timers behave the same on every machine.
+
+## Smooth Motion
+
+Because `update` runs at a fixed rate and `render` runs at the display's, a frame usually lands between two updates. Drawing the latest position as-is makes motion judder slightly when the two rates don't line up (a 120 Hz update on a 144 Hz screen, say). `render`'s `alpha` says where the frame falls: 0 is the state after the previous update, 1 the state after the latest. Keep the previous position and draw between the two:
+
+```zig
+pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) void {
+    self.prevPos = self.pos;
+    self.pos = self.pos.add(self.vel.scale(@floatCast(deltaMs)));
+}
+
+pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void {
+    const drawPos = self.prevPos.lerp(self.pos, alpha);
+    // ... draw at drawPos
+}
+```
+
+After a teleport (respawn, wrapping around the screen), set `prevPos` to the new position too, or the object is drawn sweeping across for one frame. A game that keeps no previous state can ignore `alpha` (`_: f32`). `gameloop_ex` slides a box this way.
 
 ## Events
 
@@ -154,7 +173,7 @@ while (lag > UpdateStepMs) {
     eng.inputs.finishTick();         // so pressed/released are one-tick edges
     if (eng.quitRequested) return false;
 }
-app.render(eng);
+app.render(eng, lag / UpdateStepMs); // alpha, see Smooth Motion
 window.swapBuffers();
 ```
 

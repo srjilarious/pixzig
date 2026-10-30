@@ -7,7 +7,7 @@
 ## A Render Frame
 
 ```zig
-pub fn render(self: *App, eng: *AppRunner.Engine) void {
+pub fn render(self: *App, eng: *AppRunner.Engine, _: f32) void {
     eng.renderer.clear(0, 0, 51, 255);
 
     eng.renderer.begin(.logical);

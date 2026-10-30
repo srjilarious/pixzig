@@ -117,7 +117,8 @@ pub const App = struct {
         if (eng.actions.pressed(.quit)) eng.quit();
     }
 
-    pub fn render(self: *App, eng: *AppRunner.Engine) void {
+    pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void {
+        _ = alpha;
         eng.renderer.clear(20, 20, 60, 255);
         eng.renderer.begin(.logical);
 

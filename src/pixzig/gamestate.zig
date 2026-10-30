@@ -25,7 +25,10 @@ pub fn GameStateMgr(
         }
     }
 
-    for (States) |State| comp.checkUpdateReturn(State, @typeName(State) ++ ".update");
+    for (States) |State| {
+        comp.checkUpdateReturn(State, @typeName(State) ++ ".update");
+        comp.checkRenderSignature(State, @typeName(State) ++ ".render");
+    }
 
     // Generate the GameState Manager
     return struct {
@@ -46,7 +49,7 @@ pub fn GameStateMgr(
         /// order; a missing, extra, or wrongly typed pointer is a compile
         /// error. The first state starts current.
         pub fn init(states: StatePtrs) Self {
-            return .{ .currState = @enumFromInt(0), .states = states };
+            return .{ .currState = @fromBackingInt(@intCast(0)), .states = states };
         }
 
         pub fn deinit(self: *Self) void {
@@ -61,7 +64,7 @@ pub fn GameStateMgr(
 
             switch (self.currState) {
                 inline else => |old| {
-                    const statePtr = self.states[@intFromEnum(old)];
+                    const statePtr = self.states[@backingInt(old)];
                     if (@hasDecl(@TypeOf(statePtr.*), "deactivate")) statePtr.deactivate();
                 },
             }
@@ -69,7 +72,7 @@ pub fn GameStateMgr(
             self.currState = state;
             switch (state) {
                 inline else => |new| {
-                    const statePtr = self.states[@intFromEnum(new)];
+                    const statePtr = self.states[@backingInt(new)];
                     if (@hasDecl(@TypeOf(statePtr.*), "activate")) statePtr.activate();
                 },
             }
@@ -80,14 +83,15 @@ pub fn GameStateMgr(
         /// `!void`; an error is logged and calls `eng.quit()`.
         pub fn update(self: *Self, eng: *Engine, deltaMs: f64) void {
             switch (self.currState) {
-                inline else => |curr| comp.callUpdate(self.states[@intFromEnum(curr)], eng, deltaMs, @tagName(curr) ++ " state update"),
+                inline else => |curr| comp.callUpdate(self.states[@backingInt(curr)], eng, deltaMs, @tagName(curr) ++ " state update"),
             }
         }
 
-        /// Calls the render method on the current state.
-        pub fn render(self: *Self, eng: *Engine) void {
+        /// Calls the render method on the current state, passing along the
+        /// interpolation `alpha` (see `AppRunner`).
+        pub fn render(self: *Self, eng: *Engine, alpha: f32) void {
             switch (self.currState) {
-                inline else => |curr| self.states[@intFromEnum(curr)].render(eng),
+                inline else => |curr| self.states[@backingInt(curr)].render(eng, alpha),
             }
         }
     };

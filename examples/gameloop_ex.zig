@@ -9,6 +9,11 @@
 //* `update` asks about named actions instead of physical keys. It also
 //* hears about window, drag-and-drop and lifecycle events through the
 //* optional `onEvent` hook, and uses it to confirm before closing.
+//*
+//* A box slides across the screen to show render interpolation: `update`
+//* moves it at the fixed tick rate, and `render` draws it between its last
+//* two positions using `alpha`, so it glides even when the display runs at
+//* a different rate than the ticks.
 
 //* -- collapsed: Imports --
 const std = @import("std");
@@ -40,6 +45,9 @@ pub const App = struct {
     testVal: i32,
     fps: FpsCounter,
     closeAsked: bool = false,
+    //* The box's x position after the previous tick and after the latest.
+    boxPrevX: f32 = 0,
+    boxX: f32 = 0,
 
     //* Binds each action to a key. An action can take several bindings,
     //* for example a key and a gamepad button.
@@ -59,6 +67,14 @@ pub const App = struct {
     }
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) void {
+        self.boxPrevX = self.boxX;
+        self.boxX += 0.2 * @as(f32, @floatCast(delta));
+        if (self.boxX > @as(f32, @floatFromInt(eng.viewport.logicalSize.x))) {
+            self.boxX = -32;
+            // Jumped back to the left: don't draw it sweeping across.
+            self.boxPrevX = self.boxX;
+        }
+
         if (self.fps.update(delta)) {
             std.log.debug("FPS: {}", .{self.fps.fps()});
         }
@@ -104,8 +120,14 @@ pub const App = struct {
         }
     }
 
-    pub fn render(self: *App, eng: *AppRunner.Engine) void {
+    //* `alpha` is how far this frame sits between the previous tick (0) and
+    //* the latest one (1).
+    pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void {
         eng.renderer.clear(0, 0, 255, 255);
+        const x = std.math.lerp(self.boxPrevX, self.boxX, alpha);
+        eng.renderer.begin(.logical);
+        eng.renderer.drawFilledRect(.fromPosSize(x, 100, 32, 32), .yellow);
+        eng.renderer.end();
         self.fps.renderTick();
     }
 };

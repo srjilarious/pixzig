@@ -26,6 +26,19 @@ pub fn checkUpdateReturn(comptime T: type, comptime what: []const u8) void {
     }
 }
 
+/// Fails compilation unless `T.render` takes `(self, eng, alpha: f32)`.
+/// `alpha` (0 to 1) is how far the frame sits between the previous update
+/// tick and the latest one, for interpolating what is drawn.
+pub fn checkRenderSignature(comptime T: type, comptime what: []const u8) void {
+    if (!@hasDecl(T, "render")) return;
+    const params = @typeInfo(@TypeOf(T.render)).@"fn".param_types;
+    const ok = params.len == 3 and params[2] == f32;
+    if (!ok) {
+        @compileError(what ++ " must take (self, eng, alpha: f32); alpha is how far the frame " ++
+            "sits between the last two update ticks, 0 to 1. Ignore it with `_ = alpha;`");
+    }
+}
+
 /// Calls `target.update(eng, deltaMs)`, which returns `void` or `!void`
 /// (see `checkUpdateReturn`). An error is logged and quits the engine.
 pub fn callUpdate(target: anytype, eng: anytype, deltaMs: f64, comptime what: []const u8) void {

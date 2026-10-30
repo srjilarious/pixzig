@@ -34,7 +34,7 @@ pub fn update(self: *App, eng: *AppRunner.Engine, _: f64) void {
     if (eng.inputs.keyboard.pressed(.escape)) eng.quit();
 }
 
-pub fn render(self: *App, eng: *AppRunner.Engine) void {
+pub fn render(self: *App, eng: *AppRunner.Engine, _: f32) void {
     eng.renderer.clear(30, 30, 60, 255);
     eng.renderer.begin(.logical);
     self.ui.begin();

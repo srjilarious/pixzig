@@ -52,7 +52,8 @@ pub const App = struct {
         if (eng.inputs.keyboard.pressed(.escape)) eng.quit();
     }
 
-    pub fn render(self: *App, eng: *AppRunner.Engine) void {
+    pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void {
+        _ = alpha;
         eng.renderer.clear(0, 0, 26, 255);
         eng.renderer.begin(.logical);
         const src = self.tex.val.src;

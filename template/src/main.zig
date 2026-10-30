@@ -48,7 +48,8 @@ pub const App = struct {
         if (self.pos.y < 0 or self.pos.y + 16 > @as(f32, @floatFromInt(size.y))) self.vel.y = -self.vel.y;
     }
 
-    pub fn render(self: *App, eng: *AppRunner.Engine) void {
+    pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void {
+        _ = alpha;
         eng.renderer.clear(26, 26, 51, 255);
 
         eng.renderer.begin(.logical);

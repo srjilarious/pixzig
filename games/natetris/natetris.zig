@@ -281,7 +281,8 @@ pub const Natetris = struct {
         }
     }
 
-    pub fn render(self: *Natetris, eng: *AppRunner.Engine) void {
+    pub fn render(self: *Natetris, eng: *AppRunner.Engine, alpha: f32) void {
+        _ = alpha;
         eng.renderer.clear(0, 0, 26, 255);
         
         eng.renderer.begin(.logical);

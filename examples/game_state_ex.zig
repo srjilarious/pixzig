@@ -23,7 +23,8 @@ const StateA = struct {
         _ = self;
     }
 
-    pub fn render(self: *StateA, eng: *AppRunner.Engine) void {
+    pub fn render(self: *StateA, eng: *AppRunner.Engine, alpha: f32) void {
+        _ = alpha;
         _ = self;
         eng.renderer.clear(0, 255, 0, 255);
     }
@@ -46,7 +47,8 @@ const ParamState = struct {
         _ = self;
     }
 
-    pub fn render(self: *ParamState, eng: *AppRunner.Engine) void {
+    pub fn render(self: *ParamState, eng: *AppRunner.Engine, alpha: f32) void {
+        _ = alpha;
         _ = self;
         eng.renderer.clear(255, 0, 0, 255);
     }
@@ -99,8 +101,8 @@ pub const App = struct {
         self.states.update(eng, delta);
     }
 
-    pub fn render(self: *App, eng: *AppRunner.Engine) void {
-        self.states.render(eng);
+    pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void {
+        self.states.render(eng, alpha);
         self.fps.renderTick();
     }
 };

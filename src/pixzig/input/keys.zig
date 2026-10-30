@@ -199,11 +199,11 @@ pub const NumGamepadAxes = @typeInfo(GamepadAxis).@"enum".field_names.len;
 
 /// Dense bitset index for a key.
 pub fn keyIndex(key: Key) usize {
-    return @intFromEnum(key);
+    return @backingInt(key);
 }
 
 pub fn mouseButtonIndex(btn: MouseButton) usize {
-    return @intFromEnum(btn);
+    return @backingInt(btn);
 }
 
 /// Maps an SDL scancode (physical position) to a `Key`.
