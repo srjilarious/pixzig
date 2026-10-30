@@ -149,7 +149,7 @@ pub const App = struct {
 };
 
 pub fn main(init: std.process.Init) !void {
-    const appRunner = try AppRunner.init("Pixzig: Tilemap Example.", init.gpa, .{ .vsync = false });
+    const appRunner = try AppRunner.init("Pixzig: Tilemap Example.", init.gpa, .{ .vsync = true });
     defer appRunner.deinit();
 
     const app: *App = try App.init(init.gpa, appRunner.engine);
