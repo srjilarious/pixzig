@@ -5,6 +5,21 @@ const Vec2U = common.Vec2U;
 const Vec2I = common.Vec2I;
 const RectF = common.RectF;
 
+/// Narrow-phase tests between circles, rects, segments and polygons; see
+/// `collision/shapes.zig`.
+pub const shapes = @import("./collision/shapes.zig");
+pub const Circle = shapes.Circle;
+pub const Segment = shapes.Segment;
+pub const Overlap = shapes.Overlap;
+pub const SegmentHit = shapes.SegmentHit;
+pub const pointInCircle = shapes.pointInCircle;
+pub const pointInPolygon = shapes.pointInPolygon;
+pub const circleCircle = shapes.circleCircle;
+pub const circleRect = shapes.circleRect;
+pub const rectRect = shapes.rectRect;
+pub const segmentCircle = shapes.segmentCircle;
+pub const segmentRect = shapes.segmentRect;
+
 /// A spatial hash grid for broad phase collision detection.  This is a fixed
 /// size grid that divides the world into cells of a specified size.  Each
 /// cell can hold a fixed number of objects.  Objects are inserted into the

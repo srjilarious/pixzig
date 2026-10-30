@@ -578,3 +578,138 @@ pub fn checkHorzSkippedDuplicatesFitTest(io: std.Io, alloc: std.mem.Allocator) !
     try testz.expectEqual(try grid.checkVert(0, 0, 1, &hits[0..]), 2);
     try testz.expectEqual(hits[1].?, 300);
 }
+
+// Narrow phase (collision/shapes.zig).
+
+const col = pixzig.collision;
+const Vec2F = pixzig.common.Vec2F;
+const RectF = pixzig.common.RectF;
+
+fn near(a: f32, b: f32) bool {
+    return @abs(a - b) < 0.0001;
+}
+
+pub fn circleCircleTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    const a: col.Circle = .{ .center = .{ .x = 0, .y = 0 }, .radius = 2 };
+    const b: col.Circle = .{ .center = .{ .x = 3, .y = 0 }, .radius = 2 };
+    const hit = col.circleCircle(a, b) orelse return testz.fail();
+    // Normal points from b toward a.
+    try testz.expectTrue(near(hit.normal.x, -1) and near(hit.normal.y, 0));
+    try testz.expectTrue(near(hit.depth, 1));
+    try testz.expectTrue(near(hit.mtv().x, -1));
+
+    // Touching is not a collision.
+    const touching: col.Circle = .{ .center = .{ .x = 4, .y = 0 }, .radius = 2 };
+    try testz.expectTrue(col.circleCircle(a, touching) == null);
+
+    // Same center still gets a usable normal.
+    const same = col.circleCircle(a, a) orelse return testz.fail();
+    try testz.expectTrue(near(same.normal.length(), 1) and near(same.depth, 4));
+}
+
+pub fn circleRectTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    const r = RectF.fromPosSize(0, 0, 10, 10);
+
+    // Overlapping the right edge from outside.
+    const right = col.circleRect(.{ .center = .{ .x = 12, .y = 5 }, .radius = 3 }, r) orelse return testz.fail();
+    try testz.expectTrue(near(right.normal.x, 1) and near(right.normal.y, 0));
+    try testz.expectTrue(near(right.depth, 1));
+
+    // Near a corner the normal is diagonal.
+    const corner = col.circleRect(.{ .center = .{ .x = 11, .y = 11 }, .radius = 2 }, r) orelse return testz.fail();
+    try testz.expectTrue(near(corner.normal.x, corner.normal.y) and corner.normal.x > 0);
+
+    // Center inside: pushed out of the nearest edge (top here).
+    const inside = col.circleRect(.{ .center = .{ .x = 5, .y = 1 }, .radius = 2 }, r) orelse return testz.fail();
+    try testz.expectTrue(near(inside.normal.y, -1) and near(inside.depth, 3));
+
+    try testz.expectTrue(col.circleRect(.{ .center = .{ .x = 14, .y = 5 }, .radius = 3 }, r) == null);
+}
+
+pub fn rectRectTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    const b = RectF.fromPosSize(0, 0, 10, 10);
+
+    // `a` sits mostly to the right, overlapping 2 in x and 8 in y.
+    const a = RectF.fromPosSize(8, 1, 10, 8);
+    const hit = col.rectRect(a, b) orelse return testz.fail();
+    try testz.expectTrue(near(hit.normal.x, 1) and near(hit.normal.y, 0) and near(hit.depth, 2));
+
+    // Moving `a` by the MTV separates it.
+    const mtv = hit.mtv();
+    const moved = RectF.fromPosSize(a.l + mtv.x, a.t + mtv.y, a.width(), a.height());
+    try testz.expectTrue(col.rectRect(moved, b) == null);
+
+    // Overlapping from above.
+    const above = col.rectRect(RectF.fromPosSize(2, -3, 4, 4), b) orelse return testz.fail();
+    try testz.expectTrue(near(above.normal.y, -1) and near(above.depth, 1));
+
+    // Shared edge only.
+    try testz.expectTrue(col.rectRect(RectF.fromPosSize(10, 0, 5, 5), b) == null);
+}
+
+pub fn segmentCircleTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    const c: col.Circle = .{ .center = .{ .x = 10, .y = 0 }, .radius = 2 };
+
+    const hit = col.segmentCircle(.{ .a = .{ .x = 0, .y = 0 }, .b = .{ .x = 20, .y = 0 } }, c) orelse return testz.fail();
+    try testz.expectTrue(near(hit.t, 0.4) and near(hit.point.x, 8) and near(hit.normal.x, -1));
+
+    // Stops short of the circle.
+    try testz.expectTrue(col.segmentCircle(.{ .a = .{ .x = 0, .y = 0 }, .b = .{ .x = 7, .y = 0 } }, c) == null);
+    // Passes beside it.
+    try testz.expectTrue(col.segmentCircle(.{ .a = .{ .x = 0, .y = 3 }, .b = .{ .x = 20, .y = 3 } }, c) == null);
+    // Starts inside.
+    const inside = col.segmentCircle(.{ .a = .{ .x = 10, .y = 0 }, .b = .{ .x = 20, .y = 0 } }, c) orelse return testz.fail();
+    try testz.expectTrue(inside.t == 0 and inside.normal.lengthSq() == 0);
+}
+
+pub fn segmentRectTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    const r = RectF.fromPosSize(10, 10, 10, 10);
+
+    // Enters through the left face.
+    const left = col.segmentRect(.{ .a = .{ .x = 0, .y = 15 }, .b = .{ .x = 30, .y = 15 } }, r) orelse return testz.fail();
+    try testz.expectTrue(near(left.t, 1.0 / 3.0) and near(left.point.x, 10) and near(left.normal.x, -1));
+
+    // Diagonal from below-right enters through the bottom face.
+    const bottom = col.segmentRect(.{ .a = .{ .x = 18, .y = 30 }, .b = .{ .x = 12, .y = 0 } }, r) orelse return testz.fail();
+    try testz.expectTrue(near(bottom.normal.y, 1) and near(bottom.point.y, 20));
+
+    // Misses, and stops short.
+    try testz.expectTrue(col.segmentRect(.{ .a = .{ .x = 0, .y = 0 }, .b = .{ .x = 30, .y = 5 } }, r) == null);
+    try testz.expectTrue(col.segmentRect(.{ .a = .{ .x = 0, .y = 15 }, .b = .{ .x = 9, .y = 15 } }, r) == null);
+
+    // Vertical segment (zero x delta) through the rect.
+    const vert = col.segmentRect(.{ .a = .{ .x = 15, .y = 0 }, .b = .{ .x = 15, .y = 30 } }, r) orelse return testz.fail();
+    try testz.expectTrue(near(vert.point.y, 10) and near(vert.normal.y, -1));
+
+    // Starts inside.
+    const inside = col.segmentRect(.{ .a = .{ .x = 15, .y = 15 }, .b = .{ .x = 30, .y = 15 } }, r) orelse return testz.fail();
+    try testz.expectTrue(inside.t == 0);
+}
+
+pub fn pointInPolygonTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    // An L shape (concave).
+    const poly = [_]Vec2F{
+        .{ .x = 0, .y = 0 }, .{ .x = 10, .y = 0 }, .{ .x = 10, .y = 4 },
+        .{ .x = 4, .y = 4 }, .{ .x = 4, .y = 10 }, .{ .x = 0, .y = 10 },
+    };
+    try testz.expectTrue(col.pointInPolygon(.{ .x = 2, .y = 8 }, &poly));
+    try testz.expectTrue(col.pointInPolygon(.{ .x = 8, .y = 2 }, &poly));
+    try testz.expectFalse(col.pointInPolygon(.{ .x = 8, .y = 8 }, &poly));
+    try testz.expectFalse(col.pointInPolygon(.{ .x = -1, .y = 2 }, &poly));
+    try testz.expectFalse(col.pointInPolygon(.{ .x = 1, .y = 1 }, poly[0..2]));
+
+    try testz.expectTrue(col.pointInCircle(.{ .x = 1, .y = 1 }, .{ .center = .{ .x = 0, .y = 0 }, .radius = 2 }));
+    try testz.expectFalse(col.pointInCircle(.{ .x = 2, .y = 2 }, .{ .center = .{ .x = 0, .y = 0 }, .radius = 2 }));
+}
