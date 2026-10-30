@@ -1,11 +1,12 @@
 # Collision and Pathfinding
 
-Pixzig has three tools here, from simplest to most general:
+Pixzig has four tools here, from simplest to most general:
 
 | Tool | Use it for |
 |---|---|
 | `tile.Mover` | Moving a box through a tile map without walking into walls. |
 | `collision.CollisionGrid` | Finding which objects are near a point or a box, for object-to-object collision. |
+| `collision.circleCircle` and friends | Deciding whether two shapes really touch, and how to push them apart. |
 | `a_star.AStarPathFinder` | Planning a path across a tile map, for enemies that chase the player. |
 
 ## Moving Against Tiles
@@ -77,6 +78,38 @@ The edge queries are handy before a move: check the edge you're about to move to
 The grid is broad phase only. It tells you what's nearby, and you still compare the actual rects with `RectF.intersects` to see if they overlap.
 
 Keep positions inside the grid. `insert` with a single point outside it is out of bounds; `insertRect` clips instead, so prefer it.
+
+## Shapes
+
+The grid only says which objects are *near* each other. To decide whether two of them actually touch, use the shape tests in `pixzig.collision`. They are plain functions with no setup:
+
+| Function | Returns |
+|---|---|
+| `circleCircle(a, b)`, `circleRect(c, r)`, `rectRect(a, b)` | `?Overlap`: null when apart |
+| `segmentCircle(s, c)`, `segmentRect(s, r)` | `?SegmentHit`: where a segment first enters the shape |
+| `pointInCircle(p, c)`, `pointInPolygon(p, corners)` | `bool` |
+
+A `Circle` is a `center` and `radius`, a `Segment` runs from `a` to `b`, and rects are the usual `RectF`. Shapes that only touch edges don't count as overlapping.
+
+An `Overlap` points from the second shape toward the first: `normal` is a unit vector and `depth` how far they overlap along it. Moving the first shape by `mtv()` (the minimum translation vector) separates them, which is all you need to stop a ball going through a wall:
+
+```zig
+const col = pixzig.collision;
+if (col.circleRect(.{ .center = ball.pos, .radius = 4 }, wall)) |hit| {
+    ball.pos = ball.pos.add(hit.mtv());
+    // Bounce: reflect the velocity off the wall.
+    ball.vel = ball.vel.sub(hit.normal.scale(2 * ball.vel.dot(hit.normal)));
+}
+```
+
+For fast things like bullets, test the path they cover in one update rather than where they end up, so they can't skip over a thin target:
+
+```zig
+const path: col.Segment = .{ .a = bullet.prevPos, .b = bullet.pos };
+if (col.segmentCircle(path, ship)) |hit| explodeAt(hit.point);
+```
+
+`SegmentHit.t` is how far along the segment the hit is (0 to 1), so with several targets the smallest `t` is the one hit first. A segment that starts inside the shape hits at `t = 0` with a zero `normal`. `Circle.bounds()` gives the rect to insert into a `CollisionGrid`.
 
 ## Pathfinding
 
