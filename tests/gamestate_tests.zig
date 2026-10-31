@@ -262,3 +262,152 @@ pub fn gameStateSwitchBackReinvokesLifecycleTest(io: std.Io, alloc: std.mem.Allo
     try testz.expectEqual(activateCountB, 1);
     try testz.expectEqual(deactivateCountB, 1);
 }
+
+// ---- State stack -----------------------------------------------------------
+
+// Every hook and per-frame call the stack states make, in order, as
+// "<state><event>" pairs: e.g. "Pa" = Play activated, "Mu" = Menu updated.
+var g_log: [64]u8 = undefined;
+var g_logLen: usize = 0;
+
+fn logEvent(state: u8, event: u8) void {
+    g_log[g_logLen] = state;
+    g_log[g_logLen + 1] = event;
+    g_logLen += 2;
+}
+
+fn takeLog() []const u8 {
+    const s = g_log[0..g_logLen];
+    g_logLen = 0;
+    return s;
+}
+
+/// A state that logs everything under `tag`: a(ctivate), d(eactivate),
+/// p(ause), r(esume), u(pdate), R(ender).
+fn LoggingState(comptime tag: u8) type {
+    return struct {
+        const Self = @This();
+        pub fn activate(_: *Self) void {
+            logEvent(tag, 'a');
+        }
+        pub fn deactivate(_: *Self) void {
+            logEvent(tag, 'd');
+        }
+        pub fn pause(_: *Self) void {
+            logEvent(tag, 'p');
+        }
+        pub fn @"resume"(_: *Self) void {
+            logEvent(tag, 'r');
+        }
+        pub fn update(_: *Self, _: *MockEngine, _: f64) void {
+            logEvent(tag, 'u');
+        }
+        pub fn render(_: *Self, _: *MockEngine, _: f32) void {
+            logEvent(tag, 'R');
+        }
+    };
+}
+
+const PlayState = LoggingState('P');
+const MenuState = LoggingState('M');
+const HudState = LoggingState('H');
+const StackKeys = enum { play, menu, hud };
+const StackMgr = pixzig.gamestate.GameStateMgr(MockEngine, StackKeys, &[_]type{ PlayState, MenuState, HudState });
+
+const StackFixture = struct {
+    play: PlayState = .{},
+    menu: MenuState = .{},
+    hud: HudState = .{},
+
+    fn mgr(self: *StackFixture) StackMgr {
+        g_logLen = 0;
+        return StackMgr.init(.{ &self.play, &self.menu, &self.hud });
+    }
+};
+
+// push pauses the state below and activates the new one; pop deactivates
+// the top and resumes the one below.
+pub fn gameStatePushPopLifecycleTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    var fx = StackFixture{};
+    var mgr = fx.mgr();
+
+    try testz.expectEqual(mgr.current(), .play);
+    try testz.expectEqual(mgr.depth(), 1);
+
+    try mgr.push(.menu, .{});
+    try testz.expectEqualStr(takeLog(), "PpMa");
+    try testz.expectEqual(mgr.current(), .menu);
+    try testz.expectEqual(mgr.depth(), 2);
+    try testz.expectTrue(mgr.isOnStack(.play));
+
+    try mgr.pop();
+    try testz.expectEqualStr(takeLog(), "MdPr");
+    try testz.expectEqual(mgr.current(), .play);
+    try testz.expectFalse(mgr.isOnStack(.menu));
+}
+
+// The bottom state can't be popped, and a state can't be pushed twice.
+pub fn gameStatePushPopErrorsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    var fx = StackFixture{};
+    var mgr = fx.mgr();
+
+    try testz.expectError(mgr.pop(), error.LastState);
+    try testz.expectError(mgr.push(.play, .{}), error.StateAlreadyOnStack);
+    try mgr.push(.menu, .{});
+    _ = takeLog();
+    try testz.expectError(mgr.push(.menu, .{}), error.StateAlreadyOnStack);
+    try testz.expectEqualStr(takeLog(), "");
+    try testz.expectEqual(mgr.depth(), 2);
+}
+
+// By default a pushed state renders over the ones below but freezes them;
+// updateBelow lets them keep running, renderBelow = false hides them.
+pub fn gameStateStackUpdateRenderBelowTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    var fx = StackFixture{};
+    var mgr = fx.mgr();
+    var eng = MockEngine{};
+
+    try mgr.push(.menu, .{});
+    _ = takeLog();
+    mgr.update(&eng, 16.0);
+    try testz.expectEqualStr(takeLog(), "Mu");
+    mgr.render(&eng, 1.0);
+    try testz.expectEqualStr(takeLog(), "PRMR");
+
+    try mgr.push(.hud, .{ .updateBelow = true, .renderBelow = false });
+    _ = takeLog();
+    // The hud lets the menu update; the menu still freezes play.
+    mgr.update(&eng, 16.0);
+    try testz.expectEqualStr(takeLog(), "MuHu");
+    mgr.render(&eng, 1.0);
+    try testz.expectEqualStr(takeLog(), "HR");
+}
+
+// setCurrState clears the whole stack, top first, then activates the new
+// state; deinit deactivates whatever is left, top first.
+pub fn gameStateSetCurrStateClearsStackTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    var fx = StackFixture{};
+    var mgr = fx.mgr();
+
+    try mgr.push(.menu, .{});
+    try mgr.push(.hud, .{});
+    _ = takeLog();
+
+    mgr.setCurrState(.menu);
+    try testz.expectEqualStr(takeLog(), "HdMdPdMa");
+    try testz.expectEqual(mgr.depth(), 1);
+    try testz.expectEqual(mgr.current(), .menu);
+
+    try mgr.push(.play, .{});
+    _ = takeLog();
+    mgr.deinit();
+    try testz.expectEqualStr(takeLog(), "PdMd");
+}

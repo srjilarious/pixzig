@@ -166,6 +166,10 @@ pub fn Renderer(opts: RendererOptions) type {
             /// viewport to the whole framebuffer until `end()`.
             screenPass: bool = false,
 
+            /// The camera's visible world rectangle during a `.camera`
+            /// pass, null otherwise (see `viewRect`).
+            passView: ?RectF = null,
+
             /// Where draws go instead of the screen (see `setTarget`).
             target: ?*RenderTarget = null,
             /// The framebuffer that was bound when a target was set, put
@@ -301,6 +305,10 @@ pub fn Renderer(opts: RendererOptions) type {
             };
 
             impl.screenPass = projection == .screen and impl.target == null;
+            impl.passView = switch (projection) {
+                .camera => |cam| cam.viewRect(self.viewport),
+                else => null,
+            };
             impl.batch.begin(mvp);
             impl.batch.setShader(null);
             applyBlend(.alpha);
@@ -315,11 +323,20 @@ pub fn Renderer(opts: RendererOptions) type {
             // one (tile maps, 3D quads).
             impl.batch.setShader(null);
             applyBlend(.alpha);
+            impl.passView = null;
 
             if (impl.screenPass) {
                 self.viewport.apply();
                 impl.screenPass = false;
             }
+        }
+
+        /// The world rectangle the current pass can see, for culling: the
+        /// camera's `viewRect` inside a `.camera` pass, null in any other
+        /// pass or outside one. The `ecs` draw helpers skip sprites that
+        /// don't overlap it; draw calls made directly are never culled.
+        pub fn viewRect(self: *const Self) ?RectF {
+            return self.implConst().passView;
         }
 
         /// Flushes queued draws, so draws made before a GL state change

@@ -34,7 +34,8 @@ pub const App = struct {
     paused: bool,
     world: *flecs.world_t,
     updateQuery: *flecs.query_t,
-    sprites: ecs.SpriteSystem,
+    draws: ecs.DrawSystem,
+    cam: pixzig.Camera2D,
     outlines: ecs.DebugOutlines,
 
     pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine) !*App {
@@ -78,7 +79,8 @@ pub const App = struct {
             .fps = FpsCounter.init(),
             .world = world,
             .updateQuery = updateQuery,
-            .sprites = try ecs.SpriteSystem.init(world),
+            .draws = try ecs.DrawSystem.init(alloc, world),
+            .cam = pixzig.Camera2D.init(),
             .outlines = outlines,
         };
 
@@ -96,7 +98,7 @@ pub const App = struct {
 
     pub fn deinit(self: *App) void {
         flecs.query_fini(self.updateQuery);
-        self.sprites.deinit();
+        self.draws.deinit();
         self.outlines.deinit();
         _ = flecs.fini(self.world);
         self.alloc.destroy(self);
@@ -120,6 +122,9 @@ pub const App = struct {
 
         flecs.set(self.world, ent, Velocity, vel);
 
+        // A random layer, so overlapping sprites keep a steady order.
+        flecs.set(self.world, ent, ecs.ZOrder, .{ .z = random.intRangeAtMost(i32, 0, 3) });
+
         if (val) {
             std.log.info("  - Setting debug outline.", .{});
             flecs.set(self.world, ent, ecs.Outline, .{ .color = Color.from(100, 255, 200, 220) });
@@ -128,7 +133,7 @@ pub const App = struct {
 
     pub fn update(self: *App, eng: *AppRunner.Engine, delta: f64) void {
         if (self.fps.update(delta)) {
-            std.log.debug("FPS: {}", .{self.fps.fps()});
+            std.log.debug("FPS: {}, drawn {}, culled {}", .{ self.fps.fps(), self.draws.lastDrawn(), self.draws.lastCulled() });
         }
 
         // The view moves opposite to the scroll direction.
@@ -177,9 +182,12 @@ pub const App = struct {
 
         self.fps.renderTick();
 
-        eng.renderer.begin(.logical);
+        // The arrow keys scroll a camera over the 800x600 field; sprites
+        // that scroll out of view are culled by the draw system.
+        self.cam.pos = .{ .x = 400 - self.scrollOffset.x, .y = 300 - self.scrollOffset.y };
+        eng.renderer.begin(.{ .camera = &self.cam });
 
-        self.sprites.draw(&eng.renderer);
+        self.draws.draw(&eng.renderer);
         self.outlines.draw(&eng.renderer);
 
         eng.renderer.end();

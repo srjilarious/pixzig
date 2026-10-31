@@ -16,7 +16,7 @@ pub const Velocity = struct { v: pixzig.Vec2F };
 
 // In init:
 self.world = flecs.init();
-ecs.registerEngineComponents(self.world); // Sprite, Actor, ecs.Outline
+ecs.registerEngineComponents(self.world); // Sprite, Actor, ecs.ZOrder, ecs.Outline
 ecs.registerComponents(self.world, .{Velocity});
 
 const e = flecs.new_id(self.world);
@@ -66,9 +66,9 @@ sprites: ecs.SpriteSystem,
 actors: ecs.ActorSystem,
 outlines: ecs.DebugOutlines,
 
-// In init (each one registers Sprite, Actor and Outline for you):
-self.sprites = try ecs.SpriteSystem.init(self.world);
-self.actors = try ecs.ActorSystem.init(self.world);
+// In init (each one registers Sprite, Actor, ZOrder and Outline for you):
+self.sprites = try ecs.SpriteSystem.init(alloc, self.world);
+self.actors = try ecs.ActorSystem.init(alloc, self.world);
 self.outlines = try ecs.DebugOutlines.init(self.world);
 try self.outlines.bindConsole(&eng.scripts, "toggleOutlines");
 
@@ -86,11 +86,32 @@ self.actors.deinit();
 self.outlines.deinit();
 ```
 
+The allocator holds each draw system's per-frame sort list, which keeps its size between frames.
+
+### Draw Order and Culling
+
+Flecs stores entities by archetype, so its iteration order shuffles whenever an entity gains or loses a component. The draw helpers sort instead: give an entity an `ecs.ZOrder` and higher `z` draws on top. Entities without one draw at z 0, and equal z falls back to entity id, so the order holds steady:
+
+```zig
+flecs.set(world, background, ecs.ZOrder, .{ .z = -10 });
+flecs.set(world, player, ecs.ZOrder, .{ .z = 10 });
+```
+
+`SpriteSystem` and `ActorSystem` each sort only their own entities. To interleave them, so a z 2 tree sprite can stand in front of a z 1 actor, draw both with one `ecs.DrawSystem` and keep `ActorSystem` for `update`:
+
+```zig
+self.draws = try ecs.DrawSystem.init(alloc, self.world);
+// In render:
+self.draws.draw(&eng.renderer);
+```
+
+Inside a camera pass (`eng.renderer.begin(.{ .camera = &cam })`), the draw helpers also skip anything whose sprite lies outside the camera's view, before sorting. They ask `eng.renderer.viewRect()`, which is null in other passes, so a `.logical` pass draws everything. Culling only affects drawing: off-screen actors still animate. `lastDrawn()` and `lastCulled()` on each system count what the last `draw` did, handy in an FPS log line. Draw calls you make yourself are never culled.
+
 `DebugOutlines` draws a box around every entity with an `ecs.Outline` component and a `Sprite` or `Actor`. It starts off; flip `enabled`, call `toggle()`, or type the bound function (`toggleOutlines()`) in the console. Set `lineWidth` for thicker boxes.
 
 To keep a camera on an entity, `ecs.followEntity(&cam, world, player, deltaMs, opts)` calls `Camera2D.follow` with the center of its sprite. See [Viewport and Cameras](page:viewport).
 
-For everything else, like systems, pipelines and relationships, see the flecs and zflecs docs. `examples/flecs_ex.zig` moves and draws sprite entities.
+For everything else, like systems, pipelines and relationships, see the flecs and zflecs docs. `examples/flecs_ex.zig` moves sprite entities on random z layers and draws them through a camera you scroll with the arrow keys, logging how many it culls.
 
 ## The Event Bus
 
