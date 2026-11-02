@@ -98,6 +98,49 @@ pub fn loadStructWrongTypeTest(io: std.Io, alloc: std.mem.Allocator) !void {
     try testz.expectEqual(eng.lua.getTop(), top);
 }
 
+const TestShape = enum { circle, square, triangle };
+
+const TestEnumConfig = struct {
+    shape: TestShape = .circle,
+};
+
+// loadStruct reads an enum field from a string naming one of its values,
+// and keeps the default when the table leaves it out.
+pub fn loadStructEnumTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var eng = try ScriptEngine.init(alloc);
+    defer eng.deinit();
+
+    try eng.run("config = { shape = \"triangle\" }");
+    const top = eng.lua.getTop();
+    const conf = try eng.loadStruct(TestEnumConfig, "config");
+    try testz.expectEqual(conf.shape, .triangle);
+    try testz.expectEqual(eng.lua.getTop(), top);
+
+    try eng.run("config = {}");
+    const defaults = try eng.loadStruct(TestEnumConfig, "config");
+    try testz.expectEqual(defaults.shape, .circle);
+    try testz.expectEqual(eng.lua.getTop(), top);
+}
+
+// loadStruct rejects an enum field set to a string that names none of its
+// values, or to something that isn't a string, and leaves the Lua stack
+// balanced.
+pub fn loadStructBadEnumTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var eng = try ScriptEngine.init(alloc);
+    defer eng.deinit();
+
+    try eng.run("config = { shape = \"hexagon\" }");
+    const top = eng.lua.getTop();
+    try testz.expectError(eng.loadStruct(TestEnumConfig, "config"), error.InvalidEnumValue);
+    try testz.expectEqual(eng.lua.getTop(), top);
+
+    try eng.run("config = { shape = 2 }");
+    try testz.expectError(eng.loadStruct(TestEnumConfig, "config"), error.InvalidFieldType);
+    try testz.expectEqual(eng.lua.getTop(), top);
+}
+
 // --- run ---
 
 // run executes Lua code and the result is visible in subsequent calls.

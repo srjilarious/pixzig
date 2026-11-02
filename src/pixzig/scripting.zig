@@ -154,7 +154,9 @@ pub const ScriptEngine = struct {
     /// `T` must be default-constructible (`.{}`). A field missing from the
     /// Lua table (or set to nil) keeps its Zig default; a field present with
     /// the wrong type returns `error.InvalidFieldType`. Supported field
-    /// types: `bool`, `int`, `float`, and `?[]u8` (heap-allocated with the
+    /// types: `bool`, `int`, `float`, enums (read from a string naming one
+    /// of the enum's fields; any other string returns
+    /// `error.InvalidEnumValue`), and `?[]u8` (heap-allocated with the
     /// Lua allocator; caller frees it, e.g. via the struct's own `deinit`).
     /// A field of any other type returns `error.UnsupportedFieldType` when
     /// the table sets it. A missing or non-table global returns
@@ -203,6 +205,17 @@ pub const ScriptEngine = struct {
                         return error.InvalidFieldType;
                     }
                     @field(myStruct, field_name) = @floatCast(try self.lua.toNumber(-1));
+                },
+                .@"enum" => {
+                    if (luaType != .string) {
+                        self.lua.pop(2); // Pop the value and table
+                        return error.InvalidFieldType;
+                    }
+                    const name = try self.lua.toString(-1);
+                    @field(myStruct, field_name) = std.meta.stringToEnum(field_type, name) orelse {
+                        self.lua.pop(2); // Pop the value and table
+                        return error.InvalidEnumValue;
+                    };
                 },
                 .optional => |opt| {
                     switch (@typeInfo(opt.child)) {
