@@ -389,6 +389,15 @@ pub fn UiContext(comptime Engine: type) type {
         // Frame lifecycle — begin/end wrap all widget calls in render()
         // ----------------------------------------------------------
 
+        /// The row height widgets lay text out on: the default font's
+        /// tallest packed glyph above the baseline, or 16 with no font.
+        /// Tighter than `Renderer.lineHeight`, which adds the descent and
+        /// line gap for spacing paragraphs.
+        pub fn lineH(self: *Self) f32 {
+            const fa = self.renderer.defaultFontAtlas() orelse return 16;
+            return @floatFromInt(fa.maxY);
+        }
+
         /// Call at the start of each render frame before any widgets.
         pub fn begin(self: *Self) void {
             self.hotId = 0;
@@ -609,7 +618,7 @@ pub fn UiContext(comptime Engine: type) type {
             );
 
             // Title text — vertically centered in title bar
-            const line_h: f32 = self.renderer.lineHeight() orelse 16;
+            const line_h: f32 = self.lineH();
             _ = self.renderer.drawString(title, .{
                 .x = @trunc(rect.l + pad_x),
                 .y = @trunc(rect.t + (title_h - line_h) / 2.0),
@@ -649,7 +658,7 @@ pub fn UiContext(comptime Engine: type) type {
                 const rect = win.rect;
                 const mp = self.mousePos;
                 if (mp.x >= rect.l and mp.x < rect.r and mp.y >= rect.t and mp.y < rect.b) {
-                    const line_h: f32 = self.renderer.lineHeight() orelse 16;
+                    const line_h: f32 = self.lineH();
                     state.scrollY = std.math.clamp(
                         state.scrollY - self.scrollDelta * line_h * 3.0,
                         0.0,
@@ -816,7 +825,7 @@ pub fn UiContext(comptime Engine: type) type {
 
         pub fn label(self: *Self, str: []const u8) void {
             const s = &self.style;
-            const line_h: f32 = self.renderer.lineHeight() orelse 16;
+            const line_h: f32 = self.lineH();
             const h: f32 = line_h + @as(f32, @floatFromInt(s.itemSpacing));
             const w: f32 = self.contentWidth();
             const rect = self.allocWidget(w, h);
@@ -902,8 +911,8 @@ pub fn UiContext(comptime Engine: type) type {
             self.renderer.drawFilledRect(rect, bg);
             self.renderer.drawEnclosingRect(rect, s.windowBorder, 1);
 
-            const ts = self.renderer.measureString(lbl);
-            const line_h: f32 = self.renderer.lineHeight() orelse 16;
+            const ts = self.renderer.measureText(lbl, .{});
+            const line_h: f32 = self.lineH();
             const tx: f32 = @trunc(rect.l + (width - ts.x) / 2.0);
             const ty: f32 = @trunc(rect.t + (h - line_h) / 2.0);
             _ = self.renderer.drawString(lbl, .{ .x = tx, .y = ty });
@@ -961,8 +970,8 @@ pub fn UiContext(comptime Engine: type) type {
             self.renderer.drawEnclosingRect(rect, s.windowBorder, 1);
 
             // Centered label
-            const ts = self.renderer.measureString(lbl);
-            const line_h: f32 = self.renderer.lineHeight() orelse 16;
+            const ts = self.renderer.measureText(lbl, .{});
+            const line_h: f32 = self.lineH();
             const tx: f32 = @trunc(rect.l + (w - ts.x) / 2.0);
             const ty: f32 = @trunc(rect.t + (h - line_h) / 2.0);
             _ = self.renderer.drawString(lbl, .{ .x = tx, .y = ty });
@@ -1004,12 +1013,12 @@ pub fn UiContext(comptime Engine: type) type {
             self.renderer.drawFilledRect(rect, bg);
 
             const pad_x: f32 = @floatFromInt(s.padding.x);
-            const line_h: f32 = self.renderer.lineHeight() orelse 16;
+            const line_h: f32 = self.lineH();
             const text_clip = RectF{ .l = rect.l + pad_x, .t = rect.t, .r = rect.r - pad_x, .b = rect.b };
-            _ = self.renderer.drawClippedString(lbl, .{
+            _ = self.renderer.drawText(lbl, .{
                 .x = @trunc(rect.l + pad_x),
                 .y = @trunc(rect.t + (rect.height() - line_h) / 2.0),
-            }, text_clip);
+            }, .{ .clip = text_clip });
 
             return clicked;
         }
@@ -1160,7 +1169,7 @@ pub fn UiContext(comptime Engine: type) type {
             }
 
             const item_sp: f32 = @floatFromInt(s.itemSpacing);
-            const line_h: f32 = self.renderer.lineHeight() orelse 16;
+            const line_h: f32 = self.lineH();
             _ = self.renderer.drawString(lbl, .{
                 .x = @trunc(box.r + item_sp * 2.0),
                 .y = @trunc(rect.t + (h - line_h) / 2.0),
@@ -1355,20 +1364,20 @@ pub fn UiContext(comptime Engine: type) type {
             self.renderer.drawEnclosingRect(rect, border_col, 1);
 
             const pad_x: f32 = @floatFromInt(s.padding.x);
-            const line_h: f32 = self.renderer.lineHeight() orelse 16;
+            const line_h: f32 = self.lineH();
             const ty: f32 = @trunc(rect.t + (h - line_h) / 2.0);
             const text_clip = RectF{ .l = rect.l + pad_x, .t = rect.t, .r = rect.r - pad_x, .b = rect.b };
-            _ = self.renderer.drawClippedString(buf[0..len.*], .{
+            _ = self.renderer.drawText(buf[0..len.*], .{
                 .x = @trunc(rect.l + pad_x),
                 .y = ty,
-            }, text_clip);
+            }, .{ .clip = text_clip });
 
             // Blinking cursor at editCursorPos
             if (focused) {
                 const blink_on = (self.frame / 30) % 2 == 0;
                 if (blink_on) {
                     const cursor_pos = if (self.editCursorId == uid) self.editCursorPos else len.*;
-                    const pre_sz = self.renderer.measureString(buf[0..cursor_pos]);
+                    const pre_sz = self.renderer.measureText(buf[0..cursor_pos], .{});
                     const cx: f32 = rect.l + pad_x + pre_sz.x;
                     const cy: f32 = rect.t + (h - line_h) / 2.0;
                     self.renderer.drawFilledRect(RectF{
@@ -1504,18 +1513,18 @@ pub fn UiContext(comptime Engine: type) type {
             else
                 std.fmt.bufPrint(&display_buf, "{}", .{value.*}) catch "?";
             const pad_x: f32 = @floatFromInt(s.padding.x);
-            const line_h: f32 = self.renderer.lineHeight() orelse 16;
+            const line_h: f32 = self.lineH();
             const ty: f32 = @trunc(rect.t + (h - line_h) / 2.0);
             const text_clip = RectF{ .l = rect.l + pad_x, .t = rect.t, .r = rect.r - pad_x, .b = rect.b };
-            _ = self.renderer.drawClippedString(value_str, .{
+            _ = self.renderer.drawText(value_str, .{
                 .x = @trunc(rect.l + pad_x),
                 .y = ty,
-            }, text_clip);
+            }, .{ .clip = text_clip });
 
             // Blinking cursor at editCursorPos
             if (focused and (self.frame / 30) % 2 == 0) {
                 const cursor_pos = if (self.editCursorId == uid) self.editCursorPos else self.intEditLen;
-                const pre_sz = self.renderer.measureString(value_str[0..cursor_pos]);
+                const pre_sz = self.renderer.measureText(value_str[0..cursor_pos], .{});
                 const cx: f32 = rect.l + pad_x + pre_sz.x;
                 const cy: f32 = rect.t + (h - line_h) / 2.0;
                 self.renderer.drawFilledRect(RectF{
@@ -1549,7 +1558,7 @@ pub fn UiContext(comptime Engine: type) type {
             const w: f32 = self.contentWidth();
             const rect = self.allocWidget(w, areaHeight);
 
-            const line_hf: f32 = self.renderer.lineHeight() orelse 16;
+            const line_hf: f32 = self.lineH();
             const pad_y: f32 = @floatFromInt(s.padding.y);
             const pad_x: f32 = @floatFromInt(s.padding.x);
             const usable_h: f32 = @max(0.0, areaHeight - pad_y * 2.0);
@@ -1614,10 +1623,10 @@ pub fn UiContext(comptime Engine: type) type {
             const start = scroll.*;
             const end_idx = @min(start + lines_visible, lines.len);
             for (start..end_idx) |i| {
-                _ = self.renderer.drawClippedString(lines[i], .{
+                _ = self.renderer.drawText(lines[i], .{
                     .x = @trunc(rect.l + pad_x),
                     .y = draw_y,
-                }, line_clip);
+                }, .{ .clip = line_clip });
                 draw_y += line_hf;
             }
 
@@ -1727,8 +1736,8 @@ pub fn UiContext(comptime Engine: type) type {
             // Value label (right-aligned inside the track)
             var val_buf: [24]u8 = undefined;
             const val_str = std.fmt.bufPrint(&val_buf, "{d:.2}", .{value.*}) catch "?";
-            const ts = self.renderer.measureString(val_str);
-            const line_h: f32 = self.renderer.lineHeight() orelse 16;
+            const ts = self.renderer.measureText(val_str, .{});
+            const line_h: f32 = self.lineH();
             _ = self.renderer.drawString(val_str, .{
                 .x = @trunc(rect.r - ts.x - @as(f32, @floatFromInt(s.padding.x))),
                 .y = @trunc(track_cy - line_h / 2.0),

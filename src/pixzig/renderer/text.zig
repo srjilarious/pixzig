@@ -52,17 +52,51 @@ const CodepointIter = struct {
     }
 };
 
-const white: Color = .{ .r = 1, .g = 1, .b = 1, .a = 1 };
+/// Where `drawText` puts the text relative to `pos.x`.
+pub const TextAlign = enum {
+    /// `pos.x` is the left edge.
+    left,
+    /// `pos.x` is the middle.
+    center,
+    /// `pos.x` is the right edge.
+    right,
+};
 
-/// Lays out strings with the active font and queues one quad per glyph into
-/// the renderer's `SpriteBatch`, so text keeps its place in draw order
-/// among sprites and shapes. A TTF atlas draws in `.mask` mode (the glyph
-/// coverage tints the color); a bitmap font's RGBA image in `.texture` mode.
+/// How `drawText` draws and `measureText` measures a string. Every field
+/// has a default, so `.{}` is the default font in white at its own size.
+pub const TextStyle = struct {
+    /// The font to draw with; null uses the renderer's default font.
+    font: ?*resources.FontAtlasHandle = null,
+    color: Color = .white,
+    /// Multiplies the font's pixel size. Glyph metrics are truncated to
+    /// whole pixels after scaling, so text started on the pixel grid stays
+    /// on it.
+    scale: f32 = 1.0,
+    /// Only the parts of glyphs inside this rect are drawn, in the pass's
+    /// coordinate space. Edge glyphs are trimmed, not dropped.
+    clip: ?RectF = null,
+    @"align": TextAlign = .left,
+    /// When set, the text is drawn a second time underneath in this color,
+    /// moved by `shadowOffset`.
+    shadow: ?Color = null,
+    /// How far the shadow sits from the text, in pixels (not scaled).
+    shadowOffset: Vec2F = .{ .x = 1, .y = 1 },
+};
+
+/// Lays out strings and queues one quad per glyph into the renderer's
+/// `SpriteBatch`, so text keeps its place in draw order among sprites and
+/// shapes. A TTF atlas draws in `.mask` mode (the glyph coverage tints the
+/// color); a bitmap font's RGBA image in `.texture` mode.
+///
+/// A line drawn at `pos` occupies a box from `pos.y` down to
+/// `pos.y + (ascent + descent) * scale`, with the baseline `ascent` below
+/// the top. `measureText` returns that box, so centering on it centers the
+/// text as drawn.
 pub const TextRenderer = struct {
     /// The batch glyphs are queued into. Owned by the renderer.
     batch: *SpriteBatch,
-    /// Active font. A hot reload replaces the atlas inside the handle, so
-    /// the next draw uses it.
+    /// The default font, used when a style names none. A hot reload
+    /// replaces the atlas inside the handle, so the next draw uses it.
     font: ?*resources.FontAtlasHandle = null,
     /// Set once the first draw call finds no font, so the "no font" warning
     /// is logged one time rather than on every string, every frame.
@@ -72,9 +106,9 @@ pub const TextRenderer = struct {
         return .{ .batch = batch };
     }
 
-    /// Makes sure every glyph `text` needs is packed into the active font
-    /// atlas and uploaded before quads are queued for it. If packing grew
-    /// the atlas texture, every glyph's UVs changed, so any quads already
+    /// Makes sure every glyph `text` needs is packed into the font atlas
+    /// and uploaded before quads are queued for it. If packing grew the
+    /// atlas texture, every glyph's UVs changed, so any quads already
     /// queued this frame are flushed against the still-current texture
     /// before the grown one is uploaded.
     fn syncAtlasForText(self: *TextRenderer, fa: *FontAtlas, text: []const u8) void {
@@ -83,7 +117,7 @@ pub const TextRenderer = struct {
         fa.commitTexture();
     }
 
-    /// Adopt a new font for rendering.
+    /// Adopt a new default font.
     pub fn setFont(self: *TextRenderer, font: *resources.FontAtlasHandle) void {
         self.font = font;
         self.warnedNoFont = false;
@@ -99,115 +133,125 @@ pub const TextRenderer = struct {
             "Set one with Renderer.setDefaultFont, or EngineInitOptions.renderInitOpts.font.", .{});
     }
 
-    pub fn drawString(self: *TextRenderer, text: []const u8, pos: Vec2F) Vec2F {
-        return self.drawGlyphs(text, pos, 1.0, white, null);
-    }
-
-    /// Like `drawString`, but tints every glyph by `color` instead of
-    /// rendering plain white.
-    pub fn drawStringColored(self: *TextRenderer, text: []const u8, pos: Vec2F, color: Color) Vec2F {
-        return self.drawGlyphs(text, pos, 1.0, color, null);
-    }
-
-    pub fn drawScaledString(self: *TextRenderer, text: []const u8, pos: Vec2F, scale: f32) Vec2F {
-        return self.drawGlyphs(text, pos, scale, white, null);
-    }
-
-    /// Like `drawScaledString`, but tints every glyph by `color`.
-    pub fn drawScaledStringColored(self: *TextRenderer, text: []const u8, pos: Vec2F, scale: f32, color: Color) Vec2F {
-        return self.drawGlyphs(text, pos, scale, color, null);
-    }
-
-    /// Like drawString but clips character quads to `clip` in the active
-    /// draw coordinate space. Partially-visible edge characters have their
-    /// source UV rect trimmed to match so no bleed from adjacent font glyphs
-    /// appears.
-    pub fn drawClippedString(self: *TextRenderer, text: []const u8, pos: Vec2F, clip: RectF) Vec2F {
-        return self.drawGlyphs(text, pos, 1.0, white, clip);
-    }
-
-    /// The one glyph loop behind every draw call. Returns the drawn size:
-    /// the summed advances, and the tallest glyph.
-    fn drawGlyphs(self: *TextRenderer, text: []const u8, pos: Vec2F, scale: f32, color: Color, clip: ?RectF) Vec2F {
-        var drawSize: Vec2F = .{ .x = 0, .y = 0 };
-        const handle = self.font orelse {
+    /// The atlas `style` draws with, or null (after warning once) when it
+    /// names no font and there is no default.
+    fn atlasFor(self: *TextRenderer, style: TextStyle) ?*FontAtlas {
+        const handle = style.font orelse self.font orelse {
             self.warnNoFont();
-            return drawSize;
+            return null;
         };
-        const fa = &handle.val;
+        return &handle.val;
+    }
+
+    /// Draws `text` with its line box's top at `pos.y` and its left edge,
+    /// middle or right edge at `pos.x` (see `TextStyle.align`). Returns the
+    /// same size `measureText` would.
+    pub fn drawText(self: *TextRenderer, text: []const u8, pos: Vec2F, style: TextStyle) Vec2F {
+        const fa = self.atlasFor(style) orelse return Vec2F.zero;
         self.syncAtlasForText(fa, text);
 
+        const size = measureWith(fa, text, style.scale);
+        const left: f32 = switch (style.@"align") {
+            .left => pos.x,
+            .center => pos.x - @trunc(size.x / 2),
+            .right => pos.x - size.x,
+        };
+        const origin: Vec2F = .{ .x = left, .y = pos.y };
+
+        if (style.shadow) |shadowColor| {
+            self.queueGlyphs(fa, text, origin.add(style.shadowOffset), style.scale, shadowColor, style.clip);
+        }
+        self.queueGlyphs(fa, text, origin, style.scale, style.color, style.clip);
+        return size;
+    }
+
+    /// The size `drawText` gives `text` in `style`: the summed glyph
+    /// advances wide, and the font's ascent plus descent tall (the line box
+    /// the glyphs are drawn in), both scaled. Alignment, clip and shadow
+    /// don't change it.
+    pub fn measureText(self: *TextRenderer, text: []const u8, style: TextStyle) Vec2F {
+        const fa = self.atlasFor(style) orelse return Vec2F.zero;
+        // Pack any not-yet-loaded blocks so their advances are known. No
+        // quads are queued here, so a grow needs no batch flush.
+        _ = fa.ensureBlocksForText(text);
+        return measureWith(fa, text, style.scale);
+    }
+
+    /// The default font's line spacing at scale 1: ascent, descent and the
+    /// font's line gap, i.e. how far apart to put the tops of consecutive
+    /// lines. Null when there is no default font.
+    pub fn lineHeight(self: *const TextRenderer) ?f32 {
+        const handle = self.font orelse return null;
+        const fa = &handle.val;
+        return @floatFromInt(fa.ascent + fa.descent + fa.lineGap);
+    }
+
+    fn measureWith(fa: *FontAtlas, text: []const u8, scale: f32) Vec2F {
+        var width: f32 = 0;
+        var it = CodepointIter{ .text = text };
+        while (it.next()) |cp| {
+            const ch = fa.getChar(cp) orelse continue;
+            width += scaleInt(ch.advance, scale);
+        }
+        return .{ .x = width, .y = scaleInt(fa.ascent + fa.descent, scale) };
+    }
+
+    /// Queues one quad per visible glyph, with the line box's top-left at
+    /// `pos`, trimming quads (and their UVs) to `clip` when one is given.
+    fn queueGlyphs(self: *TextRenderer, fa: *FontAtlas, text: []const u8, pos: Vec2F, scale: f32, color: Color, clip: ?RectF) void {
         const mode: DrawMode = if (fa.isAlpha) .mask else .texture;
         var currX: f32 = pos.x;
-        const posY = pos.y + scaleInt(fa.ascent, scale);
+        const baseline = pos.y + scaleInt(fa.ascent, scale);
         var it = CodepointIter{ .text = text };
         while (it.next()) |cp| {
             const ch = fa.getChar(cp) orelse continue;
             const advance = scaleInt(ch.advance, scale);
+            defer currX += advance;
 
             // Only draw if the character has a visual representation.
-            if (ch.size.x > 0 and ch.size.y > 0) {
-                var dest = RectF.fromPosSize(
-                    currX + scaleInt(ch.bearing.x, scale),
-                    posY - scaleInt(ch.bearing.y, scale),
-                    scaleInt(ch.size.x, scale),
-                    scaleInt(ch.size.y, scale),
-                );
-                var src = ch.coords;
+            if (ch.size.x <= 0 or ch.size.y <= 0) continue;
 
-                if (clip) |c| {
-                    // Entirely left of clip: advance the pen but don't draw.
-                    if (dest.r <= c.l) {
-                        currX += advance;
-                        drawSize.x += advance;
-                        continue;
-                    }
-                    // Entirely right of clip: nothing further will be visible.
-                    if (dest.l >= c.r) break;
+            var dest = RectF.fromPosSize(
+                currX + scaleInt(ch.bearing.x, scale),
+                baseline - scaleInt(ch.bearing.y, scale),
+                scaleInt(ch.size.x, scale),
+                scaleInt(ch.size.y, scale),
+            );
+            var src = ch.coords;
 
-                    const uv_per_px = (src.r - src.l) / dest.width();
-                    if (dest.l < c.l) {
-                        src.l += (c.l - dest.l) * uv_per_px;
-                        dest.l = c.l;
-                    }
-                    if (dest.r > c.r) {
-                        src.r -= (dest.r - c.r) * uv_per_px;
-                        dest.r = c.r;
-                    }
-                }
-
-                self.batch.draw(&fa.texture, dest, src, .none, color, mode);
+            if (clip) |c| {
+                // Wholly right of the clip: nothing further will show.
+                if (dest.l >= c.r) break;
+                if (!clipQuad(&dest, &src, c)) continue;
             }
 
-            currX += advance;
-            drawSize.x += advance;
-            drawSize.y = @max(drawSize.y, scaleInt(ch.size.y, scale));
+            self.batch.draw(&fa.texture, dest, src, .none, color, mode);
         }
-
-        return drawSize;
-    }
-
-    /// Measures `text` without drawing it.
-    pub fn measureString(self: *TextRenderer, text: []const u8) Vec2F {
-        var width: f32 = 0;
-        var height: f32 = 0;
-
-        const handle = self.font orelse {
-            self.warnNoFont();
-            return .{ .x = 0, .y = 0 };
-        };
-
-        // Pack any not-yet-loaded blocks so their advances are known. No
-        // quads are queued here, so a grow needs no batch flush.
-        _ = handle.val.ensureBlocksForText(text);
-
-        var it = CodepointIter{ .text = text };
-        while (it.next()) |cp| {
-            const ch = handle.val.getChar(cp) orelse continue;
-            width += @floatFromInt(ch.advance);
-            height = @max(height, @as(f32, @floatFromInt(ch.size.y)));
-        }
-
-        return .{ .x = width, .y = height };
     }
 };
+
+/// Trims `dest` to `clip`, moving `src`'s UV edges by the same fraction so
+/// no neighbouring glyph bleeds in. False when nothing is left to draw.
+fn clipQuad(dest: *RectF, src: *RectF, clip: RectF) bool {
+    if (dest.r <= clip.l or dest.l >= clip.r or dest.b <= clip.t or dest.t >= clip.b) return false;
+
+    const uPerPx = (src.r - src.l) / dest.width();
+    const vPerPx = (src.b - src.t) / dest.height();
+    if (dest.l < clip.l) {
+        src.l += (clip.l - dest.l) * uPerPx;
+        dest.l = clip.l;
+    }
+    if (dest.r > clip.r) {
+        src.r -= (dest.r - clip.r) * uPerPx;
+        dest.r = clip.r;
+    }
+    if (dest.t < clip.t) {
+        src.t += (clip.t - dest.t) * vPerPx;
+        dest.t = clip.t;
+    }
+    if (dest.b > clip.b) {
+        src.b -= (dest.b - clip.b) * vPerPx;
+        dest.b = clip.b;
+    }
+    return true;
+}

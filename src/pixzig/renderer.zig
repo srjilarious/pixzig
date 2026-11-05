@@ -43,6 +43,8 @@ pub const BatchLayout = quad_batch.BatchLayout;
 pub const SpriteBatch = sprite_batch.SpriteBatch;
 pub const DrawMode = sprite_batch.DrawMode;
 pub const TextRenderer = textMod.TextRenderer;
+pub const TextStyle = textMod.TextStyle;
+pub const TextAlign = textMod.TextAlign;
 
 /// Comptime render options that allow us to compile out features we don't
 /// need.  For example, if you don't need shape rendering, you can set
@@ -399,54 +401,41 @@ pub fn Renderer(opts: RendererOptions) type {
             self.implMut().batch.drawEnclosingRect(dest, color, lineWidth);
         }
 
-        /// Requires `RendererOptions.textRendering == true`; calling it with
-        /// text rendering compiled out is a compile error. Draws nothing (and
-        /// logs an error) if no default font has been set (see `setDefaultFont`).
+        /// Draws `text` in `style` (font, color, scale, clip, alignment,
+        /// shadow; see `TextStyle`) with its line box's top at `pos.y`.
+        /// Returns the size drawn, the same as `measureText`. Requires
+        /// `RendererOptions.textRendering == true`; calling it with text
+        /// rendering compiled out is a compile error. Draws nothing (and
+        /// logs an error) if the style names no font and no default font
+        /// has been set (see `setDefaultFont`).
+        pub fn drawText(self: *Self, text: []const u8, pos: Vec2F, style: TextStyle) Vec2F {
+            requireFlag("drawText", "textRendering");
+            return self.implMut().text.drawText(text, pos, style);
+        }
+
+        /// `drawText` in the default style: the default font, white, at
+        /// its own size.
         pub fn drawString(self: *Self, text: []const u8, pos: Vec2F) Vec2F {
             requireFlag("drawString", "textRendering");
-            return self.implMut().text.drawString(text, pos);
+            return self.implMut().text.drawText(text, pos, .{});
         }
 
-        /// Requires `RendererOptions.textRendering == true`; see `drawString()`.
-        pub fn drawScaledString(self: *Self, text: []const u8, pos: Vec2F, scale: f32) Vec2F {
-            requireFlag("drawScaledString", "textRendering");
-            return self.implMut().text.drawScaledString(text, pos, scale);
-        }
-
-        /// Like `drawString`, but tints every glyph by `color` instead of
-        /// rendering plain white. Requires `RendererOptions.textRendering == true`.
-        pub fn drawStringColored(self: *Self, text: []const u8, pos: Vec2F, color: Color) Vec2F {
-            requireFlag("drawStringColored", "textRendering");
-            return self.implMut().text.drawStringColored(text, pos, color);
-        }
-
-        /// Like `drawScaledString`, but tints every glyph by `color`.
+        /// The size `drawText` would draw `text` in `style` without drawing
+        /// it: the advances wide, and the font's ascent plus descent tall,
+        /// both scaled. Centering this box centers the text as drawn.
         /// Requires `RendererOptions.textRendering == true`.
-        pub fn drawScaledStringColored(self: *Self, text: []const u8, pos: Vec2F, scale: f32, color: Color) Vec2F {
-            requireFlag("drawScaledStringColored", "textRendering");
-            return self.implMut().text.drawScaledStringColored(text, pos, scale, color);
+        pub fn measureText(self: *Self, text: []const u8, style: TextStyle) Vec2F {
+            requireFlag("measureText", "textRendering");
+            return self.implMut().text.measureText(text, style);
         }
 
-        /// Like `drawString`, but only the parts of glyphs inside `clip` are
-        /// drawn (edge glyphs are trimmed, not dropped). Requires
+        /// The default font's line spacing at scale 1 (ascent, descent and
+        /// line gap): how far apart to put the tops of consecutive lines.
+        /// Null when no font is set. Requires
         /// `RendererOptions.textRendering == true`.
-        pub fn drawClippedString(self: *Self, text: []const u8, pos: Vec2F, clip: RectF) Vec2F {
-            requireFlag("drawClippedString", "textRendering");
-            return self.implMut().text.drawClippedString(text, pos, clip);
-        }
-
-        /// The default font's line height in pixels, or null when no font is
-        /// set. Requires `RendererOptions.textRendering == true`.
         pub fn lineHeight(self: *const Self) ?f32 {
             requireFlag("lineHeight", "textRendering");
-            const font = self.implConst().text.font orelse return null;
-            return @floatFromInt(font.val.maxY);
-        }
-
-        /// Measures `text` without drawing it. Requires `RendererOptions.textRendering == true`.
-        pub fn measureString(self: *Self, text: []const u8) Vec2F {
-            requireFlag("measureString", "textRendering");
-            return self.implMut().text.measureString(text);
+            return self.implConst().text.lineHeight();
         }
     };
 }

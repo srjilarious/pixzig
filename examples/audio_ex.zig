@@ -133,7 +133,7 @@ pub const App = struct {
             "Esc = quit",
         };
         for (lines) |line| {
-            _ = eng.renderer.drawStringColored(line, .{ .x = 30, .y = y }, dim);
+            _ = eng.renderer.drawText(line, .{ .x = 30, .y = y }, .{ .color = dim });
             y += 30;
         }
 
@@ -143,10 +143,10 @@ pub const App = struct {
             if (eng.audio.musicPlaying()) "playing" else "stopped",
             eng.audio.busVolume(.music),
         }) catch "";
-        _ = eng.renderer.drawStringColored(status, .{ .x = 30, .y = y }, white);
+        _ = eng.renderer.drawText(status, .{ .x = 30, .y = y }, .{ .color = white });
         y += 30;
         const state = if (self.paused) "PAUSED" else if (self.synthVoice != null) "synth on" else "";
-        _ = eng.renderer.drawStringColored(state, .{ .x = 30, .y = y }, white);
+        _ = eng.renderer.drawText(state, .{ .x = 30, .y = y }, .{ .color = white });
 
         eng.renderer.end();
     }

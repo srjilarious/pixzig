@@ -83,8 +83,21 @@ pub const App = struct {
 
         eng.renderer.drawEnclosingRect(RectF.fromPosSize(20, 320, size.x, size.y), Color.from(100, 255, 100, 255), 2);
 
-        _ = eng.renderer.drawScaledString("Scaled 2x!", .{ .x = 20, .y = 280 }, 2.0);
-        _ = eng.renderer.drawScaledString("Scaled 0.5x!", .{ .x = 20, .y = 50 }, 0.5);
+        _ = eng.renderer.drawText("Scaled 2x!", .{ .x = 20, .y = 280 }, .{ .scale = 2.0 });
+        _ = eng.renderer.drawText("Scaled 0.5x!", .{ .x = 20, .y = 50 }, .{ .scale = 0.5 });
+
+        // One `TextStyle` covers color, alignment, a drop shadow and
+        // clipping. Each line here is aligned on the same x.
+        const mid: f32 = 600;
+        eng.renderer.drawFilledRect(RectF.fromPosSize(mid, 90, 1, 140), Color.gray);
+        _ = eng.renderer.drawText("left", .{ .x = mid, .y = 100 }, .{ .color = Color.hex(0xffcc66ff) });
+        _ = eng.renderer.drawText("centered", .{ .x = mid, .y = 130 }, .{ .@"align" = .center, .shadow = Color.black });
+        _ = eng.renderer.drawText("right", .{ .x = mid, .y = 160 }, .{ .@"align" = .right, .scale = 1.5 });
+
+        // Clipped to a box: glyphs crossing its edge are trimmed.
+        const box = RectF.fromPosSize(mid - 60, 200, 120, 18);
+        eng.renderer.drawRect(box, Color.gray, 1);
+        _ = eng.renderer.drawText("clipped to the box on both sides", .{ .x = mid - 90, .y = 198 }, .{ .clip = box });
 
         eng.renderer.end();
     }

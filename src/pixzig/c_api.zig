@@ -1024,25 +1024,27 @@ export fn pz_draw_string(eng: *PzEngine, text: [*:0]const u8, x: i32, y: i32) ca
 }
 
 /// Draws `text` with every glyph tinted by a 0-1 RGBA color; see
-/// `TextRenderer.drawStringColored`.
+/// `Renderer.drawText`.
 export fn pz_draw_string_colored(eng: *PzEngine, text: [*:0]const u8, x: i32, y: i32, r: f32, g: f32, b: f32, a: f32) callconv(.c) void {
-    _ = eng.engine.renderer.drawStringColored(std.mem.span(text), .{ .x = @floatFromInt(x), .y = @floatFromInt(y) }, .{ .r = r, .g = g, .b = b, .a = a });
+    _ = eng.engine.renderer.drawText(std.mem.span(text), .{ .x = @floatFromInt(x), .y = @floatFromInt(y) }, .{ .color = .{ .r = r, .g = g, .b = b, .a = a } });
 }
 
 /// Draws `text` scaled uniformly about its top-left position.
 export fn pz_draw_string_scaled(eng: *PzEngine, text: [*:0]const u8, x: i32, y: i32, scale: f32) callconv(.c) void {
-    _ = eng.engine.renderer.drawScaledString(std.mem.span(text), .{ .x = @floatFromInt(x), .y = @floatFromInt(y) }, scale);
+    _ = eng.engine.renderer.drawText(std.mem.span(text), .{ .x = @floatFromInt(x), .y = @floatFromInt(y) }, .{ .scale = scale });
 }
 
-/// Measures `text` in the default font without drawing it. Reports (0, 0)
-/// when no font is set.
+/// Measures `text` in the default font without drawing it: the advances
+/// wide and the line box (ascent plus descent) tall. Reports (0, 0) when no
+/// font is set.
 export fn pz_measure_string(eng: *PzEngine, text: [*:0]const u8, out_w: *i32, out_h: *i32) callconv(.c) void {
-    const size = eng.engine.renderer.measureString(std.mem.span(text));
+    const size = eng.engine.renderer.measureText(std.mem.span(text), .{});
     out_w.* = @intFromFloat(size.x);
     out_h.* = @intFromFloat(size.y);
 }
 
-/// The default font's line height in pixels, or -1 when no font is set.
+/// The default font's line spacing in pixels (ascent, descent and line
+/// gap), or -1 when no font is set.
 export fn pz_font_line_height(eng: *PzEngine) callconv(.c) i32 {
     const h = eng.engine.renderer.lineHeight() orelse return -1;
     return @intFromFloat(h);

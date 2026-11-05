@@ -128,6 +128,8 @@ pub const RendererInitOpts = renderer.RendererInitOpts;
 pub const Projection = renderer.Projection;
 pub const FontSource = renderer.FontSource;
 pub const FontAtlas = renderer.FontAtlas;
+pub const TextStyle = renderer.TextStyle;
+pub const TextAlign = renderer.TextAlign;
 
 pub const TileMap = tile.TileMap;
 pub const TileLayer = tile.TileLayer;

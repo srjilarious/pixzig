@@ -73,14 +73,16 @@ pub const TouchOverlay = struct {
             renderer.drawTextureColored(ring, square(b.center, b.radiusPx), full_uv, white(0.5));
             if (text and b.label.len > 0) {
                 const label = b.label.slice();
-                const size = renderer.measureString(label);
                 // Scale the label to about half the button's height,
                 // whatever size the default font was packed at.
-                const scale = if (size.y > 0) b.radiusPx / size.y else 1;
-                _ = renderer.drawScaledStringColored(label, .{
-                    .x = b.center.x - size.x * scale / 2,
-                    .y = b.center.y - size.y * scale / 2,
-                }, scale, white(if (b.down) 0.95 else 0.7));
+                const height = renderer.measureText(label, .{}).y;
+                const scale = if (height > 0) b.radiusPx / height else 1;
+                const size = renderer.measureText(label, .{ .scale = scale });
+                _ = renderer.drawText(label, .{ .x = b.center.x, .y = b.center.y - size.y / 2 }, .{
+                    .scale = scale,
+                    .color = white(if (b.down) 0.95 else 0.7),
+                    .@"align" = .center,
+                });
             }
         }
     }

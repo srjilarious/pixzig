@@ -1,20 +1,47 @@
 # Text and Fonts
 
-The renderer draws text with one default font. Out of the box that's Karla at 20 pixels, embedded in your executable by `buildGame`, so `drawString` works with no setup at all.
+The renderer draws text with a default font. Out of the box that's Karla at 20 pixels, embedded in your executable by `buildGame`, so `drawString` works with no setup at all.
 
 ## Drawing Text
 
-Text draws inside a `begin`/`end` pair like everything else, at an integer position:
+Text draws inside a `begin`/`end` pair like everything else. `drawText` takes the text, a position and a `TextStyle`; `drawString` is the same with the default style:
 
 ```zig
 eng.renderer.begin(.logical);
 const size = eng.renderer.drawString("Score: 100", .{ .x = 8, .y = 8 });
-_ = eng.renderer.drawStringColored("Game Over", .{ .x = 100, .y = 80 }, Color.from(255, 80, 80, 255));
-_ = eng.renderer.drawScaledString("Big", .{ .x = 8, .y = 40 }, 2.0);
+_ = eng.renderer.drawText("Game Over", .{ .x = 100, .y = 80 }, .{ .color = Color.from(255, 80, 80, 255) });
+_ = eng.renderer.drawText("Big", .{ .x = 8, .y = 40 }, .{ .scale = 2.0 });
 eng.renderer.end();
 ```
 
-Positions are `Vec2F`, like sprites and the mouse. Each draw call returns the size of the text it drew, also a `Vec2F`, which is handy for boxes and backgrounds. To lay out text before drawing it, use `measureString(text)` and `lineHeight()`. `drawClippedString(text, pos, clipRect)` trims glyphs at the clip rect's edges, for text in a scrolling panel.
+Every `TextStyle` field has a default, so name only what you change:
+
+| Field | Default | |
+|---|---|---|
+| `font` | null | A `*FontAtlasHandle` from the resource manager. Null uses the default font. |
+| `color` | white | Multiplies each glyph; alpha below 1 fades the text. |
+| `scale` | 1 | Multiplies the font's pixel size. |
+| `clip` | null | Only the parts of glyphs inside this rect are drawn, for text in a scrolling panel. |
+| `align` | `.left` | Whether `pos.x` is the text's left edge, `.center` or `.right` edge. Written `.@"align"`, since `align` is a Zig keyword. |
+| `shadow` | null | Draws the text again underneath in this color, `shadowOffset` (default 1, 1) pixels away. |
+
+```zig
+const title: pixzig.TextStyle = .{ .scale = 3, .@"align" = .center, .shadow = Color.black };
+_ = eng.renderer.drawText("PAUSED", .{ .x = screenW / 2, .y = 40 }, title);
+
+const big = try eng.resources.getFontAtlas("title-font");
+_ = eng.renderer.drawText("Chapter 1", .{ .x = 8, .y = 8 }, .{ .font = big });
+```
+
+Positions are `Vec2F`, like sprites and the mouse. `pos.y` is the top of the line: the baseline sits the font's ascent below it, and descenders reach down to `ascent + descent`. `drawText` returns the size of that line box, and `measureText(text, style)` returns the same size without drawing, so centering a measured string centers it as drawn:
+
+```zig
+const style: pixzig.TextStyle = .{ .scale = 2 };
+const size = eng.renderer.measureText("Ready?", style);
+_ = eng.renderer.drawText("Ready?", .{ .x = (w - size.x) / 2, .y = (h - size.y) / 2 }, style);
+```
+
+`lineHeight()` is the default font's line spacing (ascent, descent and the font's line gap), for stacking lines of text.
 
 Glyphs are packed into the font atlas the first time they're drawn. Text is UTF-8, so Japanese, accented letters and symbols work as long as the font has them.
 
@@ -65,7 +92,7 @@ _ = try eng.resources.loadFontFromBitmap(
 try eng.renderer.setDefaultFont(&eng.resources, "font5r");
 ```
 
-Start the renderer with `.font = .none` when you're going to swap in a bitmap font, so it doesn't load the embedded one for nothing. `drawStringColored` tints bitmap fonts too. See `examples/bitmap_text_rendering_ex.zig`.
+Start the renderer with `.font = .none` when you're going to swap in a bitmap font, so it doesn't load the embedded one for nothing. A `color` in the style tints bitmap fonts too. See `examples/bitmap_text_rendering_ex.zig`.
 
 ![bitmap_text_rendering_ex drawing with a bitmap font](assets/screenshots/bitmap_text.png)
 
@@ -81,7 +108,7 @@ Characters no face has draw as an empty box. A hot reload of the main font file 
 
 ## Changing the Size at Runtime
 
-`eng.defaultFontAtlas()` gives you the live atlas, or null when there's no default font. `setFontSize` repacks it at a new pixel size, and the next `drawString` uses it:
+`eng.defaultFontAtlas()` gives you the live atlas, or null when there's no default font. `setFontSize` repacks it at a new pixel size, and the next draw uses it:
 
 ```zig
 const kb = &eng.inputs.keyboard;

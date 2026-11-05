@@ -218,6 +218,14 @@ pub const FontAtlas = struct {
     /// where already-drawn ASCII text sits. Equals `maxY` for a bitmap
     /// font atlas, which has no scalable face to measure.
     ascent: i32,
+    /// Distance in pixels from the baseline down to the lowest descender:
+    /// the primary face's scaled vmetrics descent, made positive. A line of
+    /// text drawn at `pos.y` covers `pos.y` to `pos.y + ascent + descent`.
+    /// 0 for a bitmap font, whose cells sit entirely above the baseline.
+    descent: i32,
+    /// Extra space the font asks for between one line's descent and the
+    /// next line's ascent. 0 for a bitmap font.
+    lineGap: i32,
     /// True for a TTF atlas, whose texture is an R8 coverage mask; false for
     /// a bitmap font's RGBA image.
     isAlpha: bool,
@@ -454,6 +462,8 @@ pub const FontAtlas = struct {
         var line_gap: c_int = 0;
         stb_tt.c.stbtt_GetFontVMetrics(&faces.items[0].info, &ascent, &descent, &line_gap);
         const scaled_ascent: i32 = @intFromFloat(@round(faces.items[0].scale * @as(f32, @floatFromInt(ascent))));
+        const scaled_descent: i32 = @intFromFloat(@round(faces.items[0].scale * @as(f32, @floatFromInt(-descent))));
+        const scaled_line_gap: i32 = @intFromFloat(@round(faces.items[0].scale * @as(f32, @floatFromInt(line_gap))));
 
         const pixels = try alloc.alloc(u8, @intCast(initial_dim * initial_dim));
         errdefer alloc.free(pixels);
@@ -492,6 +502,8 @@ pub const FontAtlas = struct {
             },
             .maxY = 0,
             .ascent = scaled_ascent,
+            .descent = scaled_descent,
+            .lineGap = scaled_line_gap,
             .isAlpha = true,
             .fontSize = fontSize,
             .alloc = alloc,
@@ -592,7 +604,10 @@ pub const FontAtlas = struct {
             var desc: c_int = 0;
             var lgap: c_int = 0;
             stb_tt.c.stbtt_GetFontVMetrics(&self.faces.items[0].info, &asc, &desc, &lgap);
-            self.ascent = @intFromFloat(@round(self.faces.items[0].scale * @as(f32, @floatFromInt(asc))));
+            const face_scale = self.faces.items[0].scale;
+            self.ascent = @intFromFloat(@round(face_scale * @as(f32, @floatFromInt(asc))));
+            self.descent = @intFromFloat(@round(face_scale * @as(f32, @floatFromInt(-desc))));
+            self.lineGap = @intFromFloat(@round(face_scale * @as(f32, @floatFromInt(lgap))));
         }
 
         // Drop every packed glyph and rewind the shelf packer.
@@ -824,6 +839,8 @@ pub const FontAtlas = struct {
             // No scalable face to measure; the bitmap path top-aligns the
             // tallest cell exactly as before, so the baseline is `maxY`.
             .ascent = maxY,
+            .descent = 0,
+            .lineGap = 0,
             .isAlpha = false,
             .fontSize = 0,
             .alloc = alloc,

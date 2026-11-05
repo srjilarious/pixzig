@@ -101,15 +101,15 @@ pub fn rendererWarnsOnceWithNoFontTest(io: std.Io, alloc: std.mem.Allocator) !vo
     try testz.expectEqual(drawn.x, 0);
     try testz.expectEqual(drawn.y, 0);
     try testz.expectTrue(r.testingNoFontWarningIssued());
-    _ = r.drawScaledString("hello", .{ .x = 0, .y = 0 }, 2.0);
-    _ = r.drawStringColored("hello", .{ .x = 0, .y = 0 }, .{ .r = 1, .g = 1, .b = 1, .a = 1 });
-    _ = r.drawClippedString("hello", .{ .x = 0, .y = 0 }, .{ .l = 0, .t = 0, .r = 10, .b = 10 });
+    _ = r.drawText("hello", .{ .x = 0, .y = 0 }, .{ .scale = 2.0 });
+    _ = r.drawText("hello", .{ .x = 0, .y = 0 }, .{ .color = .{ .r = 1, .g = 1, .b = 1, .a = 1 } });
+    _ = r.drawText("hello", .{ .x = 0, .y = 0 }, .{ .clip = .{ .l = 0, .t = 0, .r = 10, .b = 10 } });
     r.end();
 
     // Measuring with no font reports nothing rather than panicking -- it's
     // reachable from Python (`app.text.measure`), where a panic would take
     // the whole interpreter down.
-    const measured = r.measureString("hello");
+    const measured = r.measureText("hello", .{});
     try testz.expectEqual(measured.x, 0);
     try testz.expectEqual(measured.y, 0);
     try testz.expectTrue(r.testingNoFontWarningIssued());
@@ -120,6 +120,52 @@ pub fn rendererWarnsOnceWithNoFontTest(io: std.Io, alloc: std.mem.Allocator) !vo
         break :blk "late";
     });
     try testz.expectTrue(!r.testingNoFontWarningIssued());
+}
+
+pub fn rendererMeasureTextMatchesDrawingTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = glCtx();
+
+    const Rndr = pixzig.renderer.Renderer(.{ .textRendering = true });
+    var rm = pixzig.resources.ResourceManager.init(alloc);
+    defer rm.deinit();
+
+    var r = try Rndr.init(alloc, &rm, &test_viewport, .{
+        .font = .{ .path = .{ .face = "assets/Roboto-Medium.ttf", .size = 20.0 } },
+    });
+    defer r.deinit();
+    const fa = r.defaultFontAtlas().?;
+
+    // The height is the line box the glyphs are drawn in, not the tallest
+    // glyph, so it is the same for "a" and "Ag".
+    const small = r.measureText("a", .{});
+    const tall = r.measureText("Ag", .{});
+    try testz.expectEqual(small.y, @as(f32, @floatFromInt(fa.ascent + fa.descent)));
+    try testz.expectEqual(small.y, tall.y);
+    try testz.expectTrue(fa.descent > 0);
+    try testz.expectEqual(r.lineHeight().?, @as(f32, @floatFromInt(fa.ascent + fa.descent + fa.lineGap)));
+
+    // Scale applies to both axes, and drawing reports what measuring does,
+    // whatever the alignment, clip or shadow.
+    const doubled = r.measureText("Hello", .{ .scale = 2 });
+    const plain = r.measureText("Hello", .{});
+    try testz.expectTrue(doubled.x >= plain.x * 2 - 5 and doubled.x <= plain.x * 2);
+    r.begin(.logical);
+    const drawn = r.drawText("Hello", .{ .x = 400, .y = 10 }, .{
+        .scale = 2,
+        .@"align" = .center,
+        .shadow = .black,
+        .clip = RectF.fromPosSize(0, 0, 410, 480),
+    });
+    r.end();
+    try testz.expectEqual(drawn.x, doubled.x);
+    try testz.expectEqual(drawn.y, doubled.y);
+
+    // A style can name another font without touching the default.
+    const big = try rm.loadFontFromTtfFile("big", "assets/Roboto-Medium.ttf", 40.0);
+    const bigSize = r.measureText("Hello", .{ .font = big });
+    try testz.expectTrue(bigSize.y > plain.y and bigSize.x > plain.x);
+    try testz.expectEqual(r.measureText("Hello", .{}).x, plain.x);
 }
 
 pub fn rendererLoadsEmbeddedFontByDefaultTest(io: std.Io, alloc: std.mem.Allocator) !void {
@@ -268,7 +314,7 @@ pub fn rendererPassesInEveryProjectionTest(io: std.Io, alloc: std.mem.Allocator)
         r.begin(p);
         r.drawFilledRect(RectF.fromPosSize(10, 10, 20, 20), pixzig.Color.from(255, 0, 0, 255));
         r.setClip(RectF.fromPosSize(0, 0, 100, 100));
-        _ = r.drawClippedString("clip", .{ .x = 10, .y = 10 }, RectF.fromPosSize(0, 0, 100, 100));
+        _ = r.drawText("clip", .{ .x = 10, .y = 10 }, .{ .clip = RectF.fromPosSize(0, 0, 100, 100) });
         r.setClip(null);
         r.end();
     }
