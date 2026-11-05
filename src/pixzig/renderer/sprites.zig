@@ -533,30 +533,46 @@ pub const Actor = struct {
     /// frame to the sprite whenever it changes. A `.loop` sequence wraps to
     /// its first frame; a `.once` sequence switches to the state's
     /// `nextState`, or holds its last frame and sets `finished()`.
+    ///
+    /// A delta longer than the current frame advances through as many frames
+    /// as it covers (carrying the remainder), so short frames don't slow
+    /// down at a low tick rate. Time left over when a `.once` state hands
+    /// off to its `nextState` carries into that state too.
     pub fn update(self: *Actor, deltaMs: f64) void {
-        const state = self.currState orelse return;
-        if (self.done) return;
-
-        const currSeq = state.sequence;
-        if (currSeq.frames.items.len == 0) return;
-        const currFrame = &currSeq.frames.items[self.currFrame];
+        if (self.currState == null or self.done) return;
         self.currFrameTimeMs += deltaMs;
-        if (self.currFrameTimeMs > currFrame.frameTimeMs) {
-            self.currFrameTimeMs -= currFrame.frameTimeMs;
+
+        var changed = false;
+        while (self.currState) |state| {
+            if (self.done) break;
+            const frames = state.sequence.frames.items;
+            if (frames.len == 0) break;
+
+            const frameTimeMs = frames[self.currFrame].frameTimeMs;
+            // A zero-length frame would never use up any time.
+            if (frameTimeMs <= 0 or self.currFrameTimeMs <= frameTimeMs) break;
+
+            self.currFrameTimeMs -= frameTimeMs;
             self.currFrame += 1;
-            if (self.currFrame >= currSeq.frames.items.len) {
-                switch (currSeq.mode) {
+            changed = true;
+            if (self.currFrame >= frames.len) {
+                switch (state.sequence.mode) {
                     .loop => self.currFrame = 0,
                     .once => {
                         self.currFrame -= 1;
+                        const leftoverMs = self.currFrameTimeMs;
                         self.finishOnce(state);
-                        return;
+                        // `finishOnce` applied the next state's first
+                        // frame, or holds this state's last one.
+                        changed = false;
+                        if (self.done) break;
+                        self.currFrameTimeMs = leftoverMs;
                     },
                 }
             }
-
-            self.applyCurrentFrame();
         }
+
+        if (changed) self.applyCurrentFrame();
     }
 
     /// A `.once` state just ran past its last frame: hand off to its

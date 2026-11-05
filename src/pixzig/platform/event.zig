@@ -96,6 +96,16 @@ pub const Event = union(enum) {
     /// The OS is terminating the app.
     terminating,
 
+    // Development. Not from the OS: the engine sends these itself.
+
+    /// A Lua file the engine's `ScriptEngine` ran (with `runScript`) or
+    /// loaded (with `require`) changed on disk, and the engine has run it
+    /// again in the same Lua state. Re-read whatever the game took from it,
+    /// e.g. `eng.scripts.loadStruct(Config, "config")`. The path is the
+    /// resolved file path, only valid during the `onEvent` call. Debug
+    /// builds on desktop only; see `ScriptEngine.checkHotReload`.
+    script_reloaded: []const u8,
+
     pub const Kind = std.meta.Tag(Event);
 };
 

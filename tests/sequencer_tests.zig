@@ -673,33 +673,72 @@ pub fn luaSeqTweenAndValuesTest(io: std.Io, alloc: std.mem.Allocator) !void {
 
     h.player.update(50.0);
     try testz.expectEqual(h.value, 15.0);
+    // The tween ends exactly at the end of this tick, and the zero-time set
+    // after it runs in the same tick.
     h.player.update(50.0);
-    try testz.expectEqual(h.value, 20.0);
-    h.player.update(16.0);
     try testz.expectEqual(h.value, 3.0);
     try testz.expectEqual(h.player.sequences.items.len, 0);
 }
 
-// An unknown value name is ignored rather than adding a step.
-pub fn luaSeqTweenUnknownValueIgnoredTest(io: std.Io, alloc: std.mem.Allocator) !void {
+// A bad argument to a seq_* or value_* function raises a Lua error (so the
+// script stops there) instead of being skipped.
+pub fn luaSeqBadArgumentsRaiseErrorsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var h: LuaSeqHarness = undefined;
+    try h.init(alloc);
+    defer h.deinit();
+
+    try h.script.run("s = seq_new()");
+    const bad = [_][]const u8{
+        "value_get('nope')",
+        "value_set('v', 'ten')",
+        "seq_tween(s, 'nope', 1, 100)",
+        "seq_wait('s', 100)",
+        "seq_wait(s)",
+        "seq_wait(99, 100)",
+        "seq_move_to(s, 1, 0, 0, 100, 'bogus_ease')",
+        "seq_move_to(s, -1, 0, 0, 100)",
+        "seq_call(s, 5)",
+        "seq_parallel(s, s)",
+        "seq_parallel(s, 99)",
+        "local t = seq_new(); seq_parallel(s, t, t)",
+        "seq_play(s, string.rep('x', 65))",
+        "seq_cancel()",
+    };
+    for (bad) |code| {
+        try testz.expectError(h.script.run(code), error.ScriptError);
+    }
+
+    // None of those added a step or used up the handle, and the stack is
+    // clean.
+    try h.script.run("seq_play(s)");
+    try testz.expectEqual(h.player.sequences.items.len, 1);
+    try testz.expectEqual(h.player.sequences.items[0].steps.items.len, 0);
+    try testz.expectEqual(h.script.lua.getTop(), 0);
+
+    // A played handle is gone.
+    try testz.expectError(h.script.run("seq_wait(s, 10)"), error.ScriptError);
+}
+
+// A track rejected by seq_parallel leaves every handle pending.
+pub fn luaSeqParallelBadTrackTakesNothingTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     var h: LuaSeqHarness = undefined;
     try h.init(alloc);
     defer h.deinit();
 
     try h.script.run(
-        \\missing = value_get("nope")
-        \\local s = seq_new()
-        \\seq_tween(s, "nope", 1, 100)
+        \\s = seq_new()
+        \\a = seq_new()
+        \\seq_set(a, "v", 7)
+    );
+    try testz.expectError(h.script.run("seq_parallel(s, a, 42)"), error.ScriptError);
+    try h.script.run(
+        \\seq_play(a)
         \\seq_play(s)
     );
-    _ = h.script.getGlobal("missing");
-    try testz.expectTrue(h.script.lua.isNil(-1));
-    h.script.lua.pop(1);
-
-    // With no steps, the sequence is done on its first update.
     h.player.update(16.0);
-    try testz.expectEqual(h.player.sequences.items.len, 0);
+    try testz.expectEqual(h.value, 7.0);
 }
 
 // seq_call runs its function when the sequence reaches it, not before.
@@ -717,9 +756,10 @@ pub fn luaSeqCallRunsFunctionInOrderTest(io: std.Io, alloc: std.mem.Allocator) !
         \\seq_play(s)
     );
 
-    h.player.update(100.0);
+    h.player.update(99.0);
     try testz.expectEqual(try h.globalNumber("calls"), 0.0);
-    h.player.update(16.0);
+    // The wait ends this tick, and the call after it runs straight away.
+    h.player.update(1.0);
     try testz.expectEqual(try h.globalNumber("calls"), 1.0);
     try testz.expectEqual(h.player.sequences.items.len, 0);
 }
@@ -738,7 +778,6 @@ pub fn luaSeqCallErrorDoesNotStopSequenceTest(io: std.Io, alloc: std.mem.Allocat
         \\seq_play(s)
     );
 
-    h.player.update(16.0);
     h.player.update(16.0);
     try testz.expectEqual(h.value, 5.0);
     try testz.expectEqual(h.script.lua.getTop(), 0);
@@ -829,13 +868,15 @@ pub fn luaSeqParallelRunsTracksTogetherTest(io: std.Io, alloc: std.mem.Allocator
     // Both of the parallel handles were freed for reuse.
     try testz.expectTrue(try h.globalNumber("reused") <= 1.0);
 
+    // Track b's wait ends with this tick and its call runs in the same one.
     h.player.update(50.0);
     try testz.expectEqual(h.value, 5.0);
-    h.player.update(16.0);
     try testz.expectEqual(try h.globalNumber("calls"), 1.0);
-    h.player.update(34.0);
-    try testz.expectEqual(h.value, 10.0);
-    h.player.update(16.0);
+    h.player.update(25.0);
+    try testz.expectEqual(h.value, 7.5);
+    // Track a finishes, which finishes the parallel step, and the set after
+    // it runs in the same tick.
+    h.player.update(25.0);
     try testz.expectEqual(h.value, -1.0);
     try testz.expectEqual(h.player.sequences.items.len, 0);
 }
@@ -853,4 +894,75 @@ pub fn playerClearStopsAllTest(io: std.Io, alloc: std.mem.Allocator) !void {
     }
     player.clear();
     try testz.expectEqual(player.sequences.items.len, 0);
+}
+
+// Zero-time steps all run in the tick they're reached.
+pub fn zeroTimeStepsRunInOneTickTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var a: f32 = 0;
+    var b: f32 = 0;
+    var c: f32 = 0;
+    var sequence = seq.Sequence.init(alloc);
+    defer sequence.deinit(alloc);
+    try sequence.add(alloc, try seq.SetValueStep.init(alloc, &a, 1));
+    try sequence.add(alloc, try seq.SetValueStep.init(alloc, &b, 2));
+    try sequence.add(alloc, try seq.SetValueStep.init(alloc, &c, 3));
+
+    try testz.expectTrue(sequence.update(16.0));
+    try testz.expectEqual(a, 1.0);
+    try testz.expectEqual(b, 2.0);
+    try testz.expectEqual(c, 3.0);
+}
+
+// Time a step doesn't need carries into the next one, so waits don't round
+// up to whole ticks.
+pub fn leftoverTimeCarriesToNextStepTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var sequence = seq.Sequence.init(alloc);
+    defer sequence.deinit(alloc);
+    try sequence.add(alloc, try seq.WaitStep.init(alloc, 30.0));
+    try sequence.add(alloc, try seq.WaitStep.init(alloc, 30.0));
+
+    // 50ms: the first wait ends at 30, the second has had 20 of its 30.
+    try testz.expectFalse(sequence.update(50.0));
+    try testz.expectEqual(sequence.currStep, 1);
+    try testz.expectTrue(sequence.update(10.0));
+}
+
+// One long tick can run a whole sequence of timed steps, and advance
+// reports what's left over.
+pub fn longTickRunsSeveralTimedStepsTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var v: f32 = 0;
+    var sequence = seq.Sequence.init(alloc);
+    defer sequence.deinit(alloc);
+    try sequence.add(alloc, try seq.WaitStep.init(alloc, 10.0));
+    try sequence.add(alloc, try seq.TweenValueStep.init(alloc, &v, 4, 20.0, .linear));
+    try sequence.add(alloc, try seq.WaitStep.init(alloc, 10.0));
+
+    const status = sequence.advance(100.0);
+    try testz.expectEqual(v, 4.0);
+    switch (status) {
+        .running => try testz.expectTrue(false),
+        .finished => |left| try testz.expectEqual(left, 60.0),
+    }
+}
+
+// A parallel step finishes with its slowest track and passes on what that
+// track left over.
+pub fn parallelStepLeftoverIsFromSlowestTrackTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var par = try seq.ParallelStep.init(alloc);
+    defer par.deinit(alloc);
+    try seq.ParallelStep.add(&par, alloc, try seq.WaitStep.init(alloc, 10.0));
+    try seq.ParallelStep.add(&par, alloc, try seq.WaitStep.init(alloc, 40.0));
+
+    switch (par.update(30.0)) {
+        .running => {},
+        .finished => try testz.expectTrue(false),
+    }
+    switch (par.update(30.0)) {
+        .running => try testz.expectTrue(false),
+        .finished => |left| try testz.expectEqual(left, 20.0),
+    }
 }

@@ -67,6 +67,7 @@ pub fn onEvent(self: *App, eng: *AppRunner.Engine, event: pixzig.Event) void {
 | `drop_begin`, `drop_file`, `drop_text`, `drop_complete` | Drag-and-drop onto the window. `drop_file` carries a `path` and `drop_text` a `text`, plus the drop `pos` in window coordinates. Both strings are only valid during the call, so copy them to keep them. |
 | `gamepad_added`, `gamepad_removed` | A pad was plugged in or out. Only reported with `inputOpts.numGamepads` above zero. See [Input](page:input). |
 | `will_enter_background`, `did_enter_background`, `will_enter_foreground`, `did_enter_foreground`, `low_memory`, `terminating` | App lifecycle, mostly from mobile platforms. The engine pauses audio on `will_enter_background` and resumes it on `did_enter_foreground` before `onEvent` sees them. Delivered as they're sent, not through the pump; see below. |
+| `script_reloaded` | Debug builds: a Lua file `eng.scripts` ran or required changed and was run again. Carries the file's path, valid during the call. Re-read config here; see [Scripting](page:scripting). |
 
 `onEvent` runs during the event pump at the start of each frame, before that frame's `update` calls, except for the lifecycle events. Input isn't delivered here on purpose: keys and buttons are latched per tick so `pressed` stays a one-update edge, and reading them in `update` keeps that true.
 

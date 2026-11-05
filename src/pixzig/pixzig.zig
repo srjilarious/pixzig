@@ -425,6 +425,11 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
             self.pumpEvents(app);
             if (self.engine.quitRequested) return false;
             self.engine.resources.checkHotReload();
+            if (engOpts.scripting) {
+                for (self.engine.scripts.checkHotReload()) |path| {
+                    if (HasOnEvent) app.onEvent(self.engine, .{ .script_reloaded = path });
+                }
+            }
 
             while (self.lag > UpdateStepMs) {
                 self.lag -= UpdateStepMs;

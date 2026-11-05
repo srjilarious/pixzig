@@ -109,13 +109,6 @@ pub fn Timer(comptime T: type) type {
     };
 }
 
-/// Converts a null-terminated C string to a Zig slice. The caller is
-/// responsible for ensuring that the C string is valid and null-terminated.
-pub fn cStrToSlice(c_str: [*:0]const u8) []const u8 {
-    const length = std.mem.len(c_str);
-    return c_str[0..length];
-}
-
 /// Removes the starting path and end extension from the given path
 pub fn baseNameFromPath(path: []const u8) []const u8 {
     const rootName = blk: {

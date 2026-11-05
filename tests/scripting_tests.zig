@@ -341,3 +341,89 @@ pub fn requireLoadsModulesThroughEngineIo(io: std.Io, alloc: std.mem.Allocator) 
     // A missing module is still an error, naming the files tried.
     try testz.expectError(eng.run("require('no_such_module')"), error.ScriptError);
 }
+
+/// Scratch files for the hot reload tests live under the build cache.
+const HotReloadScratch = ".zig-cache/pixzig-script-reload-tests/";
+
+/// An absolute path to `name` in a fresh scratch directory `dir`, so it
+/// doesn't depend on the asset base. Caller frees.
+fn scratchPath(alloc: std.mem.Allocator, comptime dir: []const u8, name: []const u8) ![]u8 {
+    const sio = std.Io.Threaded.global_single_threaded.io();
+    std.Io.Dir.cwd().deleteTree(sio, HotReloadScratch ++ dir) catch {};
+    const cwd = try std.process.currentPathAlloc(sio, alloc);
+    defer alloc.free(cwd);
+    return std.fs.path.join(alloc, &.{ cwd, HotReloadScratch ++ dir, name });
+}
+
+fn globalInteger(eng: *ScriptEngine, name: []const u8) !ziglua.Integer {
+    _ = eng.getGlobal(name);
+    defer eng.lua.pop(1);
+    return try eng.lua.toInteger(-1);
+}
+
+// A file run with runScript runs again when it changes, and checkHotReload
+// reports it once.
+pub fn hotReloadRerunsChangedScriptTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    const path = try scratchPath(alloc, "rerun", "conf.lua");
+    defer alloc.free(path);
+    try pixzig.save.writeFileAtomic(alloc, path, "value = 1\nruns = (runs or 0) + 1\n");
+
+    var eng = try ScriptEngine.init(alloc);
+    defer eng.deinit();
+    try eng.runScript(path);
+    try testz.expectEqual(try globalInteger(&eng, "value"), 1);
+
+    // Nothing changed yet.
+    try testz.expectEqual(eng.checkHotReload().len, 0);
+
+    try pixzig.save.writeFileAtomic(alloc, path, "value = 2\nruns = (runs or 0) + 1\n");
+    const reloaded = eng.checkHotReload();
+    try testz.expectEqual(reloaded.len, 1);
+    try testz.expectEqualStr(reloaded[0], path);
+    try testz.expectEqual(try globalInteger(&eng, "value"), 2);
+    try testz.expectEqual(try globalInteger(&eng, "runs"), 2);
+    try testz.expectEqual(eng.checkHotReload().len, 0);
+}
+
+// A broken edit isn't reported and keeps the old globals; fixing it reloads.
+pub fn hotReloadSkipsBrokenScriptTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    const path = try scratchPath(alloc, "broken", "conf.lua");
+    defer alloc.free(path);
+    try pixzig.save.writeFileAtomic(alloc, path, "value = 1\n");
+
+    var eng = try ScriptEngine.init(alloc);
+    defer eng.deinit();
+    try eng.runScript(path);
+
+    try pixzig.save.writeFileAtomic(alloc, path, "value = = 2\n");
+    try testz.expectEqual(eng.checkHotReload().len, 0);
+    try testz.expectEqual(try globalInteger(&eng, "value"), 1);
+
+    try pixzig.save.writeFileAtomic(alloc, path, "value = 3\n");
+    try testz.expectEqual(eng.checkHotReload().len, 1);
+    try testz.expectEqual(try globalInteger(&eng, "value"), 3);
+}
+
+// A module loaded with require is required again when it changes, so later
+// requires get the new version.
+pub fn hotReloadRerequiresChangedModuleTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    const path = try scratchPath(alloc, "module", "tuning.lua");
+    defer alloc.free(path);
+    try pixzig.save.writeFileAtomic(alloc, path, "return { speed = 10 }\n");
+    const dir = std.fs.path.dirname(path).?;
+
+    var eng = try ScriptEngine.init(alloc);
+    defer eng.deinit();
+    const setup = try std.fmt.allocPrint(alloc, "package.path = '{s}/?.lua'\nspeed = require('tuning').speed", .{dir});
+    defer alloc.free(setup);
+    try eng.run(setup);
+    try testz.expectEqual(try globalInteger(&eng, "speed"), 10);
+
+    try pixzig.save.writeFileAtomic(alloc, path, "return { speed = 25 }\n");
+    try testz.expectEqual(eng.checkHotReload().len, 1);
+    try eng.run("speed = require('tuning').speed");
+    try testz.expectEqual(try globalInteger(&eng, "speed"), 25);
+}

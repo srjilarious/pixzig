@@ -525,3 +525,57 @@ pub fn actorCurrEmptySequenceIsNullTest(io: std.Io, alloc: std.mem.Allocator) !v
 
     try testz.expectTrue(actor.curr() == null);
 }
+
+// A delta covering several frames advances through all of them.
+pub fn actorUpdateAdvancesSeveralFramesTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var tm = try createDummyTextureManager(alloc);
+    defer tm.deinit();
+
+    var seq = try makeWalkSeq(alloc, &tm);
+    defer seq.deinit();
+    const walk: ActorState = .{ .name = "walk", .sequence = &seq };
+
+    var actor = Actor.init(alloc, try tm.createSprite("player_right_1"));
+    defer actor.deinit();
+    _ = try actor.addState(&walk, .{});
+
+    // 250ms of 100ms frames: frame 1 at 100, back to frame 0 at 200, with
+    // 50ms into it.
+    actor.update(250);
+    try testz.expectEqual(actor.currFrame, 0);
+    try testz.expectEqual(actor.currFrameTimeMs, 50.0);
+    try testz.expectEqual(actor.sprite.texture, try tm.getTexture("player_right_2"));
+
+    actor.update(60);
+    try testz.expectEqual(actor.currFrame, 1);
+    try testz.expectEqual(actor.sprite.texture, try tm.getTexture("player_right_3"));
+}
+
+// Time left after a play-once state ends carries into its next state.
+pub fn actorOnceCarriesTimeIntoNextStateTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var tm = try createDummyTextureManager(alloc);
+    defer tm.deinit();
+
+    var walk = try makeWalkSeq(alloc, &tm);
+    defer walk.deinit();
+    var attack = try makeOnceSeq(alloc, &tm);
+    defer attack.deinit();
+    const idleState: ActorState = .{ .name = "idle", .sequence = &walk };
+    const attackState: ActorState = .{ .name = "attack", .nextState = "idle", .sequence = &attack };
+
+    var actor = Actor.init(alloc, try tm.createSprite("player_right_1"));
+    defer actor.deinit();
+    _ = try actor.addState(&idleState, .{});
+    _ = try actor.addState(&attackState, .{});
+    try actor.setState("attack", .{});
+
+    // Attack's two frames use 200ms; the other 150 runs idle past its
+    // first frame.
+    actor.update(350);
+    try testz.expectEqualStr(actor.currName, "idle");
+    try testz.expectEqual(actor.currFrame, 1);
+    try testz.expectEqual(actor.currFrameTimeMs, 50.0);
+    try testz.expectEqual(actor.sprite.texture, try tm.getTexture("player_right_3"));
+}

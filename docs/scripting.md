@@ -62,6 +62,25 @@ local boss    = require "enemies.boss"   -- assets/scripts/enemies/boss.lua
 
 Lua's own file searcher still runs after it, for paths relative to the working directory on desktop.
 
+### Hot Reload
+
+In a debug build on desktop, every file run with `runScript` or loaded with `require` (through the engine's searcher) is watched. When you save one, the engine runs it again in the same Lua state: a script is run with `runScript` again, and a module is dropped from `package.loaded` and required again, so later `require` calls get the new version. Code still holding the old module table keeps it.
+
+Running the script again only changes Lua's state, so the engine then tells the app with a `script_reloaded` event carrying the file's path. Re-read whatever the game took from the script there:
+
+```zig
+pub fn onEvent(self: *App, eng: *AppRunner.Engine, event: pixzig.Event) void {
+    switch (event) {
+        .script_reloaded => self.config = eng.scripts.loadStruct(Config, "config") catch self.config,
+        else => {},
+    }
+}
+```
+
+A script with an error is logged and not reported, and stays watched, so saving the fix reloads it. Keep in mind that everything the script does happens again, so a script that plays sequences or registers callbacks will do that a second time.
+
+`AppRunner` checks `eng.scripts` each frame. A game that makes its own `ScriptEngine` calls `scripts.checkHotReload()` once a frame itself; it runs the changed files and returns their paths. Release builds and Android never watch scripts.
+
 ## Reading a Config Table
 
 `loadStruct` copies a global Lua table into a Zig struct, matching fields by name:

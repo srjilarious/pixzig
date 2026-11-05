@@ -162,11 +162,11 @@ pub const PlaySoundStep = struct {
         return .{ .ptr = self, .vtable = &vtable };
     }
 
-    fn update(step: *seq.Step, _: f64) f64 {
+    fn update(step: *seq.Step, deltaMs: f64) seq.Step.Status {
         const self: *PlaySoundStep = @ptrCast(@alignCast(step.ptr));
         _ = self.eng.audio.play(self.name, .{}) catch {};
-        step.done = true;
-        return -1.0;
+        // Takes no time, so all of this tick is left for the next step.
+        return .{ .finished = deltaMs };
     }
 
     fn deinit(step: *seq.Step, alloc: std.mem.Allocator) void {
@@ -176,7 +176,7 @@ pub const PlaySoundStep = struct {
 };
 ```
 
-`update` gets the elapsed milliseconds and returns the time it has left. When the step is finished, set `step.done = true` and return a negative number, and the sequence moves to the next step. `deinit` frees whatever the step allocated, and runs when the sequence is freed.
+`update` gets the elapsed milliseconds and returns a `Step.Status`: `.running` while the step needs more time, or `.finished` with how much of `deltaMs` it didn't use. The sequence hands that leftover to the next step in the same tick, so a run of zero-time steps (setting values, playing sounds, calling Lua) all happen in the tick they're reached, and a 30 ms wait followed by another one ends after 60 ms, not after whole ticks. A step that runs for a set time can return `seq.Step.timed(elapsedMs, durationMs)`, which works the leftover out. A step's first `update` can get a delta of 0, when the step before it ended exactly at the end of a tick. `deinit` frees whatever the step allocated, and runs when the sequence is freed.
 
 ## Building Sequences From Lua
 
@@ -202,7 +202,7 @@ That adds these Lua functions:
 | `seq_play(h [, tag])` | Hand the sequence to the player, tagged if `tag` is given. |
 | `seq_running(tag) -> bool` | Whether a sequence with that tag is playing. |
 | `seq_cancel(tag) -> count` | Stop every sequence with that tag. |
-| `value_get(value) -> number` | Read a registered value right away (nil if there's no such value). |
+| `value_get(value) -> number` | Read a registered value right away. |
 | `value_set(value, v)` | Set a registered value right away. |
 
 ### Registered Values
@@ -221,7 +221,17 @@ seq_tween(h, "door_open", 0, 400)
 seq_play(h, "door")
 ```
 
-The pointer has to outlive the context and any sequence tweening it. An unknown value name logs a warning and the step isn't added.
+The pointer has to outlive the context and any sequence tweening it.
+
+### Mistakes Stop the Script
+
+A bad argument raises a Lua error, the way Lua's own functions do: a wrong type, a missing argument, a handle that isn't a pending sequence (including one already played), an unknown value or ease name, or a tag longer than 64 bytes. The script stops at that line and the error is logged with its file and line:
+
+```
+assets/door.lua:3: bad argument #2 to 'seq_tween' (no value named 'dor_open' (see SeqScriptingContext.registerValue))
+```
+
+Nothing is added for the call that failed, and `seq_parallel` checks all its handles before using any up.
 
 ### Hooks Into the Game
 

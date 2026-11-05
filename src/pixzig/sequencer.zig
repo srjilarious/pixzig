@@ -21,33 +21,59 @@ const Actor = sprites.Actor;
 pub const MAX_NAME_LEN = 64;
 
 /// A single step in a sequence. Steps are heap allocated and owned by the
-/// Sequence that contains them. Each step has an update function that is
-/// called every tick while the step is active, and a deinit function that
-/// is called once when the step is removed from its sequence to free any
-/// heap memory owned by the step.
+/// Sequence that contains them.
 ///
-/// The step struct is designed to be extensible by games, with a VTable
-/// pattern for the update and deinit functions and a void pointer for
-/// step-specific data. The base Step struct is not intended to be used
-/// directly; instead, games should define their own step structs with the
-/// Step struct as a prefix, and implement the update and deinit functions
-/// for their step type.
+/// A step is a type-erased pointer to the step's own struct plus a vtable.
+/// To write a game step, define a struct holding the step's state, give it
+/// a `const vtable: Step.VTable` with `update` and `deinit` functions, and
+/// an `init` that heap-allocates the struct and returns
+/// `.{ .ptr = ptr, .vtable = &vtable }`. See `WaitStep` for the smallest
+/// example.
 pub const Step = struct {
     ptr: *anyopaque,
     vtable: *const VTable,
-    done: bool = false,
+
+    /// What a step's `update` reports.
+    pub const Status = union(enum) {
+        /// The step used all of the delta and needs more time.
+        running,
+        /// The step is finished. The payload is how much of the delta (in
+        /// ms) it didn't need; the sequence hands that to the next step in
+        /// the same tick. A zero-time step returns the whole delta.
+        finished: f64,
+    };
 
     pub const VTable = struct {
-        /// Return time left, and a negative when the step is finished.
-        update: *const fn (step: *Step, deltaMs: f64) f64,
+        /// Advances the step by `deltaMs`. Called every tick while the step
+        /// is current. When the step before it finished partway through a
+        /// tick, the first call gets only what was left of that tick, which
+        /// may be 0. Never called again once it has returned `.finished`.
+        update: *const fn (step: *Step, deltaMs: f64) Status,
         /// Free any heap memory owned by the step.
         deinit: *const fn (step: *Step, alloc: std.mem.Allocator) void,
     };
+
+    pub fn update(self: *Step, deltaMs: f64) Status {
+        return self.vtable.update(self, deltaMs);
+    }
+
+    pub fn deinit(self: *Step, alloc: std.mem.Allocator) void {
+        self.vtable.deinit(self, alloc);
+    }
+
+    /// The status of a step that has run for `elapsedMs` of its
+    /// `durationMs`: finished, with the overshoot left over, once elapsed
+    /// reaches the duration.
+    pub fn timed(elapsedMs: f64, durationMs: f64) Status {
+        if (elapsedMs >= durationMs) return .{ .finished = elapsedMs - @max(durationMs, 0) };
+        return .running;
+    }
 };
 
 /// A step that waits for a specified amount of time before finishing.
 pub const WaitStep = struct {
-    timeLeft: f64,
+    durationMs: f64,
+    elapsedMs: f64,
     const vtable: Step.VTable = .{
         .update = update,
         .deinit = deinit,
@@ -55,19 +81,14 @@ pub const WaitStep = struct {
 
     pub fn init(alloc: std.mem.Allocator, durationMs: f64) !Step {
         const ptr = try alloc.create(WaitStep);
-        ptr.* = WaitStep{ .timeLeft = durationMs };
-        return .{
-            .ptr = ptr,
-            .vtable = &vtable,
-            .done = false,
-        };
+        ptr.* = WaitStep{ .durationMs = durationMs, .elapsedMs = 0 };
+        return .{ .ptr = ptr, .vtable = &vtable };
     }
 
-    pub fn update(step: *Step, deltaMs: f64) f64 {
+    pub fn update(step: *Step, deltaMs: f64) Step.Status {
         const self: *WaitStep = @ptrCast(@alignCast(step.ptr));
-        self.timeLeft -= deltaMs;
-        step.done = self.timeLeft <= 0;
-        return self.timeLeft;
+        self.elapsedMs += deltaMs;
+        return Step.timed(self.elapsedMs, self.durationMs);
     }
 
     pub fn deinit(step: *Step, alloc: std.mem.Allocator) void {
@@ -81,7 +102,13 @@ pub const WaitStep = struct {
 /// add() method, which takes a Step struct and appends it to the list of
 /// sub-steps.
 pub const ParallelStep = struct {
-    subSteps: std.ArrayListUnmanaged(Step),
+    tracks: std.ArrayListUnmanaged(Track),
+
+    const Track = struct {
+        step: Step,
+        finished: bool,
+    };
+
     const vtable: Step.VTable = .{
         .update = update,
         .deinit = deinit,
@@ -89,56 +116,44 @@ pub const ParallelStep = struct {
 
     pub fn init(alloc: std.mem.Allocator) !Step {
         const ptr = try alloc.create(ParallelStep);
-        ptr.* = ParallelStep{
-            .subSteps = .empty,
-        };
-        return .{
-            .ptr = ptr,
-            .vtable = &vtable,
-            .done = false,
-        };
+        ptr.* = ParallelStep{ .tracks = .empty };
+        return .{ .ptr = ptr, .vtable = &vtable };
     }
 
+    /// Adds `subStep`, which the parallel step then owns.
     pub fn add(step: *Step, alloc: std.mem.Allocator, subStep: Step) !void {
         const self: *ParallelStep = @ptrCast(@alignCast(step.ptr));
-        try self.subSteps.append(alloc, subStep);
+        try self.tracks.append(alloc, .{ .step = subStep, .finished = false });
     }
 
-    pub fn update(step: *Step, deltaMs: f64) f64 {
-        if (step.done) return 0.0;
-
-        var minTimeLeft: f64 = std.math.floatMax(f64);
-        var maxTimeLeft: f64 = 0.0;
+    pub fn update(step: *Step, deltaMs: f64) Step.Status {
         const self: *ParallelStep = @ptrCast(@alignCast(step.ptr));
-        for (self.subSteps.items) |*subStep| {
+        var allFinished = true;
+        // The step finishes with the slowest sub-step, so what's left over
+        // is the smallest leftover among the ones finishing this tick.
+        var leftoverMs = deltaMs;
+        for (self.tracks.items) |*track| {
             // A finished sub-step isn't run again, so one-shot steps (like
             // a LuaCallStep) fire once while the others catch up.
-            if (subStep.done) continue;
-            const currStepTimeLeft = subStep.vtable.update(subStep, deltaMs);
-            if (currStepTimeLeft < minTimeLeft) {
-                minTimeLeft = currStepTimeLeft;
-            }
-            if (currStepTimeLeft > maxTimeLeft) {
-                maxTimeLeft = currStepTimeLeft;
+            if (track.finished) continue;
+            switch (track.step.update(deltaMs)) {
+                .running => allFinished = false,
+                .finished => |left| {
+                    track.finished = true;
+                    leftoverMs = @min(leftoverMs, left);
+                },
             }
         }
-
-        for (self.subSteps.items) |subStep| {
-            if (!subStep.done) return maxTimeLeft;
-        }
-
-        step.done = true;
-        // Every sub-step may have finished on an earlier tick, leaving
-        // minTimeLeft untouched; the step still has to report finishing.
-        return if (minTimeLeft <= 0) minTimeLeft else -1.0;
+        if (!allFinished) return .running;
+        return .{ .finished = leftoverMs };
     }
 
     pub fn deinit(step: *Step, alloc: std.mem.Allocator) void {
         const self: *ParallelStep = @ptrCast(@alignCast(step.ptr));
-        for (self.subSteps.items) |*subStep| {
-            subStep.vtable.deinit(subStep, alloc);
+        for (self.tracks.items) |*track| {
+            track.step.deinit(alloc);
         }
-        self.subSteps.deinit(alloc);
+        self.tracks.deinit(alloc);
         alloc.destroy(self);
     }
 };
@@ -193,15 +208,13 @@ pub const MoveToStep = struct {
             .startPos = null,
             .ease = ease,
         };
-        return .{ .ptr = ptr, .vtable = &vtable, .done = false };
+        return .{ .ptr = ptr, .vtable = &vtable };
     }
 
-    pub fn update(step: *Step, deltaMs: f64) f64 {
+    pub fn update(step: *Step, deltaMs: f64) Step.Status {
         const self: *MoveToStep = @ptrCast(@alignCast(step.ptr));
-        const spr = self.sprite() orelse {
-            step.done = true;
-            return -1.0;
-        };
+        // An entity without a sprite has nothing to move.
+        const spr = self.sprite() orelse return .{ .finished = deltaMs };
 
         // Lazy-capture start position on the first tick.
         if (self.startPos == null) {
@@ -209,14 +222,12 @@ pub const MoveToStep = struct {
         }
 
         self.elapsedMs += deltaMs;
-        const t: f32 = @floatCast(@min(self.elapsedMs / self.durationMs, 1.0));
+        const t: f32 = progress(self.elapsedMs, self.durationMs);
         const pos = self.startPos.?.lerp(self.target, self.ease.apply(t));
         spr.setPosF(pos.x, pos.y);
         self.markModified();
 
-        const timeLeft = self.durationMs - self.elapsedMs;
-        step.done = timeLeft <= 0;
-        return timeLeft;
+        return Step.timed(self.elapsedMs, self.durationMs);
     }
 
     pub fn deinit(step: *Step, alloc: std.mem.Allocator) void {
@@ -238,6 +249,13 @@ pub const MoveToStep = struct {
         }
     }
 };
+
+/// How far `elapsedMs` is through `durationMs`, from 0 to 1. A zero (or
+/// negative) duration is already at the end.
+fn progress(elapsedMs: f64, durationMs: f64) f32 {
+    if (durationMs <= 0) return 1.0;
+    return @floatCast(@min(elapsedMs / durationMs, 1.0));
+}
 
 /// Tweens one value from `from` to `to` over `durationMs` along an easing
 /// curve, handing each tick's value to a callback. For anything a game can
@@ -291,20 +309,15 @@ pub const TweenStep = struct {
             .elapsedMs = 0,
             .ease = ease,
         };
-        return .{ .ptr = ptr, .vtable = &vtable, .done = false };
+        return .{ .ptr = ptr, .vtable = &vtable };
     }
 
-    pub fn update(step: *Step, deltaMs: f64) f64 {
+    pub fn update(step: *Step, deltaMs: f64) Step.Status {
         const self: *TweenStep = @ptrCast(@alignCast(step.ptr));
         self.elapsedMs += deltaMs;
-
-        // A zero duration jumps straight to the end value.
-        const t: f32 = if (self.durationMs <= 0) 1.0 else @floatCast(@min(self.elapsedMs / self.durationMs, 1.0));
+        const t = progress(self.elapsedMs, self.durationMs);
         self.applyFn(self.ctx, easing.tween(self.ease, self.from, self.to, t));
-
-        const timeLeft = self.durationMs - self.elapsedMs;
-        step.done = timeLeft <= 0;
-        return timeLeft;
+        return Step.timed(self.elapsedMs, self.durationMs);
     }
 
     pub fn deinit(step: *Step, alloc: std.mem.Allocator) void {
@@ -332,16 +345,16 @@ pub const SetActorStateStep = struct {
         stateName: []const u8,
     ) !Step {
         const ptr = try alloc.create(SetActorStateStep);
+        errdefer alloc.destroy(ptr);
         ptr.* = .{
             .world = world,
             .entityId = entityId,
             .stateName = try alloc.dupe(u8, stateName),
         };
-        return .{ .ptr = ptr, .vtable = &vtable, .done = false };
+        return .{ .ptr = ptr, .vtable = &vtable };
     }
 
-    pub fn update(step: *Step, deltaMs: f64) f64 {
-        _ = deltaMs;
+    pub fn update(step: *Step, deltaMs: f64) Step.Status {
         const self: *SetActorStateStep = @ptrCast(@alignCast(step.ptr));
         if (flecs.get_mut(self.world, self.entityId, Actor)) |actor| {
             actor.setState(self.stateName, .{}) catch |err| {
@@ -349,8 +362,7 @@ pub const SetActorStateStep = struct {
             };
             flecs.modified(self.world, self.entityId, Actor);
         }
-        step.done = true;
-        return -1.0;
+        return .{ .finished = deltaMs };
     }
 
     pub fn deinit(step: *Step, alloc: std.mem.Allocator) void {
@@ -387,21 +399,17 @@ pub const TweenValueStep = struct {
             .elapsedMs = 0,
             .ease = ease,
         };
-        return .{ .ptr = ptr, .vtable = &vtable, .done = false };
+        return .{ .ptr = ptr, .vtable = &vtable };
     }
 
-    pub fn update(step: *Step, deltaMs: f64) f64 {
+    pub fn update(step: *Step, deltaMs: f64) Step.Status {
         const self: *TweenValueStep = @ptrCast(@alignCast(step.ptr));
         if (self.from == null) self.from = self.target.*;
 
         self.elapsedMs += deltaMs;
-        // A zero duration jumps straight to the end value.
-        const t: f32 = if (self.durationMs <= 0) 1.0 else @floatCast(@min(self.elapsedMs / self.durationMs, 1.0));
+        const t = progress(self.elapsedMs, self.durationMs);
         self.target.* = easing.tween(self.ease, self.from.?, self.to, t);
-
-        const timeLeft = self.durationMs - self.elapsedMs;
-        step.done = timeLeft <= 0;
-        return timeLeft;
+        return Step.timed(self.elapsedMs, self.durationMs);
     }
 
     pub fn deinit(step: *Step, alloc: std.mem.Allocator) void {
@@ -424,15 +432,13 @@ pub const SetValueStep = struct {
     pub fn init(alloc: std.mem.Allocator, target: *f32, value: f32) !Step {
         const ptr = try alloc.create(SetValueStep);
         ptr.* = .{ .target = target, .value = value };
-        return .{ .ptr = ptr, .vtable = &vtable, .done = false };
+        return .{ .ptr = ptr, .vtable = &vtable };
     }
 
-    pub fn update(step: *Step, deltaMs: f64) f64 {
-        _ = deltaMs;
+    pub fn update(step: *Step, deltaMs: f64) Step.Status {
         const self: *SetValueStep = @ptrCast(@alignCast(step.ptr));
         self.target.* = self.value;
-        step.done = true;
-        return -1.0;
+        return .{ .finished = deltaMs };
     }
 
     pub fn deinit(step: *Step, alloc: std.mem.Allocator) void {
@@ -455,13 +461,12 @@ pub const SubSequenceStep = struct {
     pub fn init(alloc: std.mem.Allocator, seq: Sequence) !Step {
         const ptr = try alloc.create(SubSequenceStep);
         ptr.* = .{ .seq = seq };
-        return .{ .ptr = ptr, .vtable = &vtable, .done = false };
+        return .{ .ptr = ptr, .vtable = &vtable };
     }
 
-    pub fn update(step: *Step, deltaMs: f64) f64 {
+    pub fn update(step: *Step, deltaMs: f64) Step.Status {
         const self: *SubSequenceStep = @ptrCast(@alignCast(step.ptr));
-        step.done = self.seq.update(deltaMs);
-        return if (step.done) -1.0 else 1.0;
+        return self.seq.advance(deltaMs);
     }
 
     pub fn deinit(step: *Step, alloc: std.mem.Allocator) void {
@@ -490,19 +495,17 @@ pub const LuaCallStep = struct {
         errdefer lua.unref(ziglua.registry_index, funcRef);
         const ptr = try alloc.create(LuaCallStep);
         ptr.* = .{ .lua = lua, .funcRef = funcRef };
-        return .{ .ptr = ptr, .vtable = &vtable, .done = false };
+        return .{ .ptr = ptr, .vtable = &vtable };
     }
 
-    pub fn update(step: *Step, deltaMs: f64) f64 {
-        _ = deltaMs;
+    pub fn update(step: *Step, deltaMs: f64) Step.Status {
         const self: *LuaCallStep = @ptrCast(@alignCast(step.ptr));
         _ = self.lua.rawGetIndex(ziglua.registry_index, self.funcRef);
         self.lua.protectedCall(.{ .args = 0, .results = 0, .msg_handler = 0 }) catch {
             std.log.err("seq_call: {s}", .{self.lua.toString(-1) catch "(non-string error)"});
             self.lua.pop(1);
         };
-        step.done = true;
-        return -1.0;
+        return .{ .finished = deltaMs };
     }
 
     pub fn deinit(step: *Step, alloc: std.mem.Allocator) void {
@@ -551,36 +554,51 @@ pub const Sequence = struct {
 
     pub fn deinit(self: *Sequence, alloc: std.mem.Allocator) void {
         for (self.steps.items) |*step| {
-            step.vtable.deinit(step, alloc);
+            step.deinit(alloc);
         }
 
         self.steps.deinit(alloc);
     }
 
+    /// Appends `step`, which the sequence then owns.
     pub fn add(self: *Sequence, alloc: std.mem.Allocator, step: Step) !void {
         try self.steps.append(alloc, step);
     }
 
+    /// Advances the sequence by `deltaMs` and returns whether it's finished.
+    /// See `advance`.
     pub fn update(self: *Sequence, deltaMs: f64) bool {
-        if (self.done) return true;
+        return switch (self.advance(deltaMs)) {
+            .running => false,
+            .finished => true,
+        };
+    }
 
-        if (self.steps.items.len == 0) {
-            self.done = true;
-            return true;
+    /// Advances the sequence by `deltaMs`. A step that finishes partway
+    /// through hands what's left of the delta to the next one, so several
+    /// steps can run in one call: zero-time steps (setting values, calling
+    /// Lua) all run in the tick they're reached, and a wait doesn't round
+    /// up to whole ticks. Reports `.finished` with the unused time once the
+    /// last step is done (or the sequence was cancelled).
+    pub fn advance(self: *Sequence, deltaMs: f64) Step.Status {
+        if (self.done) return .{ .finished = deltaMs };
+
+        var remainingMs = deltaMs;
+        while (self.currStep < self.steps.items.len) {
+            const step = &self.steps.items[self.currStep];
+            switch (step.update(remainingMs)) {
+                .running => return .running,
+                .finished => |left| {
+                    self.currStep += 1;
+                    remainingMs = left;
+                },
+            }
+            // A step's Lua call may have cancelled this sequence.
+            if (self.done) return .{ .finished = remainingMs };
         }
 
-        // TODO: change to a while loop that advances through multiple steps if deltaMs is large enough.
-        const step = &self.steps.items[self.currStep];
-        const timeLeft = step.vtable.update(step, deltaMs);
-        if (timeLeft <= 0) {
-            self.currStep += 1;
-        }
-
-        if (self.currStep >= self.steps.items.len) {
-            self.done = true;
-            return true;
-        }
-        return false;
+        self.done = true;
+        return .{ .finished = remainingMs };
     }
 };
 
@@ -714,6 +732,7 @@ pub const SequencePlayer = struct {
     }
 };
 
+
 // ----------------------------------------------------------------------------
 // Lua scripting bridge
 // ----------------------------------------------------------------------------
@@ -723,6 +742,11 @@ pub const SequencePlayer = struct {
 /// (seq_new, seq_wait, seq_move_to, seq_tween, ...), play them, and stop
 /// them by tag. Games expose their own state to those scripts as named f32
 /// values (see `registerValue`).
+///
+/// A bad argument (wrong type, a handle that isn't a pending sequence, an
+/// unknown value or ease name) raises a Lua error naming the function and
+/// argument, like Lua's own library functions do, so the script stops at the
+/// mistake and the error is logged with its file and line.
 pub const SeqScriptingContext = struct {
     alloc: std.mem.Allocator,
     world: *flecs.world_t,
@@ -804,24 +828,74 @@ pub const SeqScriptingContext = struct {
         self.pending.items[@intCast(handle)] = null;
         return taken;
     }
-
-    /// The registered value named by the string at stack index `idx`, or
-    /// null (with a warning naming `func`) if there's none.
-    fn valueArg(self: *SeqScriptingContext, lua: *Lua, idx: i32, comptime func: []const u8) ?*f32 {
-        const name = lua.toString(idx) catch {
-            std.log.warn(func ++ ": value name must be a string", .{});
-            return null;
-        };
-        return self.values.get(name) orelse {
-            std.log.warn(func ++ ": no value named '{s}'", .{name});
-            return null;
-        };
-    }
 };
+
+// --- Argument helpers ---------------------------------------------------------
+//
+// These raise a Lua error on a bad argument. A Lua error longjmps out of the
+// binding, skipping any Zig `defer`, so each binding reads and checks all of
+// its arguments before it allocates anything, and frees what it holds before
+// raising an out-of-memory error.
+
+const not_pending_msg = "not a pending sequence (make one with seq_new; seq_play and seq_parallel use it up)";
+
+/// The handle at stack index `arg`, which must name a pending sequence.
+fn pendingHandleArg(ctx: *SeqScriptingContext, lua: *Lua, arg: i32) ziglua.Integer {
+    const handle = lua.checkInteger(arg);
+    if (ctx.pendingSeq(handle) == null) lua.argError(arg, not_pending_msg);
+    return handle;
+}
+
+/// The pending sequence named by the handle at stack index `arg`.
+fn pendingArg(ctx: *SeqScriptingContext, lua: *Lua, arg: i32) *Sequence {
+    return ctx.pendingSeq(pendingHandleArg(ctx, lua, arg)).?;
+}
+
+/// The registered value named by the string at stack index `arg`.
+fn valueArg(ctx: *SeqScriptingContext, lua: *Lua, arg: i32) *f32 {
+    const name = lua.checkString(arg);
+    return ctx.values.get(name) orelse
+        lua.argError(arg, lua.pushFString("no value named '%s' (see SeqScriptingContext.registerValue)", .{name.ptr}));
+}
+
+/// The flecs entity id at stack index `arg`.
+fn entityArg(lua: *Lua, arg: i32) flecs.entity_t {
+    const id = lua.checkInteger(arg);
+    if (id < 0) lua.argError(arg, "entity id can't be negative");
+    return @intCast(id);
+}
+
+/// The optional `Ease` name at stack index `arg`, linear when absent or nil.
+fn easeArg(lua: *Lua, arg: i32) Ease {
+    const name = lua.optString(arg) orelse return .linear;
+    return std.meta.stringToEnum(Ease, name) orelse
+        lua.argError(arg, lua.pushFString("unknown ease '%s'", .{name.ptr}));
+}
+
+/// Raises a Lua error for an allocation (or other non-argument) failure.
+fn raiseFailure(lua: *Lua, comptime func: [:0]const u8, err: anyerror) noreturn {
+    lua.raiseErrorStr(func ++ ": %s", .{@errorName(err).ptr});
+}
+
+/// Appends a freshly made step to `s`, freeing it and raising a Lua error if
+/// making or appending it failed.
+fn appendStep(
+    ctx: *SeqScriptingContext,
+    lua: *Lua,
+    s: *Sequence,
+    comptime func: [:0]const u8,
+    made: anyerror!Step,
+) void {
+    var step = made catch |err| raiseFailure(lua, func, err);
+    s.add(ctx.alloc, step) catch |err| {
+        step.deinit(ctx.alloc);
+        raiseFailure(lua, func, err);
+    };
+}
 
 // --- Lua function implementations --------------------------------------------
 
-/// seq_new() -> handle:integer  — allocate a new pending sequence slot.
+/// seq_new() -> handle: allocate a new pending sequence slot.
 fn luaSeqNew(ctx: *SeqScriptingContext, lua: *Lua) i32 {
     for (ctx.pending.items, 0..) |*slot, i| {
         if (slot.* == null) {
@@ -830,90 +904,70 @@ fn luaSeqNew(ctx: *SeqScriptingContext, lua: *Lua) i32 {
             return 1;
         }
     }
-    ctx.pending.append(ctx.alloc, Sequence.init(ctx.alloc)) catch {
-        lua.pushInteger(-1); // out of memory
-        return 1;
-    };
+    ctx.pending.append(ctx.alloc, Sequence.init(ctx.alloc)) catch |err| raiseFailure(lua, "seq_new", err);
     lua.pushInteger(@intCast(ctx.pending.items.len - 1));
     return 1;
 }
 
-/// seq_wait(handle, ms) — append a WaitStep to the pending sequence.
+/// seq_wait(handle, ms): append a WaitStep to the pending sequence.
 fn luaSeqWait(ctx: *SeqScriptingContext, lua: *Lua) i32 {
-    const handle = lua.toInteger(1) catch return 0;
-    const ms = lua.toNumber(2) catch return 0;
-    if (ctx.pendingSeq(handle)) |s| {
-        s.add(ctx.alloc, WaitStep.init(ctx.alloc, ms) catch return 0) catch {};
-    }
+    const s = pendingArg(ctx, lua, 1);
+    const ms = lua.checkNumber(2);
+    appendStep(ctx, lua, s, "seq_wait", WaitStep.init(ctx.alloc, ms));
     return 0;
 }
 
-/// seq_move_to(handle, entity_id, x, y, ms [, ease]) — append a MoveToStep.
-/// `ease` is an `Ease` name such as "quad_out"; omitted, the move is
-/// linear. An unknown name logs a warning and falls back to linear.
+/// seq_move_to(handle, entity_id, x, y, ms [, ease]): append a MoveToStep.
+/// `ease` is an `Ease` name such as "quad_out"; omitted, the move is linear.
 fn luaSeqMoveTo(ctx: *SeqScriptingContext, lua: *Lua) i32 {
-    const handle = lua.toInteger(1) catch return 0;
-    const entityId: flecs.entity_t = @intCast(lua.toInteger(2) catch return 0);
-    const x: f32 = @floatCast(lua.toNumber(3) catch return 0);
-    const y: f32 = @floatCast(lua.toNumber(4) catch return 0);
-    const ms = lua.toNumber(5) catch return 0;
-    const ease = luaEaseArg(lua, 6);
-    if (ctx.pendingSeq(handle)) |s| {
-        s.add(ctx.alloc, MoveToStep.initEased(ctx.alloc, ctx.world, entityId, .{ .x = x, .y = y }, ms, ease) catch return 0) catch {};
-    }
+    const s = pendingArg(ctx, lua, 1);
+    const entityId = entityArg(lua, 2);
+    const x: f32 = @floatCast(lua.checkNumber(3));
+    const y: f32 = @floatCast(lua.checkNumber(4));
+    const ms = lua.checkNumber(5);
+    const ease = easeArg(lua, 6);
+    appendStep(ctx, lua, s, "seq_move_to", MoveToStep.initEased(ctx.alloc, ctx.world, entityId, .{ .x = x, .y = y }, ms, ease));
     return 0;
-}
-
-/// Reads an optional `Ease` name at stack index `idx`, defaulting to linear.
-fn luaEaseArg(lua: *Lua, idx: i32) Ease {
-    if (lua.getTop() < idx or lua.isNil(idx)) return .linear;
-    const name = lua.toString(idx) catch return .linear;
-    return std.meta.stringToEnum(Ease, name) orelse {
-        std.log.warn("seq: unknown ease '{s}', using linear", .{name});
-        return .linear;
-    };
 }
 
 /// seq_tween(handle, name, to, ms [, ease]): append a TweenValueStep that
 /// eases the value `name` from wherever it is when the step starts to `to`.
 fn luaSeqTween(ctx: *SeqScriptingContext, lua: *Lua) i32 {
-    const handle = lua.toInteger(1) catch return 0;
-    const target = ctx.valueArg(lua, 2, "seq_tween") orelse return 0;
-    const to: f32 = @floatCast(lua.toNumber(3) catch return 0);
-    const ms = lua.toNumber(4) catch return 0;
-    const ease = luaEaseArg(lua, 5);
-    if (ctx.pendingSeq(handle)) |s| {
-        s.add(ctx.alloc, TweenValueStep.init(ctx.alloc, target, to, ms, ease) catch return 0) catch {};
-    }
+    const s = pendingArg(ctx, lua, 1);
+    const target = valueArg(ctx, lua, 2);
+    const to: f32 = @floatCast(lua.checkNumber(3));
+    const ms = lua.checkNumber(4);
+    const ease = easeArg(lua, 5);
+    appendStep(ctx, lua, s, "seq_tween", TweenValueStep.init(ctx.alloc, target, to, ms, ease));
     return 0;
 }
 
 /// seq_set(handle, name, value): append a SetValueStep.
 fn luaSeqSet(ctx: *SeqScriptingContext, lua: *Lua) i32 {
-    const handle = lua.toInteger(1) catch return 0;
-    const target = ctx.valueArg(lua, 2, "seq_set") orelse return 0;
-    const value: f32 = @floatCast(lua.toNumber(3) catch return 0);
-    if (ctx.pendingSeq(handle)) |s| {
-        s.add(ctx.alloc, SetValueStep.init(ctx.alloc, target, value) catch return 0) catch {};
-    }
+    const s = pendingArg(ctx, lua, 1);
+    const target = valueArg(ctx, lua, 2);
+    const value: f32 = @floatCast(lua.checkNumber(3));
+    appendStep(ctx, lua, s, "seq_set", SetValueStep.init(ctx.alloc, target, value));
     return 0;
 }
 
 /// seq_call(handle, fn): append a LuaCallStep that calls `fn` (no
 /// arguments) when the sequence reaches it.
 fn luaSeqCall(ctx: *SeqScriptingContext, lua: *Lua) i32 {
-    const handle = lua.toInteger(1) catch return 0;
-    if (!lua.isFunction(2)) {
-        std.log.warn("seq_call: second argument must be a function", .{});
-        return 0;
-    }
-    const s = ctx.pendingSeq(handle) orelse return 0;
+    const s = pendingArg(ctx, lua, 1);
+    lua.checkType(2, .function);
     lua.pushValue(2);
-    const step = LuaCallStep.initFromStack(ctx.alloc, lua) catch return 0;
-    s.add(ctx.alloc, step) catch {
-        var dropped = step;
-        dropped.vtable.deinit(&dropped, ctx.alloc);
-    };
+    appendStep(ctx, lua, s, "seq_call", LuaCallStep.initFromStack(ctx.alloc, lua));
+    return 0;
+}
+
+/// seq_set_actor_state(handle, entity_id, state_name): append a
+/// SetActorStateStep.
+fn luaSeqSetActorState(ctx: *SeqScriptingContext, lua: *Lua) i32 {
+    const s = pendingArg(ctx, lua, 1);
+    const entityId = entityArg(lua, 2);
+    const stateName = lua.checkString(3);
+    appendStep(ctx, lua, s, "seq_set_actor_state", SetActorStateStep.init(ctx.alloc, ctx.world, entityId, stateName));
     return 0;
 }
 
@@ -921,96 +975,88 @@ fn luaSeqCall(ctx: *SeqScriptingContext, lua: *Lua) i32 {
 /// pending sequences h1, h2, ... side by side, finishing when all of them
 /// have. Those handles are used up, like seq_play.
 fn luaSeqParallel(ctx: *SeqScriptingContext, lua: *Lua) i32 {
-    const handle = lua.toInteger(1) catch return 0;
-    const s = ctx.pendingSeq(handle) orelse return 0;
-    var par = ParallelStep.init(ctx.alloc) catch return 0;
+    const handle = pendingHandleArg(ctx, lua, 1);
+    const top = lua.getTop();
 
+    // Check every track before taking any, so a bad one leaves them all
+    // pending.
     var arg: i32 = 2;
-    while (arg <= lua.getTop()) : (arg += 1) {
-        const sub = lua.toInteger(arg) catch continue;
-        if (sub == handle) {
-            std.log.warn("seq_parallel: a sequence can't run inside itself", .{});
-            continue;
+    while (arg <= top) : (arg += 1) {
+        const sub = pendingHandleArg(ctx, lua, arg);
+        if (sub == handle) lua.argError(arg, "a sequence can't run inside itself");
+        var earlier: i32 = 2;
+        while (earlier < arg) : (earlier += 1) {
+            if (lua.checkInteger(earlier) == sub) lua.argError(arg, "the same sequence is passed twice");
         }
-        var track = ctx.takePending(sub) orelse continue;
-        const step = SubSequenceStep.init(ctx.alloc, track) catch {
+    }
+
+    var par = ParallelStep.init(ctx.alloc) catch |err| raiseFailure(lua, "seq_parallel", err);
+    arg = 2;
+    while (arg <= top) : (arg += 1) {
+        var track = ctx.takePending(lua.checkInteger(arg)).?;
+        var step = SubSequenceStep.init(ctx.alloc, track) catch |err| {
             track.deinit(ctx.alloc);
-            continue;
+            par.deinit(ctx.alloc);
+            raiseFailure(lua, "seq_parallel", err);
         };
-        ParallelStep.add(&par, ctx.alloc, step) catch {
-            var dropped = step;
-            dropped.vtable.deinit(&dropped, ctx.alloc);
+        ParallelStep.add(&par, ctx.alloc, step) catch |err| {
+            step.deinit(ctx.alloc);
+            par.deinit(ctx.alloc);
+            raiseFailure(lua, "seq_parallel", err);
         };
     }
 
-    s.add(ctx.alloc, par) catch par.vtable.deinit(&par, ctx.alloc);
-    return 0;
-}
-
-/// seq_cancel(tag) -> count: stop every playing sequence tagged `tag`.
-fn luaSeqCancel(ctx: *SeqScriptingContext, lua: *Lua) i32 {
-    const tag = lua.toString(1) catch {
-        lua.pushInteger(0);
-        return 1;
-    };
-    lua.pushInteger(@intCast(ctx.player.cancel(tag)));
-    return 1;
-}
-
-/// seq_running(tag) -> boolean: whether a sequence tagged `tag` is playing.
-fn luaSeqRunning(ctx: *SeqScriptingContext, lua: *Lua) i32 {
-    const tag = lua.toString(1) catch {
-        lua.pushBoolean(false);
-        return 1;
-    };
-    lua.pushBoolean(ctx.player.isRunning(tag));
-    return 1;
-}
-
-/// value_get(name) -> number: the current value `name`, or nil if there's
-/// no such value.
-fn luaValueGet(ctx: *SeqScriptingContext, lua: *Lua) i32 {
-    if (ctx.valueArg(lua, 1, "value_get")) |v| {
-        lua.pushNumber(v.*);
-    } else {
-        lua.pushNil();
-    }
-    return 1;
-}
-
-/// value_set(name, value): set the value `name` right away.
-fn luaValueSet(ctx: *SeqScriptingContext, lua: *Lua) i32 {
-    const target = ctx.valueArg(lua, 1, "value_set") orelse return 0;
-    target.* = @floatCast(lua.toNumber(2) catch return 0);
-    return 0;
-}
-
-/// seq_set_actor_state(handle, entity_id, state_name) — append a SetActorStateStep.
-fn luaSeqSetActorState(ctx: *SeqScriptingContext, lua: *Lua) i32 {
-    const handle = lua.toInteger(1) catch return 0;
-    const entityId: flecs.entity_t = @intCast(lua.toInteger(2) catch return 0);
-    const stateName = lua.toString(3) catch return 0;
-    if (ctx.pendingSeq(handle)) |s| {
-        s.add(ctx.alloc, SetActorStateStep.init(ctx.alloc, ctx.world, entityId, stateName) catch return 0) catch {};
-    }
+    appendStep(ctx, lua, ctx.pendingSeq(handle).?, "seq_parallel", par);
     return 0;
 }
 
 /// seq_play(handle [, tag]): submit the sequence to the SequencePlayer and
 /// free the slot. A `tag` lets seq_running / seq_cancel find it later.
 fn luaSeqPlay(ctx: *SeqScriptingContext, lua: *Lua) i32 {
-    const handle = lua.toInteger(1) catch return 0;
-    var s = ctx.takePending(handle) orelse return 0;
-    if (lua.getTop() >= 2 and !lua.isNil(2)) {
-        const tag = lua.toString(2) catch {
-            s.deinit(ctx.alloc);
-            return 0;
-        };
-        ctx.player.addTagged(s, tag) catch |err| {
-            std.log.warn("seq_play: can't play sequence tagged '{s}': {}", .{ tag, err });
-        };
-    } else {
-        ctx.player.add(s) catch s.deinit(ctx.alloc);
+    const handle = pendingHandleArg(ctx, lua, 1);
+    const tag = lua.optString(2);
+    if (tag) |t| {
+        if (t.len > MAX_NAME_LEN) {
+            lua.argError(2, std.fmt.comptimePrint("tag is longer than {d} bytes", .{MAX_NAME_LEN}));
+        }
     }
+
+    var s = ctx.takePending(handle).?;
+    if (tag) |t| {
+        // addTagged frees the sequence when it fails.
+        ctx.player.addTagged(s, t) catch |err| raiseFailure(lua, "seq_play", err);
+    } else {
+        ctx.player.add(s) catch |err| {
+            s.deinit(ctx.alloc);
+            raiseFailure(lua, "seq_play", err);
+        };
+    }
+    return 0;
+}
+
+/// seq_cancel(tag) -> count: stop every playing sequence tagged `tag`.
+fn luaSeqCancel(ctx: *SeqScriptingContext, lua: *Lua) i32 {
+    const tag = lua.checkString(1);
+    lua.pushInteger(@intCast(ctx.player.cancel(tag)));
+    return 1;
+}
+
+/// seq_running(tag) -> boolean: whether a sequence tagged `tag` is playing.
+fn luaSeqRunning(ctx: *SeqScriptingContext, lua: *Lua) i32 {
+    const tag = lua.checkString(1);
+    lua.pushBoolean(ctx.player.isRunning(tag));
+    return 1;
+}
+
+/// value_get(name) -> number: the current value `name`.
+fn luaValueGet(ctx: *SeqScriptingContext, lua: *Lua) i32 {
+    lua.pushNumber(valueArg(ctx, lua, 1).*);
+    return 1;
+}
+
+/// value_set(name, value): set the value `name` right away.
+fn luaValueSet(ctx: *SeqScriptingContext, lua: *Lua) i32 {
+    const target = valueArg(ctx, lua, 1);
+    target.* = @floatCast(lua.checkNumber(2));
     return 0;
 }

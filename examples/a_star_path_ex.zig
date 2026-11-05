@@ -19,7 +19,8 @@ const AStarPathFinder = pixzig.a_star.AStarPathFinder;
 const TileLayer = pixzig.tile.TileLayer;
 const TileSet = pixzig.tile.TileSet;
 const Tile = pixzig.tile.Tile;
-const TiledLayerRenderer = pixzig.tile.deprecated.TiledLayerRenderer;
+const TileMap = pixzig.tile.TileMap;
+const TileMapRenderer = pixzig.tile.TileMapRenderer;
 
 const NumTilesHorz = 4;
 const NumTilesVert = 4;
@@ -30,6 +31,7 @@ const BasicTileMapPathChecker = pixzig.a_star.BasicTileMapPathChecker;
 
 const MapWidth = 24;
 const MapHeight = 18;
+const MapName = "a_star_map";
 
 // The engine owns the action map (`eng.actions`) and updates it each tick.
 const Action = enum { refresh, set_start, set_end, add_wall, cursor_left, cursor_right, cursor_up, cursor_down, quit };
@@ -40,10 +42,10 @@ pub const App = struct {
     fps: FpsCounter,
     grid: GridRenderer,
     path: Path,
-    layer: TileLayer,
-    pathLayer: TileLayer,
-    pathLayerRenderer: TiledLayerRenderer,
-    tileSet: TileSet,
+    /// Draws the map's one layer, which holds the walls and the path. The
+    /// resource manager owns the map itself; see `layer`.
+    mapRenderer: TileMapRenderer,
+    camera: pixzig.Camera2D,
     checker: BasicTileMapPathChecker,
     pathFinder: AStarPathFinder(BasicTileMapPathChecker),
     cursorPos: Vec2I = .{ .x = 0, .y = 0 },
@@ -208,55 +210,64 @@ pub const App = struct {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         _ = try eng.resources.loadTextureFromBuffer("a_star", bufferSize.x, bufferSize.y, textureBuff);
 
+        // One tileset over the "a_star" texture: 0 is empty, 1 a wall, 2 to
+        // 9 the path pieces.
+        var map = try TileMap.init(alloc);
+        try map.tilesets.append(alloc, try TileSet.initEmpty(alloc, .{ .x = 8, .y = 8 }, .{ .x = 32, .y = 32 }, 10));
+        const tileSet = &map.tilesets.items[0];
+        tileSet.tile(0).?.* = Tile{ .core = pixzig.tile.Clear, .properties = null, .alloc = alloc };
+        tileSet.tile(1).?.* = Tile{ .core = pixzig.tile.BlocksAll, .properties = null, .alloc = alloc };
+        // Draw the tileset from the texture made above, matched by name.
+        tileSet.imageSource = try alloc.dupe(u8, "a_star");
+
+        try map.layers.append(alloc, try TileLayer.initEmpty(alloc, .{ .x = MapWidth, .y = MapHeight }, .{ .x = TileWidth, .y = TileHeight }));
+        const wallLayer = &map.layers.items[0];
+        wallLayer.tileset = tileSet;
+        wallLayer.setTileData(1, 0, 1);
+        wallLayer.setTileData(2, 2, 1);
+        wallLayer.setTileData(3, 4, 1);
+        wallLayer.setTileData(5, 5, 1);
+        wallLayer.setTileData(5, 6, 1);
+        wallLayer.setTileData(4, 6, 1);
+        wallLayer.setTileData(7, 7, 1);
+
+        // The resource manager owns the map from here on.
+        _ = try eng.resources.addTileMap(MapName, map);
+
+        // Centered on the logical view, so map pixels line up with the
+        // cursor and grid drawn in logical coordinates.
+        var camera = pixzig.Camera2D.init();
+        camera.pos = .{ .x = 80, .y = 48 };
+
         app.* = .{
             .alloc = alloc,
             .fps = FpsCounter.init(),
             .grid = grid,
             .path = .empty,
-            .layer = undefined,
-            .pathLayer = undefined,
-            .pathLayerRenderer = undefined,
-            .tileSet = undefined,
+            .mapRenderer = try TileMapRenderer.init(alloc, &eng.resources, MapName),
+            .camera = camera,
             .checker = undefined,
             .pathFinder = undefined,
         };
 
-        app.tileSet = try TileSet.initEmpty(alloc, .{ .x = 8, .y = 8 }, .{ .x = 32, .y = 32 }, 10);
-        app.tileSet.tile(0).?.* = Tile{ .core = pixzig.tile.Clear, .properties = null, .alloc = alloc };
-        app.tileSet.tile(1).?.* = Tile{ .core = pixzig.tile.BlocksAll, .properties = null, .alloc = alloc };
-
-        app.layer = try TileLayer.initEmpty(alloc, .{ .x = MapWidth, .y = MapHeight }, .{ .x = TileWidth, .y = TileHeight });
-        app.layer.tileset = &app.tileSet;
-
-        app.layer.setTileData(1, 0, 1);
-        app.layer.setTileData(2, 2, 1);
-        app.layer.setTileData(3, 4, 1);
-        app.layer.setTileData(5, 5, 1);
-        app.layer.setTileData(5, 6, 1);
-        app.layer.setTileData(4, 6, 1);
-        app.layer.setTileData(7, 7, 1);
-
-        app.pathLayer = try TileLayer.initEmpty(alloc, .{ .x = MapWidth, .y = MapHeight }, .{ .x = TileWidth, .y = TileHeight });
-        app.pathLayer.tileset = &app.tileSet;
-
-        const tex_shader = try eng.resources.getShader(shaders.TextureShader);
-        const a_star_tex = try eng.resources.getTexture("a_star");
-        app.pathLayerRenderer = try tile.deprecated.TiledLayerRenderer.init(alloc, tex_shader, a_star_tex);
-        // TODO: Change to pathLayer and make wall layer renderer.
-        try app.pathLayerRenderer.recreateVertices(&app.tileSet, &app.layer);
-
-        app.checker = BasicTileMapPathChecker.init(&app.layer);
+        app.checker = BasicTileMapPathChecker.init(app.layer());
         app.pathFinder = try AStarPathFinder(BasicTileMapPathChecker).init(app.checker, alloc, .{ .x = MapWidth, .y = MapHeight });
         return app;
     }
 
     pub fn deinit(self: *App) void {
-        self.pathLayerRenderer.deinit();
+        self.mapRenderer.deinit();
         self.grid.deinit();
         self.alloc.destroy(self);
     }
 
+    /// The map's only layer.
+    fn layer(self: *App) *TileLayer {
+        return &self.mapRenderer.tileMap().layers.items[0];
+    }
+
     fn updatePathOnMap(self: *App) !void {
+        const map = self.layer();
 
         // Clear out the old path tiles.
         for (0..MapHeight) |yu| {
@@ -264,20 +275,20 @@ pub const App = struct {
                 const x: i32 = @intCast(xu);
                 const y: i32 = @intCast(yu);
                 // 1 is the wall tile, higher are path tiles.
-                if (self.layer.tileData(x, y) > 1) {
-                    self.layer.setTileData(x, y, 0);
+                if (map.tileData(x, y) > 1) {
+                    map.setTileData(x, y, 0);
                 }
             }
         }
 
         if (self.path.items.len > 0) {
             const first = self.path.items[0];
-            self.layer.setTileData(first.x, first.y, 8);
+            map.setTileData(first.x, first.y, 8);
         }
 
         if (self.path.items.len > 1) {
             const end = self.path.items[self.path.items.len - 1];
-            self.layer.setTileData(end.x, end.y, 9);
+            map.setTileData(end.x, end.y, 9);
         }
 
         for (1..self.path.items.len - 1) |i| {
@@ -291,34 +302,34 @@ pub const App = struct {
 
             if (prev.x == curr.x and curr.x == next.x) {
                 // Vertical line
-                self.layer.setTileData(curr.x, curr.y, 3);
+                map.setTileData(curr.x, curr.y, 3);
             } else if (prev.y == curr.y and curr.y == next.y) {
                 // Horizontal line
-                self.layer.setTileData(curr.x, curr.y, 2);
+                map.setTileData(curr.x, curr.y, 2);
             } else if ((prev.isAbove(curr) and next.isRightOf(curr)) or
                 (next.isAbove(curr) and prev.isRightOf(curr)))
             {
                 // Top right bend
-                self.layer.setTileData(curr.x, curr.y, 5);
+                map.setTileData(curr.x, curr.y, 5);
             } else if ((prev.isLeftOf(curr) and next.isBelow(curr)) or
                 (next.isLeftOf(curr) and prev.isBelow(curr)))
             {
                 // Bottom left bend
-                self.layer.setTileData(curr.x, curr.y, 4);
+                map.setTileData(curr.x, curr.y, 4);
             } else if ((prev.isAbove(curr) and next.isLeftOf(curr)) or
                 (next.isAbove(curr) and prev.isLeftOf(curr)))
             {
                 // Top left bend
-                self.layer.setTileData(curr.x, curr.y, 6);
+                map.setTileData(curr.x, curr.y, 6);
             } else if ((prev.isBelow(curr) and next.isRightOf(curr)) or
                 (next.isBelow(curr) and prev.isRightOf(curr)))
             {
                 // Bottom Right bend
-                self.layer.setTileData(curr.x, curr.y, 7);
+                map.setTileData(curr.x, curr.y, 7);
             }
         }
 
-        try self.pathLayerRenderer.recreateVertices(&self.tileSet, &self.layer);
+        self.mapRenderer.markAllDirty();
     }
 
     fn refreshPath(self: *App) void {
@@ -356,7 +367,7 @@ pub const App = struct {
         }
 
         if (eng.actions.pressed(.add_wall)) {
-            self.layer.setTileData(self.cursorPos.x, self.cursorPos.y, 1);
+            self.layer().setTileData(self.cursorPos.x, self.cursorPos.y, 1);
             self.refreshPath();
         }
 
@@ -402,7 +413,7 @@ pub const App = struct {
         );
         eng.renderer.end();
 
-        try self.pathLayerRenderer.draw(&self.layer, eng.projection());
+        self.mapRenderer.render(&self.camera, &eng.viewport);
 
         try self.grid.draw(eng.projection());
     }

@@ -1,9 +1,21 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const io = @import("./io.zig");
 const ziglua = @import("ziglua");
 const paths = @import("./paths.zig");
+const file_watcher = @import("./file_watcher.zig");
 
 const Lua = ziglua.Lua;
+const FileWatcher = file_watcher.FileWatcher;
+const WatchId = file_watcher.WatchId;
+
+/// Whether script files are watched for hot reload: debug builds, and not
+/// on Android, where scripts are inside the APK and never change.
+const hot_reload_enabled = builtin.mode == .debug and !builtin.abi.isAndroid();
+
+/// The Lua registry key holding the `HotReload` pointer, so the `require`
+/// searcher (which only has the Lua state) can register module files.
+const hot_reload_registry_key = "pixzig.script_hot_reload";
 
 /// Signature required by `registerFunc`. Arguments are read off the Lua stack
 /// by index (1-based); the return value is the number of values pushed back
@@ -12,11 +24,20 @@ pub const LuaFunc = fn (*Lua) i32;
 
 /// Wraps a Lua 5.3 state (via `ziglua`) with the standard libraries opened.
 /// Owns the underlying `*Lua`; call `deinit()` to close it.
+///
+/// In debug builds (not on Android) every file run with `runScript` or
+/// loaded with `require` is watched, and `checkHotReload` runs a changed one
+/// again. `AppRunner` calls that each frame for the engine's own
+/// `eng.scripts` and hands each reload to the app's `onEvent` as
+/// `.script_reloaded`.
 pub const ScriptEngine = struct {
     lua: *Lua,
     /// Kept for resolving script paths in `runScript`; the Lua state has its
     /// own copy for its internal allocations.
     alloc: std.mem.Allocator,
+    /// Script file watching, in debug builds. Heap-allocated so it stays put
+    /// when the engine is copied (e.g. adopted into `eng.scripts`).
+    hotReload: ?*HotReload,
 
     /// Creates a new Lua state and opens the standard libraries (string,
     /// table, math, etc). `require` finds modules through the engine's file
@@ -26,11 +47,98 @@ pub const ScriptEngine = struct {
         errdefer lua.deinit();
         lua.openLibs();
         try installAssetSearcher(lua);
-        return .{ .lua = lua, .alloc = allocator };
+
+        var hotReload: ?*HotReload = null;
+        if (comptime hot_reload_enabled) {
+            hotReload = HotReload.create(allocator) catch |err| blk: {
+                std.log.err("Script hot reload disabled: can't watch files: {}", .{err});
+                break :blk null;
+            };
+            if (hotReload) |hr| {
+                lua.pushLightUserdata(hr);
+                lua.setField(ziglua.registry_index, hot_reload_registry_key);
+            }
+        }
+        return .{ .lua = lua, .alloc = allocator, .hotReload = hotReload };
     }
 
     pub fn deinit(self: *ScriptEngine) void {
         self.lua.deinit();
+        if (self.hotReload) |hr| hr.destroy();
+    }
+
+    /// Runs again every watched script file that changed on disk since the
+    /// last call, and returns the resolved paths of the ones that ran
+    /// without error (valid until the next call). A file run with
+    /// `runScript` is run again the same way; a module loaded with `require`
+    /// is dropped from `package.loaded` and required again, so later
+    /// `require` calls get the new module (code still holding the old
+    /// module table keeps the old one). Errors are logged and the file
+    /// stays watched, so saving a fix reloads it.
+    ///
+    /// Re-running happens in the same Lua state, so globals the script sets
+    /// are replaced and anything else it does (registering callbacks,
+    /// playing sequences) happens again. The game re-reads what it needs,
+    /// e.g. with `loadStruct`.
+    ///
+    /// `AppRunner` calls this for `eng.scripts`. A game with its own
+    /// `ScriptEngine` calls it once per frame itself. Always empty in
+    /// release builds and on Android.
+    pub fn checkHotReload(self: *ScriptEngine) []const []const u8 {
+        if (comptime !hot_reload_enabled) return &.{};
+        const hr = self.hotReload orelse return &.{};
+        hr.reloaded.clearRetainingCapacity();
+
+        var changed: std.ArrayList(WatchId) = .empty;
+        defer changed.deinit(hr.alloc);
+        hr.watcher.poll(hr.alloc, &changed) catch |err| {
+            std.log.err("Script file watcher poll error: {}", .{err});
+            return &.{};
+        };
+
+        for (changed.items) |id| {
+            const entry = hr.entries.get(id) orelse continue;
+            // An editor's save can report the same file more than once.
+            if (containsPath(hr.reloaded.items, entry.path)) continue;
+
+            std.log.info("Hot reloading script {s}", .{entry.path});
+            const result = if (entry.module) |name| self.reloadModule(name) else self.runScript(entry.path);
+            result catch |err| {
+                std.log.warn("Script hot reload of {s} failed: {}", .{ entry.path, err });
+                continue;
+            };
+            hr.reloaded.append(hr.alloc, entry.path) catch |err| {
+                std.log.err("Script hot reload: can't report {s}: {}", .{ entry.path, err });
+            };
+        }
+        return hr.reloaded.items;
+    }
+
+    /// Drops the module `name` from `package.loaded` and requires it again.
+    fn reloadModule(self: *ScriptEngine, name: [:0]const u8) !void {
+        const lua = self.lua;
+        if ((lua.getGlobal("package") catch .nil) != .table) {
+            lua.pop(1);
+            return error.NoLuaPackageLib;
+        }
+        if (lua.getField(-1, "loaded") != .table) {
+            lua.pop(2);
+            return error.NoLuaPackageLib;
+        }
+        lua.pushNil();
+        lua.setField(-2, name);
+        lua.pop(2);
+
+        if ((lua.getGlobal("require") catch .nil) != .function) {
+            lua.pop(1);
+            return error.NoLuaPackageLib;
+        }
+        _ = lua.pushString(name);
+        lua.protectedCall(.{ .args = 1, .results = 0, .msg_handler = 0 }) catch {
+            std.log.err("{s}\n", .{lua.toString(-1) catch "(non-string error)"});
+            lua.pop(1);
+            return error.ScriptError;
+        };
     }
 
     /// Registers `func` as a global Lua function named `name`. Prefer
@@ -117,9 +225,18 @@ pub const ScriptEngine = struct {
     /// error message and returns `error.SyntaxError` / `error.ScriptError`
     /// on syntax or runtime failure, plus `error.ScriptFileError` when the
     /// file can't be opened or read.
+    ///
+    /// In debug builds the file is watched for `checkHotReload`, even when
+    /// it fails to load, so saving a fix runs it.
     pub fn runScript(self: *ScriptEngine, file: []const u8) !void {
         const resolved = try paths.resolve(self.alloc, file);
         defer self.alloc.free(resolved);
+
+        if (self.hotReload) |hr| {
+            hr.watch(resolved, null) catch |err| {
+                std.log.warn("Can't watch {s} for hot reload: {}", .{ resolved, err });
+            };
+        }
 
         // Read through `io` rather than `luaL_loadfile`, so a script inside
         // an Android APK loads like any other asset.
@@ -343,11 +460,19 @@ fn assetSearcher(lua: *Lua) i32 {
             continue;
         };
 
+        // Watched even if it doesn't compile, so saving a fix reloads it.
+        if (hotReloadOf(lua)) |hr| {
+            hr.watch(found.path, name) catch |err| {
+                std.log.warn("Can't watch {s} for hot reload: {}", .{ found.path, err });
+            };
+        }
+
         // Free the Zig buffers before anything that can raise a Lua error,
         // which would skip a `defer`.
         const load_result = lua.loadBuffer(found.source, found.chunk_name, .binary_text);
         alloc.free(found.source);
         alloc.free(found.chunk_name);
+        alloc.free(found.path);
         load_result catch {
             const msg: [:0]const u8 = lua.toString(-1) catch "?";
             lua.raiseErrorStr("error loading module '%s' from file '%s':\n\t%s", .{ name.ptr, candidate.ptr, msg.ptr });
@@ -381,18 +506,93 @@ const FoundModule = struct {
     source: []u8,
     /// `@` and the resolved path, Lua's chunk name for a file.
     chunk_name: [:0]u8,
+    /// The resolved path.
+    path: []u8,
 };
 
 /// Reads the module file `candidate` (resolved like any asset path), or
-/// null when there's no such file. The caller frees both buffers.
+/// null when there's no such file. The caller frees all three buffers.
 fn readModule(alloc: std.mem.Allocator, candidate: []const u8) !?FoundModule {
     const resolved = try paths.resolve(alloc, candidate);
-    defer alloc.free(resolved);
+    errdefer alloc.free(resolved);
     const source = io.readFile(alloc, resolved) catch |err| switch (err) {
-        error.FileNotFound => return null,
+        error.FileNotFound => {
+            alloc.free(resolved);
+            return null;
+        },
         else => return err,
     };
     errdefer alloc.free(source);
     const chunk_name = try std.fmt.allocPrintSentinel(alloc, "@{s}", .{resolved}, 0);
-    return .{ .source = source, .chunk_name = chunk_name };
+    return .{ .source = source, .chunk_name = chunk_name, .path = resolved };
+}
+
+/// Script files being watched for hot reload, and what to do when each one
+/// changes. See `ScriptEngine.checkHotReload`.
+const HotReload = struct {
+    alloc: std.mem.Allocator,
+    watcher: FileWatcher,
+    entries: std.AutoHashMapUnmanaged(WatchId, Entry) = .empty,
+    /// Paths `checkHotReload` last returned. Borrowed from `entries`.
+    reloaded: std.ArrayListUnmanaged([]const u8) = .empty,
+
+    const Entry = struct {
+        /// The resolved file path. Owned.
+        path: []const u8,
+        /// The module name for a file `require` loaded, or null for one
+        /// `runScript` ran. Owned.
+        module: ?[:0]const u8,
+    };
+
+    fn create(alloc: std.mem.Allocator) !*HotReload {
+        const self = try alloc.create(HotReload);
+        errdefer alloc.destroy(self);
+        self.* = .{ .alloc = alloc, .watcher = try FileWatcher.init(alloc) };
+        return self;
+    }
+
+    fn destroy(self: *HotReload) void {
+        var it = self.entries.valueIterator();
+        while (it.next()) |entry| {
+            self.alloc.free(entry.path);
+            if (entry.module) |name| self.alloc.free(name);
+        }
+        self.entries.deinit(self.alloc);
+        self.reloaded.deinit(self.alloc);
+        self.watcher.deinit();
+        self.alloc.destroy(self);
+    }
+
+    /// Watches `path`, to be re-run (or re-required as `module`) when it
+    /// changes. A path already watched keeps its first registration.
+    fn watch(self: *HotReload, path: []const u8, module: ?[]const u8) !void {
+        var it = self.entries.valueIterator();
+        while (it.next()) |entry| {
+            if (std.mem.eql(u8, entry.path, path)) return;
+        }
+
+        const ownedPath = try self.alloc.dupe(u8, path);
+        errdefer self.alloc.free(ownedPath);
+        const ownedModule: ?[:0]const u8 = if (module) |name| try self.alloc.dupeSentinel(u8, name, 0) else null;
+        errdefer if (ownedModule) |name| self.alloc.free(name);
+
+        const id = try self.watcher.watch(path);
+        try self.entries.put(self.alloc, id, .{ .path = ownedPath, .module = ownedModule });
+    }
+};
+
+/// The `HotReload` registered in `lua`'s registry by `ScriptEngine.init`,
+/// or null when hot reload is off.
+fn hotReloadOf(lua: *Lua) ?*HotReload {
+    if (comptime !hot_reload_enabled) return null;
+    defer lua.pop(1);
+    if (lua.getField(ziglua.registry_index, hot_reload_registry_key) != .light_userdata) return null;
+    return lua.toUserdata(HotReload, -1) catch null;
+}
+
+fn containsPath(list: []const []const u8, path: []const u8) bool {
+    for (list) |p| {
+        if (std.mem.eql(u8, p, path)) return true;
+    }
+    return false;
 }

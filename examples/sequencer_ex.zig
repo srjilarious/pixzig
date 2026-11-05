@@ -53,11 +53,10 @@ pub const FlashStep = struct {
     ) !seq.Step {
         const ptr = try alloc.create(FlashStep);
         ptr.* = .{ .flash = flash, .durationMs = durationMs, .color = color };
-        return .{ .ptr = ptr, .vtable = &vtable, .done = false };
+        return .{ .ptr = ptr, .vtable = &vtable };
     }
 
-    pub fn update(step: *seq.Step, deltaMs: f64) f64 {
-        _ = deltaMs;
+    pub fn update(step: *seq.Step, deltaMs: f64) seq.Step.Status {
         const self: *FlashStep = @ptrCast(@alignCast(step.ptr));
         self.flash.* = .{
             .active = true,
@@ -65,8 +64,8 @@ pub const FlashStep = struct {
             .totalMs = self.durationMs,
             .color = self.color,
         };
-        step.done = true;
-        return -1.0;
+        // Zero time: the whole delta goes to the next step.
+        return .{ .finished = deltaMs };
     }
 
     pub fn deinit(step: *seq.Step, alloc: std.mem.Allocator) void {

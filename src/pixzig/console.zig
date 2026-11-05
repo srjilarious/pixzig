@@ -152,7 +152,7 @@ pub const Console = struct {
     }
 
     fn addMessageToHistoryZ(self: *Console, msgC: [:0]const u8) !void {
-        try self.addMessageToHistory(utils.cStrToSlice(msgC));
+        try self.addMessageToHistory(msgC);
     }
 
     fn addMessageToHistory(self: *Console, msg: []const u8) !void {
@@ -163,7 +163,7 @@ pub const Console = struct {
     const AddMessageOpts = struct { prepend: ?[]const u8 = null };
 
     fn addMessageToLogZ(self: *Console, msgC: [:0]const u8, opts: AddMessageOpts) !void {
-        try self.addMessageToLog(utils.cStrToSlice(msgC), opts);
+        try self.addMessageToLog(msgC, opts);
     }
 
     fn addMessageToLog(self: *Console, msg: []const u8, opts: AddMessageOpts) !void {
