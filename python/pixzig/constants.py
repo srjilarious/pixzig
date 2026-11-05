@@ -1,12 +1,14 @@
-"""Key, mouse, gamepad, and event codes.
+"""Key, mouse, gamepad, event, easing, blend and text codes.
 
 GENERATED FILE -- do not edit by hand. Regenerate with `zig build
-py-constants`, which reads the enums in `src/pixzig/input/keys.zig`
-and the `Event` kinds in `src/pixzig/platform/event.zig`.
+py-constants`, which reads the enums in `src/pixzig/input/keys.zig`,
+the `Event` kinds in `src/pixzig/platform/event.zig`, and the
+renderer and easing enums listed in
+`tools/gen_py_constants/gen_py_constants.zig`.
 
-The values are pixzig's own dense indices into the engine's
-Key/MouseButton/Gamepad/Event enums. They are plain ints under the
-hood, but code should always use these names rather than the numbers.
+The values are pixzig's own dense indices into the engine's enums.
+They are plain ints under the hood, but code should always use these
+names rather than the numbers.
 """
 
 
@@ -192,3 +194,46 @@ class EventKind:
     DID_ENTER_FOREGROUND = 16
     LOW_MEMORY = 17
     TERMINATING = 18
+    SCRIPT_RELOADED = 19
+
+
+class InputDevice:
+    KEYBOARD = 0
+    MOUSE = 1
+    GAMEPAD = 2
+    TOUCH = 3
+
+
+class Ease:
+    LINEAR = 0
+    QUAD_IN = 1
+    QUAD_OUT = 2
+    QUAD_IN_OUT = 3
+    CUBIC_IN = 4
+    CUBIC_OUT = 5
+    CUBIC_IN_OUT = 6
+    SINE_IN = 7
+    SINE_OUT = 8
+    SINE_IN_OUT = 9
+    BACK_IN = 10
+    BACK_OUT = 11
+    ELASTIC_OUT = 12
+    BOUNCE_OUT = 13
+
+
+class BlendMode:
+    ALPHA = 0
+    ADDITIVE = 1
+    MULTIPLY = 2
+    PREMULTIPLIED = 3
+
+
+class TextAlign:
+    LEFT = 0
+    CENTER = 1
+    RIGHT = 2
+
+
+class TargetFilter:
+    NEAREST = 0
+    LINEAR = 1

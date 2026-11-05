@@ -53,7 +53,7 @@ class HelloApp(App):
         orbit_y = self.player_pos[1] + 80.0 * math.sin(self.orbit_angle)
         self.orbiter.set_pos(orbit_x, orbit_y)
 
-    def render(self) -> None:
+    def render(self, alpha: float) -> None:
         self.render_begin()
 
         # Size the banner to the text rather than guessing at 260x60.
@@ -62,7 +62,7 @@ class HelloApp(App):
         line_h = self.text.line_height() or 24
         self.shapes.filled_rect(20, 20, text_w + 20, line_h + 20, (40, 40, 80))
         self.shapes.rect(20, 20, text_w + 20, line_h + 20, (255, 255, 255), line_width=2)
-        self.text.draw_colored(greeting, 30, 30, (255, 220, 120))
+        self.text.draw(greeting, 30, 30, color=(255, 220, 120))
 
         self.player.draw()
         self.orbiter.draw()

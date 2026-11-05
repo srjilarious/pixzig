@@ -90,6 +90,23 @@ class Sprite:
         self._check_alive()
         _n.pz_sprite_set_tint(self._handle, 1.0, 1.0, 1.0, 1.0)
 
+    def set_fill(self, color) -> None:
+        """Draws the sprite as a silhouette in an (r, g, b, a) colour, 0-255,
+        keeping the texture's own alpha: a hit flash, a shadow, a selection
+        highlight. The colour's alpha blends between the sprite's own colours
+        (0) and a solid fill (255). Takes precedence over the tint. None
+        draws the sprite normally again."""
+        self._check_alive()
+        if color is None:
+            _n.pz_sprite_set_fill(self._handle, False, 0.0, 0.0, 0.0, 0.0)
+            return
+        if len(color) == 3:
+            r, g, b = color
+            a = 255
+        else:
+            r, g, b, a = color
+        _n.pz_sprite_set_fill(self._handle, True, r / 255.0, g / 255.0, b / 255.0, a / 255.0)
+
     @property
     def rect(self):
         self._check_alive()

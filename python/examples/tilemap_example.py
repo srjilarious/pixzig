@@ -51,7 +51,7 @@ class TilemapApp(App):
 
         self.camera.set_pos(*self.guy_pos)
 
-    def render(self) -> None:
+    def render(self, alpha: float) -> None:
         self.render_begin(self.camera)
         self.map_renderer.render_below(self.camera, 1.0)
         self.shapes.filled_rect(self.guy_pos[0], self.guy_pos[1], 32, 32, (255, 0, 0))

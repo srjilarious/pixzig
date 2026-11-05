@@ -39,7 +39,7 @@ class ActionMapApp(App):
         self.box_x += self.actions.axis("move_x") * 0.3 * dt_ms
         self.box_x = max(0.0, min(760.0, self.box_x))
 
-    def render(self) -> None:
+    def render(self, alpha: float) -> None:
         self.render_begin()
 
         held = self.actions.down("jump")

@@ -7,6 +7,7 @@ timestep loop below mirrors pixzig's own `AppRunner.gameLoopCore`
 import atexit
 import ctypes
 import functools
+import inspect
 import time
 import weakref
 
@@ -16,10 +17,11 @@ from .anim import Actor
 from .audio import Audio
 from .camera import Camera
 from .event import Event
-from .input import Gamepad, Keyboard, Mouse
+from .input import Gamepad, Keyboard, Mouse, Touch
 from .manifest import AssetManifest
 from .paths import AssetPaths
-from .shapes import Shapes
+from .render_target import RenderTarget
+from .shapes import Shapes, _normalize_color
 from .sprite import Flip, Sprite
 from .text import Text
 from .tilemap import TileMapRenderer
@@ -31,6 +33,16 @@ def _close_at_exit(app_ref):
     app = app_ref()
     if app is not None:
         app.close()
+
+
+def _takes_alpha(render) -> bool:
+    """Whether a bound `render` method accepts the interpolation alpha."""
+    try:
+        params = inspect.signature(render).parameters.values()
+    except (TypeError, ValueError):
+        return True
+    positional = [p for p in params if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD, p.VAR_POSITIONAL)]
+    return len(positional) >= 1
 
 
 def _clear_rgba(color):
@@ -150,6 +162,7 @@ class App:
 
         self.keyboard = Keyboard(eng)
         self.mouse = Mouse(eng)
+        self.touch = Touch(eng)
         self.shapes = Shapes(eng)
         self.text = Text(eng, self._paths)
         self.audio = Audio(eng, self._paths)
@@ -173,6 +186,12 @@ class App:
 
     def gamepad(self, index: int) -> Gamepad:
         return Gamepad(self._eng, index)
+
+    @property
+    def last_device(self) -> int:
+        """The input device the player used last, an `InputDevice`: show
+        "Press A" or "Press Space" to match, or hide touch hints."""
+        return _n.pz_input_last_device(self._eng)
 
     # --- Resources -----------------------------------------------------
 
@@ -319,7 +338,7 @@ class App:
     # for world-space drawing -- e.g. interleaved with
     # `TileMapRenderer.render_below`/`render_above`:
     #
-    #   def render(self):
+    #   def render(self, alpha):
     #       self.render_begin(self.camera)
     #       self.tilemap_renderer.render_below(self.camera, 1.0)
     #       self.player_sprite.draw()
@@ -335,8 +354,79 @@ class App:
         else:
             _n.pz_render_begin_world(self._eng, camera._handle)
 
+    def render_begin_screen(self) -> None:
+        """Begins a pass in framebuffer pixels, ignoring the logical size
+        (in a render target, the target's own pixels). See
+        `window.framebuffer_size`."""
+        _n.pz_render_begin_screen(self._eng)
+
     def render_end(self) -> None:
         _n.pz_render_end(self._eng)
+
+    def set_blend(self, mode: int) -> None:
+        """Sets how later draws in this pass blend with what's behind them,
+        a `BlendMode`: `ADDITIVE` for glows and lasers, `MULTIPLY` for
+        shadows, `PREMULTIPLIED` for drawing a render target cleared
+        transparent. Every pass starts at `BlendMode.ALPHA`."""
+        _n.check(_n.pz_render_set_blend(self._eng, int(mode)) == 0)
+
+    def fade(self, color, amount: float) -> None:
+        """Covers the logical screen with `color` (0-255 tuple), its alpha
+        scaled by `amount` from 0 (nothing) to 1: a fade to black, a hit
+        flash, a dimmed pause screen. A pass of its own, so call it between
+        passes, usually last in `render`."""
+        r, g, b, a = _normalize_color(color)
+        _n.pz_render_fade(self._eng, r, g, b, a, float(amount))
+
+    # --- Render targets and shaders ------------------------------------
+
+    def create_render_target(self, width: int, height: int, filter: int = 0) -> RenderTarget:
+        """Creates an offscreen image to draw into with `set_target`. `filter`
+        is a `TargetFilter`: `NEAREST` keeps a low-resolution target blocky
+        when drawn scaled up, `LINEAR` smooths it. See `pixzig.render_target`."""
+        handle = _n.pz_render_target_create(self._eng, int(width), int(height), int(filter))
+        if not handle:
+            raise _n.Error(_n.last_error())
+        return self._track(RenderTarget(handle))
+
+    def set_target(self, target) -> None:
+        """Sends later passes into `target` (a `RenderTarget`), or back to
+        the screen for None. Call it between passes. Inside a target,
+        `render_begin()` and `render_begin(camera)` stretch the logical
+        screen over the whole target."""
+        _n.pz_render_set_target(self._eng, target._handle if target is not None else None)
+
+    def create_shader(self, name: str, fragment_source: str) -> None:
+        """Compiles a GLSL ES 3.00 fragment shader under `name`, for
+        `set_shader`. It gets `in vec2 Texcoord`, `in vec4 Col` (the draw's
+        color), `flat in float Mode`, `uniform sampler2D tex`, and writes
+        `out vec4 fragColor`; `texture(tex, Texcoord) * Col` is the plain
+        sprite result to build on. Compiling a name again replaces it."""
+        _n.check(_n.pz_shader_create(self._eng, name.encode("utf-8"), fragment_source.encode("utf-8")) == 0)
+
+    def set_shader(self, name) -> None:
+        """Draws the rest of this pass with the shader `name`, or the default
+        shader for None. Every pass starts with the default."""
+        _n.check(_n.pz_render_set_shader(self._eng, name.encode("utf-8") if name is not None else None) == 0)
+
+    def set_uniform(self, name: str, value) -> None:
+        """Sets a uniform on the active shader: an int sets an `int`, a
+        float a `float`, a 2-tuple a `vec2` and a 4-tuple a `vec4` (pass
+        colors as 0-1 floats here). A name the shader doesn't use is
+        ignored."""
+        key = name.encode("utf-8")
+        if isinstance(value, bool) or not isinstance(value, (int, float, tuple, list)):
+            raise TypeError(f"set_uniform: unsupported value {value!r}")
+        if isinstance(value, int):
+            _n.pz_render_set_uniform_int(self._eng, key, value)
+        elif isinstance(value, float):
+            _n.pz_render_set_uniform_float(self._eng, key, value)
+        elif len(value) == 2:
+            _n.pz_render_set_uniform_vec2(self._eng, key, float(value[0]), float(value[1]))
+        elif len(value) == 4:
+            _n.pz_render_set_uniform_vec4(self._eng, key, *(float(v) for v in value))
+        else:
+            raise TypeError(f"set_uniform: a tuple uniform needs 2 or 4 values, got {len(value)}")
 
     # --- Events --------------------------------------------------------
 
@@ -360,8 +450,11 @@ class App:
         end the game; the return value is ignored."""
         pass
 
-    def render(self) -> None:
-        """Called once per displayed frame, after the screen is cleared."""
+    def render(self, alpha: float) -> None:
+        """Called once per displayed frame, after the screen is cleared.
+        `alpha` is how far the frame sits between the last two updates, 0 to
+        1: draw moving things at `prev + (curr - prev) * alpha` for smooth
+        motion at any frame rate. A `render(self)` without it still works."""
         pass
 
     def on_event(self, event: Event) -> None:
@@ -424,6 +517,7 @@ class App:
         # game time, so start the clock fresh.
         self._curr_time = time.perf_counter() * 1000.0
         self._lag = 0.0
+        render_takes_alpha = _takes_alpha(self.render)
         try:
             while self._running and not _n.pz_should_close(self._eng):
                 now = time.perf_counter() * 1000.0
@@ -447,7 +541,12 @@ class App:
 
                 r, g, b, a = _clear_rgba(self.clear_color)
                 _n.pz_render_clear(self._eng, r, g, b, a)
-                self.render()
+                if render_takes_alpha:
+                    # The ticks above leave 0 < lag <= one step: how far the
+                    # frame sits past the previous tick, toward the latest.
+                    self.render(min(max(self._lag / self._update_step_ms, 0.0), 1.0))
+                else:
+                    self.render()
                 _n.pz_swap_buffers(self._eng)
         finally:
             self.close()

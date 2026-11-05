@@ -1,19 +1,41 @@
 """TrueType text rendering. Access via `App.text`.
 
-The three draw calls mirror the engine's three text calls: plain, colored,
-and scaled. There is no colored *and* scaled call yet.
+One draw call takes the style as keyword arguments, like the engine's
+`drawText(text, pos, TextStyle)`:
 
     app.text.load_font("ui", "assets/Roboto.ttf", 16)
     app.text.set_font("ui")
-    app.text.draw_colored("Score: 40", 8, 8, (255, 220, 0))
+    app.text.draw("Score: 40", 8, 8, color=(255, 220, 0))
+    app.text.draw("PAUSED", 160, 100, scale=2, align=TextAlign.CENTER, shadow=(0, 0, 0))
 
-Coordinates are the top-left of the text, in whatever space the current
-render pass is using.
+`y` is the top of the text's line box. `x` is its left edge, middle or right
+edge, by `align`. Coordinates are in whatever space the current render pass
+is using, and may be fractional.
 """
 import ctypes
 
 from . import _native as _n
+from .constants import TextAlign
 from .shapes import _normalize_color
+
+
+def _style(font, color, scale, align, clip, shadow, shadow_offset) -> _n.PzTextStyle:
+    """Fills a `PzTextStyle` from `draw`/`measure`'s keyword arguments."""
+    style = _n.PzTextStyle()
+    style.font = font.encode("utf-8") if font is not None else None
+    style.r, style.g, style.b, style.a = _normalize_color(color)
+    style.scale = float(scale)
+    style.alignment = int(align)
+    if clip is not None:
+        x, y, w, h = clip
+        style.has_clip = True
+        style.clip_l, style.clip_t = float(x), float(y)
+        style.clip_r, style.clip_b = float(x) + float(w), float(y) + float(h)
+    if shadow is not None:
+        style.has_shadow = True
+        style.shadow_r, style.shadow_g, style.shadow_b, style.shadow_a = _normalize_color(shadow)
+        style.shadow_dx, style.shadow_dy = float(shadow_offset[0]), float(shadow_offset[1])
+    return style
 
 
 class Text:
@@ -29,35 +51,68 @@ class Text:
         )
 
     def set_font(self, name: str) -> None:
-        """Makes `name` (a font from `load_font` or a manifest) the font the
-        draw calls below use."""
+        """Makes `name` (a font from `load_font` or a manifest) the default
+        font: the one `draw` and `measure` use when not given `font=`."""
         _n.check(_n.pz_set_default_font(self._eng, name.encode("utf-8")) == 0)
 
-    def draw(self, text: str, x: int, y: int) -> None:
-        _n.pz_draw_string(self._eng, text.encode("utf-8"), int(x), int(y))
+    def set_pixelated(self, name: str, pixelated: bool = True) -> None:
+        """Samples the font `name` with hard pixel edges, for a pixel font
+        drawn scaled up. `False` goes back to smooth sampling."""
+        _n.check(_n.pz_font_set_pixelated(self._eng, name.encode("utf-8"), bool(pixelated)) == 0)
 
-    def draw_colored(self, text: str, x: int, y: int, color) -> None:
-        """Draws `text` with every glyph tinted by `color`, an (r, g, b) or
-        (r, g, b, a) tuple of 0-255 components."""
-        r, g, b, a = _normalize_color(color)
-        _n.pz_draw_string_colored(self._eng, text.encode("utf-8"), int(x), int(y), r, g, b, a)
+    def draw(
+        self,
+        text: str,
+        x: float,
+        y: float,
+        color=(255, 255, 255),
+        scale: float = 1.0,
+        font: str = None,
+        align: int = TextAlign.LEFT,
+        clip=None,
+        shadow=None,
+        shadow_offset=(1, 1),
+    ):
+        """Draws `text` and returns the (width, height) it took, the same as
+        `measure`.
 
-    def draw_scaled(self, text: str, x: int, y: int, scale: float) -> None:
-        """Draws `text` scaled uniformly about (x, y). The glyphs are the
-        atlas's own pixels stretched, so large scales get soft; load the
-        font at the size you want for crisp text."""
-        _n.pz_draw_string_scaled(self._eng, text.encode("utf-8"), int(x), int(y), float(scale))
-
-    def measure(self, text: str):
-        """Returns the (width, height) `text` would occupy, without drawing
-        it. Width is the sum of the glyph advances; height is the tallest
-        glyph, so it varies with the string ("ace" is shorter than "Ace")."""
-        w, h = ctypes.c_int32(), ctypes.c_int32()
-        _n.pz_measure_string(self._eng, text.encode("utf-8"), ctypes.byref(w), ctypes.byref(h))
+        * `color` -- an (r, g, b) or (r, g, b, a) tuple of 0-255 components.
+        * `scale` -- the atlas's own pixels stretched, so large scales get
+          soft; load the font at the size you want for crisp text.
+        * `font` -- a font name, or None for the default font.
+        * `align` -- a `TextAlign`: whether `x` is the left edge, the middle
+          or the right edge.
+        * `clip` -- an (x, y, w, h) rect the glyphs are cut to.
+        * `shadow` -- a color to draw a drop shadow in, `shadow_offset`
+          pixels away.
+        """
+        style = _style(font, color, scale, align, clip, shadow, shadow_offset)
+        w, h = ctypes.c_float(), ctypes.c_float()
+        _n.check(
+            _n.pz_draw_text(
+                self._eng, text.encode("utf-8"), float(x), float(y), ctypes.byref(style), ctypes.byref(w), ctypes.byref(h)
+            )
+            == 0
+        )
         return (w.value, h.value)
 
-    def line_height(self):
-        """The current font's line height in pixels -- the spacing to use
-        between rows of text -- or None when no font is set."""
-        h = _n.pz_font_line_height(self._eng)
+    def measure(self, text: str, scale: float = 1.0, font: str = None):
+        """Returns the (width, height) `text` would take, without drawing
+        it: the glyph advances wide, and the font's line box (ascent plus
+        descent) tall, so every string in one font measures the same
+        height. (0, 0) when there's no font."""
+        style = _style(font, (255, 255, 255), scale, TextAlign.LEFT, None, None, (0, 0))
+        w, h = ctypes.c_float(), ctypes.c_float()
+        _n.check(
+            _n.pz_measure_text(self._eng, text.encode("utf-8"), ctypes.byref(style), ctypes.byref(w), ctypes.byref(h))
+            == 0
+        )
+        return (w.value, h.value)
+
+    def line_height(self, font: str = None):
+        """A font's line spacing in pixels at scale 1 -- how far apart to
+        put rows of text -- or None when there's no such font. `font` is a
+        font name, or None for the default font."""
+        name = font.encode("utf-8") if font is not None else None
+        h = _n.pz_font_line_height(self._eng, name)
         return None if h < 0 else h

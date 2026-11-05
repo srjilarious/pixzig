@@ -1,12 +1,12 @@
-//! Regenerates `python/pixzig/constants.py` from the engine's own input
-//! enums.
+//! Regenerates `python/pixzig/constants.py` from the engine's own enums.
 //!
-//! The Python bindings pass key and button codes across the C ABI as plain
-//! ints, so the two sides have to agree on the numbering. These are pixzig's
-//! own dense enum values, and this generator is what keeps the copy honest.
-//! Run it after adding, removing or reordering anything in
-//! `src/pixzig/input/keys.zig` or the `Event` union in
-//! `src/pixzig/platform/event.zig`:
+//! The Python bindings pass key and button codes, event kinds, blend modes
+//! and the like across the C ABI as plain ints, so the two sides have to
+//! agree on the numbering. These are pixzig's own dense enum values, and
+//! this generator is what keeps the copy honest. Run it after adding,
+//! removing or reordering anything in `src/pixzig/input/keys.zig`, the
+//! `Event` union in `src/pixzig/platform/event.zig`, or any other enum
+//! listed in `main` below:
 //!
 //!     zig build py-constants
 //!
@@ -18,17 +18,24 @@ const pixzig = @import("pixzig");
 const keys = pixzig.input.keys;
 const MouseAxis = pixzig.input.action.MouseAxis;
 const EventKind = pixzig.Event.Kind;
+const InputDevice = pixzig.input.Device;
+const Ease = pixzig.Ease;
+const BlendMode = pixzig.BlendMode;
+const TextAlign = pixzig.TextAlign;
+const TargetFilter = pixzig.renderer.TargetFilter;
 
 const header =
-    \\"""Key, mouse, gamepad, and event codes.
+    \\"""Key, mouse, gamepad, event, easing, blend and text codes.
     \\
     \\GENERATED FILE -- do not edit by hand. Regenerate with `zig build
-    \\py-constants`, which reads the enums in `src/pixzig/input/keys.zig`
-    \\and the `Event` kinds in `src/pixzig/platform/event.zig`.
+    \\py-constants`, which reads the enums in `src/pixzig/input/keys.zig`,
+    \\the `Event` kinds in `src/pixzig/platform/event.zig`, and the
+    \\renderer and easing enums listed in
+    \\`tools/gen_py_constants/gen_py_constants.zig`.
     \\
-    \\The values are pixzig's own dense indices into the engine's
-    \\Key/MouseButton/Gamepad/Event enums. They are plain ints under the
-    \\hood, but code should always use these names rather than the numbers.
+    \\The values are pixzig's own dense indices into the engine's enums.
+    \\They are plain ints under the hood, but code should always use these
+    \\names rather than the numbers.
     \\"""
     \\
 ;
@@ -63,6 +70,11 @@ pub fn main(init: std.process.Init) !void {
     try writeEnum(&out, alloc, "GamepadAxis", keys.GamepadAxis);
     try writeEnum(&out, alloc, "MouseAxis", MouseAxis);
     try writeEnum(&out, alloc, "EventKind", EventKind);
+    try writeEnum(&out, alloc, "InputDevice", InputDevice);
+    try writeEnum(&out, alloc, "Ease", Ease);
+    try writeEnum(&out, alloc, "BlendMode", BlendMode);
+    try writeEnum(&out, alloc, "TextAlign", TextAlign);
+    try writeEnum(&out, alloc, "TargetFilter", TargetFilter);
 
     try std.Io.Dir.cwd().writeFile(init.io, .{ .sub_path = out_path, .data = out.items });
     std.log.info("Wrote {s} ({d} bytes).", .{ out_path, out.items.len });

@@ -93,6 +93,12 @@ const PzAssetManifest = struct {
     registryIndex: usize,
 };
 
+const PzRenderTarget = struct {
+    eng: *PzEngine,
+    target: pixzig.RenderTarget,
+    registryIndex: usize,
+};
+
 // ---------------------------------------------------------------------------
 // Action mapping. `pixzig.input.ActionMap(Action, Axes)` is comptime-generic
 // over user-defined enums, which Python can't supply. Instead, freeze one
@@ -158,6 +164,7 @@ const PzEngine = struct {
     manifests: std.ArrayList(*PzAssetManifest),
     actionMaps: std.ArrayList(*PzActionMap),
     actors: std.ArrayList(*PzActor),
+    renderTargets: std.ArrayList(*PzRenderTarget),
     /// Adapters for streams started with `pz_audio_play_stream`.
     streams: std.ArrayList(*PzStream),
     /// Shared frame-sequence/actor-state store, created on the first
@@ -268,6 +275,7 @@ export fn pz_init(opts: *const PzInitOptions) callconv(.c) ?*PzEngine {
         .manifests = .empty,
         .actionMaps = .empty,
         .actors = .empty,
+        .renderTargets = .empty,
         .streams = .empty,
         .anim = null,
     };
@@ -310,6 +318,13 @@ export fn pz_deinit(eng: *PzEngine) callconv(.c) void {
     }
     eng.actors.deinit(eng.alloc);
     if (eng.anim) |*m| m.deinit();
+
+    // Before the engine, while the GL context is still alive.
+    for (eng.renderTargets.items) |rt| {
+        rt.target.deinit();
+        eng.alloc.destroy(rt);
+    }
+    eng.renderTargets.deinit(eng.alloc);
 
     eng.engine.deinit();
 
@@ -442,6 +457,155 @@ export fn pz_render_clear(eng: *PzEngine, r: u8, g: u8, b: u8, a: u8) callconv(.
 
 export fn pz_render_end(eng: *PzEngine) callconv(.c) void {
     eng.engine.renderer.end();
+}
+
+/// Begins a pass in framebuffer pixels (or a render target's own pixels),
+/// ignoring the logical size.
+export fn pz_render_begin_screen(eng: *PzEngine) callconv(.c) void {
+    eng.engine.renderer.begin(.screen);
+}
+
+/// Sets how later draws in this pass blend with what's behind them. `mode`
+/// is a `BlendMode` value. Every pass starts at alpha blending.
+export fn pz_render_set_blend(eng: *PzEngine, mode: c_int) callconv(.c) i32 {
+    const m = enumArg(pixzig.BlendMode, mode) orelse {
+        setLastErrorMsg("invalid blend mode");
+        return -1;
+    };
+    eng.engine.renderer.setBlend(m);
+    return 0;
+}
+
+/// Covers the logical screen with a 0-1 RGBA color, its alpha scaled by
+/// `amount`. A pass of its own: call it between passes.
+export fn pz_render_fade(eng: *PzEngine, r: f32, g: f32, b: f32, a: f32, amount: f32) callconv(.c) void {
+    eng.engine.renderer.fade(.{ .r = r, .g = g, .b = b, .a = a }, amount);
+}
+
+// ---------------------------------------------------------------------------
+// Custom shaders. A shader is stored in the resource manager by name; see
+// `Renderer.createShader` for what the fragment shader receives.
+// ---------------------------------------------------------------------------
+
+/// Compiles a GLSL ES 3.00 fragment shader into a shader named `name`.
+/// Compiling a name again replaces it.
+export fn pz_shader_create(eng: *PzEngine, name: [*:0]const u8, fragment_source: [*:0]const u8) callconv(.c) i32 {
+    _ = eng.engine.renderer.createShader(&eng.engine.resources, std.mem.span(name), fragment_source) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    return 0;
+}
+
+/// Draws later quads in this pass with the shader `name`, or the default
+/// shader for null. Every pass starts with the default shader.
+export fn pz_render_set_shader(eng: *PzEngine, name: ?[*:0]const u8) callconv(.c) i32 {
+    const n = name orelse {
+        eng.engine.renderer.setShader(null);
+        return 0;
+    };
+    const shader = eng.engine.resources.getShader(std.mem.span(n)) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    eng.engine.renderer.setShader(shader);
+    return 0;
+}
+
+/// Sets a `float` uniform on the active shader. A name the shader doesn't
+/// use is ignored.
+export fn pz_render_set_uniform_float(eng: *PzEngine, name: [*:0]const u8, v: f32) callconv(.c) void {
+    eng.engine.renderer.setUniform(std.mem.span(name), v);
+}
+
+/// Sets an `int` uniform on the active shader.
+export fn pz_render_set_uniform_int(eng: *PzEngine, name: [*:0]const u8, v: i32) callconv(.c) void {
+    eng.engine.renderer.setUniform(std.mem.span(name), v);
+}
+
+/// Sets a `vec2` uniform on the active shader.
+export fn pz_render_set_uniform_vec2(eng: *PzEngine, name: [*:0]const u8, x: f32, y: f32) callconv(.c) void {
+    eng.engine.renderer.setUniform(std.mem.span(name), pixzig.Vec2F{ .x = x, .y = y });
+}
+
+/// Sets a `vec4` uniform on the active shader.
+export fn pz_render_set_uniform_vec4(eng: *PzEngine, name: [*:0]const u8, x: f32, y: f32, z: f32, w: f32) callconv(.c) void {
+    eng.engine.renderer.setUniform(std.mem.span(name), pixzig.Color{ .r = x, .g = y, .b = z, .a = w });
+}
+
+// ---------------------------------------------------------------------------
+// Render targets. Targets are opaque handles (*PzRenderTarget); valid from
+// pz_render_target_create until pz_render_target_destroy.
+// ---------------------------------------------------------------------------
+
+fn pzRenderTargetCreateImpl(eng: *PzEngine, w: i32, h: i32, filter: pixzig.renderer.TargetFilter) !*PzRenderTarget {
+    if (w <= 0 or h <= 0) return error.InvalidRenderTargetSize;
+    var target = try pixzig.RenderTarget.init(.{ .x = @intCast(w), .y = @intCast(h) }, .{ .filter = filter });
+    errdefer target.deinit();
+
+    const wrapper = try eng.alloc.create(PzRenderTarget);
+    errdefer eng.alloc.destroy(wrapper);
+    wrapper.* = .{ .eng = eng, .target = target, .registryIndex = undefined };
+    try registryAdd(PzRenderTarget, &eng.renderTargets, eng.alloc, wrapper);
+    return wrapper;
+}
+
+/// Creates a `w` x `h` pixel offscreen image to draw into. `filter` is a
+/// `TargetFilter` value: how the image is sampled when drawn scaled.
+export fn pz_render_target_create(eng: *PzEngine, w: i32, h: i32, filter: c_int) callconv(.c) ?*PzRenderTarget {
+    const f = enumArg(pixzig.renderer.TargetFilter, filter) orelse {
+        setLastErrorMsg("invalid target filter");
+        return null;
+    };
+    return pzRenderTargetCreateImpl(eng, w, h, f) catch |err| {
+        setLastErrorErr(err);
+        return null;
+    };
+}
+
+/// Frees a render target. Don't destroy the target passes are drawing into;
+/// `pz_render_set_target(eng, null)` first.
+export fn pz_render_target_destroy(rt: *PzRenderTarget) callconv(.c) void {
+    if (rt.eng.engine.renderer.currentTarget() == &rt.target) rt.eng.engine.renderer.setTarget(null);
+    rt.target.deinit();
+    registryRemove(PzRenderTarget, &rt.eng.renderTargets, rt);
+    rt.eng.alloc.destroy(rt);
+}
+
+export fn pz_render_target_size(rt: *PzRenderTarget, out_w: *i32, out_h: *i32) callconv(.c) void {
+    const sz = rt.target.size();
+    out_w.* = @intCast(sz.x);
+    out_h.* = @intCast(sz.y);
+}
+
+/// Reallocates the image at a new size, discarding its contents. Call it
+/// outside a pass that draws into this target.
+export fn pz_render_target_resize(rt: *PzRenderTarget, w: i32, h: i32) callconv(.c) i32 {
+    if (w <= 0 or h <= 0) {
+        setLastErrorMsg("InvalidRenderTargetSize");
+        return -1;
+    }
+    rt.target.resize(.{ .x = @intCast(w), .y = @intCast(h) }) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    return 0;
+}
+
+/// Sends later passes to `rt`, or back to the screen for null. Call it
+/// between passes. Inside a target, logical and camera passes stretch the
+/// logical screen over the whole target, and a screen pass draws in the
+/// target's own pixels.
+export fn pz_render_set_target(eng: *PzEngine, rt: ?*PzRenderTarget) callconv(.c) void {
+    eng.engine.renderer.setTarget(if (rt) |t| &t.target else null);
+}
+
+/// Draws the target's image upright into the rect (x, y, w, h) of the
+/// current pass, tinted by a 0-1 RGBA color (white for none).
+export fn pz_render_target_draw(rt: *PzRenderTarget, x: f32, y: f32, w: f32, h: f32, r: f32, g: f32, b: f32, a: f32) callconv(.c) void {
+    const tex = &rt.target.texture;
+    const dest = pixzig.RectF{ .l = x, .t = y, .r = x + w, .b = y + h };
+    rt.eng.engine.renderer.drawTextureColored(tex, dest, tex.val.src, .{ .r = r, .g = g, .b = b, .a = a });
 }
 
 // ---------------------------------------------------------------------------
@@ -631,6 +795,13 @@ export fn pz_sprite_set_tint(spr: *PzSprite, r: f32, g: f32, b: f32, a: f32) cal
     }
 }
 
+/// Draws the sprite as a silhouette of a 0-1 RGBA color (alpha kept from
+/// the texture), `a` blending between the sprite's own colors (0) and a
+/// solid fill (1). Takes precedence over the tint. `enabled` false clears it.
+export fn pz_sprite_set_fill(spr: *PzSprite, enabled: bool, r: f32, g: f32, b: f32, a: f32) callconv(.c) void {
+    spr.sprite.fill = if (enabled) .{ .r = r, .g = g, .b = b, .a = a } else null;
+}
+
 /// The sprite's origin position (what pz_sprite_set_pos set).
 export fn pz_sprite_get_pos(spr: *PzSprite, out_x: *f32, out_y: *f32) callconv(.c) void {
     const p = spr.sprite.pos();
@@ -714,6 +885,18 @@ export fn pz_camera_set_bounds(cam: *PzCamera, l: f32, t: f32, r: f32, b: f32) c
 
 export fn pz_camera_clear_bounds(cam: *PzCamera) callconv(.c) void {
     cam.camera.bounds = null;
+}
+
+/// Moves the camera toward (tx, ty) for one tick of `dt_ms`; see
+/// `Camera2D.follow`. The target can move inside a box of half-size
+/// (deadzone_x, deadzone_y) without moving the camera. `smoothing` is how
+/// fast the camera closes the gap per second (5 is snappy, 2 is floaty);
+/// zero or less jumps straight to the target.
+export fn pz_camera_follow(cam: *PzCamera, tx: f32, ty: f32, dt_ms: f64, deadzone_x: f32, deadzone_y: f32, smoothing: f32) callconv(.c) void {
+    cam.camera.follow(.{ .x = tx, .y = ty }, dt_ms, .{
+        .deadzone = .{ .x = deadzone_x, .y = deadzone_y },
+        .smoothing = if (smoothing > 0) smoothing else null,
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -1019,35 +1202,98 @@ export fn pz_draw_enclosing_rect(eng: *PzEngine, x: f32, y: f32, w: f32, h: f32,
     eng.engine.renderer.drawEnclosingRect(dest, .{ .r = r, .g = g, .b = b, .a = a }, line_width);
 }
 
-export fn pz_draw_string(eng: *PzEngine, text: [*:0]const u8, x: i32, y: i32) callconv(.c) void {
-    _ = eng.engine.renderer.drawString(std.mem.span(text), .{ .x = @floatFromInt(x), .y = @floatFromInt(y) });
+/// `TextStyle` for C callers. Every field is required; `pixzig.Text` in
+/// Python fills in the defaults.
+pub const PzTextStyle = extern struct {
+    /// The name of a font (from `pz_load_font` or a manifest), or null for
+    /// the default font.
+    font: ?[*:0]const u8,
+    /// Text color, 0-1 RGBA.
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+    scale: f32,
+    /// A `TextAlign` value: what `x` is, the left edge, middle or right
+    /// edge of the text.
+    alignment: i32,
+    /// Clip the glyphs to the rect (clipL, clipT)-(clipR, clipB).
+    hasClip: bool,
+    clipL: f32,
+    clipT: f32,
+    clipR: f32,
+    clipB: f32,
+    /// Draw a shadow in the shadow color, offset by (shadowDx, shadowDy).
+    hasShadow: bool,
+    shadowR: f32,
+    shadowG: f32,
+    shadowB: f32,
+    shadowA: f32,
+    shadowDx: f32,
+    shadowDy: f32,
+};
+
+/// Converts a `PzTextStyle`, looking its font up by name.
+fn textStyleFrom(eng: *PzEngine, s: *const PzTextStyle) !pixzig.TextStyle {
+    const font = if (s.font) |name| try eng.engine.resources.getFontAtlas(std.mem.span(name)) else null;
+    return .{
+        .font = font,
+        .color = .{ .r = s.r, .g = s.g, .b = s.b, .a = s.a },
+        .scale = s.scale,
+        .clip = if (s.hasClip) .{ .l = s.clipL, .t = s.clipT, .r = s.clipR, .b = s.clipB } else null,
+        .@"align" = enumArg(pixzig.TextAlign, s.alignment) orelse return error.InvalidTextAlign,
+        .shadow = if (s.hasShadow) .{ .r = s.shadowR, .g = s.shadowG, .b = s.shadowB, .a = s.shadowA } else null,
+        .shadowOffset = .{ .x = s.shadowDx, .y = s.shadowDy },
+    };
 }
 
-/// Draws `text` with every glyph tinted by a 0-1 RGBA color; see
-/// `Renderer.drawText`.
-export fn pz_draw_string_colored(eng: *PzEngine, text: [*:0]const u8, x: i32, y: i32, r: f32, g: f32, b: f32, a: f32) callconv(.c) void {
-    _ = eng.engine.renderer.drawText(std.mem.span(text), .{ .x = @floatFromInt(x), .y = @floatFromInt(y) }, .{ .color = .{ .r = r, .g = g, .b = b, .a = a } });
+/// Draws `text` with its line box's top at `y` and `x` placed by the
+/// style's alignment; see `Renderer.drawText`. Writes the size drawn (what
+/// `pz_measure_text` reports). Fails for an unknown font name.
+export fn pz_draw_text(eng: *PzEngine, text: [*:0]const u8, x: f32, y: f32, style: *const PzTextStyle, out_w: *f32, out_h: *f32) callconv(.c) i32 {
+    const ts = textStyleFrom(eng, style) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    const size = eng.engine.renderer.drawText(std.mem.span(text), .{ .x = x, .y = y }, ts);
+    out_w.* = size.x;
+    out_h.* = size.y;
+    return 0;
 }
 
-/// Draws `text` scaled uniformly about its top-left position.
-export fn pz_draw_string_scaled(eng: *PzEngine, text: [*:0]const u8, x: i32, y: i32, scale: f32) callconv(.c) void {
-    _ = eng.engine.renderer.drawText(std.mem.span(text), .{ .x = @floatFromInt(x), .y = @floatFromInt(y) }, .{ .scale = scale });
+/// Measures `text` without drawing it: the advances wide and the line box
+/// (ascent plus descent) tall, at the style's font and scale. (0, 0) when
+/// there's no font. Fails for an unknown font name.
+export fn pz_measure_text(eng: *PzEngine, text: [*:0]const u8, style: *const PzTextStyle, out_w: *f32, out_h: *f32) callconv(.c) i32 {
+    const ts = textStyleFrom(eng, style) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    const size = eng.engine.renderer.measureText(std.mem.span(text), ts);
+    out_w.* = size.x;
+    out_h.* = size.y;
+    return 0;
 }
 
-/// Measures `text` in the default font without drawing it: the advances
-/// wide and the line box (ascent plus descent) tall. Reports (0, 0) when no
-/// font is set.
-export fn pz_measure_string(eng: *PzEngine, text: [*:0]const u8, out_w: *i32, out_h: *i32) callconv(.c) void {
-    const size = eng.engine.renderer.measureText(std.mem.span(text), .{});
-    out_w.* = @intFromFloat(size.x);
-    out_h.* = @intFromFloat(size.y);
+/// A font's line spacing at scale 1 (ascent, descent and line gap): how far
+/// apart to put the tops of consecutive lines. `font` is a font name, or
+/// null for the default font. -1 when there's no such font.
+export fn pz_font_line_height(eng: *PzEngine, font: ?[*:0]const u8) callconv(.c) f32 {
+    const name = font orelse return eng.engine.renderer.lineHeight() orelse -1;
+    const handle = eng.engine.resources.getFontAtlas(std.mem.span(name)) catch return -1;
+    const fa = &handle.val;
+    return @floatFromInt(fa.ascent + fa.descent + fa.lineGap);
 }
 
-/// The default font's line spacing in pixels (ascent, descent and line
-/// gap), or -1 when no font is set.
-export fn pz_font_line_height(eng: *PzEngine) callconv(.c) i32 {
-    const h = eng.engine.renderer.lineHeight() orelse return -1;
-    return @intFromFloat(h);
+/// Samples the font's glyphs with hard pixel edges (true) or smoothly
+/// (false), for pixel fonts drawn scaled up. See `FontAtlas.setPixelated`.
+export fn pz_font_set_pixelated(eng: *PzEngine, font: [*:0]const u8, pixelated: bool) callconv(.c) i32 {
+    const handle = eng.engine.resources.getFontAtlas(std.mem.span(font)) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    handle.val.setPixelated(pixelated);
+    return 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -1877,4 +2123,197 @@ export fn pz_tilemap_object_prop(tr: *PzTilemapRenderer, group_index: i32, obj_i
     const obj = &group.objects.items[@intCast(obj_index)];
     const v = tmPropValue(obj.properties, std.mem.span(name)) orelse return empty;
     return tmCopyZ(&g_tm_str_c, v);
+}
+
+// ---------------------------------------------------------------------------
+// Collision shape tests. Pure functions, no engine needed. Rects are
+// (x, y, w, h); see `pixzig.collision.shapes`.
+// ---------------------------------------------------------------------------
+
+/// How two shapes overlap: a unit `normal` pointing from the second shape
+/// toward the first, and the `depth` along it. Moving the first shape by
+/// normal * depth separates them.
+pub const PzOverlap = extern struct {
+    nx: f32,
+    ny: f32,
+    depth: f32,
+};
+
+/// Where a segment first enters a shape: `t` along it (0 to 1), the point
+/// there, and the shape's outward normal.
+pub const PzSegmentHit = extern struct {
+    t: f32,
+    x: f32,
+    y: f32,
+    nx: f32,
+    ny: f32,
+};
+
+fn rectXywh(x: f32, y: f32, w: f32, h: f32) pixzig.RectF {
+    return .{ .l = x, .t = y, .r = x + w, .b = y + h };
+}
+
+fn writeOverlap(found: ?pixzig.collision.Overlap, out: *PzOverlap) bool {
+    const o = found orelse return false;
+    out.* = .{ .nx = o.normal.x, .ny = o.normal.y, .depth = o.depth };
+    return true;
+}
+
+fn writeSegmentHit(found: ?pixzig.collision.SegmentHit, out: *PzSegmentHit) bool {
+    const h = found orelse return false;
+    out.* = .{ .t = h.t, .x = h.point.x, .y = h.point.y, .nx = h.normal.x, .ny = h.normal.y };
+    return true;
+}
+
+export fn pz_circle_circle(ax: f32, ay: f32, ar: f32, bx: f32, by: f32, br: f32, out: *PzOverlap) callconv(.c) bool {
+    return writeOverlap(pixzig.collision.circleCircle(
+        .{ .center = .{ .x = ax, .y = ay }, .radius = ar },
+        .{ .center = .{ .x = bx, .y = by }, .radius = br },
+    ), out);
+}
+
+export fn pz_circle_rect(cx: f32, cy: f32, cr: f32, x: f32, y: f32, w: f32, h: f32, out: *PzOverlap) callconv(.c) bool {
+    return writeOverlap(pixzig.collision.circleRect(
+        .{ .center = .{ .x = cx, .y = cy }, .radius = cr },
+        rectXywh(x, y, w, h),
+    ), out);
+}
+
+export fn pz_rect_rect(ax: f32, ay: f32, aw: f32, ah: f32, bx: f32, by: f32, bw: f32, bh: f32, out: *PzOverlap) callconv(.c) bool {
+    return writeOverlap(pixzig.collision.rectRect(rectXywh(ax, ay, aw, ah), rectXywh(bx, by, bw, bh)), out);
+}
+
+export fn pz_segment_circle(x1: f32, y1: f32, x2: f32, y2: f32, cx: f32, cy: f32, cr: f32, out: *PzSegmentHit) callconv(.c) bool {
+    return writeSegmentHit(pixzig.collision.segmentCircle(
+        .{ .a = .{ .x = x1, .y = y1 }, .b = .{ .x = x2, .y = y2 } },
+        .{ .center = .{ .x = cx, .y = cy }, .radius = cr },
+    ), out);
+}
+
+export fn pz_segment_rect(x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32, w: f32, h: f32, out: *PzSegmentHit) callconv(.c) bool {
+    return writeSegmentHit(pixzig.collision.segmentRect(
+        .{ .a = .{ .x = x1, .y = y1 }, .b = .{ .x = x2, .y = y2 } },
+        rectXywh(x, y, w, h),
+    ), out);
+}
+
+export fn pz_point_in_circle(px: f32, py: f32, cx: f32, cy: f32, cr: f32) callconv(.c) bool {
+    return pixzig.collision.pointInCircle(.{ .x = px, .y = py }, .{ .center = .{ .x = cx, .y = cy }, .radius = cr });
+}
+
+/// Whether (px, py) is inside the polygon whose `count` corners are the
+/// x, y pairs in `coords` (2 * count floats). False when it can't allocate.
+export fn pz_point_in_polygon(px: f32, py: f32, coords: [*]const f32, count: i32) callconv(.c) bool {
+    if (count < 3) return false;
+    const n: usize = @intCast(count);
+    const points = std.heap.c_allocator.alloc(pixzig.Vec2F, n) catch return false;
+    defer std.heap.c_allocator.free(points);
+    for (points, 0..) |*p, i| p.* = .{ .x = coords[2 * i], .y = coords[2 * i + 1] };
+    return pixzig.collision.pointInPolygon(.{ .x = px, .y = py }, points);
+}
+
+// ---------------------------------------------------------------------------
+// Touch and input device. Positions are logical game coordinates.
+// ---------------------------------------------------------------------------
+
+/// The first tap this tick, or false when there was none in the game area.
+export fn pz_touch_tapped(eng: *PzEngine, out_x: *f32, out_y: *f32) callconv(.c) bool {
+    const p = eng.engine.inputs.touch.tapped() orelse return false;
+    out_x.* = p.x;
+    out_y.* = p.y;
+    return true;
+}
+
+/// The `index`-th tap this tick (several fingers can tap at once). False
+/// past the last tap, or for a tap outside the game area.
+export fn pz_touch_tap_at(eng: *PzEngine, index: i32, out_x: *f32, out_y: *f32) callconv(.c) bool {
+    if (index < 0) return false;
+    const p = eng.engine.inputs.touch.tapAt(@intCast(index)) orelse return false;
+    out_x.* = p.x;
+    out_y.* = p.y;
+    return true;
+}
+
+/// How many taps there were this tick, including any outside the game
+/// area (which `pz_touch_tap_at` reports as false).
+export fn pz_touch_tap_count(eng: *PzEngine) callconv(.c) i32 {
+    return @intCast(eng.engine.inputs.touch.numTaps);
+}
+
+export fn pz_touch_finger_count(eng: *PzEngine) callconv(.c) i32 {
+    return @intCast(eng.engine.inputs.touch.fingerCount());
+}
+
+/// One finger that's down. `hasPos`/`hasStart` are false while that point
+/// is outside the game area (over a letterbox band).
+pub const PzFinger = extern struct {
+    id: u64,
+    hasPos: bool,
+    x: f32,
+    y: f32,
+    hasStart: bool,
+    startX: f32,
+    startY: f32,
+    /// Whether it landed on a virtual pad control.
+    onControl: bool,
+};
+
+/// The `index`-th finger down (0 to `pz_touch_finger_count` - 1). False
+/// past the last one.
+export fn pz_touch_finger(eng: *PzEngine, index: i32, out: *PzFinger) callconv(.c) bool {
+    if (index < 0) return false;
+    var it = eng.engine.inputs.touch.fingerIterator();
+    var i: i32 = 0;
+    while (it.next()) |f| : (i += 1) {
+        if (i != index) continue;
+        out.* = std.mem.zeroes(PzFinger);
+        out.id = f.id;
+        out.onControl = f.onControl;
+        if (f.pos) |p| {
+            out.hasPos = true;
+            out.x = p.x;
+            out.y = p.y;
+        }
+        if (f.start) |p| {
+            out.hasStart = true;
+            out.startX = p.x;
+            out.startY = p.y;
+        }
+        return true;
+    }
+    return false;
+}
+
+/// The input device the player used last, as an `InputDevice` value.
+export fn pz_input_last_device(eng: *PzEngine) callconv(.c) i32 {
+    return @backingInt(eng.engine.inputs.lastDevice());
+}
+
+// ---------------------------------------------------------------------------
+// Saves and easing
+// ---------------------------------------------------------------------------
+
+/// Writes the per-user directory for the game's saves and settings
+/// (created if needed, ending in a path separator) into `buf`, and returns
+/// its length, or -1 when it can't be found or doesn't fit. See
+/// `pixzig.save.prefPath`.
+export fn pz_pref_path(org: [*:0]const u8, app: [*:0]const u8, buf: [*]u8, buf_len: usize) callconv(.c) i32 {
+    const path = pixzig.save.prefPath(std.heap.c_allocator, std.mem.span(org), std.mem.span(app)) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    defer std.heap.c_allocator.free(path);
+    if (path.len > buf_len) {
+        setLastErrorMsg("pref path too long for the buffer");
+        return -1;
+    }
+    @memcpy(buf[0..path.len], path);
+    return @intCast(path.len);
+}
+
+/// Applies the easing curve `ease` (an `Ease` value) to `t`, clamped to
+/// [0, 1] first. An unknown curve is linear.
+export fn pz_ease(ease: c_int, t: f32) callconv(.c) f32 {
+    const e = enumArg(pixzig.Ease, ease) orelse return std.math.clamp(t, 0, 1);
+    return e.apply(t);
 }

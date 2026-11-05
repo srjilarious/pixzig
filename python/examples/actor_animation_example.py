@@ -92,7 +92,7 @@ class ActorAnimationApp(App):
         self.pos[1] += dy
         self.sprite.set_pos(*map(int, self.pos))
 
-    def render(self) -> None:
+    def render(self, alpha: float) -> None:
         self.render_begin()
         self.sprite.draw()
         self.text.draw("Arrow keys to walk, Esc to quit", 20, 20)

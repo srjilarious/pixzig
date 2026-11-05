@@ -85,7 +85,7 @@ class TilemapRuntimeApp(App):
                 self.map.refresh()
                 self.painted = f"erased tile at ({tx}, {ty})"
 
-    def render(self) -> None:
+    def render(self, alpha: float) -> None:
         self.render_begin(self.camera)
         self.map.render_below(self.camera, 1.0)
         for x, y, w, h, _ in self.obj_rects:

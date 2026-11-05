@@ -101,6 +101,11 @@ py_install VENV=".venv": wheels
 	@[ -d "{{VENV}}" ] || uv venv "{{VENV}}"
 	uv pip install --python "{{VENV}}" --reinstall "python/dist/pixzig-$(cat python/VERSION)-py3-none-linux_x86_64.whl"
 
+# Run the Python binding tests that don't need a window, against the local build
+py_test:
+	zig build python-ffi
+	python3 -I python/tests/test_pure.py
+
 # Run a Python example against the installed wheel, e.g. `just py hello_pixzig`
 py EX VENV=".venv":
 	"{{VENV}}/bin/python" python/examples/{{EX}}.py

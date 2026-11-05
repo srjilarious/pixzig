@@ -1,7 +1,14 @@
-"""Keyboard, mouse, and gamepad state, read each frame from the engine."""
+"""Keyboard, mouse, gamepad and touch state, read each frame from the engine."""
 import ctypes
+from collections import namedtuple
 
 from . import _native as _n
+
+
+#: One finger that's down. `pos` and `start` (where it landed) are (x, y) in
+#: logical game coordinates, or None while that point is over a letterbox
+#: band. `id` stays the same from when the finger lands until it lifts.
+Finger = namedtuple("Finger", ["id", "pos", "start", "on_control"])
 
 
 class Keyboard:
@@ -95,6 +102,53 @@ class Mouse:
     def show_cursor(self, visible: bool) -> None:
         """Shows or hides the system cursor (applies process-wide)."""
         _n.pz_cursor_show(self._eng, bool(visible))
+
+
+class Touch:
+    """Touchscreen input. Positions are in logical game coordinates, the
+    same space as `mouse.pos`."""
+
+    def __init__(self, eng):
+        self._eng = eng
+
+    def tapped(self):
+        """Where a finger tapped (touched and lifted quickly, without moving
+        far) this tick, as (x, y), or None. With several taps in one tick,
+        the first one; see `taps`."""
+        x, y = ctypes.c_float(), ctypes.c_float()
+        if _n.pz_touch_tapped(self._eng, ctypes.byref(x), ctypes.byref(y)):
+            return (x.value, y.value)
+        return None
+
+    def taps(self):
+        """Every tap this tick inside the game area, as a list of (x, y)."""
+        out = []
+        x, y = ctypes.c_float(), ctypes.c_float()
+        for index in range(_n.pz_touch_tap_count(self._eng)):
+            if _n.pz_touch_tap_at(self._eng, index, ctypes.byref(x), ctypes.byref(y)):
+                out.append((x.value, y.value))
+        return out
+
+    @property
+    def finger_count(self) -> int:
+        return _n.pz_touch_finger_count(self._eng)
+
+    def fingers(self):
+        """The fingers down right now, as a list of `Finger`."""
+        out = []
+        f = _n.PzFinger()
+        index = 0
+        while _n.pz_touch_finger(self._eng, index, ctypes.byref(f)):
+            out.append(
+                Finger(
+                    id=f.id,
+                    pos=(f.x, f.y) if f.has_pos else None,
+                    start=(f.start_x, f.start_y) if f.has_start else None,
+                    on_control=bool(f.on_control),
+                )
+            )
+            index += 1
+        return out
 
 
 class Gamepad:

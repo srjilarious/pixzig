@@ -67,7 +67,7 @@ class AudioApp(App):
 
         self.flash = max(0.0, self.flash - dt_ms)
 
-    def render(self) -> None:
+    def render(self, alpha: float) -> None:
         self.render_begin()
 
         glow = int(60 + 160 * (self.flash / 200.0))

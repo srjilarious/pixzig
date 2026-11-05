@@ -89,6 +89,13 @@ class _PzActor(ctypes.Structure):
 PzActorPtr = ctypes.POINTER(_PzActor)
 
 
+class _PzRenderTarget(ctypes.Structure):
+    """Opaque render target handle; never inspected from Python."""
+
+
+PzRenderTargetPtr = ctypes.POINTER(_PzRenderTarget)
+
+
 class PzInitOptions(ctypes.Structure):
     """Mirror of `PzInitOptions` in src/pixzig/c_api.zig. Every field is
     required; `App.__init__` supplies the defaults."""
@@ -174,6 +181,13 @@ pz_render_begin = _sig("pz_render_begin", [PzEnginePtr], None)
 pz_render_begin_world = _sig("pz_render_begin_world", [PzEnginePtr, PzCameraPtr], None)
 pz_render_clear = _sig("pz_render_clear", [PzEnginePtr, c_uint8, c_uint8, c_uint8, c_uint8], None)
 pz_render_end = _sig("pz_render_end", [PzEnginePtr], None)
+pz_render_begin_screen = _sig("pz_render_begin_screen", [PzEnginePtr], None)
+pz_render_set_blend = _sig("pz_render_set_blend", [PzEnginePtr, ctypes.c_int], ctypes.c_int32)
+pz_render_fade = _sig(
+    "pz_render_fade",
+    [PzEnginePtr, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float],
+    None,
+)
 
 # --- Input ---------------------------------------------------------------
 pz_key_down = _sig("pz_key_down", [PzEnginePtr, c_int], c_bool)
@@ -216,6 +230,7 @@ pz_sprite_set_src_rect = _sig(
     "pz_sprite_set_src_rect", [PzSpritePtr, c_int32, c_int32, c_int32, c_int32], None
 )
 pz_sprite_set_tint = _sig("pz_sprite_set_tint", [PzSpritePtr, c_float, c_float, c_float, c_float], None)
+pz_sprite_set_fill = _sig("pz_sprite_set_fill", [PzSpritePtr, c_bool, c_float, c_float, c_float, c_float], None)
 pz_sprite_get_size = _sig(
     "pz_sprite_get_size", [PzSpritePtr, ctypes.POINTER(c_float), ctypes.POINTER(c_float)], None
 )
@@ -294,6 +309,9 @@ pz_camera_set_zoom = _sig("pz_camera_set_zoom", [PzCameraPtr, c_float], None)
 pz_camera_get_zoom = _sig("pz_camera_get_zoom", [PzCameraPtr], c_float)
 pz_camera_set_bounds = _sig("pz_camera_set_bounds", [PzCameraPtr, c_float, c_float, c_float, c_float], None)
 pz_camera_clear_bounds = _sig("pz_camera_clear_bounds", [PzCameraPtr], None)
+pz_camera_follow = _sig(
+    "pz_camera_follow", [PzCameraPtr, c_float, c_float, ctypes.c_double, c_float, c_float, c_float], None
+)
 
 # --- Tilemap -----------------------------------------------------------
 pz_load_tilemap = _sig("pz_load_tilemap", [PzEnginePtr, c_char_p, c_char_p], c_int32)
@@ -415,17 +433,68 @@ pz_draw_enclosing_rect = _sig(
     [PzEnginePtr, c_float, c_float, c_float, c_float, c_float, c_float, c_float, c_float, c_uint8],
     None,
 )
-pz_draw_string = _sig("pz_draw_string", [PzEnginePtr, c_char_p, c_int32, c_int32], None)
-pz_draw_string_colored = _sig(
-    "pz_draw_string_colored",
-    [PzEnginePtr, c_char_p, c_int32, c_int32, c_float, c_float, c_float, c_float],
+
+
+class PzTextStyle(ctypes.Structure):
+    """Mirror of `PzTextStyle` in src/pixzig/c_api.zig. `pixzig.Text`
+    fills it in."""
+
+    _fields_ = [
+        # A font name, or None for the default font.
+        ("font", c_char_p),
+        ("r", c_float),
+        ("g", c_float),
+        ("b", c_float),
+        ("a", c_float),
+        ("scale", c_float),
+        # A TextAlign value.
+        ("alignment", c_int32),
+        ("has_clip", c_bool),
+        ("clip_l", c_float),
+        ("clip_t", c_float),
+        ("clip_r", c_float),
+        ("clip_b", c_float),
+        ("has_shadow", c_bool),
+        ("shadow_r", c_float),
+        ("shadow_g", c_float),
+        ("shadow_b", c_float),
+        ("shadow_a", c_float),
+        ("shadow_dx", c_float),
+        ("shadow_dy", c_float),
+    ]
+
+
+PzTextStylePtr = ctypes.POINTER(PzTextStyle)
+pz_draw_text = _sig(
+    "pz_draw_text", [PzEnginePtr, c_char_p, c_float, c_float, PzTextStylePtr, _fp, _fp], c_int32
+)
+pz_measure_text = _sig("pz_measure_text", [PzEnginePtr, c_char_p, PzTextStylePtr, _fp, _fp], c_int32)
+pz_font_line_height = _sig("pz_font_line_height", [PzEnginePtr, c_char_p], c_float)
+pz_font_set_pixelated = _sig("pz_font_set_pixelated", [PzEnginePtr, c_char_p, c_bool], c_int32)
+
+# --- Custom shaders --------------------------------------------------------
+pz_shader_create = _sig("pz_shader_create", [PzEnginePtr, c_char_p, c_char_p], c_int32)
+pz_render_set_shader = _sig("pz_render_set_shader", [PzEnginePtr, c_char_p], c_int32)
+pz_render_set_uniform_float = _sig("pz_render_set_uniform_float", [PzEnginePtr, c_char_p, c_float], None)
+pz_render_set_uniform_int = _sig("pz_render_set_uniform_int", [PzEnginePtr, c_char_p, c_int32], None)
+pz_render_set_uniform_vec2 = _sig("pz_render_set_uniform_vec2", [PzEnginePtr, c_char_p, c_float, c_float], None)
+pz_render_set_uniform_vec4 = _sig(
+    "pz_render_set_uniform_vec4", [PzEnginePtr, c_char_p, c_float, c_float, c_float, c_float], None
+)
+
+# --- Render targets --------------------------------------------------------
+pz_render_target_create = _sig(
+    "pz_render_target_create", [PzEnginePtr, c_int32, c_int32, ctypes.c_int], PzRenderTargetPtr
+)
+pz_render_target_destroy = _sig("pz_render_target_destroy", [PzRenderTargetPtr], None)
+pz_render_target_size = _sig("pz_render_target_size", [PzRenderTargetPtr, _ip, _ip], None)
+pz_render_target_resize = _sig("pz_render_target_resize", [PzRenderTargetPtr, c_int32, c_int32], c_int32)
+pz_render_set_target = _sig("pz_render_set_target", [PzEnginePtr, PzRenderTargetPtr], None)
+pz_render_target_draw = _sig(
+    "pz_render_target_draw",
+    [PzRenderTargetPtr, c_float, c_float, c_float, c_float, c_float, c_float, c_float, c_float],
     None,
 )
-pz_draw_string_scaled = _sig(
-    "pz_draw_string_scaled", [PzEnginePtr, c_char_p, c_int32, c_int32, c_float], None
-)
-pz_measure_string = _sig("pz_measure_string", [PzEnginePtr, c_char_p, _ip, _ip], None)
-pz_font_line_height = _sig("pz_font_line_height", [PzEnginePtr], c_int32)
 
 # --- Window / viewport -------------------------------------------------
 pz_window_size = _sig("pz_window_size", [PzEnginePtr, _ip, _ip], None)
@@ -462,3 +531,52 @@ pz_key_shift = _sig("pz_key_shift", [PzEnginePtr], c_bool)
 pz_key_ctrl = _sig("pz_key_ctrl", [PzEnginePtr], c_bool)
 pz_key_alt = _sig("pz_key_alt", [PzEnginePtr], c_bool)
 pz_key_super = _sig("pz_key_super", [PzEnginePtr], c_bool)
+
+# --- Collision shape tests -------------------------------------------------
+
+
+class PzOverlap(ctypes.Structure):
+    _fields_ = [("nx", c_float), ("ny", c_float), ("depth", c_float)]
+
+
+class PzSegmentHit(ctypes.Structure):
+    _fields_ = [("t", c_float), ("x", c_float), ("y", c_float), ("nx", c_float), ("ny", c_float)]
+
+
+_overlap_p = ctypes.POINTER(PzOverlap)
+_hit_p = ctypes.POINTER(PzSegmentHit)
+_f = c_float
+pz_circle_circle = _sig("pz_circle_circle", [_f, _f, _f, _f, _f, _f, _overlap_p], c_bool)
+pz_circle_rect = _sig("pz_circle_rect", [_f, _f, _f, _f, _f, _f, _f, _overlap_p], c_bool)
+pz_rect_rect = _sig("pz_rect_rect", [_f, _f, _f, _f, _f, _f, _f, _f, _overlap_p], c_bool)
+pz_segment_circle = _sig("pz_segment_circle", [_f, _f, _f, _f, _f, _f, _f, _hit_p], c_bool)
+pz_segment_rect = _sig("pz_segment_rect", [_f, _f, _f, _f, _f, _f, _f, _f, _hit_p], c_bool)
+pz_point_in_circle = _sig("pz_point_in_circle", [_f, _f, _f, _f, _f], c_bool)
+pz_point_in_polygon = _sig("pz_point_in_polygon", [_f, _f, _fp, c_int32], c_bool)
+
+# --- Touch and input device -----------------------------------------------
+
+
+class PzFinger(ctypes.Structure):
+    _fields_ = [
+        ("id", ctypes.c_uint64),
+        ("has_pos", c_bool),
+        ("x", c_float),
+        ("y", c_float),
+        ("has_start", c_bool),
+        ("start_x", c_float),
+        ("start_y", c_float),
+        ("on_control", c_bool),
+    ]
+
+
+pz_touch_tapped = _sig("pz_touch_tapped", [PzEnginePtr, _fp, _fp], c_bool)
+pz_touch_tap_at = _sig("pz_touch_tap_at", [PzEnginePtr, c_int32, _fp, _fp], c_bool)
+pz_touch_tap_count = _sig("pz_touch_tap_count", [PzEnginePtr], c_int32)
+pz_touch_finger_count = _sig("pz_touch_finger_count", [PzEnginePtr], c_int32)
+pz_touch_finger = _sig("pz_touch_finger", [PzEnginePtr, c_int32, ctypes.POINTER(PzFinger)], c_bool)
+pz_input_last_device = _sig("pz_input_last_device", [PzEnginePtr], c_int32)
+
+# --- Saves and easing --------------------------------------------------------
+pz_pref_path = _sig("pz_pref_path", [c_char_p, c_char_p, ctypes.c_char_p, ctypes.c_size_t], c_int32)
+pz_ease = _sig("pz_ease", [ctypes.c_int, c_float], c_float)

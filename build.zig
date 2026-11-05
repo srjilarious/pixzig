@@ -745,7 +745,7 @@ pub fn build(b: *std.Build) void {
             const run_gen_consts = b.addRunArtifact(gen_consts);
             run_gen_consts.setCwd(b.path("."));
             run_gen_consts.addArg("python/pixzig/constants.py");
-            b.step("py-constants", "Regenerate python/pixzig/constants.py from the input enums")
+            b.step("py-constants", "Regenerate python/pixzig/constants.py from the engine enums")
                 .dependOn(&run_gen_consts.step);
 
             const zkdocs = @import("zkdocs");

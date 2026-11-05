@@ -41,6 +41,24 @@ class Camera:
         self._check_alive()
         _n.pz_camera_clear_bounds(self._handle)
 
+    def follow(self, x: float, y: float, dt_ms: float, deadzone=(0.0, 0.0), smoothing: float = None) -> None:
+        """Moves the camera toward (x, y), e.g. the player, for one tick.
+        Call it from `update` with that tick's `dt_ms`.
+
+        * `deadzone` -- the half-size (w, h), in world units, of a box around
+          the camera's center the target can move in without moving the
+          camera. (0, 0) keeps the target centered.
+        * `smoothing` -- how fast the camera closes the gap, per second:
+          after one second `exp(-smoothing)` of it remains (5 is snappy, 2
+          is floaty). None jumps straight to the target.
+
+        Bounds set with `set_bounds` still apply when drawing."""
+        self._check_alive()
+        rate = float(smoothing) if smoothing is not None else 0.0
+        _n.pz_camera_follow(
+            self._handle, float(x), float(y), float(dt_ms), float(deadzone[0]), float(deadzone[1]), rate
+        )
+
     def destroy(self) -> None:
         if not self._destroyed:
             _n.pz_camera_destroy(self._handle)
