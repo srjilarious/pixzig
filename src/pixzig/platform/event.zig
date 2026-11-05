@@ -73,9 +73,14 @@ pub const Event = union(enum) {
     gamepad_removed: GamepadId,
 
     // Application lifecycle, mostly from mobile platforms. On iOS and
-    // Android `will_enter_background` must be acted on before returning,
-    // and this arrives through the pump a frame late at best, so treat
-    // these as advisory until mobile support registers an event watch.
+    // Android the app is suspended as soon as `will_enter_background` has
+    // been sent, so under `AppRunner` these reach `onEvent` straight from
+    // SDL's event filter, while the OS is sending them, rather than through
+    // the queue on the next pump. They arrive on the game's own thread,
+    // from inside SDL (normally the event pump), so saving on
+    // `will_enter_background` happens before the app is suspended. A game
+    // driving the engine without a runner gets the same with
+    // `eng.setLifecycleHandler`.
 
     /// The OS is about to background the app: save state. The engine has
     /// already paused audio with `pauseAll`.
@@ -93,6 +98,21 @@ pub const Event = union(enum) {
 
     pub const Kind = std.meta.Tag(Event);
 };
+
+/// Whether `event` is one of the application lifecycle events, which
+/// `Engine` delivers from its event filter rather than through the queue.
+pub fn isLifecycle(event: *const sdl.SDL_Event) bool {
+    return switch (event.type) {
+        sdl.SDL_EVENT_WILL_ENTER_BACKGROUND,
+        sdl.SDL_EVENT_DID_ENTER_BACKGROUND,
+        sdl.SDL_EVENT_WILL_ENTER_FOREGROUND,
+        sdl.SDL_EVENT_DID_ENTER_FOREGROUND,
+        sdl.SDL_EVENT_LOW_MEMORY,
+        sdl.SDL_EVENT_TERMINATING,
+        => true,
+        else => false,
+    };
+}
 
 /// Translates one SDL event into an engine `Event`, or null for events
 /// that aren't engine-level: input events, and window events the engine

@@ -278,3 +278,183 @@ pub fn touchPadSwallowsEmulatedMouse(io: std.Io, alloc: std.mem.Allocator) !void
     try testz.expectTrue(inputs.mouse.down(.left));
     try testz.expectFalse(inputs.touch.active);
 }
+
+/// A 1000x500 framebuffer showing a 100x100 logical game with `.fit`:
+/// scaled 5x, centred, so the game spans x 250..750.
+fn letterboxed() pixzig.windowing.Viewport {
+    return pixzig.windowing.Viewport.init(.{ .x = 100, .y = 100 }, .{ .x = 1000, .y = 500 }, .fit);
+}
+
+pub fn touchTapReportsLogicalLanding(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    var touch = testTouch();
+    touch.viewport = letterboxed();
+    try touch.addButton(.{ .name = "a", .anchor = .top_left, .x = 20, .y = 20, .radius = 10 });
+    try testz.expectEqual(touch.tapped(), null);
+
+    // On the button: a button press, not a tap.
+    touch.fingerDown(1, .{ .x = 40, .y = 40 });
+    try testz.expectEqual(touch.tapped(), null);
+
+    // Over the left letterbox bar, then in the game area. The bar's
+    // landing is counted but has no logical position.
+    touch.fingerDown(2, .{ .x = 100, .y = 250 });
+    touch.fingerDown(3, .{ .x = 500, .y = 100 });
+    try testz.expectEqual(touch.tapCount(), 2);
+    try testz.expectEqual(touch.tapAt(0), null);
+    const pos = touch.tapped().?;
+    try testz.expectEqual(pos.x, 50);
+    try testz.expectEqual(pos.y, 20);
+
+    // A tap that lifts before the tick still counts, until the tick ends.
+    touch.fingerUp(3);
+    try testz.expectEqual(touch.tapped().?.x, 50);
+    touch.finishTick();
+    try testz.expectEqual(touch.tapped(), null);
+    try testz.expectEqual(touch.tapCount(), 0);
+}
+
+pub fn touchFingerIteratorReportsLogicalPositions(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    var touch = testTouch();
+    touch.viewport = letterboxed();
+    try touch.addStick(.{ .name = "move", .anchor = .center, .x = 0, .y = 0, .radius = 20 });
+
+    touch.fingerDown(4, .{ .x = 500, .y = 250 });
+    touch.fingerDown(5, .{ .x = 300, .y = 50 });
+    touch.fingerMove(5, .{ .x = 50, .y = 50 });
+
+    var it = touch.fingerIterator();
+    var seen: usize = 0;
+    while (it.next()) |f| {
+        seen += 1;
+        if (f.id == 4) {
+            try testz.expectTrue(f.onControl);
+            try testz.expectEqual(f.pos.?.x, 50);
+            try testz.expectEqual(f.pos.?.y, 50);
+        } else {
+            try testz.expectEqual(f.id, 5);
+            try testz.expectFalse(f.onControl);
+            // Dragged off the game onto the bar.
+            try testz.expectEqual(f.pos, null);
+            try testz.expectEqual(f.start.?.x, 10);
+            try testz.expectEqual(f.fbPos.x, 50);
+        }
+    }
+    try testz.expectEqual(seen, 2);
+}
+
+const touch_reload_good =
+    \\touch = { buttons = { { name = "jump" }, { name = "fire" } } }
+;
+const touch_reload_bad =
+    \\touch = { buttons = { { name = "dash" }, { anchor = "bottom_right" } } }
+;
+
+pub fn touchLoadFromLuaReplacesLayoutAtomically(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var script = try ScriptEngine.init(alloc);
+    defer script.deinit();
+    var touch = testTouch();
+
+    try script.run(touch_config);
+    try touch.loadFromLua(&script, "touch");
+    try testz.expectEqual(touch.buttonSlice().len, 2);
+    try testz.expectEqual(touch.stickSlice().len, 1);
+
+    // Running it again replaces rather than failing on duplicates, and a
+    // finger holding a control is released.
+    touch.fingerDown(1, touch.stickSlice()[0].center);
+    try touch.loadFromLua(&script, "touch");
+    try testz.expectEqual(touch.buttonSlice().len, 2);
+    try testz.expectEqual(touch.stick("move").x, 0);
+
+    try script.run(touch_reload_good);
+    try touch.loadFromLua(&script, "touch");
+    try testz.expectEqual(touch.stickSlice().len, 0);
+    try testz.expectTrue(touch.findButton("jump") != null);
+
+    // The second entry has no name: the whole load fails and the previous
+    // layout stays, with no half-added "dash".
+    try script.run(touch_reload_bad);
+    try testz.expectError(touch.loadFromLua(&script, "touch"), error.MissingTouchName);
+    try testz.expectEqual(touch.buttonSlice().len, 2);
+    try testz.expectTrue(touch.findButton("fire") != null);
+    try testz.expectEqual(touch.findButton("dash"), null);
+}
+
+fn keyEvent(scancode: sdl.SDL_Scancode) sdl.SDL_Event {
+    var event: sdl.SDL_Event = std.mem.zeroes(sdl.SDL_Event);
+    event.type = sdl.SDL_EVENT_KEY_DOWN;
+    event.key.scancode = scancode;
+    event.key.down = true;
+    return event;
+}
+
+pub fn inputLastDeviceFollowsUse(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    _ = alloc;
+    var inputs = InputManager.init(.{ .mouse = true, .numGamepads = 0 });
+    try inputs.touch.addButton(.{ .name = "a" });
+
+    var finger: sdl.SDL_Event = std.mem.zeroes(sdl.SDL_Event);
+    finger.type = sdl.SDL_EVENT_FINGER_DOWN;
+    finger.tfinger.fingerID = 1;
+    inputs.handleEvent(finger);
+    try testz.expectEqual(inputs.lastDevice(), .touch);
+    try testz.expectTrue(inputs.touch.visible());
+
+    // Android's back button is a key, but doesn't hide the pad.
+    inputs.handleEvent(keyEvent(sdl.SDL_SCANCODE_AC_BACK));
+    try testz.expectEqual(inputs.lastDevice(), .touch);
+    try testz.expectTrue(inputs.touch.visible());
+    try testz.expectTrue(inputs.keyboard.down(.back));
+
+    inputs.handleEvent(keyEvent(sdl.SDL_SCANCODE_A));
+    try testz.expectEqual(inputs.lastDevice(), .keyboard);
+    try testz.expectFalse(inputs.touch.visible());
+
+    // A stick resting near centre isn't picking up the pad; a push is.
+    var axis: sdl.SDL_Event = std.mem.zeroes(sdl.SDL_Event);
+    axis.type = sdl.SDL_EVENT_GAMEPAD_AXIS_MOTION;
+    axis.gaxis.value = 3000;
+    inputs.handleEvent(axis);
+    try testz.expectEqual(inputs.lastDevice(), .keyboard);
+    axis.gaxis.value = -30000;
+    inputs.handleEvent(axis);
+    try testz.expectEqual(inputs.lastDevice(), .gamepad);
+
+    var motion: sdl.SDL_Event = std.mem.zeroes(sdl.SDL_Event);
+    motion.type = sdl.SDL_EVENT_MOUSE_MOTION;
+    motion.motion.which = 1;
+    inputs.handleEvent(motion);
+    try testz.expectEqual(inputs.lastDevice(), .mouse);
+}
+
+pub fn touchStickDeadzoneIsRadial(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var inputs = InputManager.init(.{});
+    inputs.touch.layout(.{ .x = 1000, .y = 500 }, 1, .{ .l = 0, .t = 0, .r = 1000, .b = 500 });
+    try inputs.touch.addStick(.{ .name = "move", .anchor = .center, .x = 0, .y = 0, .radius = 100 });
+    var actions = try input.ActionMap(Actions, Axes).init(alloc);
+    defer actions.deinit();
+    const name = try input.touch.Name.init("move");
+    try actions.bindAxis(.move_x, .{ .touch_stick = .{ .stick = name, .component = .x, .deadzone = 0.15 } });
+    try actions.bindAxis(.move_y, .{ .touch_stick = .{ .stick = name, .component = .y, .deadzone = 0.15 } });
+
+    // (0.1, 0.1): each component is under the deadzone and so is the
+    // whole deflection (0.14).
+    inputs.touch.fingerDown(1, .{ .x = 510, .y = 260 });
+    actions.update(&inputs, 0);
+    try testz.expectEqual(actions.axis(.move_x), 0);
+    try testz.expectEqual(actions.axis(.move_y), 0);
+
+    // (0.12, 0.12): each component is under, but the diagonal (0.17)
+    // isn't, so both read through rather than snapping to zero.
+    inputs.touch.fingerMove(1, .{ .x = 512, .y = 262 });
+    actions.update(&inputs, 0);
+    try testz.expectTrue(actions.axis(.move_x) > 0.11);
+    try testz.expectTrue(actions.axis(.move_y) > 0.11);
+}

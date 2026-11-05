@@ -53,3 +53,34 @@ jobs:
       - name: Build the project template
         working-directory: template
         run: zig build
+
+  # Compile-only Android build: every example's APK for arm64, no emulator.
+  # Catches engine changes that break the Android target (bionic, GLES,
+  # SDL's Java glue) without needing a device. The runner image ships the
+  # Android SDK and NDK ($ANDROID_HOME, $ANDROID_NDK_HOME) and a JDK.
+  android-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0-dev.1857+3c46da14d
+          mirror: https://github.com/srjilarious/zig-toolchains/releases/download/0.17.0-dev.1857+3c46da14d
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # The APKs are signed with the debug key, which only Android Studio
+      # creates; make a throwaway one.
+      - name: Create a debug keystore
+        run: |
+          mkdir -p ~/.android
+          keytool -genkeypair -keystore ~/.android/debug.keystore \
+            -storepass android -keypass android -alias androiddebugkey \
+            -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -validity 10000
+
+      - name: Build every example's APK
+        run: zig build install -Dtarget=aarch64-linux-android

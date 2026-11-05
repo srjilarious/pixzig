@@ -43,3 +43,4 @@ pub const manager = @import("./input/manager.zig");
 pub const InputOptions = manager.InputOptions;
 pub const InputManager = manager.InputManager;
 pub const MaxGamepads = manager.MaxGamepads;
+pub const Device = manager.Device;

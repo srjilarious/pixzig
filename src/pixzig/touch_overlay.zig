@@ -1,10 +1,19 @@
 //! Draws the virtual pad (`input/touch.zig`) over the game: a ring and a
 //! knob for each stick, a disc for each button, brighter while held. The
-//! engine draws it after `App.render` whenever `Touch.visible()` says so.
+//! engine draws it after `App.render` whenever `Touch.visible()` says so,
+//! or earlier in the frame if the app calls `eng.drawTouchOverlay()`.
 //!
-//! The renderer has no circle primitive, so the shapes are two small
-//! textures made on first use: a soft-edged disc and a ring, white, tinted
-//! and faded as they're drawn.
+//! The renderer has no circle primitive, so the default shapes are two
+//! small textures made on first use: a soft-edged disc and a ring, white,
+//! tinted and faded as they're drawn. Set `eng.touchOverlay.style` to
+//! change the colours and fades or draw the game's own textures instead:
+//!
+//! ```zig
+//! eng.touchOverlay.style = .{
+//!     .color = .{ .r = 1, .g = 0.8, .b = 0.3, .a = 1 },
+//!     .button = try eng.resources.loadTexture("pad_button", "assets/pad_button.png"),
+//! };
+//! ```
 
 const std = @import("std");
 const gl = @import("zopengl").bindings;
@@ -27,7 +36,46 @@ const ring_thickness = 0.08;
 
 const full_uv: RectF = .{ .l = 0, .t = 0, .r = 1, .b = 1 };
 
+/// How the pad looks. Each texture is drawn stretched over the control's
+/// square, tinted with `color` at the given alpha; null uses the generated
+/// disc or ring.
+pub const Style = struct {
+    /// Tint for every part of the pad. Its alpha scales the alphas below.
+    color: Color = .{ .r = 1, .g = 1, .b = 1, .a = 1 },
+
+    /// A stick's ring, at its full radius.
+    stickRing: ?*TextureHandle = null,
+    stickRingAlpha: f32 = 0.45,
+    /// A stick's knob, which follows the thumb.
+    knob: ?*TextureHandle = null,
+    /// The knob's radius as a fraction of the stick's.
+    knobScale: f32 = 0.45,
+    knobAlpha: f32 = 0.4,
+    knobHeldAlpha: f32 = 0.7,
+
+    /// A button's face.
+    button: ?*TextureHandle = null,
+    buttonAlpha: f32 = 0.2,
+    buttonHeldAlpha: f32 = 0.5,
+    /// The outline drawn over a button's face. Set `buttonRingAlpha` to 0
+    /// for none, e.g. when `button` has its own border.
+    buttonRing: ?*TextureHandle = null,
+    buttonRingAlpha: f32 = 0.5,
+
+    /// Button labels, drawn with the default font when the engine has text
+    /// rendering.
+    labels: bool = true,
+    labelAlpha: f32 = 0.7,
+    labelHeldAlpha: f32 = 0.95,
+
+    fn tint(self: *const Style, alpha: f32) Color {
+        return .{ .r = self.color.r, .g = self.color.g, .b = self.color.b, .a = self.color.a * alpha };
+    }
+};
+
 pub const TouchOverlay = struct {
+    /// How the pad is drawn. Change it at any time.
+    style: Style = .{},
     disc: ?*TextureHandle = null,
     ring: ?*TextureHandle = null,
 
@@ -58,20 +106,25 @@ pub const TouchOverlay = struct {
         renderer.begin(.screen);
         defer renderer.end();
 
+        const st = &self.style;
         for (touch.stickSlice()) |*s| {
-            renderer.drawTextureColored(ring, square(s.center, s.radiusPx), full_uv, white(0.45));
+            renderer.drawTextureColored(st.stickRing orelse ring, square(s.center, s.radiusPx), full_uv, st.tint(st.stickRingAlpha));
             const held = s.value.x != 0 or s.value.y != 0;
             const knob: Vec2F = .{
                 .x = s.center.x + s.value.x * s.radiusPx,
                 .y = s.center.y + s.value.y * s.radiusPx,
             };
-            renderer.drawTextureColored(disc, square(knob, s.radiusPx * 0.45), full_uv, white(if (held) 0.7 else 0.4));
+            const knobAlpha = if (held) st.knobHeldAlpha else st.knobAlpha;
+            renderer.drawTextureColored(st.knob orelse disc, square(knob, s.radiusPx * st.knobScale), full_uv, st.tint(knobAlpha));
         }
 
         for (touch.buttonSlice()) |*b| {
-            renderer.drawTextureColored(disc, square(b.center, b.radiusPx), full_uv, white(if (b.down) 0.5 else 0.2));
-            renderer.drawTextureColored(ring, square(b.center, b.radiusPx), full_uv, white(0.5));
-            if (text and b.label.len > 0) {
+            const faceAlpha = if (b.down) st.buttonHeldAlpha else st.buttonAlpha;
+            renderer.drawTextureColored(st.button orelse disc, square(b.center, b.radiusPx), full_uv, st.tint(faceAlpha));
+            if (st.buttonRingAlpha > 0) {
+                renderer.drawTextureColored(st.buttonRing orelse ring, square(b.center, b.radiusPx), full_uv, st.tint(st.buttonRingAlpha));
+            }
+            if (text and st.labels and b.label.len > 0) {
                 const label = b.label.slice();
                 // Scale the label to about half the button's height,
                 // whatever size the default font was packed at.
@@ -80,7 +133,7 @@ pub const TouchOverlay = struct {
                 const size = renderer.measureText(label, .{ .scale = scale });
                 _ = renderer.drawText(label, .{ .x = b.center.x, .y = b.center.y - size.y / 2 }, .{
                     .scale = scale,
-                    .color = white(if (b.down) 0.95 else 0.7),
+                    .color = st.tint(if (b.down) st.labelHeldAlpha else st.labelAlpha),
                     .@"align" = .center,
                 });
             }
@@ -115,9 +168,6 @@ fn clearBars(viewport: *const Viewport) void {
     viewport.apply();
 }
 
-fn white(alpha: f32) Color {
-    return .{ .r = 1, .g = 1, .b = 1, .a = alpha };
-}
 
 fn square(center: Vec2F, radius: f32) RectF {
     return RectF.fromPosSize(center.x - radius, center.y - radius, radius * 2, radius * 2);

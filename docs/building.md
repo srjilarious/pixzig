@@ -86,7 +86,9 @@ On Android:
 - The `assets/` folder is packed into the APK, and relative asset paths read from there, so the game's code doesn't change. Everything the engine loads (textures, fonts, maps, sounds, Lua scripts) reads through SDL, which knows where to look. Saves go to `platform.prefPath`, the app's private storage.
 - The window always fills the screen. `EngineInitOptions.orientation` picks the way up: the default, `.auto`, is landscape for a `windowSize` wider than tall and portrait otherwise; `.landscape`, `.portrait` and `.any` say so outright.
 - Rendering uses OpenGL ES 3.0. The engine's shaders are GLSL ES 3.00 everywhere, so custom shaders written for the web work here too.
-- Touch drives the [virtual pad](page:input), and the back button closes the game.
+- Touch drives the [virtual pad](page:input). The back button arrives as `Key.back` and closes the game unless `EngineInitOptions.trapBackButton` is set (see [The Game Loop](page:app-runner)).
+- Lifecycle events (`will_enter_background` and the rest) reach `onEvent` while the OS is still waiting, so save there.
+- Lua's `require` reads modules from the APK too, through the same file IO; see [Scripting](page:scripting).
 - There's no hot reload, and the launcher icon is pixzig's for now.
 
 In the pixzig repo, `just band render_ex` builds an example's APK (`just band` alone builds them all), `just rand render_ex` builds, installs and launches it, and `just logcat` follows the log. `band` targets `aarch64`; set `ANDROID_ABI=x86_64` to build for the emulator. `rand` builds for whichever device is connected, and with none it boots the emulator first (`just emu` does only that; `ANDROID_AVD` picks the image). With a phone and the emulator both connected, set `ANDROID_SERIAL` to the one `adb devices` lists that you want.

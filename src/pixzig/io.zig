@@ -34,16 +34,33 @@ fn readFileSentinel(alloc: std.mem.Allocator, path: []const u8, comptime sentine
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const path_z = std.fmt.bufPrintSentinel(&path_buf, "{s}", .{path}, 0) catch return error.NameTooLong;
 
-    var size: usize = 0;
-    const data = sdl.SDL_LoadFile(path_z.ptr, &size) orelse {
-        std.log.debug("SDL_LoadFile({s}): {s}", .{ path, sdl.SDL_GetError() });
+    const stream = sdl.SDL_IOFromFile(path_z.ptr, "rb") orelse {
+        std.log.debug("SDL_IOFromFile({s}): {s}", .{ path, sdl.SDL_GetError() });
         return error.FileNotFound;
     };
-    defer sdl.SDL_free(data);
+    defer _ = sdl.SDL_CloseIO(stream);
 
-    const bytes = @as([*]const u8, @ptrCast(data))[0..size];
-    if (sentinel) |s| return alloc.dupeSentinel(u8, bytes, s);
-    return alloc.dupe(u8, bytes);
+    // Read straight into the caller's buffer, so a large asset isn't held
+    // twice (SDL's copy and ours) at its peak.
+    const size_or_err = sdl.SDL_GetIOSize(stream);
+    if (size_or_err < 0) {
+        std.log.debug("SDL_GetIOSize({s}): {s}", .{ path, sdl.SDL_GetError() });
+        return error.ReadFailed;
+    }
+    const size: usize = @intCast(size_or_err);
+    const buf = if (sentinel) |s| try alloc.allocSentinel(u8, size, s) else try alloc.alloc(u8, size);
+    errdefer alloc.free(buf);
+
+    var got: usize = 0;
+    while (got < size) {
+        const n = sdl.SDL_ReadIO(stream, buf[got..].ptr, size - got);
+        if (n == 0) {
+            std.log.debug("SDL_ReadIO({s}): {s}", .{ path, sdl.SDL_GetError() });
+            return error.ReadFailed;
+        }
+        got += n;
+    }
+    return buf;
 }
 
 /// Whether `path` can be opened for reading.

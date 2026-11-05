@@ -82,6 +82,18 @@ pub const AxisSource = union(enum) {
     },
 };
 
+/// The other axis of the same stick, or null for a trigger, which a
+/// deadzone measures on its own.
+fn stickPartner(axis: keys.GamepadAxis) ?keys.GamepadAxis {
+    return switch (axis) {
+        .left_x => .left_y,
+        .left_y => .left_x,
+        .right_x => .right_y,
+        .right_y => .right_x,
+        .left_trigger, .right_trigger => null,
+    };
+}
+
 /// A `touch_button` source for the pad button `name`, for binding from Zig:
 /// `try actions.bind(.jump, try touchButton("a"))`.
 pub fn touchButton(name: []const u8) !Source {
@@ -639,8 +651,16 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
                     },
                     .gamepad_axis => |ga| {
                         if (inputs.numGamepads > 0) {
-                            val = inputs.gamepads[0].axis(ga.axis);
-                            if (@abs(val) < ga.deadzone) val = 0;
+                            const pad = &inputs.gamepads[0];
+                            val = pad.axis(ga.axis);
+                            // Radial for a stick: measure the whole stick's
+                            // deflection, not this one component, so a
+                            // diagonal isn't cut to a cross near centre.
+                            const mag = if (stickPartner(ga.axis)) |other| blk: {
+                                const o = pad.axis(other);
+                                break :blk @sqrt(val * val + o * o);
+                            } else @abs(val);
+                            if (mag < ga.deadzone) val = 0;
                         }
                     },
                     .mouse_axis => |ma| {
@@ -659,7 +679,8 @@ pub fn ActionMap(comptime Action: type, comptime Axes: type) type {
                             .x => v.x,
                             .y => v.y,
                         };
-                        if (@abs(val) < ts.deadzone) val = 0;
+                        // Radial, as for gamepad sticks.
+                        if (@sqrt(v.x * v.x + v.y * v.y) < ts.deadzone) val = 0;
                         if (ts.invert) val = -val;
                     },
                     .touch_drag => |td| {

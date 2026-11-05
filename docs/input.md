@@ -50,7 +50,7 @@ A few binding details:
 
 - `bind` can be called several times for one action. Any of its bindings counts.
 - Several axis bindings on one axis add up, so keyboard and stick can both drive `move_x`.
-- `gamepad_axis` has a `deadzone` (0.18 by default). Gamepad bindings read gamepad slot 0.
+- `gamepad_axis` has a `deadzone` (0.18 by default), measured on the whole stick (both of its axes together) so diagonals stay smooth; a trigger's is measured on its own. Gamepad bindings read gamepad slot 0.
 - `mouse_axis` reads the mouse movement for the tick, scaled by `sensitivity` and clamped to `clamp`. Use it for mouse look.
 
 ### Key Chords
@@ -241,16 +241,48 @@ or from Zig, with `eng.inputs.touch.addStick(.{ ... })`, `addButton(.{ ... })` a
 The same config works everywhere. On a desktop the pad is never drawn, and touch bindings read as up and 0, the same as a binding to a pad control that doesn't exist. A config without a `touch` table loads without error.
 
 - **Placement.** `anchor` is a screen corner (`top_left`, `bottom_right`, ...), edge (`top`, `left`, ...) or `center`. `x` and `y` are how far in from it the control's centre sits, and `radius` its size, all in dp (density-independent pixels), so the pad is the same physical size on a phone and a tablet. Controls stay inside the safe area, clear of notches and rounded corners, and move with the screen when it rotates.
-- **Sticks** read in [-1, +1] per `component`: `x` is right-positive, `y` is down-positive as on screen (`invert = true` flips it), with a `deadzone` (default 0.15).
+- **Sticks** read in [-1, +1] per `component`: `x` is right-positive, `y` is down-positive as on screen (`invert = true` flips it), with a `deadzone` (default 0.15) measured on the whole stick, like a gamepad's.
 - **Buttons** are held while a finger is on them. A tap too quick to span a tick still reads as down for one tick, so `pressed` catches it.
 - **Drags.** A finger that lands on no control drags. `touch_drag` reads how far such fingers moved this tick in dp, within `region` (`full`, `left_half`, `right_half`, `top_half`, `bottom_half`), scaled by `sensitivity` and clamped to `clamp` like `mouse_axis`.
 - A finger belongs to whatever it first touched until it lifts, so a thumb that slides off a button keeps it held.
 
-The engine draws the pad over the frame, after `App.render`, while touch is the input in use: it appears with the first touch and hides once a key, a real mouse or a gamepad is used. With no pad declared, touches arrive as mouse clicks (SDL's emulation), so a mouse-driven game works by touch as it is. Once a pad is declared, those emulated clicks are dropped, so tapping a pad button doesn't also click under it.
+The engine draws the pad over the frame, after `App.render`, while touch is the input in use: it appears with the first touch and hides once a key, a real mouse or a gamepad is used. It isn't drawn while the engine console is open. To draw a pause screen or dialog over the pad, call `eng.drawTouchOverlay()` from `render` before drawing them; the runner then skips its own draw for that frame. With no pad declared, touches arrive as mouse clicks (SDL's emulation), so a mouse-driven game works by touch as it is. Once a pad is declared, those emulated clicks are dropped, so tapping a pad button doesn't also click under it.
 
 `eng.inputs.touch` also answers directly: `buttonDown("a")`, `stick("move")`, `drag(.full)` and `fingerCount()`.
 
-A screen that wants plain taps, like a title or pause menu, turns the pad off with `eng.inputs.touch.setPadEnabled(false)` and back on when play resumes. While it's off the pad isn't drawn, its controls read as up, and touches arrive as mouse clicks again, so `inputs.mouse.pressed(.left)` and `inputs.mouse.pos()` see taps. `inputs.touch.active` tells a tap from a real click.
+`loadFromLua` replaces the whole layout, all or nothing: running it again after a script reload swaps in the new pad, and a bad entry leaves the old one in place.
+
+### The Pad's Look
+
+`eng.touchOverlay.style` (a [](sym:TouchOverlayStyle)) sets the pad's tint, how faded each part is at rest and while held, the knob's size, and whether labels are drawn. Its `stickRing`, `knob`, `button` and `buttonRing` take textures to draw in place of the plain discs and rings, each stretched over the control's square:
+
+```zig
+eng.touchOverlay.style = .{
+    .color = pixzig.Color.from(255, 200, 80, 255),
+    .button = try eng.resources.loadTexture("pad_button", "assets/pad_button.png"),
+    .buttonRingAlpha = 0, // the texture has its own border
+};
+```
+
+### Touching the Game Directly
+
+Games that are played by touching the play area (tap a tile, drag a piece) read the fingers on no pad control in logical game coordinates, the same space as `inputs.mouse.pos()`. These work whether or not a pad is declared or enabled:
+
+```zig
+if (eng.inputs.touch.tapped()) |pos| self.selectTileAt(pos);
+
+var it = eng.inputs.touch.fingerIterator();
+while (it.next()) |f| {
+    if (f.onControl) continue;
+    if (f.pos) |pos| self.dragPiece(f.id, pos);
+}
+```
+
+`tapped()` is where a finger touched down since the last tick, like `mouse.pressed`, so a tap shorter than a tick still counts. Positions over the letterbox bars, outside the game area, are null. `tapCount()` and `tapAt(i)` give every landing when several fingers touch down at once.
+
+`eng.inputs.lastDevice()` says which kind of device the player used last, `.keyboard`, `.mouse`, `.gamepad` or `.touch`, for wording prompts ("Tap to start" or "Press Space"). It starts as `.touch` on Android.
+
+A screen that wants plain taps, like a title or pause menu, turns the pad off with `eng.inputs.touch.setPadEnabled(false)` and back on when play resumes. While it's off the pad isn't drawn, its controls read as up, and touches arrive as mouse clicks again, so `inputs.mouse.pressed(.left)` and `inputs.mouse.pos()` see taps. `inputs.touch.tapped()` or `inputs.lastDevice()` tells a tap from a real click.
 
 ## Command Key Maps
 

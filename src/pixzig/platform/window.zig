@@ -286,6 +286,14 @@ pub fn showCursor(visible: bool) void {
     _ = if (visible) sdl.SDL_ShowCursor() else sdl.SDL_HideCursor();
 }
 
+/// Whether Android's back button is kept from closing the app. Either way
+/// it arrives as a key press (`Key.back`); trapped, the activity doesn't
+/// also finish. SDL reads the hint each time back is pressed, so this can
+/// change at any time. Does nothing on other platforms.
+pub fn setTrapBackButton(trap: bool) void {
+    _ = sdl.SDL_SetHint(sdl.SDL_HINT_ANDROID_TRAP_BACK_BUTTON, if (trap) "1" else "0");
+}
+
 /// The directory the running executable lives in, with a trailing path
 /// separator. SDL owns the string and keeps it alive for the whole process,
 /// so callers may borrow it without freeing. Null when SDL cannot work the

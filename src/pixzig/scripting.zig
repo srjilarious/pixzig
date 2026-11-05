@@ -19,10 +19,13 @@ pub const ScriptEngine = struct {
     alloc: std.mem.Allocator,
 
     /// Creates a new Lua state and opens the standard libraries (string,
-    /// table, math, etc).
+    /// table, math, etc). `require` finds modules through the engine's file
+    /// IO, like `runScript`; see `assetSearcher`.
     pub fn init(allocator: std.mem.Allocator) !ScriptEngine {
         var lua = try Lua.init(allocator);
+        errdefer lua.deinit();
         lua.openLibs();
+        try installAssetSearcher(lua);
         return .{ .lua = lua, .alloc = allocator };
     }
 
@@ -264,3 +267,132 @@ pub const ScriptEngine = struct {
         return myStruct;
     }
 };
+
+/// Puts `assetSearcher` into `package.searchers` just after the preload
+/// searcher, ahead of Lua's own file searcher, which stays as a fallback
+/// for paths relative to the working directory.
+fn installAssetSearcher(lua: *Lua) !void {
+    _ = lua.getGlobal("package") catch return error.NoLuaPackageLib;
+    defer lua.pop(1);
+    if (lua.getField(-1, "searchers") != .table) {
+        lua.pop(1);
+        return error.NoLuaPackageLib;
+    }
+    defer lua.pop(1);
+
+    // Shift entries 2..n up one to make room at 2.
+    var i: i32 = @intCast(lua.rawLen(-1));
+    while (i >= 2) : (i -= 1) {
+        _ = lua.rawGetIndex(-1, i);
+        lua.rawSetIndex(-2, i + 1);
+    }
+    lua.pushFunction(ziglua.wrap(assetSearcher));
+    lua.rawSetIndex(-2, 2);
+}
+
+/// A `package.searchers` entry that finds a module the way `runScript`
+/// finds a script: each template in `package.path` has its `?` replaced by
+/// the module name (dots become `/`), a relative result is resolved against
+/// the asset base like every other asset path, and the file is read through
+/// `io`. So `require "enemies.boss"` works from inside an Android APK, where
+/// Lua's own searcher can't see. Add the game's script folder to the path:
+///
+/// ```lua
+/// package.path = "assets/scripts/?.lua;" .. package.path
+/// ```
+///
+/// Follows Lua's searcher protocol: returns the loaded chunk and the file it
+/// came from, or a string listing the files tried. A file that's found but
+/// doesn't compile is an error, as with Lua's own searcher.
+fn assetSearcher(lua: *Lua) i32 {
+    const name = lua.checkString(1);
+    _ = lua.getGlobal("package") catch {
+        _ = lua.pushString("\n\tno package table");
+        return 1;
+    };
+    _ = lua.getField(-1, "path");
+    // Both stay on the stack, so `templates` stays valid.
+    const templates = lua.toString(-1) catch {
+        _ = lua.pushString("\n\tpackage.path is not a string");
+        return 1;
+    };
+
+    var mod_buf: [std.fs.max_path_bytes]u8 = undefined;
+    if (name.len > mod_buf.len) {
+        _ = lua.pushString("\n\tmodule name too long");
+        return 1;
+    }
+    const mod_path = mod_buf[0..name.len];
+    for (name, 0..) |ch, i| mod_path[i] = if (ch == '.') '/' else ch;
+
+    const alloc = lua.allocator();
+    var tried: i32 = 0;
+    var it = std.mem.splitScalar(u8, templates, ';');
+    while (it.next()) |template| {
+        if (template.len == 0) continue;
+        var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+        const candidate = expandTemplate(&path_buf, template, mod_path) orelse continue;
+
+        const found = readModule(alloc, candidate) catch |err| {
+            _ = lua.pushFString("\n\tcannot read '%s': %s", .{ candidate.ptr, @errorName(err).ptr });
+            tried += 1;
+            continue;
+        } orelse {
+            _ = lua.pushFString("\n\tno file '%s'", .{candidate.ptr});
+            tried += 1;
+            continue;
+        };
+
+        // Free the Zig buffers before anything that can raise a Lua error,
+        // which would skip a `defer`.
+        const load_result = lua.loadBuffer(found.source, found.chunk_name, .binary_text);
+        alloc.free(found.source);
+        alloc.free(found.chunk_name);
+        load_result catch {
+            const msg: [:0]const u8 = lua.toString(-1) catch "?";
+            lua.raiseErrorStr("error loading module '%s' from file '%s':\n\t%s", .{ name.ptr, candidate.ptr, msg.ptr });
+        };
+        _ = lua.pushString(candidate);
+        return 2;
+    }
+
+    if (tried == 0) _ = lua.pushString("");
+    if (tried > 1) lua.concat(tried);
+    return 1;
+}
+
+/// `template` with each `?` replaced by `mod_path`, a leading `./` dropped
+/// (SDL can't open that inside an APK, and it means nothing to the asset
+/// base), null-terminated in `buf`. Null when it doesn't fit.
+fn expandTemplate(buf: []u8, template: []const u8, mod_path: []const u8) ?[:0]const u8 {
+    const t = if (std.mem.startsWith(u8, template, "./")) template[2..] else template;
+    var len: usize = 0;
+    for (t) |ch| {
+        const piece: []const u8 = if (ch == '?') mod_path else &.{ch};
+        if (len + piece.len + 1 > buf.len) return null;
+        @memcpy(buf[len..][0..piece.len], piece);
+        len += piece.len;
+    }
+    buf[len] = 0;
+    return buf[0..len :0];
+}
+
+const FoundModule = struct {
+    source: []u8,
+    /// `@` and the resolved path, Lua's chunk name for a file.
+    chunk_name: [:0]u8,
+};
+
+/// Reads the module file `candidate` (resolved like any asset path), or
+/// null when there's no such file. The caller frees both buffers.
+fn readModule(alloc: std.mem.Allocator, candidate: []const u8) !?FoundModule {
+    const resolved = try paths.resolve(alloc, candidate);
+    defer alloc.free(resolved);
+    const source = io.readFile(alloc, resolved) catch |err| switch (err) {
+        error.FileNotFound => return null,
+        else => return err,
+    };
+    errdefer alloc.free(source);
+    const chunk_name = try std.fmt.allocPrintSentinel(alloc, "@{s}", .{resolved}, 0);
+    return .{ .source = source, .chunk_name = chunk_name };
+}

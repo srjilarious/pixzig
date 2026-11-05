@@ -149,6 +149,10 @@ pub const Key = enum {
     right_alt,
     right_super,
     menu,
+    /// Android's back button (and a browser's back key on the web).
+    /// Pressing it also closes an Android game unless
+    /// `EngineInitOptions.trapBackButton` is set.
+    back,
 };
 
 /// Mouse buttons. `x1`/`x2` are the side buttons.
@@ -326,6 +330,7 @@ pub fn fromScancode(sc: sdl.SDL_Scancode) Key {
         sdl.SDL_SCANCODE_RALT => .right_alt,
         sdl.SDL_SCANCODE_RGUI => .right_super,
         sdl.SDL_SCANCODE_APPLICATION => .menu,
+        sdl.SDL_SCANCODE_AC_BACK => .back,
         else => .unknown,
     };
 }
@@ -451,6 +456,7 @@ pub fn fromKeycode(kc: sdl.SDL_Keycode) Key {
         sdl.SDLK_RALT => .right_alt,
         sdl.SDLK_RGUI => .right_super,
         sdl.SDLK_APPLICATION => .menu,
+        sdl.SDLK_AC_BACK => .back,
         else => .unknown,
     };
 }

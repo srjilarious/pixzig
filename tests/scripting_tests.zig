@@ -318,3 +318,26 @@ pub fn globalsTakeUnterminatedNamesTest(io: std.Io, alloc: std.mem.Allocator) !v
     try testz.expectEqual(eng.getGlobal("x"), .number);
     eng.lua.pop(1);
 }
+
+pub fn requireLoadsModulesThroughEngineIo(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    var eng = try ScriptEngine.init(alloc);
+    defer eng.deinit();
+
+    // Relative templates resolve like every asset path, and `?/init.lua`
+    // finds a package directory.
+    try eng.run(
+        \\package.path = "assets/lua_modules/?.lua;assets/lua_modules/?/init.lua"
+        \\greeting = require("greet").hello("pixzig")
+        \\sides = require("shapes").sides.square
+    );
+    _ = eng.getGlobal("greeting");
+    try testz.expectEqualStr(try eng.lua.toString(-1), "hello pixzig");
+    eng.lua.pop(1);
+    _ = eng.getGlobal("sides");
+    try testz.expectEqual(try eng.lua.toInteger(-1), 4);
+    eng.lua.pop(1);
+
+    // A missing module is still an error, naming the files tried.
+    try testz.expectError(eng.run("require('no_such_module')"), error.ScriptError);
+}

@@ -129,6 +129,7 @@ class Key:
     RIGHT_ALT = 115
     RIGHT_SUPER = 116
     MENU = 117
+    BACK = 118
 
 
 class MouseButton:

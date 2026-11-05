@@ -67,6 +67,8 @@ pub const AssetKind = assets.AssetKind;
 pub const ManifestSource = assets.ManifestSource;
 pub const file_watcher = @import("./file_watcher.zig");
 const TouchOverlay = @import("./touch_overlay.zig").TouchOverlay;
+/// How the virtual pad looks; set it on `eng.touchOverlay.style`.
+pub const TouchOverlayStyle = @import("./touch_overlay.zig").Style;
 pub const FileWatcher = file_watcher.FileWatcher;
 
 /// Build and test plumbing, not game API: the root wrapper `buildGame`
@@ -238,6 +240,12 @@ pub const EngineInitOptions = struct {
     /// Seed for `Engine.rng`. Null seeds it from the clock, so each run
     /// differs; set it for reproducible runs (replays, tests, lockstep).
     rngSeed: ?u64 = null,
+    /// Keep Android's back button from closing the game, so it can be read
+    /// as `Key.back` (or bound in an `ActionMap`) to pause or go back a
+    /// menu. Off, back still arrives as `Key.back` but also closes the
+    /// game. Change it later with `Engine.setTrapBackButton`. Ignored on
+    /// other platforms.
+    trapBackButton: bool = false,
     renderInitOpts: renderer.RendererInitOpts = .{},
     /// A script engine for the engine to adopt as `eng.scripts` instead of
     /// creating its own. Lets `main` run a config script before the window
@@ -290,7 +298,8 @@ var g_EmscriptenAppRef: ?*anyopaque = null;
 ///
 /// An app may also declare an `onEvent` to hear about window, drag-and-drop,
 /// gamepad hot-plug and lifecycle events. It's called during the event
-/// pump, before the frame's updates:
+/// pump, before the frame's updates, except for lifecycle events, which
+/// arrive as the OS sends them (see `Engine.setLifecycleHandler`):
 ///
 /// ```zig
 ///     fn onEvent(self: *AppData, eng: *Engine, event: pixzig.Event) void
@@ -427,7 +436,10 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
             // the frame sits past the previous tick, toward the latest.
             const alpha: f32 = @floatCast(std.math.clamp(self.lag / UpdateStepMs, 0.0, 1.0));
             app.render(self.engine, alpha);
-            self.engine.drawTouchOverlay();
+            // Over the frame, unless the app drew the pad itself to put
+            // its own UI on top.
+            if (!self.engine.touchOverlayDrawn) self.engine.drawTouchOverlay();
+            self.engine.touchOverlayDrawn = false;
             self.engine.window.swapBuffers();
             return true;
         }
@@ -477,6 +489,7 @@ pub fn AppRunner(comptime AppData: type, comptime engOpts: EngineOptions) type {
 
         pub fn run(self: *Self, app: *AppData) void {
             std.log.info("Starting main loop...\n", .{});
+            if (HasOnEvent) self.engine.setLifecycleHandler(app);
             // Time spent between `init` and here (typically `App.init`
             // loading assets) is not game time, so start the clock fresh.
             self.resetClock();
@@ -532,6 +545,15 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
         actions: if (engOpts.actionOpts != null) *Actions else void,
         /// Draws `inputs.touch`'s virtual pad; see `drawTouchOverlay`.
         touchOverlay: TouchOverlay = .{},
+        /// Set when `drawTouchOverlay` runs during a frame, so `AppRunner`
+        /// knows the app drew the pad itself.
+        touchOverlayDrawn: bool = false,
+        /// Where lifecycle events go as SDL sends them; see
+        /// `setLifecycleHandler`.
+        lifecycleHandler: ?LifecycleHandler = null,
+        /// The thread `init` ran on, the only one lifecycle events are
+        /// delivered on from the event filter.
+        mainThread: u64 = 0,
 
         const Self = @This();
 
@@ -540,6 +562,13 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
                 @compileError("EngineOptions.console requires EngineOptions.scripting = true");
             }
         }
+        /// A type-erased `onEvent` for lifecycle events; see
+        /// `setLifecycleHandler`.
+        pub const LifecycleHandler = struct {
+            ctx: *anyopaque,
+            call: *const fn (ctx: *anyopaque, eng: *Self, event: Event) void,
+        };
+
         pub const Renderer = renderer.Renderer(engOpts.rendererOpts);
         pub const Inputs = input.InputManager;
         /// The `ActionMap` type behind `eng.actions`, or void when
@@ -651,6 +680,15 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
             }
 
             eng.updateTouchLayout();
+            eng.setTrapBackButton(options.trapBackButton);
+
+            // Lifecycle events are sent while the OS waits to suspend the
+            // app, so they're handled in a filter as SDL sends them rather
+            // than on the next pump. The filter passes everything through
+            // until a handler is set.
+            eng.mainThread = sdl.SDL_GetCurrentThreadID();
+            sdl.SDL_SetEventFilter(eventFilter, eng);
+            errdefer sdl.SDL_SetEventFilter(null, null);
 
             if (engOpts.actionOpts != null) eng.actions = try Actions.init(allocator);
             errdefer if (engOpts.actionOpts != null) eng.actions.deinit();
@@ -731,6 +769,7 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
 
             if (engOpts.actionOpts != null) self.actions.deinit();
             self.inputs.deinit();
+            sdl.SDL_SetEventFilter(null, null);
             self.window.destroy();
             platform.quit();
 
@@ -780,6 +819,72 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
         /// loop exits without rendering again. Safe to call more than once.
         pub fn quit(self: *Self) void {
             self.quitRequested = true;
+        }
+
+        /// Sets whether Android's back button is kept from closing the game
+        /// (see `EngineInitOptions.trapBackButton`). Safe to change at any
+        /// time, e.g. trapped during play and released on the title screen
+        /// so back leaves the game there. Does nothing on other platforms.
+        pub fn setTrapBackButton(self: *Self, trap: bool) void {
+            _ = self;
+            platform.setTrapBackButton(trap);
+        }
+
+        /// Sends lifecycle events (`will_enter_background` and the rest) to
+        /// `handler.onEvent(eng, event)` as SDL sends them, instead of
+        /// through the queue a pump later, when the app may already be
+        /// suspended. `handler` is a pointer to anything with that method,
+        /// or null to go back to the queue. `AppRunner` sets it to the app
+        /// when its loop starts; set it yourself only when driving the
+        /// engine without a runner. The handler must outlive the engine or
+        /// be cleared first.
+        pub fn setLifecycleHandler(self: *Self, handler: anytype) void {
+            if (@TypeOf(handler) == @TypeOf(null)) {
+                self.lifecycleHandler = null;
+                return;
+            }
+            const Ptr = @TypeOf(handler);
+            const Thunk = struct {
+                fn call(ctx: *anyopaque, eng: *Self, event: Event) void {
+                    const h: Ptr = @ptrCast(@alignCast(ctx));
+                    h.onEvent(eng, event);
+                }
+            };
+            self.lifecycleHandler = .{ .ctx = @ptrCast(handler), .call = Thunk.call };
+        }
+
+        /// SDL's event filter, called for every event as it is sent, from
+        /// whichever thread sent it. Lifecycle events sent on the game's
+        /// thread while a handler is set are handled and delivered here
+        /// and kept out of the queue; everything else is queued as usual.
+        fn eventFilter(userdata: ?*anyopaque, event: [*c]sdl.SDL_Event) callconv(.c) bool {
+            const self: *Self = @ptrCast(@alignCast(userdata orelse return true));
+            if (!platform.event.isLifecycle(event)) return true;
+            if (sdl.SDL_GetCurrentThreadID() != self.mainThread) return true;
+            const handler = self.lifecycleHandler orelse return true;
+            self.handleLifecycle(event);
+            const engEvent = platform.event.fromSdl(event) orelse return true;
+            handler.call(handler.ctx, self, engEvent);
+            return false;
+        }
+
+        /// The engine's own part in a lifecycle event: a backgrounded app
+        /// shouldn't keep playing. Pausing on `will` gives the best chance
+        /// of stopping before the OS suspends us; resuming waits for `did`,
+        /// once the app is actually back.
+        fn handleLifecycle(self: *Self, event: *const sdl.SDL_Event) void {
+            if (!engOpts.audioOpts.enabled) return;
+            switch (event.type) {
+                sdl.SDL_EVENT_WILL_ENTER_BACKGROUND => if (!self.audioPausedForBackground) {
+                    self.audio.pauseAll();
+                    self.audioPausedForBackground = true;
+                },
+                sdl.SDL_EVENT_DID_ENTER_FOREGROUND => if (self.audioPausedForBackground) {
+                    self.audio.resumeAll();
+                    self.audioPausedForBackground = false;
+                },
+                else => {},
+            }
         }
 
         /// Sets whether vsync is enabled or not on the graphics context.
@@ -845,22 +950,11 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
                     // Event-driven key state latches, so anything held when
                     // the window loses focus would otherwise stay down.
                     sdl.SDL_EVENT_WINDOW_FOCUS_LOST => self.inputs.clear(),
-                    // A backgrounded app shouldn't keep playing. Pausing on
-                    // `will` gives the best chance of stopping before the
-                    // OS suspends us; resuming waits for `did`, once the
-                    // app is actually back.
-                    sdl.SDL_EVENT_WILL_ENTER_BACKGROUND => {
-                        if (engOpts.audioOpts.enabled and !self.audioPausedForBackground) {
-                            self.audio.pauseAll();
-                            self.audioPausedForBackground = true;
-                        }
-                    },
-                    sdl.SDL_EVENT_DID_ENTER_FOREGROUND => {
-                        if (engOpts.audioOpts.enabled and self.audioPausedForBackground) {
-                            self.audio.resumeAll();
-                            self.audioPausedForBackground = false;
-                        }
-                    },
+                    // Only the lifecycle events the filter left in the
+                    // queue get here: those sent before a handler was set.
+                    sdl.SDL_EVENT_WILL_ENTER_BACKGROUND,
+                    sdl.SDL_EVENT_DID_ENTER_FOREGROUND,
+                    => self.handleLifecycle(&event),
                     else => self.inputs.handleEvent(event),
                 }
 
@@ -893,12 +987,18 @@ pub fn Engine(comptime engOpts: EngineOptions) type {
             );
         }
 
-        /// Draws the virtual pad over the frame while touch is the input in
-        /// use (`inputs.touch.visible()`). `AppRunner` calls this after
-        /// `App.render`; call it yourself only when driving the engine
-        /// without a runner.
+        /// Draws the virtual pad while touch is the input in use
+        /// (`inputs.touch.visible()`) and the engine console is closed.
+        ///
+        /// `AppRunner` draws it after `App.render`, over everything. To put
+        /// a pause screen, dialog or the console above it instead, call
+        /// this from `render` before drawing them: the runner then skips
+        /// its own draw for that frame. Call it yourself every frame when
+        /// driving the engine without a runner.
         pub fn drawTouchOverlay(self: *Self) void {
+            self.touchOverlayDrawn = true;
             if (!self.inputs.touch.visible()) return;
+            if (engOpts.console != null and self.console.enabled) return;
             self.touchOverlay.draw(&self.renderer, &self.resources, &self.viewport, &self.inputs.touch, engOpts.rendererOpts.textRendering);
         }
 

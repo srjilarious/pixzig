@@ -66,13 +66,23 @@ pub fn onEvent(self: *App, eng: *AppRunner.Engine, event: pixzig.Event) void {
 | `minimized`, `maximized`, `restored` | The window's state changed. |
 | `drop_begin`, `drop_file`, `drop_text`, `drop_complete` | Drag-and-drop onto the window. `drop_file` carries a `path` and `drop_text` a `text`, plus the drop `pos` in window coordinates. Both strings are only valid during the call, so copy them to keep them. |
 | `gamepad_added`, `gamepad_removed` | A pad was plugged in or out. Only reported with `inputOpts.numGamepads` above zero. See [Input](page:input). |
-| `will_enter_background`, `did_enter_background`, `will_enter_foreground`, `did_enter_foreground`, `low_memory`, `terminating` | App lifecycle, mostly from mobile platforms. The engine pauses audio on `will_enter_background` and resumes it on `did_enter_foreground` before `onEvent` sees them. |
+| `will_enter_background`, `did_enter_background`, `will_enter_foreground`, `did_enter_foreground`, `low_memory`, `terminating` | App lifecycle, mostly from mobile platforms. The engine pauses audio on `will_enter_background` and resumes it on `did_enter_foreground` before `onEvent` sees them. Delivered as they're sent, not through the pump; see below. |
 
-`onEvent` runs during the event pump at the start of each frame, before that frame's `update` calls. Input isn't delivered here on purpose: keys and buttons are latched per tick so `pressed` stays a one-update edge, and reading them in `update` keeps that true.
+`onEvent` runs during the event pump at the start of each frame, before that frame's `update` calls, except for the lifecycle events. Input isn't delivered here on purpose: keys and buttons are latched per tick so `pressed` stays a one-update edge, and reading them in `update` keeps that true.
 
 A close request is reported once per frame even though SDL reports closing the last window twice (a window close, then a quit), so cancelling it once is enough. To close later, after the prompt is answered, call `eng.window.requestClose()` or `eng.quit()`.
 
-The lifecycle events come through the same once-per-frame pump. That's too late for iOS and Android, which expect `will_enter_background` to be handled before the OS suspends the app, so treat them as advisory for now.
+The lifecycle events don't wait for the pump. iOS and Android suspend the app as soon as `will_enter_background` has been sent, so the engine hands them to `onEvent` from an SDL event filter while SDL is sending them. They still arrive on the game's thread, usually from inside the pump, so it's safe to save there:
+
+```zig
+.will_enter_background => self.saveGame() catch |err| std.log.err("save failed: {}", .{err}),
+```
+
+A game driving the engine without `AppRunner` gets the same by calling `eng.setLifecycleHandler(&app)`; until it does, lifecycle events come through the pump like the rest.
+
+### The Back Button
+
+On Android the back button arrives as a key, `Key.back`, and then closes the game. To use it for pausing or leaving a menu instead, set `trapBackButton = true` in the `EngineInitOptions` and read it like any key or action binding (`{ action = "pause", type = "key", key = "back" }`). `eng.setTrapBackButton(false)` lets it close the game again, say on the title screen. Pressing back doesn't count as switching away from touch, so the virtual pad stays up.
 
 ## Creating the Runner
 

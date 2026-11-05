@@ -45,6 +45,8 @@ pub fn keyCodeMappingTest(io: std.Io, alloc: std.mem.Allocator) !void {
     try testz.expectEqual(keys.fromScancode(sdl.SDL_SCANCODE_F12), .F12);
     try testz.expectEqual(keys.fromScancode(sdl.SDL_SCANCODE_KP_PLUS), .kp_add);
     try testz.expectEqual(keys.fromScancode(sdl.SDL_SCANCODE_UNKNOWN), .unknown);
+    try testz.expectEqual(keys.fromScancode(sdl.SDL_SCANCODE_AC_BACK), .back);
+    try testz.expectEqual(keys.fromKeycode(sdl.SDLK_AC_BACK), .back);
 
     try testz.expectEqual(keys.fromKeycode(sdl.SDLK_W), .w);
     try testz.expectEqual(keys.fromKeycode(sdl.SDLK_RETURN), .enter);

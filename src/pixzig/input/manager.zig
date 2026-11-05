@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const sdl = @import("sdl3");
 const windowing = @import("../window.zig");
 const common = @import("../common.zig");
@@ -18,6 +19,14 @@ const Touch = @import("./touch.zig").Touch;
 /// here because translate-c leaves the C casts as macros.
 const touch_mouse_id: sdl.SDL_MouseID = std.math.maxInt(sdl.SDL_MouseID);
 const mouse_touch_id: sdl.SDL_TouchID = std.math.maxInt(sdl.SDL_TouchID);
+
+/// The kinds of input device `InputManager.lastDevice` tells apart.
+pub const Device = enum { keyboard, mouse, gamepad, touch };
+
+/// How far a gamepad stick or trigger must move, out of 1, to count as the
+/// player picking up the pad for `lastDevice`. Well clear of the drift an
+/// idle stick reports.
+const gamepad_axis_threshold = 0.5;
 
 /// Maximum number of gamepads that an InputManager can own.
 pub const MaxGamepads: u8 = 4;
@@ -55,6 +64,8 @@ pub const InputManager = struct {
     /// Fingers and the virtual pad. Declare a pad with
     /// `touch.addButton`/`addStick` or `touch.loadFromLua`.
     touch: Touch,
+    /// See `lastDevice`.
+    last: Device,
 
     const Self = @This();
 
@@ -67,6 +78,7 @@ pub const InputManager = struct {
             .mouse = Mouse.init(),
             .gamepads = undefined,
             .touch = Touch.init(),
+            .last = if (builtin.abi.isAndroid()) .touch else .keyboard,
         };
         for (0..MaxGamepads) |i| {
             result.gamepads[i] = Gamepad.init(i);
@@ -79,6 +91,22 @@ pub const InputManager = struct {
         for (0..self.numGamepads) |i| {
             self.gamepads[i].deinit();
         }
+    }
+
+    /// The kind of device the player used most recently: a key press, a
+    /// real mouse moved or clicked, a gamepad button or a stick or trigger
+    /// pushed well past centre, or a finger landing. Use it to word hints
+    /// ("Tap to start" or "Press Space") and pick which prompts to show.
+    /// Starts as `.touch` on Android and `.keyboard` elsewhere.
+    pub fn lastDevice(self: *const Self) Device {
+        return self.last;
+    }
+
+    /// Records that `device` was just used. Any other device hides the
+    /// virtual pad until the next touch.
+    fn used(self: *Self, device: Device) void {
+        self.last = device;
+        if (device != .touch) self.touch.active = false;
     }
 
     /// Routes one SDL event into the subsystem it belongs to. Called from
@@ -98,6 +126,7 @@ pub const InputManager = struct {
                 if (event.tfinger.touchID == mouse_touch_id) return;
                 const pos = self.touchPos(event.tfinger.x, event.tfinger.y);
                 if (event.type == sdl.SDL_EVENT_FINGER_DOWN) {
+                    self.used(.touch);
                     self.touch.fingerDown(event.tfinger.fingerID, pos);
                 } else {
                     self.touch.fingerMove(event.tfinger.fingerID, pos);
@@ -109,12 +138,19 @@ pub const InputManager = struct {
                 self.touch.fingerUp(event.tfinger.fingerID);
                 return;
             },
-            sdl.SDL_EVENT_KEY_DOWN, sdl.SDL_EVENT_GAMEPAD_BUTTON_DOWN => self.touch.active = false,
+            // Android's back button is a key, but pressing it doesn't
+            // mean the player put the touchscreen down.
+            sdl.SDL_EVENT_KEY_DOWN => if (event.key.scancode != sdl.SDL_SCANCODE_AC_BACK) self.used(.keyboard),
+            sdl.SDL_EVENT_GAMEPAD_BUTTON_DOWN => self.used(.gamepad),
+            sdl.SDL_EVENT_GAMEPAD_AXIS_MOTION => {
+                const value = @abs(@as(f32, @floatFromInt(event.gaxis.value)) / 32767.0);
+                if (value >= gamepad_axis_threshold) self.used(.gamepad);
+            },
             sdl.SDL_EVENT_MOUSE_MOTION => {
                 if (event.motion.which == touch_mouse_id) {
                     if (self.touch.hasPad()) return;
                 } else {
-                    self.touch.active = false;
+                    self.used(.mouse);
                 }
             },
             sdl.SDL_EVENT_MOUSE_BUTTON_DOWN, sdl.SDL_EVENT_MOUSE_BUTTON_UP => {
@@ -124,7 +160,7 @@ pub const InputManager = struct {
                     // leaving a menu), would otherwise leave the button held.
                     if (self.touch.hasPad() and event.button.down) return;
                 } else {
-                    self.touch.active = false;
+                    self.used(.mouse);
                 }
             },
             else => {},
@@ -202,6 +238,7 @@ pub const InputManager = struct {
         viewport: *const windowing.Viewport,
     ) void {
         _ = self.keyboard.update();
+        self.touch.viewport = viewport.*;
 
         if (self.mouseEnabled) {
             const raw = self.mouse.rawPos();

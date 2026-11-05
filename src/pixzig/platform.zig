@@ -9,6 +9,7 @@ pub const Window = window.Window;
 pub const WindowCreateOptions = window.WindowCreateOptions;
 pub const Orientation = window.Orientation;
 pub const showCursor = window.showCursor;
+pub const setTrapBackButton = window.setTrapBackButton;
 pub const basePath = window.basePath;
 pub const prefPath = window.prefPath;
 pub const timeMs = window.timeMs;

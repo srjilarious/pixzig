@@ -28,10 +28,16 @@
 //! its ring, so a thumb needn't be exact), a button, or neither. Fingers on
 //! neither are the ones `touch_drag` reads. A finger keeps its control
 //! until it lifts, so a thumb that slides off a held button keeps it held.
+//!
+//! Games that touch the play area directly (tap a tile, drag a piece) read
+//! the fingers on no control in logical game coordinates, the same space as
+//! `mouse.pos()`, with `tapped()` and `fingerIterator()`. These work with
+//! or without a pad.
 
 const std = @import("std");
 const common = @import("../common.zig");
 const ScriptEngine = @import("../scripting.zig").ScriptEngine;
+const Viewport = @import("../window.zig").Viewport;
 const Vec2F = common.Vec2F;
 const RectF = common.RectF;
 
@@ -169,6 +175,45 @@ const Finger = struct {
     owner: Owner,
 };
 
+/// A finger as `fingerIterator` reports it.
+pub const FingerInfo = struct {
+    /// SDL's id for the finger, stable from when it lands until it lifts.
+    id: u64,
+    /// Where it is, in logical game coordinates, or null while it's
+    /// outside the game area (over a letterbox bar).
+    pos: ?Vec2F,
+    /// Where it landed, in logical game coordinates, or null when that was
+    /// outside the game area.
+    start: ?Vec2F,
+    /// Where it is, in framebuffer pixels.
+    fbPos: Vec2F,
+    /// Whether it landed on a pad control (so belongs to that control).
+    onControl: bool,
+};
+
+/// Walks the fingers down, in no particular order. See
+/// `Touch.fingerIterator`.
+pub const FingerIterator = struct {
+    touch: *const Touch,
+    index: usize = 0,
+
+    pub fn next(self: *FingerIterator) ?FingerInfo {
+        while (self.index < MaxFingers) {
+            const slot = self.touch.fingers[self.index];
+            self.index += 1;
+            const f = slot orelse continue;
+            return .{
+                .id = f.id,
+                .pos = self.touch.toLogical(f.pos),
+                .start = self.touch.toLogical(f.start),
+                .fbPos = f.pos,
+                .onControl = f.owner != .none,
+            };
+        }
+        return null;
+    }
+};
+
 /// How far beyond its ring a stick still catches a finger, as a multiple of
 /// its radius, and the same for a button.
 const stick_catch = 1.3;
@@ -180,6 +225,11 @@ pub const Touch = struct {
     sticks: [MaxSticks]Stick = undefined,
     numSticks: usize = 0,
     fingers: [MaxFingers]?Finger = @splat(null),
+    /// Where fingers landed on no control since the last tick, in
+    /// framebuffer pixels, oldest first. Kept apart from `fingers` so a tap
+    /// that lands and lifts between two ticks still counts.
+    taps: [MaxFingers]Vec2F = undefined,
+    numTaps: usize = 0,
     /// Set when a finger lands, cleared when another kind of input is used.
     /// The pad is drawn only while this is set.
     active: bool = false,
@@ -187,10 +237,14 @@ pub const Touch = struct {
     padEnabled: bool = true,
     /// The screen in framebuffer pixels, density (framebuffer pixels per
     /// dp), and the safe area controls are kept inside. Refreshed by
-    /// `layout` every tick.
+    /// `layout`, which the engine calls at init and on every resize.
     screen: Vec2F = .{ .x = 1, .y = 1 },
     dpScale: f32 = 1,
     safe: RectF = .{ .l = 0, .t = 0, .r = 1, .b = 1 },
+    /// The engine's viewport as of the last tick, for mapping fingers into
+    /// logical coordinates. Set by `InputManager.update`; until then
+    /// positions map one framebuffer pixel to one unit.
+    viewport: ?Viewport = null,
 
     const Self = @This();
 
@@ -311,6 +365,50 @@ pub const Touch = struct {
         return .{ .x = sum.x / self.dpScale, .y = sum.y / self.dpScale };
     }
 
+    /// Where a finger landed on no pad control since the last tick, in
+    /// logical game coordinates, or null when none did. A landing is a
+    /// tap the moment the finger touches down, like `mouse.pressed`, so
+    /// it counts even if the finger then drags. With several, the first
+    /// one inside the game area; see `tapCount`/`tapAt` for the rest.
+    pub fn tapped(self: *const Self) ?Vec2F {
+        for (self.taps[0..self.numTaps]) |t| {
+            if (self.toLogical(t)) |pos| return pos;
+        }
+        return null;
+    }
+
+    /// Number of fingers that landed on no control since the last tick.
+    pub fn tapCount(self: *const Self) usize {
+        return self.numTaps;
+    }
+
+    /// The `index`th landing since the last tick, in logical game
+    /// coordinates, or null when it was outside the game area.
+    pub fn tapAt(self: *const Self, index: usize) ?Vec2F {
+        if (index >= self.numTaps) return null;
+        return self.toLogical(self.taps[index]);
+    }
+
+    /// The fingers down, with positions in logical game coordinates:
+    ///
+    /// ```zig
+    /// var it = eng.inputs.touch.fingerIterator();
+    /// while (it.next()) |f| {
+    ///     if (f.onControl) continue;
+    ///     if (f.pos) |p| dragPieceTo(f.id, p);
+    /// }
+    /// ```
+    pub fn fingerIterator(self: *const Self) FingerIterator {
+        return .{ .touch = self };
+    }
+
+    /// A framebuffer position in logical game coordinates, or null outside
+    /// the game area.
+    pub fn toLogical(self: *const Self, fbPos: Vec2F) ?Vec2F {
+        const vp = self.viewport orelse return fbPos;
+        return vp.framebufferToLogical(fbPos);
+    }
+
     /// Number of fingers down.
     pub fn fingerCount(self: *const Self) usize {
         var n: usize = 0;
@@ -321,8 +419,8 @@ pub const Touch = struct {
     }
 
     /// Places the controls for a screen of `screen` framebuffer pixels with
-    /// `dpScale` pixels per dp, inside `safe`. The input manager calls it
-    /// every tick, so a rotation or resize moves the pad with the screen.
+    /// `dpScale` pixels per dp, inside `safe`. The engine calls it at init
+    /// and on every resize, so a rotation moves the pad with the screen.
     pub fn layout(self: *Self, screen: Vec2F, dpScale: f32, safe: RectF) void {
         self.screen = screen;
         self.dpScale = if (dpScale > 0) dpScale else 1;
@@ -369,7 +467,14 @@ pub const Touch = struct {
         const slot = self.slotFor(id) orelse self.freeSlot() orelse return;
         const owner = self.ownerAt(pos);
         slot.* = .{ .id = id, .start = pos, .pos = pos, .owner = owner };
-        if (owner == .button) self.buttons[owner.button].tapped = true;
+        switch (owner) {
+            .button => |i| self.buttons[i].tapped = true,
+            .stick => {},
+            .none => if (self.numTaps < MaxFingers) {
+                self.taps[self.numTaps] = pos;
+                self.numTaps += 1;
+            },
+        }
         self.refreshControls();
     }
 
@@ -396,12 +501,14 @@ pub const Touch = struct {
             if (slot.*) |*f| f.motion = .{ .x = 0, .y = 0 };
         }
         for (self.buttons[0..self.numButtons]) |*b| b.tapped = false;
+        self.numTaps = 0;
     }
 
     /// Lifts every finger. The engine calls this on focus loss, when the OS
     /// stops sending the lifts.
     pub fn clear(self: *Self) void {
         self.fingers = @splat(null);
+        self.numTaps = 0;
         for (self.buttons[0..self.numButtons]) |*b| b.tapped = false;
         self.refreshControls();
     }
@@ -463,18 +570,28 @@ pub const Touch = struct {
         }
     }
 
-    /// Reads a layout from the Lua table in the global `global_name`, with
-    /// `buttons` and `sticks` lists as in the module comment. Does nothing
-    /// when the global isn't set, so a config without a pad loads on every
-    /// platform.
+    /// Replaces the layout with the one in the Lua table in the global
+    /// `global_name`, with `buttons` and `sticks` lists as in the module
+    /// comment. All or nothing: on an error the previous layout stays as it
+    /// was, so a hot reload can simply run it again. Fingers holding a
+    /// control are released, as by `clearLayout`. Does nothing when the
+    /// global isn't set, so a config without a pad loads on every platform.
     pub fn loadFromLua(self: *Self, script: *const ScriptEngine, global_name: []const u8) !void {
         const lua = script.lua;
         _ = script.getGlobal(global_name);
         defer lua.pop(1);
         if (lua.isNil(-1)) return;
         if (!lua.isTable(-1)) return error.InvalidTouchTable;
-        const table = lua.absIndex(-1);
 
+        // Build into a copy and swap it in only once every entry has read.
+        var next = self.*;
+        next.clearLayout();
+        try next.addFromLuaTable(lua, lua.absIndex(-1));
+        self.* = next;
+    }
+
+    /// Adds the controls in the layout table at stack index `table`.
+    fn addFromLuaTable(self: *Self, lua: anytype, table: i32) !void {
         _ = lua.getField(table, "sticks");
         defer lua.pop(1);
         if (lua.isTable(-1)) {

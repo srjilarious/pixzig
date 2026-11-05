@@ -50,6 +50,18 @@ try scripts.runScript("assets/level1.lua");     // a file
 
 Script paths resolve like every other asset (see [Assets](page:assets)). On an error, both log Lua's message and return `error.SyntaxError` or `error.ScriptError`. `runScript` returns `error.ScriptFileError` when the file can't be read.
 
+### Modules
+
+`require` finds modules the same way `runScript` finds scripts: through the engine's file IO, so it works from inside an Android APK, with relative paths resolved like every other asset. It tries each template in `package.path` with `?` replaced by the module name (dots become `/`). Lua's default path looks next to the executable, so point it at the game's scripts first:
+
+```lua
+package.path = "assets/scripts/?.lua;assets/scripts/?/init.lua;" .. package.path
+local enemies = require "enemies"        -- assets/scripts/enemies.lua
+local boss    = require "enemies.boss"   -- assets/scripts/enemies/boss.lua
+```
+
+Lua's own file searcher still runs after it, for paths relative to the working directory on desktop.
+
 ## Reading a Config Table
 
 `loadStruct` copies a global Lua table into a Zig struct, matching fields by name:
