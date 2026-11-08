@@ -3,7 +3,7 @@
 ![Logo](docs/assets/pixzig.png)
 
 ![Version Badge](https://img.shields.io/badge/Version-0.22.0-brightgreen)
-![Zig Version Badge](https://img.shields.io/badge/Zig%20Version-0.17.0--dev.1857%2B3c46da14d-%23f7a41d?logo=zig)
+![Zig Version Badge](https://img.shields.io/badge/Zig%20Version-0.17.0-%23f7a41d?logo=zig)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 
 Pixzig is a game engine intended for writing 2d games.  The goal is to make it simple and fun to make games that can run on native targets (Windows and Linux in particular), in the browser via emscripten, and on Android phones and tablets.  It's a hobby project, and not intended for broader use, but if you want to fork it or use it as inspiration, have fun! :smile:
