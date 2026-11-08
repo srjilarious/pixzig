@@ -59,5 +59,20 @@ class AssetPaths:
         return os.path.normpath(os.path.join(self.root, path))
 
     def encode(self, path: str) -> bytes:
-        """`resolve`, UTF-8 encoded for the FFI."""
-        return self.resolve(path).encode("utf-8")
+        """`resolve`, UTF-8 encoded for the FFI.
+
+        Every caller loads a file that must already exist, so this raises
+        FileNotFoundError naming the resolved path (and the asset root a
+        relative path was taken from) instead of letting the engine fail
+        with a bare "FileNotFound"."""
+        resolved = self.resolve(path)
+        if not os.path.isfile(resolved):
+            if os.path.isabs(path):
+                message = f"asset not found: {resolved}"
+            else:
+                message = (
+                    f"asset not found: '{path}' resolved to {resolved} "
+                    f"(asset root is {self.root})"
+                )
+            raise FileNotFoundError(message)
+        return resolved.encode("utf-8")

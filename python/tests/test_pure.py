@@ -12,7 +12,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-from pixzig import Ease, collision, color, easing, save  # noqa: E402
+from pixzig import AssetPaths, Ease, collision, color, easing, save  # noqa: E402
 from pixzig.sequence import SequencePlayer, Step, parallel, tween, tween_attr, wait  # noqa: E402
 from pixzig.states import State, StateStack  # noqa: E402
 
@@ -327,6 +327,25 @@ class SaveTests(unittest.TestCase):
             save.save_json(path, {"volume": 0.25, "name": "nate"})
             self.assertEqual(save.load_json(path), {"volume": 0.25, "name": "nate"})
             self.assertFalse(os.path.exists(path + ".tmp"))
+
+
+class AssetPathsTests(unittest.TestCase):
+    def test_existing_relative_path_resolves_against_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "assets"))
+            png = os.path.join(tmp, "assets", "hero.png")
+            open(png, "wb").close()
+            paths = AssetPaths(tmp)
+            self.assertEqual(paths.encode("assets/hero.png"), os.path.normpath(png).encode("utf-8"))
+
+    def test_missing_file_names_the_resolved_path_and_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = AssetPaths(tmp)
+            with self.assertRaises(FileNotFoundError) as ctx:
+                paths.encode("assets/missing.png")
+            message = str(ctx.exception)
+            self.assertIn(os.path.join(tmp, "assets", "missing.png"), message)
+            self.assertIn(f"asset root is {os.path.abspath(tmp)}", message)
 
 
 if __name__ == "__main__":

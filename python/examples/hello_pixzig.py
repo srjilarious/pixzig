@@ -10,15 +10,21 @@ import os
 
 from pixzig import App, Key
 
-# The examples share the repo's top-level assets/ directory, two levels up
-# from this script. Pointing `asset_root` there lets every load below use a
-# short path, and keeps them working whatever directory you launch from.
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+# In a pixzig checkout the examples share the repo's top-level assets/
+# directory, two levels up from this script. Copied somewhere else, they look
+# for an assets/ folder next to the script instead. Pointing `asset_root` at
+# whichever holds assets/ lets every load below use a short path, and keeps
+# them working whatever directory you launch from.
+HERE = os.path.dirname(os.path.abspath(__file__))
+if os.path.isdir(os.path.join(HERE, "assets")):
+    ASSET_ROOT = HERE
+else:
+    ASSET_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 
 
 class HelloApp(App):
     def __init__(self):
-        super().__init__("Hello Pixzig", width=800, height=480, asset_root=REPO_ROOT)
+        super().__init__("Hello Pixzig", width=800, height=480, asset_root=ASSET_ROOT)
         self.clear_color = (18, 18, 28)
 
         self.load_texture("pac", "assets/pac-tiles.png")

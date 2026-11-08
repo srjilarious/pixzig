@@ -33,4 +33,4 @@ if __name__ == "__main__":
 
 - [Python bindings guide](https://www.walknsqualk.com/pixzig/page/python.html)
 - [Full engine documentation](https://www.walknsqualk.com/pixzig/)
-- [Python examples](https://github.com/srjilarious/pixzig/tree/main/python/examples) (they load art from the repo's top-level `assets/` folder)
+- [Python examples](https://github.com/srjilarious/pixzig/tree/main/python/examples) (they need the repo's `assets/` folder, either in a clone or copied next to them)

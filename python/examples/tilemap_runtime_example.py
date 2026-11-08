@@ -18,14 +18,18 @@ from pixzig import App, Key, MouseButton
 
 SOLID_LAYER = "main_layer"
 
-# Assets live in the repo's top-level assets/ directory, two levels up from
-# this script; see hello_pixzig.py.
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+# Uses an assets/ folder next to this script if there is one, else the repo's
+# top-level assets/ two levels up; see hello_pixzig.py.
+HERE = os.path.dirname(os.path.abspath(__file__))
+if os.path.isdir(os.path.join(HERE, "assets")):
+    ASSET_ROOT = HERE
+else:
+    ASSET_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 
 
 class TilemapRuntimeApp(App):
     def __init__(self):
-        super().__init__("Tilemap Runtime Example", width=800, height=480, asset_root=REPO_ROOT)
+        super().__init__("Tilemap Runtime Example", width=800, height=480, asset_root=ASSET_ROOT)
 
         self.text.load_font("roboto", "assets/Roboto-Medium.ttf", 18)
         self.text.set_font("roboto")

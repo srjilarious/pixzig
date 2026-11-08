@@ -26,7 +26,7 @@ pip install pixzig
 
 The wheel version matches the engine version, so `pip install pixzig==0.22.0` gets the Python API for engine 0.22.0. The Linux wheel is built against manylinux 2.28 (glibc 2.28 or newer). macOS isn't packaged yet.
 
-The examples in `python/examples/` aren't part of the package. They load art from the repo's top-level `assets/` folder, so clone the repo to run them.
+The examples in `python/examples/` aren't part of the package. Run them from a clone of the repo, where they load art from the top-level `assets/` folder, or copy them anywhere with the repo's `assets/` folder next to them.
 
 ### Building from a checkout
 
