@@ -14,8 +14,8 @@
             .hash = "zargunaught-1.4.0-aoeNI7jpAABLyZYY1PuerxHy8uT30_oN5QeExe6R333a",
         },
         .zkdocs = .{
-            .url = "https://github.com/srjilarious/zkdocs/archive/refs/tags/v0.10.0.tar.gz",
-            .hash = "zkdocs-0.10.0-4A6vTWmoEgBJdLy06x1Pk0zKrNGkkYmAmGsvHVPtcKm1",
+            .url = "https://github.com/srjilarious/zkdocs/archive/refs/tags/v0.10.1.tar.gz",
+            .hash = "zkdocs-0.10.1-4A6vTauoEgAawv1L_bn7ugDeJS8WRKtEJoPOMUIgqYNe",
         },
         .ziglua = .{
             .path = "libs/ziglua",
@@ -49,13 +49,11 @@
             // .url = "https://github.com/zig-gamedev/zflecs/archive/fcde2da35ea43c289bc731c9a244417c176192d0.tar.gz",
             // .hash = "12201bcd78d8301929e3f1a029c6f418340b4f540b885c685fde51e4b34ead27a4a5",
         },
+        // Lua 5.3.6's src/ and README, vendored unchanged from
+        // https://www.lua.org/ftp/lua-5.3.6.tar.gz (sha256 fc5fd69b...0466d60)
+        // because lua.org downloads kept timing out in CI.
         .lua53 = .{
-            .url = "https://www.lua.org/ftp/lua-5.3.6.tar.gz",
-            .hash = "N-V-__8AALihEACTeiI1Me9rP-qPZT3BNTELDoSAXn76FIhw",
+            .path = "libs/lua53",
         },
-        // .false = .{
-        //     .url = "https://www.lua.org/ftp/lua-5.3.6.tar.gz",
-        //     .hash = "N-V-__8AALihEACTeiI1Me9rP-qPZT3BNTELDoSAXn76FIhw",
-        // },
     },
 }
