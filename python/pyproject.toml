@@ -8,6 +8,23 @@ dynamic = ["version"]
 description = "Python bindings for the pixzig game engine"
 requires-python = ">=3.9"
 license = "MIT"
+readme = "README.md"
+keywords = ["game", "gamedev", "2d", "engine", "sdl", "opengl"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Games/Entertainment",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Homepage = "https://github.com/srjilarious/pixzig"
+Documentation = "https://www.walknsqualk.com/pixzig/page/python.html"
+Source = "https://github.com/srjilarious/pixzig"
+Issues = "https://github.com/srjilarious/pixzig/issues"
 
 [tool.setuptools.dynamic]
 # Populated at build time from build.zig.zon's own .version field (the

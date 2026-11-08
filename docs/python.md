@@ -6,7 +6,31 @@ Lua scripting and the flecs ECS are Zig-only: a Python game already has a script
 
 ## Installing
 
-Build a wheel from a pixzig checkout. This builds the native library with `zig build python-ffi` and packages it:
+Wheels for Windows (x64) and Linux (x86_64) are published to [PyPI](https://pypi.org/project/pixzig/), so a plain `pip install` is all a game needs. The native engine library ships inside the wheel. Install it into a virtual environment:
+
+On Windows:
+
+```bat
+py -m venv .venv
+.venv\Scripts\activate
+pip install pixzig
+```
+
+On Linux:
+
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+pip install pixzig
+```
+
+The wheel version matches the engine version, so `pip install pixzig==0.22.0` gets the Python API for engine 0.22.0. The Linux wheel is built against manylinux 2.28 (glibc 2.28 or newer). macOS isn't packaged yet.
+
+The examples in `python/examples/` aren't part of the package. They load art from the repo's top-level `assets/` folder, so clone the repo to run them.
+
+### Building from a checkout
+
+To work on the bindings, or to use engine changes that aren't released yet, build the wheels yourself. This builds the native library with `zig build python-ffi` and packages it:
 
 ```sh
 python3 python/build_wheels.py
@@ -14,7 +38,7 @@ python3 python/build_wheels.py
 
 That writes Linux and Windows wheels to `python/dist/`. Install the one for your platform into a virtual environment. With [uv](https://docs.astral.sh/uv/) and `just`, `just py_install` does both steps into `.venv`, and `just py hello_pixzig` runs an example from `python/examples/`.
 
-The Linux wheel is built against the glibc on the machine that built it, so build it on a system at least as old as the ones you want to run on.
+A locally built Linux wheel is tied to the glibc on the machine that built it, so build it on a system at least as old as the ones you want to run on. (The published wheel avoids this by building inside the manylinux container.)
 
 ## A Python Game
 
