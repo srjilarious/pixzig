@@ -879,13 +879,25 @@ fn buildEngine(
         ziglua.module("zlua").addIncludePath(.{ .cwd_relative = getSysRootInclude(b) });
     }
 
+    const lua_lib = ziglua.artifact("lua");
+
     const ziglua_mod = ziglua.module("zlua");
     pixeng.addImport("ziglua", ziglua_mod);
 
-    const ziglua_c_mod = ziglua.module("ziglua-c");
+    var ziglua_c_mod = ziglua.module("ziglua-c");
+    if (ndk) |n| {
+        // ziglua translates Lua's headers with addTranslateC, which has no
+        // libc-file option, so for Android it reads the host's glibc headers
+        // instead of bionic's (Ubuntu's multiarch gnu/stubs.h then fails on
+        // a missing stubs-32.h). Translate them against the NDK instead, and
+        // hand that to ziglua's own `c` import as well as the engine's.
+        ziglua_c_mod = n.translateC(b, ziglua.path("build/include/lua_all.h"), &.{
+            lua_lib.getEmittedIncludeTree(),
+        }, &.{});
+        ziglua_mod.addImport("c", ziglua_c_mod);
+    }
     pixeng.addImport("ziglua-c", ziglua_c_mod);
 
-    const lua_lib = ziglua.artifact("lua");
     addArchIncludes(b, target, optimize, lua_lib) catch unreachable;
     if (ndk) |n| n.apply(lua_lib);
     engine_lib.root_module.linkLibrary(lua_lib);
