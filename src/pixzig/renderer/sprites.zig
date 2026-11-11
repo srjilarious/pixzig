@@ -34,7 +34,12 @@ pub const Sprite = struct {
     /// `setScale` grow the sprite around it. Defaults to the top-left
     /// corner; change it with `setOrigin`/`setOriginNormalized`.
     origin: Vec2F = .{ .x = 0, .y = 0 },
+    /// Mirrors the image when drawn (`.horz` faces a right-facing frame
+    /// left). The rect, origin and position don't change. Combines with
+    /// `rotate`, which turns the flipped image.
     flip: Flip,
+    /// A quarter-turn rotation (or the older flip-only values) applied
+    /// when drawn.
     rotate: Rotate,
     /// Colour multiplier applied by `Renderer.drawSprite`. Null draws the
     /// texture's own colours.

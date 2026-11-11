@@ -322,6 +322,18 @@ pub const AssetManifest = struct {
         return std.fs.path.joinZ(alloc, &.{ self.rootDir, def.path });
     }
 
+    /// Reads the whole file behind `id` (usually a `raw` asset, like a JSON
+    /// config) into a buffer the caller owns. Goes through `io.readFile`,
+    /// so it reads from inside the APK on Android and from disk elsewhere.
+    pub fn readRaw(self: *const Self, alloc: std.mem.Allocator, id: []const u8) ![]u8 {
+        const path = try self.resolvePath(alloc, id);
+        defer alloc.free(path);
+        return io.readFile(alloc, path) catch |err| {
+            std.log.err("AssetManifest: couldn't read '{s}' ({s}): {s}", .{ id, path, @errorName(err) });
+            return err;
+        };
+    }
+
     /// True (after logging it) when an audio asset can't load because the
     /// engine has audio off, so one manifest serves builds with and without.
     fn skipAudio(self: *const Self, kind: AssetKind, id: []const u8) bool {

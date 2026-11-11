@@ -6,7 +6,8 @@ away by id with `App.load_sprite`, `App.create_tilemap_renderer` and
 `Text.set_font`. A group named `boot` loads as soon as the manifest opens.
 
 The kinds are `texture`, `atlas`, `font` (with a `font_size`), `tilemap`,
-`sound`, `music` and `raw` (a file the game reads itself).
+`sound`, `music` and `raw` (a file the game reads itself with
+`AssetManifest.read_raw`).
 
 Example:
     A manifest file:
@@ -33,6 +34,24 @@ class AssetManifest:
     def _check_alive(self) -> None:
         if self._destroyed:
             raise _n.Error("asset manifest already destroyed (or the app has shut down)")
+
+    def read_raw(self, asset_id: str) -> bytes:
+        """Reads the whole file behind an asset, usually a `raw` one.
+
+        The file is read the way the engine reads every asset, so this is the
+        way to load a game's own data files (JSON, text, level data).
+
+        Args:
+            asset_id: The asset's id in the manifest.
+
+        Returns:
+            The file's contents.
+
+        Raises:
+            pixzig.Error: No asset has that id, or its file can't be read.
+        """
+        self._check_alive()
+        return _n.read_buffer(_n.pz_manifest_read_raw, self._handle, asset_id.encode("utf-8"))
 
     def load_group(self, name: str) -> None:
         """Loads every asset in a group.

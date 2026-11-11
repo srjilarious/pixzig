@@ -34,7 +34,8 @@ class Rotate(IntEnum):
 
 
 class Flip(IntEnum):
-    """A flip for an animation frame or state. Matches the engine's `Flip` enum.
+    """A mirror for `Sprite.set_flip`, an animation frame or a state. Matches
+    the engine's `Flip` enum.
 
     A frame's flip and its state's flip combine, and two flips on the same axis
     cancel out.
@@ -124,6 +125,19 @@ class Sprite:
         """
         self._check_alive()
         _n.pz_sprite_set_rotate(self._handle, int(rotate))
+
+    def set_flip(self, flip: Flip) -> None:
+        """Mirrors the sprite when it's drawn.
+
+        Its rect and position don't change, so a right-facing frame drawn
+        with `Flip.HORZ` faces left in the same spot. Combines with
+        `set_rotate`.
+
+        Args:
+            flip: A `Flip`; `Flip.NONE` draws it as is.
+        """
+        self._check_alive()
+        _n.pz_sprite_set_flip(self._handle, int(flip))
 
     def set_src_rect(self, x: int, y: int, w: int, h: int) -> None:
         """Draws only part of the sprite's frame.

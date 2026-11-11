@@ -10,24 +10,36 @@ Pixzig has four tools here, from simplest to most general:
 | `a_star.AStarPathFinder` | Planning a path across a tile map, for enemies that chase the player. |
 
 !!! note "Zig only"
-    The tile `Mover`, the collision grid and pathfinding are Zig-only. Python has the [shape tests](page:python-api/collision), and reads tile flags through [`TileMapRenderer.tile_flags`](page:python-api/tilemap#h3-tilemaprenderer-tile-flags).
+    The collision grid and pathfinding are Zig-only. Python has the tile mover (as [`TileMapRenderer.move_x`/`move_y`](page:python-api/tilemap#h3-tilemaprenderer-move-x)), the [shape tests](page:python-api/collision), and reads tile flags through [`TileMapRenderer.tile_flags`](page:python-api/tilemap#h3-tilemaprenderer-tile-flags).
 
 ## Moving Against Tiles
 
 `tile.Mover` moves a rect along one axis and stops it at the first blocking tile. Blocking comes from the `blocks` property on tiles in Tiled (see [Tile Maps](page:tile-rendering)):
 
-```zig
-const Mover = pixzig.tile.Mover;
-const layer = self.mapRenderer.tileMap().layerByName("walls").?;
+=== "Zig"
 
-const speed: f32 = 2;
-if (eng.actions.down(.left)) _ = Mover.moveLeft(&self.box, speed, layer, pixzig.tile.BlocksAll);
-if (eng.actions.down(.right)) _ = Mover.moveRight(&self.box, speed, layer, pixzig.tile.BlocksAll);
-if (eng.actions.down(.up)) _ = Mover.moveUp(&self.box, speed, layer, pixzig.tile.BlocksAll);
-if (eng.actions.down(.down)) _ = Mover.moveDown(&self.box, speed, layer, pixzig.tile.BlocksAll);
-```
+    ```zig
+    const Mover = pixzig.tile.Mover;
+    const layer = self.mapRenderer.tileMap().layerByName("walls").?;
 
-Each call returns true when it hit something. In that case the rect is moved flush against the tile's edge rather than overlapping it. The last argument is a mask of tile flags that count as solid, so a platformer can pass `tile.BlocksTop` when falling to get one-way platforms.
+    const speed: f32 = 2;
+    if (eng.actions.down(.left)) _ = Mover.moveLeft(&self.box, speed, layer, pixzig.tile.BlocksAll);
+    if (eng.actions.down(.right)) _ = Mover.moveRight(&self.box, speed, layer, pixzig.tile.BlocksAll);
+    if (eng.actions.down(.up)) _ = Mover.moveUp(&self.box, speed, layer, pixzig.tile.BlocksAll);
+    if (eng.actions.down(.down)) _ = Mover.moveDown(&self.box, speed, layer, pixzig.tile.BlocksAll);
+    ```
+
+=== "Python"
+
+    ```python
+    walls = self.map.layer_index("walls")
+    # The sign of the distance picks the direction. Each returns the box's
+    # new left (or top) edge and whether a tile stopped it.
+    self.x, hit_wall = self.map.move_x(walls, self.x, self.y, self.w, self.h, dx)
+    self.y, landed = self.map.move_y(walls, self.x, self.y, self.w, self.h, dy)
+    ```
+
+Each call returns true when it hit something. In that case the rect is moved flush against the tile's edge rather than overlapping it. The last argument is a mask of tile flags that count as solid, so a platformer can pass `tile.BlocksTop` (`TileFlags.BLOCKS_TOP` in Python) when falling to get one-way platforms.
 
 Move one axis at a time like this, and sliding along walls works for free.
 

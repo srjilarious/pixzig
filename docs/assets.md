@@ -141,12 +141,14 @@ const manifest = pixzig_build.manifestFromDef(b, .{
 });
 ```
 
-Pass it as `.manifest` to `buildGame`. If you'd rather keep it in a JSON file, use `manifestFromFile(b, "assets/manifest.json")`:
+Pass it as `.manifest` to `buildGame`. `root` is the assets folder, relative to your `build.zig`. It's usually `assets`, but it can be any folder in your project, such as `games/hopper/assets` for a game nested in a bigger build.
+
+If you'd rather keep the list in a JSON file, use `manifestFromFile(b, "manifest.json")`. The Python bindings can open the same file with `App.load_manifest`, so a game written in both languages lists its assets once (`games/hopper` does this):
 
 ```json
 {
   "version": 1,
-  "root": ".",
+  "root": "assets",
   "groups": {
     "boot": ["ui_font"],
     "game": ["sprites", "level1"]
@@ -160,7 +162,14 @@ Pass it as `.manifest` to `buildGame`. If you'd rather keep it in a JSON file, u
 }
 ```
 
-Asset paths are relative to `root`, which for a manifest file is relative to the manifest's own folder. The kinds are `texture`, `atlas`, `font`, `tilemap`, `sound`, `music` and `raw`. Each asset is registered under its `id`, so you look it up with `getTexture("sprites")`, `getSound("jump")` and so on. Atlas frames keep their own names. A `font` needs a `font_size`. A game with audio turned off skips `sound` and `music` assets (it logs each one), so the same manifest works either way. A `raw` asset isn't loaded by the manifest; it just marks a file the game reads itself, like a Lua script, so a web build preloads it.
+Asset paths are relative to `root`, which for a manifest file is relative to the manifest's own folder. Keep the file beside the assets folder rather than inside it: a package installs the manifest and copies the assets folder next to it at `root`, and web and Android builds keep both at the same paths they have in your project. The kinds are `texture`, `atlas`, `font`, `tilemap`, `sound`, `music` and `raw`. Each asset is registered under its `id`, so you look it up with `getTexture("sprites")`, `getSound("jump")` and so on. Atlas frames keep their own names. A `font` needs a `font_size`. A game with audio turned off skips `sound` and `music` assets (it logs each one), so the same manifest works either way. A `raw` asset isn't loaded by the manifest; it marks a file the game reads itself, like a Lua script or a JSON config, so a web build preloads it. Read one with `readRaw`, which reads from inside the APK on Android and from disk everywhere else:
+
+```zig
+const bytes = try eng.manifest.readRaw(alloc, "tuning");
+defer alloc.free(bytes);
+```
+
+In Python it's `manifest.read_raw("tuning")`, and `app.read_file(path)` reads a file without a manifest.
 
 ### Loading at Runtime
 

@@ -6,7 +6,7 @@ Asset manifests: a game's assets listed in one JSON file, in groups.
 
 Open one with `App.load_manifest(path)`. Loading a group registers its assets in the engine under their manifest ids, so they're usable straight away by id with [`App.load_sprite`](page:python-api/app#h3-app-load-sprite), [`App.create_tilemap_renderer`](page:python-api/app#h3-app-create-tilemap-renderer) and [`Text.set_font`](page:python-api/text#h3-text-set-font). A group named `boot` loads as soon as the manifest opens.
 
-The kinds are `texture`, `atlas`, `font` (with a `font_size`), `tilemap`, `sound`, `music` and `raw` (a file the game reads itself).
+The kinds are `texture`, `atlas`, `font` (with a `font_size`), `tilemap`, `sound`, `music` and `raw` (a file the game reads itself with [`AssetManifest.read_raw`](page:python-api/manifest#h3-assetmanifest-read-raw)).
 
 **Example:**
 
@@ -27,6 +27,26 @@ A manifest file:
 ## `AssetManifest`
 
 An opened asset manifest. Create one with [`App.load_manifest`](page:python-api/app#h3-app-load-manifest).
+
+### `AssetManifest.read_raw`
+
+```python
+read_raw(asset_id: str) -> bytes
+```
+
+Reads the whole file behind an asset, usually a `raw` one.
+
+The file is read the way the engine reads every asset, so this is the way to load a game's own data files (JSON, text, level data).
+
+| Argument | Type | Description |
+|---|---|---|
+| `asset_id` | `str` | The asset's id in the manifest. |
+
+**Returns:** The file's contents.
+
+**Raises:**
+
+- `pixzig.Error`: No asset has that id, or its file can't be read.
 
 ### `AssetManifest.load_group`
 

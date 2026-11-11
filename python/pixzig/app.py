@@ -330,6 +330,25 @@ class App:
             raise _n.Error(_n.last_error())
         return self._track(TileMapRenderer(handle))
 
+    def read_file(self, path: str) -> bytes:
+        """Reads a whole file the way the engine reads its assets.
+
+        For a game's own data files (JSON, text, level data). With a manifest,
+        `AssetManifest.read_raw` reads one by id instead.
+
+        Args:
+            path: The file, relative to `asset_root`.
+
+        Returns:
+            The file's contents.
+
+        Raises:
+            FileNotFoundError: The file doesn't exist; the message names the
+                resolved path and the asset root.
+            pixzig.Error: The file couldn't be read.
+        """
+        return _n.read_buffer(_n.pz_read_file, self._paths.encode(path))
+
     def load_manifest(self, path: str) -> AssetManifest:
         """Opens an asset manifest JSON file.
 

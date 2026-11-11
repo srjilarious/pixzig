@@ -15,8 +15,6 @@ fn fromRoot(b: *std.Build, sub: []const u8) []const u8 {
     return b.root.joinString(b.allocator, sub) catch @panic("OOM");
 }
 
-const assets_dir = "assets";
-
 /// `target` with the Android API level filled in (see
 /// `android.toolchain`), or `target` unchanged for everything else, so the
 /// engine and every C dependency agree on which bionic they build against.
@@ -198,6 +196,10 @@ pub const GroupEntry = struct {
 
 /// Inline manifest definition for use directly in build.zig.
 pub const ManifestDef = struct {
+    /// The assets directory, relative to the build root. Asset paths are
+    /// relative to it. A game nested in a bigger build (like hopper in
+    /// pixzig's own) points this at its own folder, e.g.
+    /// "games/hopper/assets".
     root: []const u8 = "assets",
     groups: []const GroupEntry = &.{},
     assets: []const AssetEntry = &.{},
@@ -216,8 +218,16 @@ pub const ManifestHandle = struct {
     /// For inline manifests: absolute path to the directory that contains the
     /// assets root (i.e. the build root, so `root` in the JSON resolves there).
     inline_base_dir: []const u8,
-    /// Individual file paths (relative to `assets/`) for Emscripten --preload-file.
-    /// If empty, the entire assets directory is preloaded.
+    /// The manifest's `root` field as written: where the assets directory
+    /// is relative to the manifest (the build root for an inline one).
+    /// Packages copy the assets to this path beside the installed manifest.
+    root: []const u8,
+    /// The assets directory relative to the build root: what packages, web
+    /// preloads and APKs copy. Web and Android builds keep it at this same
+    /// relative path, so the manifest finds it there as it does on disk.
+    assets_dir: []const u8,
+    /// Individual file paths (relative to `assets_dir`) for Emscripten
+    /// --preload-file. If empty, the entire assets directory is preloaded.
     emcc_files: []const []const u8 = &.{},
 
     /// Wire the manifest into `exe`, adding the generated `manifest_options`
@@ -229,16 +239,10 @@ pub const ManifestHandle = struct {
     ///     JSON content and asset root; no file needed.
     ///
     /// **Package mode** (`is_package == true`):
-    ///   All assets + the manifest JSON are copied to
-    ///   `<prefix>/bin/<exe_name>/assets/` and `manifest_path` is set to the
-    ///   relative path `assets/manifest.json`.
-    pub fn addTo(
-        self: ManifestHandle,
-        exe: *std.Build.Step.Compile,
-        is_package: bool,
-        src_assets_dir: []const u8,
-    ) void {
-        self.addToModule(exe, exe.root_module, is_package, src_assets_dir);
+    ///   The manifest JSON is installed as `<prefix>/bin/<exe_name>/manifest.json`
+    ///   and `assets_dir` is copied beside it at the manifest's `root`.
+    pub fn addTo(self: ManifestHandle, exe: *std.Build.Step.Compile, is_package: bool) void {
+        self.addToModule(exe, exe.root_module, is_package);
     }
 
     /// Wire the manifest into `exe`, adding the generated `manifest_options`
@@ -249,7 +253,6 @@ pub const ManifestHandle = struct {
         exe: *std.Build.Step.Compile,
         mod: *std.Build.Module,
         is_package: bool,
-        src_assets_dir: []const u8,
     ) void {
         const b = self.b;
         const exe_name = exe.name;
@@ -272,9 +275,9 @@ pub const ManifestHandle = struct {
             const dest_subdir = b.pathJoin(&.{ "bin", exe_name });
 
             const copy_assets = b.addInstallDirectory(.{
-                .source_dir = b.path(src_assets_dir),
+                .source_dir = b.path(self.assets_dir),
                 .install_dir = .{ .custom = dest_subdir },
-                .install_subdir = "assets",
+                .install_subdir = self.root,
             });
             exe.step.dependOn(&copy_assets.step);
 
@@ -293,10 +296,9 @@ pub const ManifestHandle = struct {
             );
             exe.step.dependOn(&install_manifest.step);
 
-            // The manifest is installed beside assets/, not inside it: its
-            // `root` field (e.g. "assets") is resolved relative to the
-            // manifest's own directory, so nesting the manifest inside
-            // assets/ would make asset paths resolve to assets/assets/...
+            // The manifest is installed beside the assets, which sit at its
+            // `root` (e.g. "assets"): `root` is resolved relative to the
+            // manifest's own directory.
             // `manifest_path` is relative; `AssetManifest.loadFromFile`
             // resolves it against the running executable's own directory
             // (not the process cwd), so the package works no matter where
@@ -330,7 +332,7 @@ pub const ManifestHandle = struct {
         const opts = b.addOptions();
 
         if (self.file_rel_path) |rel| {
-            if (!std.mem.startsWith(u8, rel, assets_dir ++ "/")) {
+            if (!self.insideAssetsDir(rel)) {
                 emcc_command.addArgs(&.{ "--preload-file", b.fmt("{s}@/{s}", .{ rel, rel }) });
             }
             opts.addOption([]const u8, "manifest_path", b.fmt("/{s}", .{rel}));
@@ -345,8 +347,15 @@ pub const ManifestHandle = struct {
         mod.addOptions("manifest_options", opts);
     }
 
+    /// Whether `rel` (relative to the build root) is inside `assets_dir`,
+    /// and so already packaged with it.
+    fn insideAssetsDir(self: ManifestHandle, rel: []const u8) bool {
+        return std.mem.startsWith(u8, rel, self.assets_dir) and
+            rel.len > self.assets_dir.len and rel[self.assets_dir.len] == '/';
+    }
+
     /// Wire the manifest into an Android game module. Android reads assets
-    /// out of the APK, where `addApk` puts `assets/` at the same relative
+    /// out of the APK, where `addApk` puts `assets_dir` at the same relative
     /// path it has in the source tree, so the manifest resolves relative to
     /// the APK's asset root. A file-based manifest outside `assets/` is
     /// packaged too: the returned entries go in `ApkOptions.extra_assets`.
@@ -356,7 +365,7 @@ pub const ManifestHandle = struct {
         var extra: []const android.ExtraAsset = &.{};
 
         if (self.file_rel_path) |rel| {
-            if (!std.mem.startsWith(u8, rel, assets_dir ++ "/")) {
+            if (!self.insideAssetsDir(rel)) {
                 extra = b.allocator.dupe(android.ExtraAsset, &.{.{ .dest = rel, .source = b.path(rel) }}) catch @panic("OOM");
             }
             opts.addOption([]const u8, "manifest_path", rel);
@@ -373,16 +382,41 @@ pub const ManifestHandle = struct {
     }
 };
 
-/// Reference an existing manifest JSON file in the repository.
-/// The file is used as-is in dev mode; it is copied to the install dir in package mode.
+/// Reference an existing manifest JSON file, `path` relative to the build
+/// root. The file is used as-is in dev mode and installed as-is in package
+/// mode. Its `root` (default "assets") is relative to the file's own
+/// directory, so `games/hopper/manifest.json` with `"root": "assets"` uses
+/// `games/hopper/assets/`. A file manifest is the way to share one asset list
+/// with the Python bindings (`App.load_manifest`).
 pub fn manifestFromFile(b: *std.Build, path: []const u8) ManifestHandle {
+    const root = manifestFileRoot(b, path);
+    const dir = std.fs.path.dirname(path) orelse ".";
     return .{
         .b = b,
         .file_abs_path = fromRoot(b, path),
         .file_rel_path = path,
         .inline_json = null,
         .inline_base_dir = fromRoot(b, "."),
+        .root = root,
+        .assets_dir = normalizedJoin(b, dir, root),
     };
+}
+
+/// The `root` field of the manifest JSON at `path`, read at configure time.
+fn manifestFileRoot(b: *std.Build, path: []const u8) []const u8 {
+    const bytes = std.Io.Dir.cwd().readFileAlloc(b.graph.io, fromRoot(b, path), b.allocator, .limited(1 << 20)) catch |err|
+        std.debug.panic("manifestFromFile: can't read {s}: {s}", .{ path, @errorName(err) });
+    const Fields = struct { root: []const u8 = "assets" };
+    const parsed = std.json.parseFromSlice(Fields, b.allocator, bytes, .{ .ignore_unknown_fields = true }) catch |err|
+        std.debug.panic("manifestFromFile: {s} isn't a manifest: {s}", .{ path, @errorName(err) });
+    return parsed.value.root;
+}
+
+/// `dir/sub` with "." parts dropped, so "./assets" comes out as "assets".
+fn normalizedJoin(b: *std.Build, dir: []const u8, sub: []const u8) []const u8 {
+    if (std.mem.eql(u8, sub, ".")) return dir;
+    if (std.mem.eql(u8, dir, ".")) return sub;
+    return b.pathJoin(&.{ dir, sub });
 }
 
 /// Define a manifest inline in build.zig. The struct is serialised to JSON and
@@ -408,6 +442,8 @@ pub fn manifestFromDef(b: *std.Build, def: ManifestDef) ManifestHandle {
         .file_abs_path = null,
         .inline_json = json,
         .inline_base_dir = fromRoot(b, "."),
+        .root = def.root,
+        .assets_dir = def.root,
         .emcc_files = files.toOwnedSlice(b.allocator) catch @panic("OOM"),
     };
 }
@@ -481,6 +517,9 @@ pub fn build(b: *std.Build) void {
         name: []const u8,
         path: []const u8,
         manifest_def: ManifestDef = .{},
+        /// A manifest JSON file (relative to the repo root) to use instead
+        /// of `manifest_def`, for a game that keeps its own assets folder.
+        manifest_file: ?[]const u8 = null,
         buildForWeb: bool = true,
     }{
         .{
@@ -509,6 +548,14 @@ pub fn build(b: *std.Build) void {
         .{
             .name = "natetris",
             .path = "games/natetris/natetris.zig",
+        },
+        // Hopper is also a standalone project (games/hopper/build.zig, for
+        // copying with `zig build new -Dfrom`). Building it here too keeps
+        // engine changes from breaking it unnoticed.
+        .{
+            .name = "hopper",
+            .path = "games/hopper/src/main.zig",
+            .manifest_file = "games/hopper/manifest.json",
         },
         .{
             .name = "actor_ex",
@@ -687,7 +734,10 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             });
 
-            const manifest = manifestFromDef(b, example_info.manifest_def);
+            const manifest = if (example_info.manifest_file) |file|
+                manifestFromFile(b, file)
+            else
+                manifestFromDef(b, example_info.manifest_def);
             const exe = buildExample(
                 b,
                 target,
@@ -1069,7 +1119,7 @@ fn buildTests(
             .{ .id = "Roboto-Medium", .kind = "font", .path = "Roboto-Medium.ttf", .font_size = 20.0 },
         },
     });
-    manifest.addToModule(tests_exe, tests_mod, is_package, assets_dir);
+    manifest.addToModule(tests_exe, tests_mod, is_package);
 
     const out_path = b.pathJoin(&.{ "bin", name });
     const install_tests = b.addInstallArtifact(tests_exe, .{ .dest_dir = .{ .override = .{ .custom = out_path } } });
@@ -1358,7 +1408,7 @@ fn addAndroidApp(
     };
 
     const has_assets = blk: {
-        var dir = b.root.openDir(b.graph.io, assets_dir, .{}) catch break :blk false;
+        var dir = b.root.openDir(b.graph.io, manifest.assets_dir, .{}) catch break :blk false;
         dir.close(b.graph.io);
         break :blk true;
     };
@@ -1369,7 +1419,8 @@ fn addAndroidApp(
         .main_lib = lib,
         .sdl_lib = sdl.lib,
         .java_dir = sdl.java_dir,
-        .assets_dir = if (has_assets) b.path(assets_dir) else null,
+        .assets_dir = if (has_assets) b.path(manifest.assets_dir) else null,
+        .assets_dest = manifest.assets_dir,
         .extra_assets = extra,
         .icon = engine_b.path("src/pixzig/assets/pixzig_icon.png"),
         .apkpack = apkpack,
@@ -1482,10 +1533,10 @@ pub fn buildExample(
             // Preload assets: use explicit file list when available, else whole dir.
             if (manifest.emcc_files.len > 0) {
                 for (manifest.emcc_files) |asset| {
-                    emcc_command.addArgs(&[_][]const u8{ "--preload-file", b.pathJoin(&.{ assets_dir, asset }) });
+                    emcc_command.addArgs(&[_][]const u8{ "--preload-file", b.pathJoin(&.{ manifest.assets_dir, asset }) });
                 }
             } else {
-                emcc_command.addArgs(&[_][]const u8{ "--preload-file", b.fmt("{s}@/{s}", .{ assets_dir, assets_dir }) });
+                emcc_command.addArgs(&[_][]const u8{ "--preload-file", b.fmt("{s}@/{s}", .{ manifest.assets_dir, manifest.assets_dir }) });
             }
             manifest.addToWebModule(exe, exe_mod, emcc_command);
 
@@ -1515,7 +1566,7 @@ pub fn buildExample(
             const out_path = b.pathJoin(&.{ "bin", name });
 
             // Wire the manifest (dev: embed JSON/path; package: copy assets + install manifest).
-            manifest.addToModule(exe, exe_mod, is_package, assets_dir);
+            manifest.addToModule(exe, exe_mod, is_package);
 
             const install_ex = b.addInstallArtifact(exe, .{ .dest_dir = .{ .override = .{ .custom = out_path } } });
 

@@ -251,6 +251,40 @@ pub fn spriteBatchSnapsSpriteToWholePixelsTest(io: std.Io, alloc: std.mem.Alloca
     batch.end();
 }
 
+pub fn spriteFlipMirrorsTheSourceTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    _ = io;
+    const ctx = glCtx();
+
+    var shader = try ctx.makeSpriteShaderHandle();
+    defer shader.free();
+    var tex = ctx.makeDummyTextureHandle();
+
+    var batch = try pixzig.renderer.SpriteBatch.init(alloc, &shader);
+    defer batch.deinit();
+
+    var spr = pixzig.sprites.Sprite.create(&tex);
+    spr.srcCoords = .{ .l = 0.25, .t = 0, .r = 0.5, .b = 1 };
+
+    batch.begin(zmath.identity());
+    // Corners are (l,b) (l,t) (r,t) (r,b): with .horz the left corners take
+    // the source's right edge, and the dest rect doesn't move.
+    spr.flip = .horz;
+    batch.drawSprite(&spr);
+    // .both swaps top and bottom as well.
+    spr.flip = .both;
+    batch.drawSprite(&spr);
+
+    const v = batch.vertices;
+    try testz.expectEqual(v[0].uv[0], @as(f32, 0.5));
+    try testz.expectEqual(v[0].uv[1], @as(f32, 1));
+    try testz.expectEqual(v[2].uv[0], @as(f32, 0.25));
+    try testz.expectEqual(v[0].pos[0], @as(f32, 0));
+    try testz.expectEqual(v[4].uv[0], @as(f32, 0.5));
+    try testz.expectEqual(v[4].uv[1], @as(f32, 0));
+    try testz.expectEqual(v[5].uv[1], @as(f32, 1));
+    batch.end();
+}
+
 pub fn spriteBatchQueuesKindsTogetherTest(io: std.Io, alloc: std.mem.Allocator) !void {
     _ = io;
     const ctx = glCtx();

@@ -251,6 +251,66 @@ Whether a tile is solid from every side (`TileFlags.BLOCKS_ALL`).
 
 **Returns:** True for a wall.
 
+### `TileMapRenderer.move_x`
+
+```python
+move_x(
+    layer_index: int,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    dx: float,
+    mask: TileFlags = TileFlags.BLOCKS_ALL,
+)
+```
+
+Moves a box sideways, stopping flush against the first solid tile.
+
+This is the engine's tile mover (`tile.Mover` in Zig). Move one axis at a time, [`move_x`](page:python-api/tilemap#h3-tilemaprenderer-move-x) then [`move_y`](page:python-api/tilemap#h3-tilemaprenderer-move-y), so a box slides along walls and floors instead of sticking to them.
+
+| Argument | Type | Default | Description |
+|---|---|---|---|
+| `layer_index` | `int` |  | The layer to collide with. |
+| `x` | `float` |  | The box's left edge, in world pixels. |
+| `y` | `float` |  | The box's top edge. |
+| `w` | `float` |  | The box's width. |
+| `h` | `float` |  | The box's height. |
+| `dx` | `float` |  | How far to move; negative moves left. |
+| `mask` | `TileFlags` | `TileFlags.BLOCKS_ALL` | Which tile flags block it. The default is tiles that block every side. |
+
+**Returns:** A tuple `(new_x, hit)`: the box's new left edge, and whether a tile stopped it short.
+
+### `TileMapRenderer.move_y`
+
+```python
+move_y(
+    layer_index: int,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    dy: float,
+    mask: TileFlags = TileFlags.BLOCKS_ALL,
+)
+```
+
+Moves a box up or down, stopping flush against the first solid tile.
+
+See [`move_x`](page:python-api/tilemap#h3-tilemaprenderer-move-x).
+
+| Argument | Type | Default | Description |
+|---|---|---|---|
+| `layer_index` | `int` |  | The layer to collide with. |
+| `x` | `float` |  | The box's left edge, in world pixels. |
+| `y` | `float` |  | The box's top edge. |
+| `w` | `float` |  | The box's width. |
+| `h` | `float` |  | The box's height. |
+| `dy` | `float` |  | How far to move; negative moves up. |
+| `mask` | `TileFlags` | `TileFlags.BLOCKS_ALL` | Which tile flags block it. The default is tiles that block every side. |
+
+**Returns:** A tuple `(new_y, hit)`: the box's new top edge, and whether a tile stopped it short. Moving down, a hit means it landed.
+
 ### `TileMapRenderer.tile_property`
 
 ```python

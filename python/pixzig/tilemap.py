@@ -270,6 +270,60 @@ class TileMapRenderer:
         self._check_alive()
         return bool(_n.pz_tilemap_tile_blocked(self._handle, int(layer_index), int(tx), int(ty)))
 
+    def move_x(self, layer_index: int, x: float, y: float, w: float, h: float, dx: float,
+               mask: TileFlags = TileFlags.BLOCKS_ALL):
+        """Moves a box sideways, stopping flush against the first solid tile.
+
+        This is the engine's tile mover (`tile.Mover` in Zig). Move one axis
+        at a time, `move_x` then `move_y`, so a box slides along walls and
+        floors instead of sticking to them.
+
+        Args:
+            layer_index: The layer to collide with.
+            x: The box's left edge, in world pixels.
+            y: The box's top edge.
+            w: The box's width.
+            h: The box's height.
+            dx: How far to move; negative moves left.
+            mask: Which tile flags block it. The default is tiles that block
+                every side.
+
+        Returns:
+            A tuple `(new_x, hit)`: the box's new left edge, and whether a tile
+            stopped it short.
+        """
+        self._check_alive()
+        out = ctypes.c_float()
+        hit = _n.pz_tilemap_move(self._handle, int(layer_index), 0, float(x), float(y), float(w), float(h),
+                                 float(dx), int(mask), ctypes.byref(out))
+        return out.value, bool(hit)
+
+    def move_y(self, layer_index: int, x: float, y: float, w: float, h: float, dy: float,
+               mask: TileFlags = TileFlags.BLOCKS_ALL):
+        """Moves a box up or down, stopping flush against the first solid tile.
+
+        See `move_x`.
+
+        Args:
+            layer_index: The layer to collide with.
+            x: The box's left edge, in world pixels.
+            y: The box's top edge.
+            w: The box's width.
+            h: The box's height.
+            dy: How far to move; negative moves up.
+            mask: Which tile flags block it. The default is tiles that block
+                every side.
+
+        Returns:
+            A tuple `(new_y, hit)`: the box's new top edge, and whether a tile
+            stopped it short. Moving down, a hit means it landed.
+        """
+        self._check_alive()
+        out = ctypes.c_float()
+        hit = _n.pz_tilemap_move(self._handle, int(layer_index), 1, float(x), float(y), float(w), float(h),
+                                 float(dy), int(mask), ctypes.byref(out))
+        return out.value, bool(hit)
+
     def tile_property(self, layer_index: int, tx: int, ty: int, name: str) -> str:
         """Reads a custom property on a tile's tileset entry.
 

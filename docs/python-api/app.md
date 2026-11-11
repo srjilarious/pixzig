@@ -205,6 +205,27 @@ The tileset texture comes from the `<image source>` in the `.tmx`, so there is n
 
 - `pixzig.Error`: No map has that name, or its tileset image can't be loaded.
 
+### `App.read_file`
+
+```python
+read_file(path: str) -> bytes
+```
+
+Reads a whole file the way the engine reads its assets.
+
+For a game's own data files (JSON, text, level data). With a manifest, [`AssetManifest.read_raw`](page:python-api/manifest#h3-assetmanifest-read-raw) reads one by id instead.
+
+| Argument | Type | Description |
+|---|---|---|
+| `path` | `str` | The file, relative to [`asset_root`](page:python-api/app#h3-app-asset-root). |
+
+**Returns:** The file's contents.
+
+**Raises:**
+
+- `FileNotFoundError`: The file doesn't exist; the message names the resolved path and the asset root.
+- `pixzig.Error`: The file couldn't be read.
+
 ### `App.load_manifest`
 
 ```python

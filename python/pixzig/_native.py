@@ -231,6 +231,7 @@ pz_sprite_destroy = _sig("pz_sprite_destroy", [PzSpritePtr], None)
 pz_sprite_set_size = _sig("pz_sprite_set_size", [PzSpritePtr, c_float, c_float], None)
 pz_sprite_set_scale = _sig("pz_sprite_set_scale", [PzSpritePtr, c_float, c_float], None)
 pz_sprite_set_rotate = _sig("pz_sprite_set_rotate", [PzSpritePtr, c_int], None)
+pz_sprite_set_flip = _sig("pz_sprite_set_flip", [PzSpritePtr, c_int], None)
 pz_sprite_set_src_rect = _sig(
     "pz_sprite_set_src_rect", [PzSpritePtr, c_int32, c_int32, c_int32, c_int32], None
 )
@@ -362,6 +363,11 @@ pz_tilemap_tile_flags = _sig(
 pz_tilemap_tile_blocked = _sig(
     "pz_tilemap_tile_blocked", [PzTilemapRendererPtr, c_int32, c_int32, c_int32], c_bool
 )
+pz_tilemap_move = _sig(
+    "pz_tilemap_move",
+    [PzTilemapRendererPtr, c_int32, c_int, c_float, c_float, c_float, c_float, c_float, ctypes.c_uint32, _fp],
+    c_bool,
+)
 pz_tilemap_tile_prop = _sig(
     "pz_tilemap_tile_prop", [PzTilemapRendererPtr, c_int32, c_int32, c_int32, c_char_p], c_char_p
 )
@@ -399,6 +405,30 @@ pz_manifest_load = _sig("pz_manifest_load", [PzEnginePtr, c_char_p], PzAssetMani
 pz_manifest_load_group = _sig("pz_manifest_load_group", [PzAssetManifestPtr, c_char_p], c_int32)
 pz_manifest_unload_group = _sig("pz_manifest_unload_group", [PzAssetManifestPtr, c_char_p], None)
 pz_manifest_destroy = _sig("pz_manifest_destroy", [PzAssetManifestPtr], None)
+
+# --- Reading files ---------------------------------------------------------
+_bufp = ctypes.POINTER(c_uint8)
+pz_manifest_read_raw = _sig(
+    "pz_manifest_read_raw",
+    [PzAssetManifestPtr, c_char_p, ctypes.POINTER(_bufp), ctypes.POINTER(ctypes.c_size_t)],
+    c_int32,
+)
+pz_read_file = _sig(
+    "pz_read_file", [c_char_p, ctypes.POINTER(_bufp), ctypes.POINTER(ctypes.c_size_t)], c_int32
+)
+pz_buffer_free = _sig("pz_buffer_free", [_bufp, ctypes.c_size_t], None)
+
+
+def read_buffer(fn, *args) -> bytes:
+    """Calls a `pz_*` reader that hands back an engine buffer, copies it into
+    bytes and frees it. Raises Error when the read fails."""
+    data = _bufp()
+    length = ctypes.c_size_t()
+    check(fn(*args, ctypes.byref(data), ctypes.byref(length)) == 0)
+    try:
+        return ctypes.string_at(data, length.value)
+    finally:
+        pz_buffer_free(data, length)
 
 # --- Action maps ---------------------------------------------------------
 pz_action_map_create = _sig("pz_action_map_create", [PzEnginePtr], PzActionMapPtr)

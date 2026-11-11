@@ -27,7 +27,7 @@ The sprite's rect stays the same, so quarter turns are meant for square sprites.
 
 Subclass of `IntEnum`.
 
-A flip for an animation frame or state. Matches the engine's [`Flip`](page:python-api/sprite#h2-flip) enum.
+A mirror for [`Sprite.set_flip`](page:python-api/sprite#h3-sprite-set-flip), an animation frame or a state. Matches the engine's [`Flip`](page:python-api/sprite#h2-flip) enum.
 
 A frame's flip and its state's flip combine, and two flips on the same axis cancel out.
 
@@ -111,6 +111,20 @@ Sets a quarter-turn rotation or flip.
 | Argument | Type | Description |
 |---|---|---|
 | `rotate` | `Rotate` | A [`Rotate`](page:python-api/sprite#h2-rotate). |
+
+### `Sprite.set_flip`
+
+```python
+set_flip(flip: Flip) -> None
+```
+
+Mirrors the sprite when it's drawn.
+
+Its rect and position don't change, so a right-facing frame drawn with `Flip.HORZ` faces left in the same spot. Combines with [`set_rotate`](page:python-api/sprite#h3-sprite-set-rotate).
+
+| Argument | Type | Description |
+|---|---|---|
+| `flip` | `Flip` | A [`Flip`](page:python-api/sprite#h2-flip); `Flip.NONE` draws it as is. |
 
 ### `Sprite.set_src_rect`
 

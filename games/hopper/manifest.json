@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "root": "assets",
+  "groups": {
+    "boot": ["hopper", "level1", "tuning"]
+  },
+  "assets": [
+    { "id": "hopper", "kind": "texture", "path": "hopper.png" },
+    { "id": "level1", "kind": "tilemap", "path": "level1.tmx" },
+    { "id": "tuning", "kind": "raw", "path": "tuning.json" }
+  ]
+}

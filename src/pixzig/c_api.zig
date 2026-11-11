@@ -780,6 +780,13 @@ export fn pz_sprite_set_rotate(spr: *PzSprite, rot: c_int) callconv(.c) void {
     spr.sprite.rotate = rotateFromInt(rot);
 }
 
+/// Mirrors the sprite when drawn. `flip`: 0=none, 1=horz, 2=vert, 3=both.
+/// Its rect and position don't change, and it combines with
+/// pz_sprite_set_rotate.
+export fn pz_sprite_set_flip(spr: *PzSprite, flip: c_int) callconv(.c) void {
+    spr.sprite.flip = flipFromInt(flip);
+}
+
 /// Sets the sub-region of the sprite's texture to draw, in texture pixels.
 export fn pz_sprite_set_src_rect(spr: *PzSprite, x: i32, y: i32, w: i32, h: i32) callconv(.c) void {
     spr.sprite.setSrcRect(pixzig.RectI.init(x, y, w, h));
@@ -1004,6 +1011,43 @@ export fn pz_manifest_load_group(m: *PzAssetManifest, group_name: [*:0]const u8)
 
 export fn pz_manifest_unload_group(m: *PzAssetManifest, group_name: [*:0]const u8) callconv(.c) void {
     m.manifest.unloadGroup(std.mem.span(group_name));
+}
+
+/// Allocates the buffers pz_read_file and pz_manifest_read_raw hand out,
+/// so pz_buffer_free needs no engine handle.
+const buffer_alloc = std.heap.smp_allocator;
+
+/// Reads the whole file behind manifest asset `id` (usually a `raw` one).
+/// On success writes a buffer to `out_data` and its length to `out_len`
+/// and returns 0; free the buffer with pz_buffer_free. Returns -1 (see
+/// pz_last_error) for an unknown id or a file that can't be read.
+export fn pz_manifest_read_raw(m: *PzAssetManifest, id: [*:0]const u8, out_data: *?[*]u8, out_len: *usize) callconv(.c) i32 {
+    const bytes = m.manifest.readRaw(buffer_alloc, std.mem.span(id)) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    out_data.* = bytes.ptr;
+    out_len.* = bytes.len;
+    return 0;
+}
+
+/// Reads the whole file at `path` the way the engine reads its assets
+/// (from inside the APK on Android). On success writes a buffer to
+/// `out_data` and its length to `out_len` and returns 0; free the buffer
+/// with pz_buffer_free. Returns -1 (see pz_last_error) when it can't.
+export fn pz_read_file(path: [*:0]const u8, out_data: *?[*]u8, out_len: *usize) callconv(.c) i32 {
+    const bytes = pixzig.asset_io.readFile(buffer_alloc, std.mem.span(path)) catch |err| {
+        setLastErrorErr(err);
+        return -1;
+    };
+    out_data.* = bytes.ptr;
+    out_len.* = bytes.len;
+    return 0;
+}
+
+/// Frees a buffer from pz_read_file or pz_manifest_read_raw.
+export fn pz_buffer_free(data: [*]u8, len: usize) callconv(.c) void {
+    buffer_alloc.free(data[0..len]);
 }
 
 export fn pz_manifest_destroy(m: *PzAssetManifest) callconv(.c) void {
@@ -2009,6 +2053,33 @@ export fn pz_tilemap_tile_blocked(tr: *PzTilemapRenderer, layerIndex: i32, tx: i
     const layer = tmLayer(tr, layerIndex) orelse return false;
     const t = layer.tile(tx, ty) orelse return false;
     return (t.core & pixzig.tile.BlocksAll) != 0;
+}
+
+/// Moves the box (x, y, w, h) by `amount` along one axis (`axis` 0 = x,
+/// 1 = y; a negative `amount` moves left or up), stopping flush against the
+/// first tile whose flags match `mask` (see `tile.Mover`). Writes the box's
+/// new left (x axis) or top (y axis) to `out_pos` and returns true when a
+/// tile stopped it. An out-of-range layer has no tiles, so the box moves
+/// the whole way.
+export fn pz_tilemap_move(tr: *PzTilemapRenderer, layerIndex: i32, axis: c_int, x: f32, y: f32, w: f32, h: f32, amount: f32, mask: u32, out_pos: *f32) callconv(.c) bool {
+    const Mover = pixzig.tile.Mover;
+    var rect = pixzig.RectF.fromPosSize(x, y, w, h);
+    var hit = false;
+    if (tmLayer(tr, layerIndex)) |layer| {
+        if (axis == 0) {
+            if (amount > 0) hit = Mover.moveRight(&rect, amount, layer, mask);
+            if (amount < 0) hit = Mover.moveLeft(&rect, -amount, layer, mask);
+        } else {
+            if (amount > 0) hit = Mover.moveDown(&rect, amount, layer, mask);
+            if (amount < 0) hit = Mover.moveUp(&rect, -amount, layer, mask);
+        }
+    } else if (axis == 0) {
+        rect = pixzig.RectF.fromPosSize(x + amount, y, w, h);
+    } else {
+        rect = pixzig.RectF.fromPosSize(x, y + amount, w, h);
+    }
+    out_pos.* = if (axis == 0) rect.l else rect.t;
+    return hit;
 }
 
 /// A custom string property on the tileset tile at (tx, ty), or "" when the

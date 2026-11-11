@@ -152,7 +152,7 @@ The origin is the sprite's pivot point. `setPos` places it, and scaling grows th
 
 `setOrigin(3, 12)` picks an exact pixel of the frame, like a hand holding a weapon. Changing the origin keeps `pos()` where it was and moves the image so the new origin lands on it.
 
-### Tint, Fill and Rotation
+### Tint and Fill
 
 `tint` multiplies the sprite's colors. `fill` replaces the color entirely while keeping the shape, which makes the classic white hit flash. `fill.a` blends between the sprite's own color (0) and a solid fill (1), and `fill` wins over `tint` when both are set:
 
@@ -174,7 +174,23 @@ The origin is the sprite's pivot point. `setPos` places it, and scaling grows th
 
 For a one-off draw without changing the sprite, use `drawSpriteColored(&spr, color)` or `drawSpriteFilled(&spr, color)`.
 
-`rotate` turns or flips the image in quarter turns: `.none`, `.rot90`, `.rot180`, `.rot270`, `.flipHorz` and `.flipVert`. The sprite's rect stays the same, so quarter turns are meant for square sprites.
+### Flipping and Rotation
+
+`flip` mirrors the image: `.none`, `.horz`, `.vert` or `.both`. The rect and position don't change, so one set of right-facing frames can face both ways:
+
+=== "Zig"
+
+    ```zig
+    self.spr.flip = if (self.facing_left) .horz else .none;
+    ```
+
+=== "Python"
+
+    ```python
+    self.spr.set_flip(Flip.HORZ if self.facing_left else Flip.NONE)
+    ```
+
+`rotate` turns the image in quarter turns: `.none`, `.rot90`, `.rot180` and `.rot270` (`.flipHorz` and `.flipVert` are older spellings of a flip). The sprite's rect stays the same, so quarter turns are meant for square sprites. `flip` and `rotate` combine: the flipped image is what gets turned.
 
 To animate sprites, wrap them in an `Actor`. See [Sprites and Animation](page:animation).
 

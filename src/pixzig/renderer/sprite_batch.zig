@@ -270,7 +270,16 @@ pub const SpriteBatch = struct {
         const l = @round(d.l);
         const t = @round(d.t);
         const snapped: RectF = .{ .l = l, .t = t, .r = l + (d.r - d.l), .b = t + (d.b - d.t) };
-        self.draw(&sprite.texture.val, snapped, sprite.srcCoords, sprite.rotate, color, mode);
+        // Flipping swaps the source edges, so it combines with `rotate`
+        // (which is applied to the flipped region).
+        const s = sprite.srcCoords;
+        const src: RectF = .{
+            .l = if (sprite.flip.x()) s.r else s.l,
+            .r = if (sprite.flip.x()) s.l else s.r,
+            .t = if (sprite.flip.y()) s.b else s.t,
+            .b = if (sprite.flip.y()) s.t else s.b,
+        };
+        self.draw(&sprite.texture.val, snapped, src, sprite.rotate, color, mode);
     }
 
     /// Queues a solid rectangle.

@@ -1,5 +1,5 @@
 """Tests for the parts of the Python bindings that don't need a window:
-sequences, the state stack, colors, easing, collision and saves.
+sequences, the state stack, colors, easing, collision, saves and file reads.
 
 Run from the repo root after `zig build python-ffi`:
 
@@ -13,6 +13,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 from pixzig import AssetPaths, Ease, collision, color, easing, save  # noqa: E402
+from pixzig import _native  # noqa: E402
 from pixzig.sequence import SequencePlayer, Step, parallel, tween, tween_attr, wait  # noqa: E402
 from pixzig.states import State, StateStack  # noqa: E402
 
@@ -346,6 +347,24 @@ class AssetPathsTests(unittest.TestCase):
             message = str(ctx.exception)
             self.assertIn(os.path.join(tmp, "assets", "missing.png"), message)
             self.assertIn(f"asset root is {os.path.abspath(tmp)}", message)
+
+
+class ReadFileTests(unittest.TestCase):
+    """The engine-side reader behind `App.read_file` and
+    `AssetManifest.read_raw`."""
+
+    REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+
+    def test_reads_the_whole_file(self):
+        path = os.path.join(self.REPO, "assets", "circle_move.lua")
+        data = _native.read_buffer(_native.pz_read_file, path.encode("utf-8"))
+        with open(path, "rb") as f:
+            self.assertEqual(data, f.read())
+
+    def test_missing_file_raises(self):
+        path = os.path.join(self.REPO, "assets", "no_such_file.json")
+        with self.assertRaises(_native.Error):
+            _native.read_buffer(_native.pz_read_file, path.encode("utf-8"))
 
 
 if __name__ == "__main__":

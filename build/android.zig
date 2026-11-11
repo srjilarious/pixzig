@@ -493,10 +493,13 @@ pub const ApkOptions = struct {
     sdl_lib: *std.Build.Step.Compile,
     /// SDL's Java sources (`sdlJavaDir`).
     java_dir: std.Build.LazyPath,
-    /// Directory packaged as the APK's `assets/assets/`, so the game's
-    /// relative `assets/...` paths find it in the APK as they do on disk.
-    /// Null for a game with no assets.
+    /// Directory packaged into the APK's `assets/` at `assets_dest`, so the
+    /// game's relative paths find it in the APK as they do on disk. Null for
+    /// a game with no assets.
     assets_dir: ?std.Build.LazyPath = null,
+    /// Where `assets_dir` goes inside the APK's `assets/`: its path relative
+    /// to the game's build root ("assets" for most games).
+    assets_dest: []const u8 = "assets",
     /// Extra files packaged under `assets/` at the given path, e.g. a
     /// manifest JSON that lives outside the assets directory.
     extra_assets: []const ExtraAsset = &.{},
@@ -588,7 +591,7 @@ pub fn addApk(b: *std.Build, tc: Toolchain, opts: ApkOptions) Apk {
     // Assets are staged into one directory so `aapt2 link -A` sees the
     // tree the game's relative paths expect.
     const assets = b.addWriteFiles();
-    if (opts.assets_dir) |dir| _ = assets.addCopyDirectory(dir, "assets", .{});
+    if (opts.assets_dir) |dir| _ = assets.addCopyDirectory(dir, opts.assets_dest, .{});
     for (opts.extra_assets) |extra| _ = assets.addCopyFile(extra.source, extra.dest);
     // `aapt2 link -A` fails on a missing directory, so there's always one.
     _ = assets.add(".pixzig", "");

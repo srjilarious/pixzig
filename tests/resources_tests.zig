@@ -168,3 +168,30 @@ pub fn manifestLoadGroupOwnsLoadedKeyTest(io: std.Io, alloc: std.mem.Allocator) 
     manifest.unloadGroup("game");
     try testz.expectEqual(manifest.loaded.count(), 0);
 }
+
+pub fn manifestReadRawReadsTheFileTest(io: std.Io, alloc: std.mem.Allocator) !void {
+    var rm = ResourceManager.init(alloc);
+    defer rm.deinit();
+
+    const json =
+        \\{
+        \\  "root": "assets",
+        \\  "assets": [
+        \\    { "id": "script", "kind": "raw", "path": "circle_move.lua" },
+        \\    { "id": "missing", "kind": "raw", "path": "no_such_file.json" }
+        \\  ]
+        \\}
+    ;
+
+    var manifest = try pixzig.AssetManifest.loadFromJson(alloc, &rm, json, ".");
+    defer manifest.deinit();
+
+    const bytes = try manifest.readRaw(alloc, "script");
+    defer alloc.free(bytes);
+    const expected = try std.Io.Dir.cwd().readFileAlloc(io, "assets/circle_move.lua", alloc, .unlimited);
+    defer alloc.free(expected);
+    try testz.expectEqualStr(bytes, expected);
+
+    try testz.expectError(manifest.readRaw(alloc, "missing"), error.FileNotFound);
+    try testz.expectError(manifest.readRaw(alloc, "nope"), error.UnknownAsset);
+}
