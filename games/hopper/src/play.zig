@@ -6,6 +6,7 @@ const tile = pixzig.tile;
 const RectF = pixzig.RectF;
 const Vec2F = pixzig.Vec2F;
 const Color = pixzig.Color;
+const Flip = pixzig.sprites.Flip;
 
 const App = @import("main.zig").App;
 const Engine = @import("main.zig").Engine;
@@ -14,7 +15,7 @@ const Body = @import("body.zig").Body;
 const solidAt = @import("body.zig").solidAt;
 const sheet = @import("sheet.zig");
 
-/// The tilemap asset ids, in play order (see build.zig's manifest). Hopper
+/// The tilemap asset ids, in play order (see manifest.json). Hopper
 /// has one; finishing the last one wins the game.
 const levels = [_][]const u8{"level1"};
 
@@ -310,25 +311,28 @@ pub const PlayState = struct {
         eng.renderer.clear(Sky[0], Sky[1], Sky[2], 255);
         self.map_renderer.render(&self.camera, &eng.viewport);
 
-        const tex = self.app.sheet_tex;
+        const app = self.app;
         eng.renderer.begin(.{ .camera = &self.camera });
 
         const coin_frame: usize = @intFromFloat(@mod(self.elapsed_ms / 120.0, sheet.CoinFrames));
         for (self.coins.items) |c| {
             if (c.taken) continue;
-            drawCell(eng, tex, sheet.Coin1 + coin_frame, c.rect.centerF().x - 8, c.rect.centerF().y - 8);
+            app.drawCell(sheet.Coin1 + coin_frame, c.rect.centerF().x - 8, c.rect.centerF().y - 8, .none);
         }
 
         for (self.walkers.items) |*w| {
             const cell: usize = if (w.squashed_ms != null)
                 sheet.BeetleSquashed
             else if (@mod(self.elapsed_ms, 300) < 150) sheet.BeetleWalk1 else sheet.BeetleWalk2;
-            drawOnBody(eng, tex, cell, &w.body, alpha);
+            drawOnBody(app, cell, &w.body, alpha, .none);
         }
 
         // Blinks while dying.
         const blink_off = self.dying_ms > 0 and @mod(self.dying_ms, 160) < 80;
-        if (!blink_off) drawOnBody(eng, tex, self.playerCell(), &self.player.body, alpha);
+        if (!blink_off) {
+            const flip: Flip = if (self.player.facing_left) .horz else .none;
+            drawOnBody(app, self.playerCell(), &self.player.body, alpha, flip);
+        }
         eng.renderer.end();
 
         // The HUD, in screen space.
@@ -347,24 +351,17 @@ pub const PlayState = struct {
             (if (@mod(p.run_px, 16) < 8) sheet.FrogRun1 else sheet.FrogRun2)
         else
             sheet.FrogIdle;
-        return if (p.facing_left) base + sheet.FrogFacingLeft else base;
+        return base;
     }
 };
 
 /// Draws a 16x16 sheet cell centred across `body` with its bottom on the
 /// body's bottom.
-fn drawOnBody(eng: *Engine, tex: *pixzig.TextureHandle, cell: usize, body: *const Body, alpha: f32) void {
+fn drawOnBody(app: *App, cell: usize, body: *const Body, alpha: f32, flip: Flip) void {
     const pos = body.drawPos(alpha);
     const x = pos.x + body.rect.width() / 2 - sheet.CellSize / 2;
     const y = pos.y + body.rect.height() - sheet.CellSize;
-    drawCell(eng, tex, cell, x, y);
-}
-
-/// Draws a sheet cell with its top-left at (x, y). Rounded to whole pixels
-/// so the pixel art doesn't shimmer between them.
-pub fn drawCell(eng: *Engine, tex: *pixzig.TextureHandle, cell: usize, x: f32, y: f32) void {
-    const dest = RectF.fromPosSize(@round(x), @round(y), sheet.CellSize, sheet.CellSize);
-    eng.renderer.drawTexture(tex, dest, sheet.uv(cell));
+    app.drawCell(cell, x, y, flip);
 }
 
 /// `value` moved toward `target` by at most `step`.

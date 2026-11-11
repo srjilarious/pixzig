@@ -2,8 +2,8 @@
 beetles, grab the coins and reach the flag.
 
 It mirrors the Zig version in ../src section by section and shares its
-assets (../assets): the sprite sheet, the level and tuning.json, so tweaking
-those changes both.
+assets: ../manifest.json lists them (the sprite sheet, the level and
+tuning.json), so tweaking those changes both.
 
     # from the pixzig checkout, once:
     just py_install
@@ -18,9 +18,10 @@ import math
 import os
 from dataclasses import dataclass, fields
 
-from pixzig import App, GamepadButton, Key, ScalePolicy, State, StateStack, TextAlign
+from pixzig import App, Flip, GamepadButton, Key, ScalePolicy, State, StateStack, TextAlign
 
-# The game's folder: assets/ lives there, next to src/ and python/.
+# The game's folder: manifest.json and assets/ live there, next to src/ and
+# python/.
 GAME_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 
@@ -53,11 +54,11 @@ class Tuning:
     camera_smoothing: float = 9
 
     @classmethod
-    def load(cls, path):
-        """A Tuning from a JSON file; fields it leaves out keep their default,
-        and unknown ones (like "_comment") are ignored."""
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
+    def load(cls, manifest, asset_id):
+        """A Tuning from the manifest's JSON asset `asset_id`; fields it leaves
+        out keep their default, and unknown ones (like "_comment") are
+        ignored."""
+        data = json.loads(manifest.read_raw(asset_id))
         known = {f.name for f in fields(cls)}
         return cls(**{k: v for k, v in data.items() if k in known})
 
@@ -67,11 +68,11 @@ class Tuning:
 
 CELL = 16
 SHEET_COLUMNS = 8
-FROG_IDLE, FROG_RUN1, FROG_RUN2, FROG_JUMP = 8, 9, 10, 11
-FROG_FACING_LEFT = 4  # left-facing frog frames are the right-facing ones plus 4
-BEETLE_WALK1, BEETLE_WALK2, BEETLE_SQUASHED = 16, 17, 18
-COIN1, COIN_FRAMES = 19, 3
 GRASS, DIRT = 0, 1
+# Sprites face right; they're flipped to face left.
+FROG_IDLE, FROG_RUN1, FROG_RUN2, FROG_JUMP = 8, 9, 10, 11
+BEETLE_WALK1, BEETLE_WALK2, BEETLE_SQUASHED = 12, 13, 14
+COIN1, COIN_FRAMES = 15, 3
 
 SKY = (120, 180, 240)
 SHADOW = (0, 0, 0)
@@ -82,8 +83,9 @@ PLAYER_W, PLAYER_H = 12, 13
 WALKER_W, WALKER_H = 14, 11
 COIN_SIZE = 10
 
-# The tilemap asset files, in play order. Finishing the last one wins.
-LEVELS = ["assets/level1.tmx"]
+# The tilemap asset ids, in play order (see manifest.json). Finishing the last
+# one wins.
+LEVELS = ["level1"]
 
 
 # ---------------------------------------------------------------------------
@@ -93,23 +95,19 @@ LEVELS = ["assets/level1.tmx"]
 class Level:
     """The loaded map: drawing it, and which tiles are solid."""
 
-    def __init__(self, app, path):
-        name = os.path.splitext(os.path.basename(path))[0]
-        app.load_tilemap(name, path)
-        self.map = app.create_tilemap_renderer(name)
+    def __init__(self, app, map_id):
+        self.map = app.create_tilemap_renderer(map_id)
         # The layer the player stands on and bumps into; others are only drawn.
         self.main = self.map.layer_index("Main")
-        self.cols, self.rows = self.map.layer_size(self.main)
-        self.tile_w, self.tile_h = self.map.tile_size(self.main)
-        self.width = self.cols * self.tile_w
-        self.height = self.rows * self.tile_h
+        cols, rows = self.map.layer_size(self.main)
+        tile_w, tile_h = self.map.tile_size(self.main)
+        self.width = cols * tile_w
+        self.height = rows * tile_h
 
     def solid_at(self, x, y):
         """Whether the tile under world pixel (x, y) is solid. Outside the
         map is empty."""
-        tx, ty = math.floor(x / self.tile_w), math.floor(y / self.tile_h)
-        if not (0 <= tx < self.cols and 0 <= ty < self.rows):
-            return False
+        tx, ty = self.map.world_to_tile(self.main, x, y)
         return self.map.is_blocked(self.main, tx, ty)
 
     def spawns(self):
@@ -118,13 +116,18 @@ class Level:
 
 
 class Body:
-    """A box that falls, moves and stops against solid tiles. pixzig's Python
-    API has no tile mover, so this does what `tile.Mover` does in Zig."""
+    """A box that falls, moves and stops against the level's solid tiles. The
+    player and the walkers are both one of these."""
 
     def __init__(self, x, y, w, h):
+        # Its hitbox, in world pixels.
         self.x, self.y, self.w, self.h = x, y, w, h
+        # Where its top-left was before the last step, for drawing it between
+        # ticks (see draw_pos).
         self.prev_x, self.prev_y = x, y
+        # Pixels per second; +y is down.
         self.vx = self.vy = 0.0
+        # Whether it ended the last step standing on a solid tile.
         self.on_ground = False
 
     @property
@@ -142,54 +145,24 @@ class Body:
         return self.x < x + w and x < self.right and self.y < y + h and y < self.bottom
 
     def step(self, dt, level, tun):
-        """Pulls it down by gravity, then moves it one axis at a time so it
-        slides along walls and floors. Returns (hit_wall, hit_floor)."""
+        """Pulls it down by gravity, then moves it by its velocity over `dt`
+        seconds, one axis at a time so it slides along walls and floors.
+        Hitting something zeroes the velocity along that axis. Returns
+        (hit_wall, hit_floor)."""
         self.prev_x, self.prev_y = self.x, self.y
         self.vy = min(self.vy + tun.gravity * dt, tun.max_fall_speed)
 
-        hit_wall = self._move_x(self.vx * dt, level)
+        self.x, hit_wall = level.map.move_x(level.main, self.x, self.y, self.w, self.h, self.vx * dt)
         if hit_wall:
             self.vx = 0
-        hit_floor, hit_ceiling = self._move_y(self.vy * dt, level)
-        if hit_floor or hit_ceiling:
+
+        dy = self.vy * dt
+        self.y, hit_y = level.map.move_y(level.main, self.x, self.y, self.w, self.h, dy)
+        if hit_y:
             self.vy = 0
-        self.on_ground = hit_floor
-        return hit_wall, hit_floor
-
-    def _rows(self, level):
-        return range(math.floor(self.y / level.tile_h), math.floor((self.bottom - 0.01) / level.tile_h) + 1)
-
-    def _cols(self, level):
-        return range(math.floor(self.x / level.tile_w), math.floor((self.right - 0.01) / level.tile_w) + 1)
-
-    def _move_x(self, dx, level):
-        if dx == 0:
-            return False
-        edge = self.right + dx if dx > 0 else self.x + dx
-        tx = math.floor((edge - 0.01) / level.tile_w) if dx > 0 else math.floor(edge / level.tile_w)
-        for ty in self._rows(level):
-            if level.solid_at(tx * level.tile_w, ty * level.tile_h):
-                # Stop flush against the tile.
-                self.x = tx * level.tile_w - self.w if dx > 0 else (tx + 1) * level.tile_w
-                return True
-        self.x += dx
-        return False
-
-    def _move_y(self, dy, level):
-        """Returns (hit_floor, hit_ceiling)."""
-        if dy == 0:
-            return False, False
-        edge = self.bottom + dy if dy > 0 else self.y + dy
-        ty = math.floor((edge - 0.01) / level.tile_h) if dy > 0 else math.floor(edge / level.tile_h)
-        for tx in self._cols(level):
-            if level.solid_at(tx * level.tile_w, ty * level.tile_h):
-                if dy > 0:
-                    self.y = ty * level.tile_h - self.h
-                    return True, False
-                self.y = (ty + 1) * level.tile_h
-                return False, True
-        self.y += dy
-        return False, False
+        # Stopped while moving down means it landed.
+        self.on_ground = hit_y and dy > 0
+        return hit_wall, self.on_ground
 
     def teleport(self, x, y):
         self.x, self.y = x, y
@@ -418,12 +391,13 @@ class Play(State):
                 cell = BEETLE_SQUASHED
             else:
                 cell = BEETLE_WALK1 if self.elapsed_ms % 300 < 150 else BEETLE_WALK2
-            draw_on_body(app, cell, w.body, alpha)
+            draw_on_body(app, cell, w.body, alpha, Flip.NONE)
 
         # Blinks while dying.
         blink_off = self.dying_ms > 0 and self.dying_ms % 160 < 80
         if not blink_off:
-            draw_on_body(app, self.player_cell(), self.player.body, alpha)
+            flip = Flip.HORZ if self.player.facing_left else Flip.NONE
+            draw_on_body(app, self.player_cell(), self.player.body, alpha, flip)
         app.render_end()
 
         # The HUD, in screen space.
@@ -439,13 +413,13 @@ class Play(State):
             base = FROG_RUN1 if p.run_px % 16 < 8 else FROG_RUN2
         else:
             base = FROG_IDLE
-        return base + FROG_FACING_LEFT if p.facing_left else base
+        return base
 
 
-def draw_on_body(app, cell, body, alpha):
+def draw_on_body(app, cell, body, alpha, flip):
     """Draws a 16x16 sheet cell centred across `body`, bottoms lined up."""
     x, y = body.draw_pos(alpha)
-    app.draw_cell(cell, x + body.w / 2 - CELL / 2, y + body.h - CELL)
+    app.draw_cell(cell, x + body.w / 2 - CELL / 2, y + body.h - CELL, flip)
 
 
 def approach(value, target, step):
@@ -554,11 +528,15 @@ class Hopper(App):
             asset_root=GAME_ROOT,
         )
         self.clear_color = SKY
-        self.tuning = Tuning.load(os.path.join(GAME_ROOT, "assets", "tuning.json"))
+        # Opening the manifest loads its "boot" group: the sprite sheet and
+        # the level, registered under their ids.
+        self.manifest = self.load_manifest("manifest.json")
+        self.tuning = Tuning.load(self.manifest, "tuning")
         self.actions = self.create_action_map()
         bind_controls(self.actions)
 
-        self.load_texture("hopper", "assets/hopper.png")
+        # One sprite over the sheet, pointed at a different cell for each
+        # thing drawn (see draw_cell).
         self.cell_sprite = self.load_sprite("hopper")
         self.cell_sprite.set_size(CELL, CELL)
 
@@ -568,12 +546,14 @@ class Hopper(App):
         self.message = Message(self)
         self.states = StateStack(self.title)
 
-    def draw_cell(self, cell, x, y):
-        """Draws a sheet cell with its top-left at (x, y), rounded to whole
-        pixels so the pixel art doesn't shimmer."""
+    def draw_cell(self, cell, x, y, flip=Flip.NONE):
+        """Draws a sheet cell with its top-left at (x, y), mirrored by `flip`.
+        The renderer rounds it to whole pixels, so the pixel art doesn't
+        shimmer between them."""
         s = self.cell_sprite
         s.set_src_rect((cell % SHEET_COLUMNS) * CELL, (cell // SHEET_COLUMNS) * CELL, CELL, CELL)
-        s.set_pos(round(x), round(y))
+        s.set_flip(flip)
+        s.set_pos(x, y)
         s.draw()
 
     def update(self, dt_ms):

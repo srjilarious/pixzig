@@ -2,30 +2,31 @@
 //! sprite in an 8-column grid of 16x16 cells (see tools/gen_art.py).
 
 const pixzig = @import("pixzig");
-const RectF = pixzig.RectF;
+const RectI = pixzig.RectI;
 
-pub const CellSize: f32 = 16;
+/// Cells are this many pixels square.
+const Size = 16;
+pub const CellSize: f32 = Size;
 const Columns = 8;
-const Rows = 3;
 
-// Sprite cells. Left-facing frog frames are the right-facing ones plus 4.
+// Tile cells (the level's tileset is this same image).
+pub const Grass = 0;
+pub const Dirt = 1;
+
+// Sprite cells. Sprites face right; they're flipped to face left.
 pub const FrogIdle = 8;
 pub const FrogRun1 = 9;
 pub const FrogRun2 = 10;
 pub const FrogJump = 11;
-pub const FrogFacingLeft = 4;
-pub const BeetleWalk1 = 16;
-pub const BeetleWalk2 = 17;
-pub const BeetleSquashed = 18;
-pub const Coin1 = 19;
+pub const BeetleWalk1 = 12;
+pub const BeetleWalk2 = 13;
+pub const BeetleSquashed = 14;
+pub const Coin1 = 15;
 pub const CoinFrames = 3;
 
-/// The texture coordinates (0..1) of cell `index`, for
-/// `renderer.drawTexture`.
-pub fn uv(index: usize) RectF {
-    const col: f32 = @floatFromInt(index % Columns);
-    const row: f32 = @floatFromInt(index / Columns);
-    const w = 1.0 / @as(f32, Columns);
-    const h = 1.0 / @as(f32, Rows);
-    return .{ .l = col * w, .t = row * h, .r = (col + 1) * w, .b = (row + 1) * h };
+/// Where cell `index` is in the sheet, in pixels, for `Sprite.setSrcRect`.
+pub fn rect(index: usize) RectI {
+    const col: i32 = @intCast(index % Columns);
+    const row: i32 = @intCast(index / Columns);
+    return RectI.init(col * Size, row * Size, Size, Size);
 }

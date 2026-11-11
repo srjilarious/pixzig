@@ -54,14 +54,13 @@ pub const Tuning = struct {
 
 /// Reads the manifest asset `id` (a JSON file) into a Tuning. Unknown
 /// fields, like "_comment", are ignored.
-pub fn load(alloc: std.mem.Allocator, manifest: anytype, id: []const u8) !Tuning {
-    const path = try manifest.resolvePath(alloc, id);
-    defer alloc.free(path);
-    const bytes = try pixzig.asset_io.readFile(alloc, path);
+pub fn load(alloc: std.mem.Allocator, manifest: *const pixzig.AssetManifest, id: []const u8) !Tuning {
+    // readRaw reads from inside the APK on Android, and from disk elsewhere.
+    const bytes = try manifest.readRaw(alloc, id);
     defer alloc.free(bytes);
 
     const parsed = std.json.parseFromSlice(Tuning, alloc, bytes, .{ .ignore_unknown_fields = true }) catch |err| {
-        std.log.err("Couldn't read {s}: {s}", .{ path, @errorName(err) });
+        std.log.err("Couldn't parse {s}: {s}", .{ id, @errorName(err) });
         return err;
     };
     defer parsed.deinit();

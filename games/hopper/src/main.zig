@@ -16,13 +16,15 @@ const manifest_options = @import("manifest_options");
 const config = @import("config.zig");
 const PlayState = @import("play.zig").PlayState;
 const screens = @import("screens.zig");
+const sheet = @import("sheet.zig");
+const Flip = pixzig.sprites.Flip;
 
 /// Named controls. Bound to keys and gamepad buttons in `bindControls`.
 pub const Action = enum { left, right, jump, confirm, pause, back };
 
 const engine_options: pixzig.EngineOptions = .{
     .actionOpts = .{ .Action = Action },
-    // Loads build.zig's "boot" asset group before App.init.
+    // Loads manifest.json's "boot" asset group before App.init.
     .manifestOpts = manifest_options,
 };
 pub const Engine = pixzig.Engine(engine_options);
@@ -40,7 +42,9 @@ pub const App = struct {
     alloc: std.mem.Allocator,
     eng: *Engine,
     tuning: config.Tuning,
-    sheet_tex: *pixzig.TextureHandle,
+    /// One sprite over assets/hopper.png, pointed at a different cell for
+    /// each thing drawn (see `drawCell`).
+    cell_sprite: pixzig.sprites.Sprite,
     title: screens.TitleState,
     play: PlayState,
     paused: screens.PausedState,
@@ -56,13 +60,14 @@ pub const App = struct {
             .alloc = alloc,
             .eng = eng,
             .tuning = try config.load(alloc, &eng.manifest, "tuning"),
-            .sheet_tex = try eng.resources.getTexture("hopper"),
+            .cell_sprite = try eng.resources.createSprite("hopper"),
             .title = .{ .app = app },
             .play = undefined,
             .paused = .{ .app = app },
             .message = .{ .app = app },
             .states = undefined,
         };
+        app.cell_sprite.setSize(sheet.CellSize, sheet.CellSize);
         app.play = try PlayState.init(alloc, app);
         app.states = StateMgr.init(.{ &app.title, &app.play, &app.paused, &app.message });
         app.states.setCurrState(.title);
@@ -80,6 +85,16 @@ pub const App = struct {
 
     pub fn render(self: *App, eng: *Engine, alpha: f32) void {
         self.states.render(eng, alpha);
+    }
+
+    /// Draws a sheet cell with its top-left at (x, y), mirrored by `flip`.
+    /// The renderer rounds it to whole pixels, so the pixel art doesn't
+    /// shimmer between them.
+    pub fn drawCell(self: *App, cell: usize, x: f32, y: f32, flip: Flip) void {
+        self.cell_sprite.setSrcRect(sheet.rect(cell));
+        self.cell_sprite.flip = flip;
+        self.cell_sprite.setPosF(x, y);
+        self.eng.renderer.drawSprite(&self.cell_sprite);
     }
 
     pub fn startGame(self: *App) void {

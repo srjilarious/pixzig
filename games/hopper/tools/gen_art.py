@@ -5,17 +5,16 @@
 
 The sheet is 8 columns of 16x16 cells. Tiles are drawn in code; the sprites
 are the ASCII pictures below, one character per pixel (see PALETTE), so you
-can redraw them in a text editor. Left-facing frames are mirrored from the
-right-facing ones.
+can redraw them in a text editor. Sprites face right; the game flips them
+to face left.
 
 Cell indexes are what the game and level1.tmx use, so keep them where they
-are (or update src/sprites.zig, python/hopper.py and the map):
+are (or update src/sheet.zig, python/hopper.py and the map):
 
      0 grass   1 dirt    2 brick   3 crate   4 bush    5 cloud   6 pole   7 flag
-     8-11  frog right: idle, run 1, run 2, jump
-    12-15  frog left:  idle, run 1, run 2, jump
-    16-17  beetle walking   18 beetle squashed
-    19-21  coin spinning
+     8-11  frog: idle, run 1, run 2, jump
+    12-13  beetle walking   14 beetle squashed
+    15-17  coin spinning
 """
 
 import random
@@ -249,10 +248,6 @@ def from_ascii(art):
     return img
 
 
-def mirrored(img):
-    return img.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
-
-
 # ---------------------------------------------------------------------------
 # Tiles
 
@@ -380,8 +375,7 @@ def main():
         grass_tile(), dirt_tile(), brick_tile(), crate_tile(),
         bush_tile(), cloud_tile(), pole_tile(), pole_tile(top=True),
     ]
-    frog = [from_ascii(a) for a in (FROG_IDLE, FROG_RUN1, FROG_RUN2, FROG_JUMP)]
-    cells += frog + [mirrored(f) for f in frog]
+    cells += [from_ascii(a) for a in (FROG_IDLE, FROG_RUN1, FROG_RUN2, FROG_JUMP)]
     cells += [from_ascii(a) for a in (BEETLE1, BEETLE2, BEETLE_SQUASHED, COIN1, COIN2, COIN3)]
 
     sheet = Image.new("RGBA", (CELL * COLUMNS, CELL * ROWS), (0, 0, 0, 0))

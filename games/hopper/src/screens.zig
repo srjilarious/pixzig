@@ -37,15 +37,15 @@ pub const TitleState = struct {
         const ground_y = size.y - 2 * sheet.CellSize;
         var x: f32 = 0;
         while (x < size.x) : (x += sheet.CellSize) {
-            play.drawCell(eng, self.app.sheet_tex, 0, x, ground_y);
-            play.drawCell(eng, self.app.sheet_tex, 1, x, ground_y + sheet.CellSize);
+            self.app.drawCell(sheet.Grass, x, ground_y, .none);
+            self.app.drawCell(sheet.Dirt, x, ground_y + sheet.CellSize, .none);
         }
 
         // A little hop every second.
         const t: f32 = @floatCast(@mod(self.elapsed_ms, 1000) / 1000);
         const hop = @max(0, @sin(t * std.math.pi * 2)) * 14;
         const frame: usize = if (hop > 0.5) sheet.FrogJump else sheet.FrogIdle;
-        play.drawCell(eng, self.app.sheet_tex, frame, size.x / 2 - 8, ground_y - sheet.CellSize - hop);
+        self.app.drawCell(frame, size.x / 2 - 8, ground_y - sheet.CellSize - hop, .none);
 
         _ = eng.renderer.drawText("HOPPER", .{ .x = size.x / 2, .y = size.y * 0.2 }, .{
             .scale = 3,
