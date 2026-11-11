@@ -55,6 +55,9 @@ pub const tile = @import("./tile.zig");
 pub const gamestate = @import("./gamestate.zig");
 pub const ecs = @import("./ecs.zig");
 pub const save = @import("./save.zig");
+/// Reads asset files the way the engine does (out of the APK on Android),
+/// e.g. a game's own `raw` assets after `manifest.resolvePath`.
+pub const asset_io = @import("./io.zig");
 pub const scripting = @import("./scripting.zig");
 pub const console = @import("./console.zig");
 pub const imgui = @import("./imgui.zig");

@@ -16,6 +16,9 @@
         .zkdocs = .{
             .url = "https://github.com/srjilarious/zkdocs/archive/refs/tags/v0.11.0.tar.gz",
             .hash = "zkdocs-0.11.0-4A6vTRveRwDmLtz1ns9v1JrH0RnOhkAiUdcMBK97D-ey",
+            // Only `zig build docs` needs it, so games that depend on
+            // pixzig never fetch it.
+            .lazy = true,
         },
         .ziglua = .{
             .path = "libs/ziglua",

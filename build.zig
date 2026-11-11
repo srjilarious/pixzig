@@ -757,13 +757,18 @@ pub fn build(b: *std.Build) void {
             b.step("py-docs", "Regenerate docs/python-api/*.md from the Python package's docstrings")
                 .dependOn(&gen_py_docs.step);
 
-            const zkdocs = @import("zkdocs");
-            const docs_run = zkdocs.addDocsStep(b, .{
-                .conf = "docs/zkdocs.conf",
-                .out = "docs-out",
-            });
-            docs_run.dependOn(&gen_py_docs.step);
-            b.step("docs", "Docs").dependOn(docs_run);
+            // zkdocs is a lazy dependency: it's only fetched when the docs
+            // step is asked for, so games that depend on pixzig don't
+            // download it.
+            const docs_step = b.step("docs", "Docs");
+            if (b.lazyImport(@This(), "zkdocs")) |zkdocs| {
+                const docs_run = zkdocs.addDocsStep(b, .{
+                    .conf = "docs/zkdocs.conf",
+                    .out = "docs-out",
+                });
+                docs_run.dependOn(&gen_py_docs.step);
+                docs_step.dependOn(docs_run);
+            }
         }
     }
 
@@ -774,8 +779,10 @@ pub fn build(b: *std.Build) void {
 }
 
 /// `zig build new -Dname=my_cool_game -Ddest=../my_cool_game` copies
-/// `template/` into a new game project (see tools/new_project).
+/// `template/` into a new game project, or another game with
+/// `-Dfrom=games/hopper` (see tools/new_project).
 fn addNewProjectStep(b: *std.Build) void {
+    const from = b.option([]const u8, "from", "zig build new: the project to copy, relative to the pixzig root (default template)") orelse "template";
     const name = b.option([]const u8, "name", "zig build new: the new project's name") orelse "my_game";
     const dest = b.option([]const u8, "dest", "zig build new: directory to create, relative to the pixzig root") orelse
         b.fmt("../{s}", .{name});
@@ -790,14 +797,14 @@ fn addNewProjectStep(b: *std.Build) void {
     const run = b.addRunArtifact(tool);
     // Relative arguments resolve against the pixzig root.
     run.setCwd(b.path("."));
-    run.addArg("template");
+    run.addArg(from);
     run.addArg(dest);
     run.addArg(name);
     run.addArg(".");
     // It creates a directory outside the cache, so never skip it as cached.
     run.has_side_effects = true;
 
-    b.step("new", "Create a new game project from template/ (-Dname=..., -Ddest=...)").dependOn(&run.step);
+    b.step("new", "Create a new game project from template/ or -Dfrom=games/hopper (-Dname=..., -Ddest=...)").dependOn(&run.step);
 }
 
 fn buildEngine(
