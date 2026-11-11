@@ -16,26 +16,49 @@ The sequencer lives in `pixzig.sequencer`. The examples below use `const seq = p
 
 Keep one `SequencePlayer` for the game and update it every tick. Build a sequence, add steps, and hand it to the player:
 
-```zig
-// In App:
-seqPlayer: seq.SequencePlayer,
+=== "Zig"
 
-// In init:
-self.seqPlayer = seq.SequencePlayer.init(alloc);
+    ```zig
+    // In App:
+    seqPlayer: seq.SequencePlayer,
 
-// Anywhere, e.g. when the player hits a switch:
-var s = seq.Sequence.init(alloc);
-try s.add(alloc, try seq.SetActorStateStep.init(alloc, world, player, "walk_right"));
-try s.add(alloc, try seq.MoveToStep.init(alloc, world, player, .{ .x = 80, .y = 16 }, 300.0));
-try s.add(alloc, try seq.WaitStep.init(alloc, 200.0));
-try self.seqPlayer.add(s);
+    // In init:
+    self.seqPlayer = seq.SequencePlayer.init(alloc);
 
-// In update:
-self.seqPlayer.update(deltaMs);
+    // Anywhere, e.g. when the player hits a switch:
+    var s = seq.Sequence.init(alloc);
+    try s.add(alloc, try seq.SetActorStateStep.init(alloc, world, player, "walk_right"));
+    try s.add(alloc, try seq.MoveToStep.init(alloc, world, player, .{ .x = 80, .y = 16 }, 300.0));
+    try s.add(alloc, try seq.WaitStep.init(alloc, 200.0));
+    try self.seqPlayer.add(s);
 
-// In deinit:
-self.seqPlayer.deinit();
-```
+    // In update:
+    self.seqPlayer.update(deltaMs);
+
+    // In deinit:
+    self.seqPlayer.deinit();
+    ```
+
+=== "Python"
+
+    ```python
+    from pixzig.sequence import SequencePlayer, move_to, wait
+
+    # In __init__:
+    self.seq_player = SequencePlayer()
+
+    # A sequence is a generator; code between yields takes no time.
+    def walk_right(self):
+        self.hero.set_state("walk_right")
+        yield move_to(self.hero.sprite, 80, 16, 300)
+        yield wait(200)
+
+    # Anywhere, e.g. when the player hits a switch:
+    self.seq_player.play(self.walk_right())
+
+    # In update:
+    self.seq_player.update(dt_ms)
+    ```
 
 The player owns the sequence once you add it, and frees it when it finishes. `seqPlayer.sequences.items.len` is how many are still running, which is handy for ignoring input during a cutscene:
 
@@ -49,17 +72,34 @@ if (self.seqPlayer.sequences.items.len == 0 and eng.actions.pressed(.move_right)
 
 Give a sequence a tag when you add it, and you can check on it or stop it later:
 
-```zig
-try self.seqPlayer.addTagged(s, "boulder_hit");
+=== "Zig"
 
-if (!self.seqPlayer.isRunning("boulder_hit")) { ... }
+    ```zig
+    try self.seqPlayer.addTagged(s, "boulder_hit");
 
-// Stops it where it is; its remaining steps never run.
-_ = self.seqPlayer.cancel("boulder_hit");
+    if (!self.seqPlayer.isRunning("boulder_hit")) { ... }
 
-// Stops everything, e.g. when the level changes.
-self.seqPlayer.clear();
-```
+    // Stops it where it is; its remaining steps never run.
+    _ = self.seqPlayer.cancel("boulder_hit");
+
+    // Stops everything, e.g. when the level changes.
+    self.seqPlayer.clear();
+    ```
+
+=== "Python"
+
+    ```python
+    self.seq_player.play(self.boulder_hit(), tag="boulder_hit")
+
+    if not self.seq_player.is_running("boulder_hit"):
+        ...
+
+    # Stops it where it is; its remaining steps never run.
+    self.seq_player.cancel("boulder_hit")
+
+    # Stops everything, e.g. when the level changes.
+    self.seq_player.clear()
+    ```
 
 Tags are at most `MAX_NAME_LEN` (64) bytes. Several sequences can share a tag, and `cancel` stops all of them.
 
@@ -115,22 +155,45 @@ The context pointer has to stay valid while the step runs, so point it at someth
 
 When the thing you're animating is just an `f32` in your game struct, these skip the callback. `TweenValueStep` eases the value to a target, starting from whatever it holds when the step begins. A tween can then pick up where an earlier one, or a cancelled one, left off. `SetValueStep` sets it in one go:
 
-```zig
-try s.add(alloc, try seq.TweenValueStep.init(alloc, &self.doorOpen, 1.0, 400.0, .quad_out));
-try s.add(alloc, try seq.WaitStep.init(alloc, 1000.0));
-try s.add(alloc, try seq.SetValueStep.init(alloc, &self.doorOpen, 0.0));
-```
+=== "Zig"
+
+    ```zig
+    try s.add(alloc, try seq.TweenValueStep.init(alloc, &self.doorOpen, 1.0, 400.0, .quad_out));
+    try s.add(alloc, try seq.WaitStep.init(alloc, 1000.0));
+    try s.add(alloc, try seq.SetValueStep.init(alloc, &self.doorOpen, 0.0));
+    ```
+
+=== "Python"
+
+    ```python
+    def door(self):
+        yield tween_attr(self, "door_open", 1.0, 400, Ease.QUAD_OUT)
+        yield wait(1000)
+        self.door_open = 0.0
+    ```
 
 ### ParallelStep
 
 Runs several steps at the same time, and finishes when all of them have. A sub-step that finishes early isn't run again while the others catch up:
 
-```zig
-var par = try seq.ParallelStep.init(alloc);
-try seq.ParallelStep.add(&par, alloc, try seq.MoveToStep.init(alloc, world, heroA, targetA, 400.0));
-try seq.ParallelStep.add(&par, alloc, try seq.MoveToStep.init(alloc, world, heroB, targetB, 400.0));
-try s.add(alloc, par);
-```
+=== "Zig"
+
+    ```zig
+    var par = try seq.ParallelStep.init(alloc);
+    try seq.ParallelStep.add(&par, alloc, try seq.MoveToStep.init(alloc, world, heroA, targetA, 400.0));
+    try seq.ParallelStep.add(&par, alloc, try seq.MoveToStep.init(alloc, world, heroB, targetB, 400.0));
+    try s.add(alloc, par);
+    ```
+
+=== "Python"
+
+    ```python
+    def slide(sprite, x, y, ms):
+        yield move_to(sprite, x, y, ms)
+
+    # parallel() takes generators, so each track can be several steps long.
+    yield parallel(slide(hero_a, *target_a, 400), slide(hero_b, *target_b, 400))
+    ```
 
 To run several steps in order as one track inside a `ParallelStep`, wrap them in a sequence and add it as a `SubSequenceStep`:
 
@@ -149,32 +212,49 @@ Calls a Lua function when the sequence reaches it. It's what `seq_call` adds (se
 
 A step is a pointer plus a small vtable with `update` and `deinit`. Steps for things the engine doesn't know about, like screen flashes or sound cues, live in your game:
 
-```zig
-pub const PlaySoundStep = struct {
-    eng: *AppRunner.Engine,
-    name: []const u8,
+=== "Zig"
 
-    const vtable: seq.Step.VTable = .{ .update = update, .deinit = deinit };
+    ```zig
+    pub const PlaySoundStep = struct {
+        eng: *AppRunner.Engine,
+        name: []const u8,
 
-    pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine, name: []const u8) !seq.Step {
-        const self = try alloc.create(PlaySoundStep);
-        self.* = .{ .eng = eng, .name = name };
-        return .{ .ptr = self, .vtable = &vtable };
-    }
+        const vtable: seq.Step.VTable = .{ .update = update, .deinit = deinit };
 
-    fn update(step: *seq.Step, deltaMs: f64) seq.Step.Status {
-        const self: *PlaySoundStep = @ptrCast(@alignCast(step.ptr));
-        _ = self.eng.audio.play(self.name, .{}) catch {};
-        // Takes no time, so all of this tick is left for the next step.
-        return .{ .finished = deltaMs };
-    }
+        pub fn init(alloc: std.mem.Allocator, eng: *AppRunner.Engine, name: []const u8) !seq.Step {
+            const self = try alloc.create(PlaySoundStep);
+            self.* = .{ .eng = eng, .name = name };
+            return .{ .ptr = self, .vtable = &vtable };
+        }
 
-    fn deinit(step: *seq.Step, alloc: std.mem.Allocator) void {
-        const self: *PlaySoundStep = @ptrCast(@alignCast(step.ptr));
-        alloc.destroy(self);
-    }
-};
-```
+        fn update(step: *seq.Step, deltaMs: f64) seq.Step.Status {
+            const self: *PlaySoundStep = @ptrCast(@alignCast(step.ptr));
+            _ = self.eng.audio.play(self.name, .{}) catch {};
+            // Takes no time, so all of this tick is left for the next step.
+            return .{ .finished = deltaMs };
+        }
+
+        fn deinit(step: *seq.Step, alloc: std.mem.Allocator) void {
+            const self: *PlaySoundStep = @ptrCast(@alignCast(step.ptr));
+            alloc.destroy(self);
+        }
+    };
+    ```
+
+=== "Python"
+
+    ```python
+    # In Python a sound is usually just played between yields; a Step class is
+    # for something that takes time or is reused.
+    class PlaySound(Step):
+        def __init__(self, app, name):
+            self.app, self.name = app, name
+
+        def update(self, dt_ms):
+            self.app.audio.play(self.name)
+            # Takes no time, so all of this tick is left for the next step.
+            return dt_ms
+    ```
 
 `update` gets the elapsed milliseconds and returns a `Step.Status`: `.running` while the step needs more time, or `.finished` with how much of `deltaMs` it didn't use. The sequence hands that leftover to the next step in the same tick, so a run of zero-time steps (setting values, playing sounds, calling Lua) all happen in the tick they're reached, and a 30 ms wait followed by another one ends after 60 ms, not after whole ticks. A step that runs for a set time can return `seq.Step.timed(elapsedMs, durationMs)`, which works the leftover out. A step's first `update` can get a delta of 0, when the step before it ended exactly at the end of a tick. `deinit` frees whatever the step allocated, and runs when the sequence is freed.
 

@@ -6,13 +6,25 @@ Most 2D games draw at a fixed, low resolution and scale it up to fill the window
 
 Set `logicalSize` when creating the runner, and pick how it scales with `scalePolicy`:
 
-```zig
-const appRunner = try AppRunner.init("My Game", alloc, .{
-    .windowSize = .{ .x = 960, .y = 540 },
-    .logicalSize = .{ .x = 320, .y = 180 },
-    .scalePolicy = .integer_fit,
-});
-```
+=== "Zig"
+
+    ```zig
+    const appRunner = try AppRunner.init("My Game", alloc, .{
+        .windowSize = .{ .x = 960, .y = 540 },
+        .logicalSize = .{ .x = 320, .y = 180 },
+        .scalePolicy = .integer_fit,
+    });
+    ```
+
+=== "Python"
+
+    ```python
+    super().__init__(
+        "My Game", 960, 540,
+        logical_size=(320, 180),
+        scale_policy=ScalePolicy.INTEGER_FIT,
+    )
+    ```
 
 Now `begin(.logical)` draws in a 320x180 space no matter how big the window is. Without a `logicalSize`, logical space follows the window and one unit is one pixel.
 
@@ -47,18 +59,36 @@ For a debug overlay in real pixels, draw in a `.screen` pass. It covers the whol
 
 A `Camera2D` looks at a point in your world. Draw through it with `begin(.{ .camera = &cam })`:
 
-```zig
-// In App:
-camera: pixzig.Camera2D = .{},
+=== "Zig"
 
-// In update, follow the player:
-self.camera.follow(self.player.dest.centerF(), deltaMs, .{});
+    ```zig
+    // In App:
+    camera: pixzig.Camera2D = .{},
 
-// In render:
-eng.renderer.begin(.{ .camera = &self.camera });
-eng.renderer.drawSprite(&self.player);
-eng.renderer.end();
-```
+    // In update, follow the player:
+    self.camera.follow(self.player.dest.centerF(), deltaMs, .{});
+
+    // In render:
+    eng.renderer.begin(.{ .camera = &self.camera });
+    eng.renderer.drawSprite(&self.player);
+    eng.renderer.end();
+    ```
+
+=== "Python"
+
+    ```python
+    # In __init__:
+    self.camera = self.create_camera()
+
+    # In update, follow the player:
+    x, y, w, h = self.player.rect
+    self.camera.follow(x + w / 2, y + h / 2, dt_ms)
+
+    # In render:
+    self.render_begin(self.camera)
+    self.player.draw()
+    self.render_end()
+    ```
 
 `pos` is the world point shown at the center of the screen. The camera has a few more fields:
 
@@ -75,30 +105,57 @@ eng.renderer.end();
 | `deadzone` | Half-size of a box around the screen center. The target can move inside it without moving the camera, like a platformer that only scrolls near the edges. |
 | `smoothing` | How fast the camera catches up, per second. After one second `exp(-smoothing)` of the gap is left: around 5 feels tight, 2 feels floaty. Null (the default) means no lag. |
 
-```zig
-self.camera.follow(target, deltaMs, .{ .deadzone = .{ .x = 32, .y = 24 }, .smoothing = 6 });
-```
+=== "Zig"
+
+    ```zig
+    self.camera.follow(target, deltaMs, .{ .deadzone = .{ .x = 32, .y = 24 }, .smoothing = 6 });
+    ```
+
+=== "Python"
+
+    ```python
+    self.camera.follow(tx, ty, dt_ms, deadzone=(32, 24), smoothing=6)
+    ```
 
 The smoothing doesn't depend on the step size, so changing `updateStepHz` doesn't change how the camera feels. For flecs games, `pixzig.ecs.followEntity` follows an entity's sprite.
 
 With `bounds` set, the camera stops at the edges instead of showing empty space past the end of the map. If the visible area is bigger than the bounds on an axis, it centers on them instead.
 
-```zig
-self.camera.bounds = .{ .l = 0, .t = 0, .r = mapWidthPx, .b = mapHeightPx };
-```
+=== "Zig"
+
+    ```zig
+    self.camera.bounds = .{ .l = 0, .t = 0, .r = mapWidthPx, .b = mapHeightPx };
+    ```
+
+=== "Python"
+
+    ```python
+    self.camera.set_bounds(0, 0, map_width_px, map_height_px)
+    ```
 
 The camera doesn't store the screen size. Every method takes the viewport, so it keeps working when the window resizes:
 
-```zig
-// Where is the mouse in the world?
-if (eng.inputs.mouse.pos()) |screenPos| {
-    const worldPos = self.camera.logicalToWorld(&eng.viewport, screenPos);
-    self.cursorTile = .{ .x = @intFromFloat(worldPos.x / 16), .y = @intFromFloat(worldPos.y / 16) };
-}
+=== "Zig"
 
-// What part of the world is visible? Good for culling.
-const visible = self.camera.viewRect(&eng.viewport);
-```
+    ```zig
+    // Where is the mouse in the world?
+    if (eng.inputs.mouse.pos()) |screenPos| {
+        const worldPos = self.camera.logicalToWorld(&eng.viewport, screenPos);
+        self.cursorTile = .{ .x = @intFromFloat(worldPos.x / 16), .y = @intFromFloat(worldPos.y / 16) };
+    }
+
+    // What part of the world is visible? Good for culling.
+    const visible = self.camera.viewRect(&eng.viewport);
+    ```
+
+=== "Python"
+
+    ```python
+    # Where is the mouse in the world? None over a letterbox bar.
+    world = self.screen_to_world(self.camera, *self.mouse.raw_pos)
+    if world:
+        self.cursor_tile = (int(world[0] // 16), int(world[1] // 16))
+    ```
 
 `worldToLogical` goes the other way, e.g. to put a name tag over an enemy in a HUD pass. All of these account for zoom, rotation and bounds.
 

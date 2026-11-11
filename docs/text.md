@@ -6,13 +6,25 @@ The renderer draws text with a default font. Out of the box that's Karla at 20 p
 
 Text draws inside a `begin`/`end` pair like everything else. `drawText` takes the text, a position and a `TextStyle`; `drawString` is the same with the default style:
 
-```zig
-eng.renderer.begin(.logical);
-const size = eng.renderer.drawString("Score: 100", .{ .x = 8, .y = 8 });
-_ = eng.renderer.drawText("Game Over", .{ .x = 100, .y = 80 }, .{ .color = Color.from(255, 80, 80, 255) });
-_ = eng.renderer.drawText("Big", .{ .x = 8, .y = 40 }, .{ .scale = 2.0 });
-eng.renderer.end();
-```
+=== "Zig"
+
+    ```zig
+    eng.renderer.begin(.logical);
+    const size = eng.renderer.drawString("Score: 100", .{ .x = 8, .y = 8 });
+    _ = eng.renderer.drawText("Game Over", .{ .x = 100, .y = 80 }, .{ .color = Color.from(255, 80, 80, 255) });
+    _ = eng.renderer.drawText("Big", .{ .x = 8, .y = 40 }, .{ .scale = 2.0 });
+    eng.renderer.end();
+    ```
+
+=== "Python"
+
+    ```python
+    self.render_begin()
+    w, h = self.text.draw("Score: 100", 8, 8)
+    self.text.draw("Game Over", 100, 80, color=(255, 80, 80))
+    self.text.draw("Big", 8, 40, scale=2.0)
+    self.render_end()
+    ```
 
 Every `TextStyle` field has a default, so name only what you change:
 
@@ -25,21 +37,41 @@ Every `TextStyle` field has a default, so name only what you change:
 | `align` | `.left` | Whether `pos.x` is the text's left edge, `.center` or `.right` edge. Written `.@"align"`, since `align` is a Zig keyword. |
 | `shadow` | null | Draws the text again underneath in this color, `shadowOffset` (default 1, 1) pixels away. |
 
-```zig
-const title: pixzig.TextStyle = .{ .scale = 3, .@"align" = .center, .shadow = Color.black };
-_ = eng.renderer.drawText("PAUSED", .{ .x = screenW / 2, .y = 40 }, title);
+=== "Zig"
 
-const big = try eng.resources.getFontAtlas("title-font");
-_ = eng.renderer.drawText("Chapter 1", .{ .x = 8, .y = 8 }, .{ .font = big });
-```
+    ```zig
+    const title: pixzig.TextStyle = .{ .scale = 3, .@"align" = .center, .shadow = Color.black };
+    _ = eng.renderer.drawText("PAUSED", .{ .x = screenW / 2, .y = 40 }, title);
+
+    const big = try eng.resources.getFontAtlas("title-font");
+    _ = eng.renderer.drawText("Chapter 1", .{ .x = 8, .y = 8 }, .{ .font = big });
+    ```
+
+=== "Python"
+
+    ```python
+    self.text.draw("PAUSED", screen_w / 2, 40, scale=3, align=TextAlign.CENTER, shadow=(0, 0, 0))
+
+    self.text.load_font("title-font", "assets/Title.ttf", 32)
+    self.text.draw("Chapter 1", 8, 8, font="title-font")
+    ```
 
 Positions are `Vec2F`, like sprites and the mouse. `pos.y` is the top of the line: the baseline sits the font's ascent below it, and descenders reach down to `ascent + descent`. `drawText` returns the size of that line box, and `measureText(text, style)` returns the same size without drawing, so centering a measured string centers it as drawn:
 
-```zig
-const style: pixzig.TextStyle = .{ .scale = 2 };
-const size = eng.renderer.measureText("Ready?", style);
-_ = eng.renderer.drawText("Ready?", .{ .x = (w - size.x) / 2, .y = (h - size.y) / 2 }, style);
-```
+=== "Zig"
+
+    ```zig
+    const style: pixzig.TextStyle = .{ .scale = 2 };
+    const size = eng.renderer.measureText("Ready?", style);
+    _ = eng.renderer.drawText("Ready?", .{ .x = (w - size.x) / 2, .y = (h - size.y) / 2 }, style);
+    ```
+
+=== "Python"
+
+    ```python
+    w, h = self.text.measure("Ready?", scale=2)
+    self.text.draw("Ready?", (screen_w - w) / 2, (screen_h - h) / 2, scale=2)
+    ```
 
 `lineHeight()` is the default font's line spacing (ascent, descent and the font's line gap), for stacking lines of text.
 
@@ -72,10 +104,19 @@ To embed a different font than Karla, set `default_font` in `buildGame` (see [Ge
 
 You can also switch fonts after startup. Load a font into the resource manager, then make it the default:
 
-```zig
-_ = try eng.resources.loadFontFromTtfFile("ui", "assets/Roboto-Medium.ttf", 16.0);
-try eng.renderer.setDefaultFont(&eng.resources, "ui");
-```
+=== "Zig"
+
+    ```zig
+    _ = try eng.resources.loadFontFromTtfFile("ui", "assets/Roboto-Medium.ttf", 16.0);
+    try eng.renderer.setDefaultFont(&eng.resources, "ui");
+    ```
+
+=== "Python"
+
+    ```python
+    self.text.load_font("ui", "assets/Roboto-Medium.ttf", 16)
+    self.text.set_font("ui")
+    ```
 
 ## Bitmap Fonts
 
@@ -96,10 +137,19 @@ Start the renderer with `.font = .none` when you're going to swap in a bitmap fo
 
 TTF fonts are filtered smoothly, which blurs a pixel-art TTF drawn at a `scale` above 1. `setPixelated(true)` on its atlas switches it to nearest filtering and keeps the hard edges:
 
-```zig
-const pixelFont = try eng.resources.loadFontFromTtfFile("pixel", "assets/PixelFont.ttf", 8.0);
-pixelFont.val.setPixelated(true);
-```
+=== "Zig"
+
+    ```zig
+    const pixelFont = try eng.resources.loadFontFromTtfFile("pixel", "assets/PixelFont.ttf", 8.0);
+    pixelFont.val.setPixelated(true);
+    ```
+
+=== "Python"
+
+    ```python
+    self.text.load_font("pixel", "assets/PixelFont.ttf", 8)
+    self.text.set_pixelated("pixel")
+    ```
 
 ![bitmap_text_rendering_ex drawing with a bitmap font](assets/screenshots/bitmap_text.png)
 

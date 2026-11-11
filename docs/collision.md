@@ -9,6 +9,9 @@ Pixzig has four tools here, from simplest to most general:
 | `collision.circleCircle` and friends | Deciding whether two shapes really touch, and how to push them apart. |
 | `a_star.AStarPathFinder` | Planning a path across a tile map, for enemies that chase the player. |
 
+!!! note "Zig only"
+    The tile `Mover`, the collision grid and pathfinding are Zig-only. Python has the [shape tests](page:python-api/collision), and reads tile flags through [`TileMapRenderer.tile_flags`](page:python-api/tilemap#h3-tilemaprenderer-tile-flags).
+
 ## Moving Against Tiles
 
 `tile.Mover` moves a rect along one axis and stops it at the first blocking tile. Blocking comes from the `blocks` property on tiles in Tiled (see [Tile Maps](page:tile-rendering)):
@@ -93,21 +96,50 @@ A `Circle` is a `center` and `radius`, a `Segment` runs from `a` to `b`, and rec
 
 An `Overlap` points from the second shape toward the first: `normal` is a unit vector and `depth` how far they overlap along it. Moving the first shape by `mtv()` (the minimum translation vector) separates them, which is all you need to stop a ball going through a wall:
 
-```zig
-const col = pixzig.collision;
-if (col.circleRect(.{ .center = ball.pos, .radius = 4 }, wall)) |hit| {
-    ball.pos = ball.pos.add(hit.mtv());
-    // Bounce: reflect the velocity off the wall.
-    ball.vel = ball.vel.sub(hit.normal.scale(2 * ball.vel.dot(hit.normal)));
-}
-```
+=== "Zig"
+
+    ```zig
+    const col = pixzig.collision;
+    if (col.circleRect(.{ .center = ball.pos, .radius = 4 }, wall)) |hit| {
+        ball.pos = ball.pos.add(hit.mtv());
+        // Bounce: reflect the velocity off the wall.
+        ball.vel = ball.vel.sub(hit.normal.scale(2 * ball.vel.dot(hit.normal)));
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    from pixzig import collision
+
+    hit = collision.circle_rect((self.ball_x, self.ball_y, 4), wall)
+    if hit:
+        self.ball_x += hit.mtv[0]
+        self.ball_y += hit.mtv[1]
+        # Bounce: reflect the velocity off the wall.
+        nx, ny = hit.normal
+        d = self.vx * nx + self.vy * ny
+        self.vx -= 2 * d * nx
+        self.vy -= 2 * d * ny
+    ```
 
 For fast things like bullets, test the path they cover in one update rather than where they end up, so they can't skip over a thin target:
 
-```zig
-const path: col.Segment = .{ .a = bullet.prevPos, .b = bullet.pos };
-if (col.segmentCircle(path, ship)) |hit| explodeAt(hit.point);
-```
+=== "Zig"
+
+    ```zig
+    const path: col.Segment = .{ .a = bullet.prevPos, .b = bullet.pos };
+    if (col.segmentCircle(path, ship)) |hit| explodeAt(hit.point);
+    ```
+
+=== "Python"
+
+    ```python
+    path = (bullet.prev_pos, bullet.pos)
+    hit = collision.segment_circle(path, ship)
+    if hit:
+        self.explode_at(*hit.point)
+    ```
 
 `SegmentHit.t` is how far along the segment the hit is (0 to 1), so with several targets the smallest `t` is the one hit first. A segment that starts inside the shape hits at `t = 0` with a zero `normal`. `Circle.bounds()` gives the rect to insert into a `CollisionGrid`.
 

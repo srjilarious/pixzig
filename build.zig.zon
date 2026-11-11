@@ -14,8 +14,8 @@
             .hash = "zargunaught-1.4.0-aoeNI7jpAABLyZYY1PuerxHy8uT30_oN5QeExe6R333a",
         },
         .zkdocs = .{
-            .url = "https://github.com/srjilarious/zkdocs/archive/refs/tags/v0.10.1.tar.gz",
-            .hash = "zkdocs-0.10.1-4A6vTauoEgAawv1L_bn7ugDeJS8WRKtEJoPOMUIgqYNe",
+            .url = "https://github.com/srjilarious/zkdocs/archive/refs/tags/v0.11.0.tar.gz",
+            .hash = "zkdocs-0.11.0-4A6vTRveRwDmLtz1ns9v1JrH0RnOhkAiUdcMBK97D-ey",
         },
         .ziglua = .{
             .path = "libs/ziglua",

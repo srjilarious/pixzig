@@ -4,6 +4,8 @@ Pixzig can also be driven from Python. The `pixzig` Python package talks to a sh
 
 Lua scripting and the flecs ECS are Zig-only: a Python game already has a scripting language, and keeps its own objects.
 
+The guide pages show Python next to Zig: their code samples have a **Python** tab wherever the bindings cover the feature. The [Python API](page:python-api/index) reference documents every class, method and function, generated from the package's docstrings.
+
 ## Installing
 
 Wheels for Windows (x64) and Linux (x86_64) are published to [PyPI](https://pypi.org/project/pixzig/), so a plain `pip install` is all a game needs. The native engine library ships inside the wheel. Install it into a virtual environment:
@@ -47,7 +49,6 @@ Subclass `App`, set things up in `__init__`, and override `update` and `render`:
 ```python
 from pixzig import App, Key
 
-
 class MyGame(App):
     def __init__(self):
         super().__init__("My Game", width=800, height=480)
@@ -71,7 +72,6 @@ class MyGame(App):
         self.text.draw("Esc to quit", 20, 440)
         self.render_end()
 
-
 if __name__ == "__main__":
     MyGame().run()
 ```
@@ -91,6 +91,8 @@ It's the same model as the Zig side (see [The Game Loop](page:app-runner)): `upd
 Relative paths resolve against the directory of your main script, not the working directory, so a game runs the same from wherever you start it. Pass `asset_root=` to `App`, or set `app.asset_root`, to point somewhere else.
 
 ## What's Available
+
+A summary; the [Python API](page:python-api/index) pages have every argument and return value.
 
 | On `App` | What it gives you |
 |---|---|
@@ -220,3 +222,5 @@ The examples in `python/examples/` cover action maps, animation, audio, tile map
 The bindings are a C API in `src/pixzig/c_api.zig` with Python wrappers in `python/pixzig/`. `python/pixzig/constants.py` is generated from the engine's enums: input, event kinds, `Ease`, `BlendMode`, `TextAlign`, `TargetFilter` and `InputDevice`. After changing one of them, regenerate it with `zig build py-constants` and commit the result.
 
 `just py_test` builds the library and runs `python/tests/test_pure.py`, which covers what doesn't need a window: sequences, the state stack, colors, easing, collision and saves.
+
+The [Python API](page:python-api/index) pages are generated from the package's Google-style docstrings by `tools/gen_py_docs.py`, which `zig build docs` runs first; `zig build py-docs` runs it on its own. Document a new function or class with a docstring (a summary line, then `Args:`, `Returns:` and `Raises:` sections) and it shows up there. A new module also needs adding to `MODULES` in the script and to `docs/zkdocs.conf`.

@@ -6,6 +6,9 @@ It draws through the normal renderer, so it uses the default font and needs shap
 
 ![imgui_ex: two windows of widgets](assets/screenshots/imgui.png)
 
+!!! note "Zig only"
+    The immediate-mode UI is Zig-only for now.
+
 ## Setting It Up
 
 ```zig

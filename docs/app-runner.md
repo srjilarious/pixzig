@@ -6,17 +6,32 @@
 
 An app is any struct with these two methods:
 
-```zig
-pub const App = struct {
-    // Called at a fixed rate (120 Hz by default). `deltaMs` is the step
-    // length in milliseconds. Call `eng.quit()` to stop.
-    pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) void { ... }
+=== "Zig"
 
-    // Called once per displayed frame. `alpha` (0 to 1) is where the frame
-    // falls between the last two updates; see Smooth Motion below.
-    pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void { ... }
-};
-```
+    ```zig
+    pub const App = struct {
+        // Called at a fixed rate (120 Hz by default). `deltaMs` is the step
+        // length in milliseconds. Call `eng.quit()` to stop.
+        pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) void { ... }
+
+        // Called once per displayed frame. `alpha` (0 to 1) is where the frame
+        // falls between the last two updates; see Smooth Motion below.
+        pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void { ... }
+    };
+    ```
+
+=== "Python"
+
+    ```python
+    class MyGame(App):
+        # Called at a fixed rate (120 Hz by default). `dt_ms` is the step
+        # length in milliseconds. Call `self.quit()` to stop.
+        def update(self, dt_ms): ...
+
+        # Called once per displayed frame. `alpha` (0 to 1) is where the frame
+        # falls between the last two updates; see Smooth Motion below.
+        def render(self, alpha): ...
+    ```
 
 `update` may return `!void` instead. An error it returns is logged and quits the app, the same as calling `eng.quit()`. Returning `bool` is a compile error: older apps returned false to quit, which is now `eng.quit()`.
 
@@ -26,17 +41,33 @@ Game logic goes in `update` and drawing goes in `render`. Keep them apart: `upda
 
 Because `update` runs at a fixed rate and `render` runs at the display's, a frame usually lands between two updates. Drawing the latest position as-is makes motion judder slightly when the two rates don't line up (a 120 Hz update on a 144 Hz screen, say). `render`'s `alpha` says where the frame falls: 0 is the state after the previous update, 1 the state after the latest. Keep the previous position and draw between the two:
 
-```zig
-pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) void {
-    self.prevPos = self.pos;
-    self.pos = self.pos.add(self.vel.scale(@floatCast(deltaMs)));
-}
+=== "Zig"
 
-pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void {
-    const drawPos = self.prevPos.lerp(self.pos, alpha);
-    // ... draw at drawPos
-}
-```
+    ```zig
+    pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) void {
+        self.prevPos = self.pos;
+        self.pos = self.pos.add(self.vel.scale(@floatCast(deltaMs)));
+    }
+
+    pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void {
+        const drawPos = self.prevPos.lerp(self.pos, alpha);
+        // ... draw at drawPos
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    def update(self, dt_ms):
+        self.prev_x, self.prev_y = self.x, self.y
+        self.x += self.vx * dt_ms
+        self.y += self.vy * dt_ms
+
+    def render(self, alpha):
+        draw_x = self.prev_x + (self.x - self.prev_x) * alpha
+        draw_y = self.prev_y + (self.y - self.prev_y) * alpha
+        # ... draw at (draw_x, draw_y)
+    ```
 
 After a teleport (respawn, wrapping around the screen), set `prevPos` to the new position too, or the object is drawn sweeping across for one frame. A game that keeps no previous state can ignore `alpha` (`_: f32`). `gameloop_ex` slides a box this way.
 
@@ -44,19 +75,34 @@ After a teleport (respawn, wrapping around the screen), set `prevPos` to the new
 
 An app can also declare `onEvent` to hear about things the OS reports that aren't keyboard, mouse or text input. It's optional; the runner only calls it when the method exists.
 
-```zig
-pub fn onEvent(self: *App, eng: *AppRunner.Engine, event: pixzig.Event) void {
-    switch (event) {
-        .close_requested => if (self.unsavedChanges) {
-            eng.cancelClose();
-            self.showSavePrompt = true;
-        },
-        .drop_file => |drop| self.loadLevel(drop.path),
-        .focus_lost => self.paused = true,
-        else => {},
+=== "Zig"
+
+    ```zig
+    pub fn onEvent(self: *App, eng: *AppRunner.Engine, event: pixzig.Event) void {
+        switch (event) {
+            .close_requested => if (self.unsavedChanges) {
+                eng.cancelClose();
+                self.showSavePrompt = true;
+            },
+            .drop_file => |drop| self.loadLevel(drop.path),
+            .focus_lost => self.paused = true,
+            else => {},
+        }
     }
-}
-```
+    ```
+
+=== "Python"
+
+    ```python
+    def on_event(self, event):
+        if event.kind == EventKind.CLOSE_REQUESTED and self.unsaved_changes:
+            self.cancel_close()
+            self.show_save_prompt = True
+        elif event.kind == EventKind.DROP_FILE:
+            self.load_level(event.path)
+        elif event.kind == EventKind.FOCUS_LOST:
+            self.paused = True
+    ```
 
 | Event | When |
 |---|---|
@@ -116,21 +162,39 @@ Turning a feature off removes its code paths. Using it anyway is a compile error
 
 `AppRunner.init` creates the window, loads OpenGL and starts the engine's systems. It takes the window title, an allocator and runtime [](sym:EngineInitOptions):
 
-```zig
-pub fn main(init: std.process.Init) !void {
-    const appRunner = try AppRunner.init("My Game", init.gpa, .{
-        .windowSize = .{ .x = 960, .y = 540 },
-        .logicalSize = .{ .x = 320, .y = 180 },
-        .scalePolicy = .integer_fit,
-    });
-    defer appRunner.deinit();
+=== "Zig"
 
-    const app = try App.init(init.gpa, appRunner.engine);
-    defer app.deinit();
+    ```zig
+    pub fn main(init: std.process.Init) !void {
+        const appRunner = try AppRunner.init("My Game", init.gpa, .{
+            .windowSize = .{ .x = 960, .y = 540 },
+            .logicalSize = .{ .x = 320, .y = 180 },
+            .scalePolicy = .integer_fit,
+        });
+        defer appRunner.deinit();
 
-    appRunner.run(app);
-}
-```
+        const app = try App.init(init.gpa, appRunner.engine);
+        defer app.deinit();
+
+        appRunner.run(app);
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    class MyGame(App):
+        def __init__(self):
+            # The window options are App's constructor arguments.
+            super().__init__(
+                "My Game", 960, 540,
+                logical_size=(320, 180),
+                scale_policy=ScalePolicy.INTEGER_FIT,
+            )
+
+    if __name__ == "__main__":
+        MyGame().run()
+    ```
 
 | Option | Default | What it does |
 |---|---|---|

@@ -2,6 +2,9 @@
 
 Pixzig embeds Lua 5.3 through [ziglua](https://github.com/natecraddock/ziglua). `ScriptEngine` wraps a Lua state with a few helpers for the common jobs: running config files, reading settings into structs, and exposing Zig functions to scripts. There's also an in-game Lua console.
 
+!!! note "Zig only"
+    Lua scripting and the console are Zig-only; a Python game already has a scripting language.
+
 ## Getting a Script Engine
 
 The easiest way is to let the engine own one:

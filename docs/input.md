@@ -19,28 +19,59 @@ const AppRunner = pixzig.AppRunner(App, .{
 
 The engine creates the map as `eng.actions` and frees it on shutdown. Bind it in your app's `init`:
 
-```zig
-try eng.actions.bind(.quit, .{ .key = .escape });
-try eng.actions.bind(.jump, .{ .key = .space });
-try eng.actions.bind(.jump, .{ .gamepad_button = .a });
-try eng.actions.bind(.fire, .{ .mouse_button = .left });
-try eng.actions.bindAxis(.move_x, .{ .buttons = .{
-    .negative = .{ .key = .a },
-    .positive = .{ .key = .d },
-} });
-try eng.actions.bindAxis(.move_x, .{ .gamepad_axis = .{ .axis = .left_x } });
-```
+=== "Zig"
+
+    ```zig
+    try eng.actions.bind(.quit, .{ .key = .escape });
+    try eng.actions.bind(.jump, .{ .key = .space });
+    try eng.actions.bind(.jump, .{ .gamepad_button = .a });
+    try eng.actions.bind(.fire, .{ .mouse_button = .left });
+    try eng.actions.bindAxis(.move_x, .{ .buttons = .{
+        .negative = .{ .key = .a },
+        .positive = .{ .key = .d },
+    } });
+    try eng.actions.bindAxis(.move_x, .{ .gamepad_axis = .{ .axis = .left_x } });
+    ```
+
+=== "Python"
+
+    ```python
+    # Python names actions and axes with strings; there's nothing to declare.
+    self.actions = self.create_action_map()
+    self.actions.bind_key("quit", Key.ESCAPE)
+    self.actions.bind_key("jump", Key.SPACE)
+    self.actions.bind_gamepad_button("jump", GamepadButton.A)
+    self.actions.bind_mouse_button("fire", MouseButton.LEFT)
+    self.actions.bind_axis_buttons("move_x", Key.A, Key.D)
+    self.actions.bind_axis_gamepad("move_x", GamepadAxis.LEFT_X)
+    ```
 
 The runner updates the map every tick, just before `update`, so all you do is query it:
 
-```zig
-pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) void {
-    if (eng.actions.pressed(.quit)) eng.quit();
-    if (eng.actions.pressed(.jump)) self.jump();
-    if (eng.actions.down(.fire)) self.fire();
-    self.vel.x = eng.actions.axis(.move_x) * Speed;
-}
-```
+=== "Zig"
+
+    ```zig
+    pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) void {
+        if (eng.actions.pressed(.quit)) eng.quit();
+        if (eng.actions.pressed(.jump)) self.jump();
+        if (eng.actions.down(.fire)) self.fire();
+        self.vel.x = eng.actions.axis(.move_x) * Speed;
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    def update(self, dt_ms):
+        self.actions.update()  # a Python map is updated by the game
+        if self.actions.pressed("quit"):
+            self.quit()
+        if self.actions.pressed("jump"):
+            self.jump()
+        if self.actions.down("fire"):
+            self.fire()
+        self.vx = self.actions.axis("move_x") * SPEED
+    ```
 
 `pressed` and `released` are true for one tick, on the edge. `down` and `up` are the held state. `axis` is in -1 to 1 for buttons and sticks.
 
@@ -124,14 +155,31 @@ self.actions.deinit();
 
 ## Keyboard
 
-```zig
-const kb = &eng.inputs.keyboard;
+=== "Zig"
 
-if (kb.down(.left)) self.x -= 3;
-if (kb.pressed(.space)) self.jump();
-if (kb.released(.space)) self.endJump();
-if (kb.ctrl() and kb.pressed(.s)) self.save();
-```
+    ```zig
+    const kb = &eng.inputs.keyboard;
+
+    if (kb.down(.left)) self.x -= 3;
+    if (kb.pressed(.space)) self.jump();
+    if (kb.released(.space)) self.endJump();
+    if (kb.ctrl() and kb.pressed(.s)) self.save();
+    ```
+
+=== "Python"
+
+    ```python
+    kb = self.keyboard
+
+    if kb.down(Key.LEFT):
+        self.x -= 3
+    if kb.pressed(Key.SPACE):
+        self.jump()
+    if kb.released(Key.SPACE):
+        self.end_jump()
+    if kb.ctrl and kb.pressed(Key.S):
+        self.save()
+    ```
 
 `shift()`, `ctrl()`, `alt()` and `super()` check either side of the modifier. Keys are `pixzig.Key` values such as `.a`, `.space`, `.escape`, `.left` and `.left_shift`.
 
@@ -145,11 +193,20 @@ if (kb.layoutPressed(.y)) self.confirm();
 
 For anything the player types, like a name or a chat line, read `text()`. It's already run through the keyboard layout, dead keys and IME, so it's correct for every language:
 
-```zig
-var buf: [16]u8 = undefined;
-const len = eng.inputs.keyboard.text(&buf);
-self.name.appendSlice(buf[0..len]);
-```
+=== "Zig"
+
+    ```zig
+    var buf: [16]u8 = undefined;
+    const len = eng.inputs.keyboard.text(&buf);
+    self.name.appendSlice(buf[0..len]);
+    ```
+
+=== "Python"
+
+    ```python
+    # Text input is always on for Python games.
+    self.name += self.keyboard.text()
+    ```
 
 Text input is off by default, and `text()` returns nothing until you turn it on:
 
@@ -163,14 +220,29 @@ It's off because an active text input can pop up an IME candidate bar or change 
 
 ## Mouse
 
-```zig
-const mouse = &eng.inputs.mouse;
-if (mouse.pos()) |pos| {
-    if (mouse.pressed(.left)) self.clickAt(pos);
-    if (mouse.down(.left)) self.dragTo(pos);
-}
-const wheel = mouse.scroll().y;
-```
+=== "Zig"
+
+    ```zig
+    const mouse = &eng.inputs.mouse;
+    if (mouse.pos()) |pos| {
+        if (mouse.pressed(.left)) self.clickAt(pos);
+        if (mouse.down(.left)) self.dragTo(pos);
+    }
+    const wheel = mouse.scroll().y;
+    ```
+
+=== "Python"
+
+    ```python
+    mouse = self.mouse
+    x, y = mouse.pos  # (-1, -1) over a letterbox bar
+    if (x, y) != (-1, -1):
+        if mouse.pressed(MouseButton.LEFT):
+            self.click_at(x, y)
+        if mouse.down(MouseButton.LEFT):
+            self.drag_to(x, y)
+    wheel = mouse.scroll[1]
+    ```
 
 `pos()` is in logical coordinates and is null while the cursor is outside the game area, over a letterbox bar. `lastPos()` is the previous tick's position. `scroll()` is the wheel movement for this tick. Buttons are `.left`, `.middle`, `.right`, `.x1` and `.x2`.
 
@@ -178,10 +250,19 @@ To convert the cursor to world coordinates under a camera, use `camera.logicalTo
 
 For first-person style mouse look, capture the cursor. It's hidden and its movement is no longer stopped by the window edge:
 
-```zig
-try eng.setCursorCapture(true);
-const turn = eng.inputs.mouse.delta().x * sensitivity;
-```
+=== "Zig"
+
+    ```zig
+    try eng.setCursorCapture(true);
+    const turn = eng.inputs.mouse.delta().x * sensitivity;
+    ```
+
+=== "Python"
+
+    ```python
+    self.mouse.set_relative(True)
+    turn = self.mouse.delta[0] * sensitivity
+    ```
 
 `delta()` is the movement this tick in window coordinates. Release the cursor with `setCursorCapture(false)`. The mouse is on by default; turn it off with `inputOpts.mouse = false` if your game doesn't use it.
 
@@ -195,14 +276,27 @@ const AppRunner = pixzig.AppRunner(App, .{
 });
 ```
 
-```zig
-if (eng.inputs.gamepad(0)) |pad| {
-    if (pad.isConnected()) {
-        if (pad.pressed(.a)) self.jump();
-        self.vel.x = pad.axis(.left_x) * Speed;
+=== "Zig"
+
+    ```zig
+    if (eng.inputs.gamepad(0)) |pad| {
+        if (pad.isConnected()) {
+            if (pad.pressed(.a)) self.jump();
+            self.vel.x = pad.axis(.left_x) * Speed;
+        }
     }
-}
-```
+    ```
+
+=== "Python"
+
+    ```python
+    # Every gamepad slot is on for Python games.
+    pad = self.gamepad(0)
+    if pad.connected:
+        if pad.pressed(GamepadButton.A):
+            self.jump()
+        self.vx = pad.axis(GamepadAxis.LEFT_X) * SPEED
+    ```
 
 `gamepad(index)` is null past the last slot you asked for. Pads can be plugged in and out while the game runs. To react when that happens, for example to pause when the player's pad drops out, handle `gamepad_added` and `gamepad_removed` in the app's `onEvent` (see [The Game Loop](page:app-runner)). They carry a `GamepadId`; `pad.id()` gives the id of the pad in a slot, or null when the slot is empty. Buttons use positional names (`.a` is the bottom face button) and axes are `.left_x`, `.left_y`, `.right_x`, `.right_y`, `.left_trigger` and `.right_trigger`.
 
@@ -268,15 +362,31 @@ eng.touchOverlay.style = .{
 
 Games that are played by touching the play area (tap a tile, drag a piece) read the fingers on no pad control in logical game coordinates, the same space as `inputs.mouse.pos()`. These work whether or not a pad is declared or enabled:
 
-```zig
-if (eng.inputs.touch.tapped()) |pos| self.selectTileAt(pos);
+=== "Zig"
 
-var it = eng.inputs.touch.fingerIterator();
-while (it.next()) |f| {
-    if (f.onControl) continue;
-    if (f.pos) |pos| self.dragPiece(f.id, pos);
-}
-```
+    ```zig
+    if (eng.inputs.touch.tapped()) |pos| self.selectTileAt(pos);
+
+    var it = eng.inputs.touch.fingerIterator();
+    while (it.next()) |f| {
+        if (f.onControl) continue;
+        if (f.pos) |pos| self.dragPiece(f.id, pos);
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    tap = self.touch.tapped()
+    if tap:
+        self.select_tile_at(*tap)
+
+    for f in self.touch.fingers():
+        if f.on_control:
+            continue
+        if f.pos:
+            self.drag_piece(f.id, *f.pos)
+    ```
 
 `tapped()` is where a finger touched down since the last tick, like `mouse.pressed`, so a tap shorter than a tick still counts. Positions over the letterbox bars, outside the game area, are null. `tapCount()` and `tapAt(i)` give every landing when several fingers touch down at once.
 

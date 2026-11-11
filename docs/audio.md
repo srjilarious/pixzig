@@ -16,12 +16,23 @@ With audio off, `eng.audio` is a stub and calling its methods is a compile error
 
 ## Loading Sounds and Music
 
-```zig
-// In init:
-_ = try eng.resources.loadSound("shoot", "assets/laserShoot.wav");
-_ = try eng.resources.loadSound("boom", "assets/explosion.wav");
-_ = try eng.resources.loadMusic("theme", "assets/theme.wav");
-```
+=== "Zig"
+
+    ```zig
+    // In init:
+    _ = try eng.resources.loadSound("shoot", "assets/laserShoot.wav");
+    _ = try eng.resources.loadSound("boom", "assets/explosion.wav");
+    _ = try eng.resources.loadMusic("theme", "assets/theme.wav");
+    ```
+
+=== "Python"
+
+    ```python
+    # In __init__:
+    self.audio.load("shoot", "assets/laserShoot.wav")
+    self.audio.load("boom", "assets/explosion.wav")
+    self.audio.load_music("theme", "assets/theme.wav")
+    ```
 
 A **sound** is decoded into memory when it loads, so it starts instantly. Use it for effects. A **music** track is streamed from disk as it plays, so a long track costs little memory.
 
@@ -31,11 +42,20 @@ Both return a handle (`*SoundHandle`, `*MusicHandle`) and can be looked up later
 
 ## Playing Sounds
 
-```zig
-if (eng.actions.pressed(.fire)) {
-    _ = eng.audio.play("shoot", .{}) catch |err| std.log.warn("shoot: {}", .{err});
-}
-```
+=== "Zig"
+
+    ```zig
+    if (eng.actions.pressed(.fire)) {
+        _ = eng.audio.play("shoot", .{}) catch |err| std.log.warn("shoot: {}", .{err});
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    if self.actions.pressed("fire"):
+        self.audio.play("shoot")
+    ```
 
 `play` takes options for one play:
 
@@ -49,12 +69,20 @@ if (eng.actions.pressed(.fire)) {
 
 A little random pan and pitch keeps rapid fire from sounding like one sample on repeat:
 
-```zig
-_ = try eng.audio.play("shoot", .{
-    .pan = eng.rng.floatRange(-0.5, 0.5),
-    .pitch = eng.rng.floatRange(0.9, 1.1),
-});
-```
+=== "Zig"
+
+    ```zig
+    _ = try eng.audio.play("shoot", .{
+        .pan = eng.rng.floatRange(-0.5, 0.5),
+        .pitch = eng.rng.floatRange(0.9, 1.1),
+    });
+    ```
+
+=== "Python"
+
+    ```python
+    self.audio.play("shoot", pan=random.uniform(-0.5, 0.5), pitch=random.uniform(0.9, 1.1))
+    ```
 
 `playHandle(handle, opts)` does the same with a handle instead of a name.
 
@@ -62,14 +90,27 @@ _ = try eng.audio.play("shoot", .{
 
 Each play gets a voice, and `play` returns a `pixzig.Voice` handle to it. Hold on to it to control a sound that's still playing, like an engine hum:
 
-```zig
-self.hum = try eng.audio.play("engine", .{ .loop = true, .volume = 0.4 });
+=== "Zig"
 
-// Later:
-eng.audio.setPitch(self.hum, 1.0 + speed / 200.0);
-eng.audio.setVolume(self.hum, 0.6);
-eng.audio.stop(self.hum, .{ .fadeOutMs = 300 });
-```
+    ```zig
+    self.hum = try eng.audio.play("engine", .{ .loop = true, .volume = 0.4 });
+
+    // Later:
+    eng.audio.setPitch(self.hum, 1.0 + speed / 200.0);
+    eng.audio.setVolume(self.hum, 0.6);
+    eng.audio.stop(self.hum, .{ .fadeOutMs = 300 });
+    ```
+
+=== "Python"
+
+    ```python
+    self.hum = self.audio.play("engine", loop=True, volume=0.4)
+
+    # Later:
+    self.audio.set_pitch(self.hum, 1.0 + speed / 200.0)
+    self.audio.set_volume(self.hum, 0.6)
+    self.audio.stop(self.hum, fade_ms=300)
+    ```
 
 There's also `setPan` and `isPlaying`, and `stopSound(name, opts)` stops every voice of one sound. A voice that's fading out still counts as playing until the fade ends, and asking it to fade out again in the meantime is ignored, so "if it's playing, fade it out" is safe to run every tick.
 
@@ -85,11 +126,21 @@ A `Voice` goes stale once its voice is reused for another play, its sound is rel
 
 One music track plays at a time:
 
-```zig
-try eng.audio.playMusic("theme", .{});                    // loops by default
-try eng.audio.playMusic("boss", .{ .fadeMs = 1500 });     // crossfade from theme
-eng.audio.stopMusic(.{ .fadeOutMs = 2000 });
-```
+=== "Zig"
+
+    ```zig
+    try eng.audio.playMusic("theme", .{});                    // loops by default
+    try eng.audio.playMusic("boss", .{ .fadeMs = 1500 });     // crossfade from theme
+    eng.audio.stopMusic(.{ .fadeOutMs = 2000 });
+    ```
+
+=== "Python"
+
+    ```python
+    self.audio.play_music("theme")               # loops by default
+    self.audio.play_music("boss", fade_ms=1500)  # crossfade from theme
+    self.audio.stop_music(fade_ms=2000)
+    ```
 
 `playMusic` takes `loop` (default `true`), `volume`, and `fadeMs`. With `fadeMs` set, a track that's already playing fades out over that time while the new one fades in. Asking for the track that's already playing doesn't restart it, so it's safe to call `playMusic` every time a level loads.
 
@@ -99,11 +150,21 @@ eng.audio.stopMusic(.{ .fadeOutMs = 2000 });
 
 `setBusVolume` sets a bus's volume, which is what a settings menu wants:
 
-```zig
-eng.audio.setBusVolume(.music, settings.musicVolume);
-eng.audio.setBusVolume(.sfx, settings.effectsVolume);
-eng.audio.setBusVolume(.master, settings.masterVolume);
-```
+=== "Zig"
+
+    ```zig
+    eng.audio.setBusVolume(.music, settings.musicVolume);
+    eng.audio.setBusVolume(.sfx, settings.effectsVolume);
+    eng.audio.setBusVolume(.master, settings.masterVolume);
+    ```
+
+=== "Python"
+
+    ```python
+    self.audio.set_bus_volume(Bus.MUSIC, settings["music_volume"])
+    self.audio.set_bus_volume(Bus.SFX, settings["effects_volume"])
+    self.audio.set_bus_volume(Bus.MASTER, settings["master_volume"])
+    ```
 
 `busVolume(bus)` reads it back.
 
@@ -115,26 +176,50 @@ The engine calls both itself when the app goes to the background and comes back 
 
 `playStream` plays audio your code generates: a tracker module player, a synth, procedural effects. You give it a callback that fills a buffer of interleaved `f32` samples and returns how many frames it wrote:
 
-```zig
-const Tone = struct {
-    phase: f32 = 0,
-    step: f32,
+=== "Zig"
 
-    fn fill(ctx: ?*anyopaque, out: []f32, channels: u32) usize {
-        const self: *Tone = @ptrCast(@alignCast(ctx.?));
-        const frames = out.len / channels;
-        for (0..frames) |i| {
-            const s = @sin(self.phase * std.math.tau) * 0.1;
-            self.phase = @mod(self.phase + self.step, 1.0);
-            for (0..channels) |c| out[i * channels + c] = s;
+    ```zig
+    const Tone = struct {
+        phase: f32 = 0,
+        step: f32,
+
+        fn fill(ctx: ?*anyopaque, out: []f32, channels: u32) usize {
+            const self: *Tone = @ptrCast(@alignCast(ctx.?));
+            const frames = out.len / channels;
+            for (0..frames) |i| {
+                const s = @sin(self.phase * std.math.tau) * 0.1;
+                self.phase = @mod(self.phase + self.step, 1.0);
+                for (0..channels) |c| out[i * channels + c] = s;
+            }
+            return frames;
         }
-        return frames;
-    }
-};
+    };
 
-self.tone = .{ .step = 440.0 / @as(f32, @floatFromInt(eng.audio.sampleRate())) };
-self.voice = try eng.audio.playStream(Tone.fill, &self.tone, .{ .channels = 1 });
-```
+    self.tone = .{ .step = 440.0 / @as(f32, @floatFromInt(eng.audio.sampleRate())) };
+    self.voice = try eng.audio.playStream(Tone.fill, &self.tone, .{ .channels = 1 });
+    ```
+
+=== "Python"
+
+    ```python
+    import math
+
+    class Tone:
+        def __init__(self, hz, rate):
+            self.phase = 0.0
+            self.step = hz / rate
+
+        def fill(self, out, frames, channels):
+            for i in range(frames):
+                s = math.sin(self.phase * math.tau) * 0.1
+                self.phase = (self.phase + self.step) % 1.0
+                for c in range(channels):
+                    out[i * channels + c] = s
+            return frames
+
+    self.tone = Tone(440.0, self.audio.sample_rate)
+    self.voice = self.audio.play_stream(self.tone.fill, channels=1)
+    ```
 
 `StreamOpts` sets `channels` (2), `sampleRate` (0 means the engine's own rate; anything else is resampled), `volume`, and the `bus` it plays through (`sfx`). Returning fewer frames than asked ends the stream once they've played; `stop` with the returned voice ends it early. Either way the engine frees it on the next frame.
 

@@ -29,14 +29,29 @@ box.contains(mousePos); // left/top edges inside, right/bottom outside
 
 Colors come from constants, bytes, or a hex literal:
 
-```zig
-Color.white, Color.black, Color.transparent, Color.red // also green, blue, yellow, cyan, magenta, gray
-Color.rgb(255, 128, 0)          // opaque
-Color.from(255, 128, 0, 128)    // with alpha
-Color.hex(0xff8000ff)           // 0xRRGGBBAA
-Color.red.withAlpha(0.5)
-Color.black.lerp(Color.white, t)
-```
+=== "Zig"
+
+    ```zig
+    Color.white, Color.black, Color.transparent, Color.red // also green, blue, yellow, cyan, magenta, gray
+    Color.rgb(255, 128, 0)          // opaque
+    Color.from(255, 128, 0, 128)    // with alpha
+    Color.hex(0xff8000ff)           // 0xRRGGBBAA
+    Color.red.withAlpha(0.5)
+    Color.black.lerp(Color.white, t)
+    ```
+
+=== "Python"
+
+    ```python
+    from pixzig import color
+
+    color.WHITE, color.BLACK, color.TRANSPARENT, color.RED  # also GREEN, BLUE, YELLOW, CYAN, MAGENTA, GRAY
+    color.rgb(255, 128, 0)           # opaque
+    color.rgb(255, 128, 0, 128)      # with alpha
+    color.hex("#ff8000")             # also "#ff800080", "#f80" or 0xff8000
+    color.with_alpha(color.RED, 128)
+    color.lerp(color.BLACK, color.WHITE, t)
+    ```
 
 ## Vec2F Math
 
@@ -94,11 +109,23 @@ const runner = try AppRunner.init("Game", alloc, .{ .rngSeed = 1234 });
 | `reseed(seed)` | Restart the sequence. |
 | `random()` | The `std.Random` interface, for `shuffle` and the rest of std's helpers. |
 
-```zig
-const spread = eng.rng.floatRange(-0.2, 0.2);
-const bullet = heading.rotate(spread).scale(speed);
-if (eng.rng.chance(0.1)) self.dropPowerUp();
-```
+=== "Zig"
+
+    ```zig
+    const spread = eng.rng.floatRange(-0.2, 0.2);
+    const bullet = heading.rotate(spread).scale(speed);
+    if (eng.rng.chance(0.1)) self.dropPowerUp();
+    ```
+
+=== "Python"
+
+    ```python
+    import random  # Python games use the standard library's random module
+
+    spread = random.uniform(-0.2, 0.2)
+    if random.random() < 0.1:
+        self.drop_power_up()
+    ```
 
 For separate streams, say level generation apart from combat, create your own `pixzig.Rng.init(seed)`.
 
@@ -108,10 +135,21 @@ For separate streams, say level generation apart from combat, create your own `p
 
 The curves are `linear`, `quad_in`, `quad_out`, `quad_in_out`, `cubic_in`, `cubic_out`, `cubic_in_out`, `sine_in`, `sine_out`, `sine_in_out`, `back_in`, `back_out`, `elastic_out` and `bounce_out`.
 
-```zig
-const t: f32 = @floatCast(self.elapsedMs / 400.0);
-const y = pixzig.easing.tween(.bounce_out, startY, floorY, t);
-```
+=== "Zig"
+
+    ```zig
+    const t: f32 = @floatCast(self.elapsedMs / 400.0);
+    const y = pixzig.easing.tween(.bounce_out, startY, floorY, t);
+    ```
+
+=== "Python"
+
+    ```python
+    from pixzig import Ease, easing
+
+    t = self.elapsed_ms / 400
+    y = easing.tween(Ease.BOUNCE_OUT, start_y, floor_y, t)
+    ```
 
 The [sequencer](page:sequences) uses these too: `MoveToStep.initEased` and `TweenStep` take an `Ease`, and Lua's `seq_move_to` takes a curve name.
 

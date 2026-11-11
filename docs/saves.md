@@ -4,10 +4,20 @@ Asset paths resolve against the executable's directory (see [Assets](page:assets
 
 ## Where Saves Go
 
-```zig
-const dir = try pixzig.save.prefPath(alloc, "myname", "mygame");
-defer alloc.free(dir);
-```
+=== "Zig"
+
+    ```zig
+    const dir = try pixzig.save.prefPath(alloc, "myname", "mygame");
+    defer alloc.free(dir);
+    ```
+
+=== "Python"
+
+    ```python
+    from pixzig import save
+
+    directory = save.pref_path("myname", "mygame")
+    ```
 
 `prefPath(alloc, org, app)` returns the directory, ending in a path separator, and creates it if it's missing. It comes from `SDL_GetPrefPath`:
 
@@ -22,25 +32,38 @@ Pick the names once and don't change them, or players lose their saves.
 
 ## Saving and Loading a Struct
 
-```zig
-const Settings = struct {
-    volume: f32 = 0.8,
-    fullscreen: bool = false,
-    name: []const u8 = "player",
-};
+=== "Zig"
 
-const path = try std.fs.path.join(alloc, &.{ dir, "settings.zon" });
-defer alloc.free(path);
+    ```zig
+    const Settings = struct {
+        volume: f32 = 0.8,
+        fullscreen: bool = false,
+        name: []const u8 = "player",
+    };
 
-try pixzig.save.saveZon(alloc, path, self.settings);
+    const path = try std.fs.path.join(alloc, &.{ dir, "settings.zon" });
+    defer alloc.free(path);
 
-var arena: std.heap.ArenaAllocator = .init(alloc);
-defer arena.deinit();
-self.settings = pixzig.save.loadZon(Settings, arena.allocator(), path) catch |err| switch (err) {
-    error.FileNotFound => .{}, // first run
-    else => return err,
-};
-```
+    try pixzig.save.saveZon(alloc, path, self.settings);
+
+    var arena: std.heap.ArenaAllocator = .init(alloc);
+    defer arena.deinit();
+    self.settings = pixzig.save.loadZon(Settings, arena.allocator(), path) catch |err| switch (err) {
+        error.FileNotFound => .{}, // first run
+        else => return err,
+    };
+    ```
+
+=== "Python"
+
+    ```python
+    # Python saves JSON instead of ZON.
+    path = os.path.join(directory, "settings.json")
+
+    save.save_json(path, self.settings)
+
+    self.settings = save.load_json(path, default={"volume": 0.8, "fullscreen": False, "name": "player"})
+    ```
 
 `saveZon` writes `<path>.tmp` and renames it over the real file, so a crash in the middle of a save leaves the previous one intact. It creates missing parent directories.
 

@@ -2,6 +2,9 @@
 
 The main renderer covers most 2D games. For the rest, pixzig has a few lower-level tools: a pixel buffer for software rendering, textured 3D quads, your own sprite batches and shaders. All of these draw on their own, so call them outside a `renderer.begin`/`end` pair.
 
+!!! note "Zig only"
+    These tools are Zig-only. Python has [render targets and custom shaders](page:python-api/app#h3-app-create-render-target).
+
 ## Pixel Buffers
 
 A `PixelBuffer` is a grid of RGB pixels you set one at a time, which is then stretched over the game area. It's the right tool for emulators, fire and plasma effects, or anything else that computes its own pixels:

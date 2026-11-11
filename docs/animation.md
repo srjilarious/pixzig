@@ -16,26 +16,44 @@ Sequences and states are shared data that you register once with a `FrameSequenc
 
 Frames name textures, so load your atlas first. Then build sequences and states and register them with the manager:
 
-```zig
-const pixzig = @import("pixzig");
-const Frame = pixzig.Frame;
-const FrameSequence = pixzig.FrameSequence;
+=== "Zig"
 
-_ = try eng.resources.loadAtlas("assets/pac-tiles");
+    ```zig
+    const pixzig = @import("pixzig");
+    const Frame = pixzig.Frame;
+    const FrameSequence = pixzig.FrameSequence;
 
-var seqMgr = try pixzig.FrameSequenceManager.init(alloc);
+    _ = try eng.resources.loadAtlas("assets/pac-tiles");
 
-const walk = try FrameSequence.init(alloc, &[_]Frame{
-    .{ .tex = try eng.resources.getTexture("player_right_1"), .frameTimeMs = 120 },
-    .{ .tex = try eng.resources.getTexture("player_right_2"), .frameTimeMs = 120 },
-    .{ .tex = try eng.resources.getTexture("player_right_3"), .frameTimeMs = 120 },
-});
-try seqMgr.addSeq("walk", walk); // the manager owns it now
+    var seqMgr = try pixzig.FrameSequenceManager.init(alloc);
 
-const walkSeq = seqMgr.getSeq("walk").?;
-try seqMgr.addState(.{ .name = "right", .sequence = walkSeq });
-try seqMgr.addState(.{ .name = "left", .sequence = walkSeq, .flipX = true });
-```
+    const walk = try FrameSequence.init(alloc, &[_]Frame{
+        .{ .tex = try eng.resources.getTexture("player_right_1"), .frameTimeMs = 120 },
+        .{ .tex = try eng.resources.getTexture("player_right_2"), .frameTimeMs = 120 },
+        .{ .tex = try eng.resources.getTexture("player_right_3"), .frameTimeMs = 120 },
+    });
+    try seqMgr.addSeq("walk", walk); // the manager owns it now
+
+    const walkSeq = seqMgr.getSeq("walk").?;
+    try seqMgr.addState(.{ .name = "right", .sequence = walkSeq });
+    try seqMgr.addState(.{ .name = "left", .sequence = walkSeq, .flipX = true });
+    ```
+
+=== "Python"
+
+    ```python
+    # The app owns the animation library; register frames as textures first.
+    self.load_texture("hero", "assets/hero.png")
+    for i in range(3):
+        self.create_subtexture("hero", f"player_right_{i + 1}", i * 16, 0, 16, 16)
+
+    self.create_sequence("walk", loop=True)
+    for i in range(3):
+        self.add_frame("walk", f"player_right_{i + 1}", 120)
+
+    self.add_anim_state("right", "walk")
+    self.add_anim_state("left", "walk", flip=Flip.HORZ)
+    ```
 
 One sequence drives both directions here. The `"left"` state flips it.
 
@@ -63,9 +81,17 @@ For more than a handful of animations, keep them in a file. A sequence file has 
 }
 ```
 
-```zig
-try seqMgr.loadSequenceFile("assets/player.sequences.json", &eng.resources);
-```
+=== "Zig"
+
+    ```zig
+    try seqMgr.loadSequenceFile("assets/player.sequences.json", &eng.resources);
+    ```
+
+=== "Python"
+
+    ```python
+    self.load_anim_file("assets/player.sequences.json")
+    ```
 
 Frame `name`s are texture names, so the textures have to be loaded before the file. `flip` is `"none"`, `"horz"`, `"vert"` or `"both"`. A state that names a sequence that doesn't exist fails with `error.UnknownFrameSequence`.
 
@@ -73,25 +99,50 @@ Frame `name`s are texture names, so the textures have to be loaded before the fi
 
 An `Actor` owns the sprite it animates. Add the states it can be in, then call `update` every tick:
 
-```zig
-// During init:
-self.hero = pixzig.Actor.init(alloc, try eng.resources.createSprite("player_right_1"));
-_ = try self.hero.addState(seqMgr.getState("right").?, .{});
-_ = try self.hero.addState(seqMgr.getState("left").?, .{});
-self.hero.sprite.setOriginNormalized(0.5, 1);
+=== "Zig"
 
-// In update:
-if (eng.inputs.keyboard.pressed(.left)) try self.hero.setState("left", .{});
-if (eng.inputs.keyboard.pressed(.right)) try self.hero.setState("right", .{});
-self.hero.update(deltaMs);
-self.hero.sprite.setPosF(self.x, self.y);
+    ```zig
+    // During init:
+    self.hero = pixzig.Actor.init(alloc, try eng.resources.createSprite("player_right_1"));
+    _ = try self.hero.addState(seqMgr.getState("right").?, .{});
+    _ = try self.hero.addState(seqMgr.getState("left").?, .{});
+    self.hero.sprite.setOriginNormalized(0.5, 1);
 
-// In render:
-eng.renderer.drawSprite(&self.hero.sprite);
+    // In update:
+    if (eng.inputs.keyboard.pressed(.left)) try self.hero.setState("left", .{});
+    if (eng.inputs.keyboard.pressed(.right)) try self.hero.setState("right", .{});
+    self.hero.update(deltaMs);
+    self.hero.sprite.setPosF(self.x, self.y);
 
-// In deinit:
-self.hero.deinit();
-```
+    // In render:
+    eng.renderer.drawSprite(&self.hero.sprite);
+
+    // In deinit:
+    self.hero.deinit();
+    ```
+
+=== "Python"
+
+    ```python
+    # In __init__:
+    self.hero = self.create_actor("player_right_1")
+    self.hero.add_state("right")
+    self.hero.add_state("left")
+    self.hero.sprite.set_origin(8, 16)
+
+    # In update:
+    if self.keyboard.pressed(Key.LEFT):
+        self.hero.set_state("left")
+    if self.keyboard.pressed(Key.RIGHT):
+        self.hero.set_state("right")
+    self.hero.update(dt_ms)
+    self.hero.sprite.set_pos(self.x, self.y)
+
+    # In render:
+    self.hero.sprite.draw()
+
+    # Freed with the app, or early with self.hero.destroy().
+    ```
 
 The first state you add becomes current and its first frame is applied right away. `setState` switches to another state and shows its first frame immediately. Setting the state the actor is already in does nothing, so it's safe to call every tick. Asking for a name you never added returns `error.UnknownActorState`.
 
@@ -113,16 +164,32 @@ _ = try ghost.addState(seqMgr.getState("red_left").?, .{ .name = "left" });
 
 A sequence's `mode` is `.loop` by default. Set it to `.once` for something like an attack. When a `.once` sequence ends, the actor switches to the state's `nextState`:
 
-```zig
-var attack = try FrameSequence.init(alloc, &attackFrames);
-attack.mode = .once;
-try seqMgr.addSeq("attack", attack);
-try seqMgr.addState(.{ .name = "attack", .sequence = seqMgr.getSeq("attack").?, .nextState = "right" });
-_ = try self.hero.addState(seqMgr.getState("attack").?, .{});
+=== "Zig"
 
-// When the attack button is pressed:
-try self.hero.setState("attack", .{ .reset = true });
-```
+    ```zig
+    var attack = try FrameSequence.init(alloc, &attackFrames);
+    attack.mode = .once;
+    try seqMgr.addSeq("attack", attack);
+    try seqMgr.addState(.{ .name = "attack", .sequence = seqMgr.getSeq("attack").?, .nextState = "right" });
+    _ = try self.hero.addState(seqMgr.getState("attack").?, .{});
+
+    // When the attack button is pressed:
+    try self.hero.setState("attack", .{ .reset = true });
+    ```
+
+=== "Python"
+
+    ```python
+    self.create_sequence("attack", loop=False)
+    for name in attack_frames:
+        self.add_frame("attack", name, 80)
+    self.add_anim_state("attack", "attack", next_state="right")
+    self.hero.add_state("attack")
+
+    # When the attack button is pressed. Python's set_state has no reset
+    # option, so a press during the attack doesn't restart it.
+    self.hero.set_state("attack")
+    ```
 
 `.{ .reset = true }` restarts the state from its first frame even if the actor is already in it, so a second press replays the attack.
 

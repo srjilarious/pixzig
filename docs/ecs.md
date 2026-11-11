@@ -4,6 +4,9 @@ Pixzig doesn't force a way to organize your game objects. For small games, a few
 
 ![flecs_ex: sprite entities moving with random velocities](assets/screenshots/flecs.png)
 
+!!! note "Zig only"
+    flecs and the event bus are Zig-only. A Python game keeps its objects in its own classes.
+
 ## A flecs World
 
 Create a world, register your component types, and add entities:

@@ -6,27 +6,51 @@ Most games have a few distinct screens: a title screen, the game itself, a pause
 
 A state is a plain struct with the same `update` and `render` methods as an app. It can also have `activate` and `deactivate`, which run when it becomes active or stops being active:
 
-```zig
-const TitleState = struct {
-    pub fn activate(self: *TitleState) void {
-        _ = self;
-        std.log.info("showing title", .{});
-    }
+=== "Zig"
 
-    pub fn update(self: *TitleState, eng: *AppRunner.Engine, deltaMs: f64) void {
-        _ = self;
-        _ = deltaMs;
-        if (eng.inputs.keyboard.pressed(.escape)) eng.quit();
-    }
+    ```zig
+    const TitleState = struct {
+        pub fn activate(self: *TitleState) void {
+            _ = self;
+            std.log.info("showing title", .{});
+        }
 
-    pub fn render(self: *TitleState, eng: *AppRunner.Engine, _: f32) void {
-        _ = self;
-        eng.renderer.clear(0, 0, 80, 255);
-    }
-};
+        pub fn update(self: *TitleState, eng: *AppRunner.Engine, deltaMs: f64) void {
+            _ = self;
+            _ = deltaMs;
+            if (eng.inputs.keyboard.pressed(.escape)) eng.quit();
+        }
 
-const PlayState = struct { ... };
-```
+        pub fn render(self: *TitleState, eng: *AppRunner.Engine, _: f32) void {
+            _ = self;
+            eng.renderer.clear(0, 0, 80, 255);
+        }
+    };
+
+    const PlayState = struct { ... };
+    ```
+
+=== "Python"
+
+    ```python
+    class TitleState(State):
+        def __init__(self, app):
+            self.app = app
+
+        def activate(self):
+            print("showing title")
+
+        def update(self, dt_ms):
+            if self.app.keyboard.pressed(Key.ESCAPE):
+                self.app.quit()
+
+        def render(self, alpha):
+            self.app.render_begin()
+            self.app.shapes.filled_rect(0, 0, 800, 480, (0, 0, 80))
+            self.app.render_end()
+
+    class PlayState(State): ...
+    ```
 
 ## Creating the Manager
 
@@ -46,11 +70,22 @@ The compiler checks that the enum and the list are the same length, and that the
 
 Create it with a tuple of pointers to your state instances, in the same order:
 
-```zig
-self.titleState = .{};
-self.playState = .{};
-self.states = StateMgr.init(.{ &self.titleState, &self.playState });
-```
+=== "Zig"
+
+    ```zig
+    self.titleState = .{};
+    self.playState = .{};
+    self.states = StateMgr.init(.{ &self.titleState, &self.playState });
+    ```
+
+=== "Python"
+
+    ```python
+    # Python states are objects; there's no enum or type list to declare.
+    self.title_state = TitleState(self)
+    self.play_state = PlayState(self)
+    self.states = StateStack(self.title_state)
+    ```
 
 The tuple's type is `StateMgr.StatePtrs`, so a missing state or a pointer of the wrong type is a compile error. The states have to stay put while the manager uses them, so keep them in your heap-allocated app (or somewhere else stable), not in local variables of `init`.
 
@@ -58,24 +93,39 @@ The tuple's type is `StateMgr.StatePtrs`, so a missing state or a pointer of the
 
 Forward the app's methods to the manager and switch states with `setCurrState`:
 
-```zig
-pub const App = struct {
-    titleState: TitleState,
-    playState: PlayState,
-    states: StateMgr,
+=== "Zig"
 
-    pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) void {
-        if (self.states.current() == .title and eng.inputs.keyboard.pressed(.enter)) {
-            self.states.setCurrState(.play);
+    ```zig
+    pub const App = struct {
+        titleState: TitleState,
+        playState: PlayState,
+        states: StateMgr,
+
+        pub fn update(self: *App, eng: *AppRunner.Engine, deltaMs: f64) void {
+            if (self.states.current() == .title and eng.inputs.keyboard.pressed(.enter)) {
+                self.states.setCurrState(.play);
+            }
+            self.states.update(eng, deltaMs);
         }
-        self.states.update(eng, deltaMs);
-    }
 
-    pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void {
-        self.states.render(eng, alpha);
-    }
-};
-```
+        pub fn render(self: *App, eng: *AppRunner.Engine, alpha: f32) void {
+            self.states.render(eng, alpha);
+        }
+    };
+    ```
+
+=== "Python"
+
+    ```python
+    class MyGame(App):
+        def update(self, dt_ms):
+            if self.states.current is self.title_state and self.keyboard.pressed(Key.ENTER):
+                self.states.set_state(self.play_state)
+            self.states.update(dt_ms)
+
+        def render(self, alpha):
+            self.states.render(alpha)
+    ```
 
 Some things to know:
 
@@ -91,15 +141,27 @@ States often need to reach back into the game, e.g. to switch states themselves.
 
 States form a stack. `push` lays a state over the current one, and `pop` takes it off again, so a pause menu, an inventory or a dialog box doesn't need to know which screen it covers:
 
-```zig
-if (eng.actions.pressed(.pause)) {
-    if (self.states.current() == .pause) {
-        try self.states.pop();
-    } else {
-        try self.states.push(.pause, .{});
+=== "Zig"
+
+    ```zig
+    if (eng.actions.pressed(.pause)) {
+        if (self.states.current() == .pause) {
+            try self.states.pop();
+        } else {
+            try self.states.push(.pause, .{});
+        }
     }
-}
-```
+    ```
+
+=== "Python"
+
+    ```python
+    if self.actions.pressed("pause"):
+        if self.states.current is self.pause_state:
+            self.states.pop()
+        else:
+            self.states.push(self.pause_state)
+    ```
 
 The options on `push` say what happens to the states underneath while it's on top:
 

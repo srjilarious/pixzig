@@ -748,11 +748,22 @@ pub fn build(b: *std.Build) void {
             b.step("py-constants", "Regenerate python/pixzig/constants.py from the engine enums")
                 .dependOn(&run_gen_consts.step);
 
+            // The Python API reference pages are generated from the
+            // package's docstrings, and the docs build regenerates them
+            // first so the site never shows stale ones.
+            const gen_py_docs = b.addSystemCommand(&.{ "python3", "-I", "tools/gen_py_docs.py" });
+            gen_py_docs.setCwd(b.path("."));
+            gen_py_docs.has_side_effects = true;
+            b.step("py-docs", "Regenerate docs/python-api/*.md from the Python package's docstrings")
+                .dependOn(&gen_py_docs.step);
+
             const zkdocs = @import("zkdocs");
-            b.step("docs", "Docs").dependOn(zkdocs.addDocsStep(b, .{
+            const docs_run = zkdocs.addDocsStep(b, .{
                 .conf = "docs/zkdocs.conf",
                 .out = "docs-out",
-            }));
+            });
+            docs_run.dependOn(&gen_py_docs.step);
+            b.step("docs", "Docs").dependOn(docs_run);
         }
     }
 

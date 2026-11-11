@@ -6,6 +6,8 @@ Pixzig is a 2D game engine written in Zig. It gives you a fixed-timestep game lo
 
 These pages walk through each system in roughly the order you'll need them. Start here, then read [The Game Loop](page:app-runner) and [Rendering](page:rendering).
 
+Pixzig can also be driven from Python. Code samples on these pages have **Zig** and **Python** tabs where the Python bindings cover the feature; pick one and every sample switches to it. [Python Bindings](page:python) covers installing the package, and the [Python API](page:python-api/index) reference lists every class and function.
+
 ## Running the Examples
 
 The pixzig repo has an example for most systems in `examples/`. Each one is its own build step:
@@ -22,6 +24,9 @@ zig build imgui_ex       # the immediate-mode UI
 `zig build --help` lists them all. They read the shared `assets/` folder in the repo root.
 
 ## Creating a Project
+
+!!! tip "Python"
+    A Python game needs no project setup: `pip install pixzig` and write a script. See [Python Bindings](page:python).
 
 The quickest start is to generate a project from pixzig's `template/` directory. From a pixzig checkout:
 
@@ -106,48 +111,73 @@ See [Building and Shipping](page:building) for packaging, Windows and web builds
 
 This opens a window and exits when Escape is pressed:
 
-```zig
-const std = @import("std");
-const pixzig = @import("pixzig");
+=== "Zig"
 
-const AppRunner = pixzig.AppRunner(App, .{});
+    ```zig
+    const std = @import("std");
+    const pixzig = @import("pixzig");
 
-pub const App = struct {
-    alloc: std.mem.Allocator,
+    const AppRunner = pixzig.AppRunner(App, .{});
 
-    pub fn init(alloc: std.mem.Allocator, _: *AppRunner.Engine) !*App {
-        const app = try alloc.create(App);
-        app.* = .{ .alloc = alloc };
-        return app;
+    pub const App = struct {
+        alloc: std.mem.Allocator,
+
+        pub fn init(alloc: std.mem.Allocator, _: *AppRunner.Engine) !*App {
+            const app = try alloc.create(App);
+            app.* = .{ .alloc = alloc };
+            return app;
+        }
+
+        pub fn deinit(self: *App) void {
+            self.alloc.destroy(self);
+        }
+
+        pub fn update(_: *App, eng: *AppRunner.Engine, _: f64) void {
+            if (eng.inputs.keyboard.pressed(.escape)) eng.quit();
+        }
+
+        pub fn render(_: *App, eng: *AppRunner.Engine, _: f32) void {
+            eng.renderer.clear(26, 26, 51, 255);
+
+            eng.renderer.begin(.logical);
+            _ = eng.renderer.drawString("Hello!", .{ .x = 8, .y = 8 });
+            eng.renderer.end();
+        }
+    };
+
+    pub fn main(init: std.process.Init) !void {
+        const appRunner = try AppRunner.init("My Game", init.gpa, .{});
+        defer appRunner.deinit();
+
+        const app = try App.init(init.gpa, appRunner.engine);
+        defer app.deinit();
+
+        appRunner.run(app);
     }
+    ```
 
-    pub fn deinit(self: *App) void {
-        self.alloc.destroy(self);
-    }
+=== "Python"
 
-    pub fn update(_: *App, eng: *AppRunner.Engine, _: f64) void {
-        if (eng.inputs.keyboard.pressed(.escape)) eng.quit();
-    }
+    ```python
+    from pixzig import App, Key
 
-    pub fn render(_: *App, eng: *AppRunner.Engine, _: f32) void {
-        eng.renderer.clear(26, 26, 51, 255);
+    class MyGame(App):
+        def __init__(self):
+            super().__init__("My Game")
+            self.clear_color = (26, 26, 51)
 
-        eng.renderer.begin(.logical);
-        _ = eng.renderer.drawString("Hello!", .{ .x = 8, .y = 8 });
-        eng.renderer.end();
-    }
-};
+        def update(self, dt_ms):
+            if self.keyboard.pressed(Key.ESCAPE):
+                self.quit()
 
-pub fn main(init: std.process.Init) !void {
-    const appRunner = try AppRunner.init("My Game", init.gpa, .{});
-    defer appRunner.deinit();
+        def render(self, alpha):
+            self.render_begin()
+            self.text.draw("Hello!", 8, 8)
+            self.render_end()
 
-    const app = try App.init(init.gpa, appRunner.engine);
-    defer app.deinit();
+    if __name__ == "__main__":
+        MyGame().run()
+    ```
 
-    appRunner.run(app);
-}
-```
-
-That's the whole shape of a pixzig game: an `App` with `update` and `render`, handed to an `AppRunner`. [The Game Loop](page:app-runner) covers what the runner does with it.
+That's the whole shape of a pixzig game: an `App` with `update` and `render`, handed to an `AppRunner`. In Python, `App` is the base class itself, and `run()` drives the same loop. [The Game Loop](page:app-runner) covers what the runner does with it.
 

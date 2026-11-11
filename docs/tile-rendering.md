@@ -8,17 +8,34 @@ Pixzig loads maps made in [Tiled](https://www.mapeditor.org/) and draws them wit
 
 Load the `.tmx` through the resource manager, then build a renderer from the map's name:
 
-```zig
-// In init:
-_ = try eng.resources.loadTileMap("level1", "assets/level1.tmx");
-self.mapRenderer = try pixzig.TileMapRenderer.init(alloc, &eng.resources, "level1");
+=== "Zig"
 
-// In render:
-self.mapRenderer.render(&self.camera, &eng.viewport);
+    ```zig
+    // In init:
+    _ = try eng.resources.loadTileMap("level1", "assets/level1.tmx");
+    self.mapRenderer = try pixzig.TileMapRenderer.init(alloc, &eng.resources, "level1");
 
-// In deinit:
-self.mapRenderer.deinit();
-```
+    // In render:
+    self.mapRenderer.render(&self.camera, &eng.viewport);
+
+    // In deinit:
+    self.mapRenderer.deinit();
+    ```
+
+=== "Python"
+
+    ```python
+    # In __init__:
+    self.load_tilemap("level1", "assets/level1.tmx")
+    self.map = self.create_tilemap_renderer("level1")
+
+    # In render. In Python, the map draws inside a camera pass.
+    self.render_begin(self.camera)
+    self.map.render(self.camera)
+    self.render_end()
+
+    # Freed with the app, or early with self.map.destroy().
+    ```
 
 The renderer works out the rest itself. It loads each layer's tileset image, as named by the `<image source>` in the `.tmx`, and only draws the parts of the map the camera can see. The map's file paths are relative to the `.tmx`, so keep them as Tiled wrote them.
 
@@ -28,15 +45,27 @@ Tile maps draw on their own rather than through the sprite batch, so call the re
 
 Usually you want some layers behind your sprites and some in front. Give each layer a `z` float property in Tiled, then draw the map in two halves:
 
-```zig
-self.mapRenderer.renderLayersBelow(1.0, &self.camera, &eng.viewport);
+=== "Zig"
 
-eng.renderer.begin(.{ .camera = &self.camera });
-eng.renderer.drawSprite(&self.player);
-eng.renderer.end();
+    ```zig
+    self.mapRenderer.renderLayersBelow(1.0, &self.camera, &eng.viewport);
 
-self.mapRenderer.renderLayersAbove(1.0, &self.camera, &eng.viewport);
-```
+    eng.renderer.begin(.{ .camera = &self.camera });
+    eng.renderer.drawSprite(&self.player);
+    eng.renderer.end();
+
+    self.mapRenderer.renderLayersAbove(1.0, &self.camera, &eng.viewport);
+    ```
+
+=== "Python"
+
+    ```python
+    self.render_begin(self.camera)
+    self.map.render_below(self.camera, 1.0)
+    self.player.draw()
+    self.map.render_above(self.camera, 1.0)
+    self.render_end()
+    ```
 
 The renderer reads these layer properties:
 
@@ -52,15 +81,28 @@ The renderer reads these layer properties:
 
 `mapRenderer.tileMap()` is the map it draws. You can also get it with `eng.resources.getTileMap("level1")`.
 
-```zig
-const map = self.mapRenderer.tileMap();
-const ground = map.layerByName("ground").?;
+=== "Zig"
 
-const size = ground.size;          // in tiles
-const tileSize = ground.tileSize;  // in pixels
-const index = ground.tileData(x, y); // -1 for an empty cell
-const tile = ground.tile(x, y);      // ?*Tile, with its flags and properties
-```
+    ```zig
+    const map = self.mapRenderer.tileMap();
+    const ground = map.layerByName("ground").?;
+
+    const size = ground.size;          // in tiles
+    const tileSize = ground.tileSize;  // in pixels
+    const index = ground.tileData(x, y); // -1 for an empty cell
+    const tile = ground.tile(x, y);      // ?*Tile, with its flags and properties
+    ```
+
+=== "Python"
+
+    ```python
+    ground = self.map.layer_index("ground")  # -1 when there's none
+
+    size = self.map.layer_size(ground)          # in tiles
+    tile_size = self.map.tile_size(ground)      # in pixels
+    index = self.map.get_tile(ground, x, y)     # -1 for an empty cell
+    flags = self.map.tile_flags(ground, x, y)   # TileFlags
+    ```
 
 ### Tile Properties
 
@@ -71,11 +113,20 @@ Give tiles in your Tiled tileset custom properties to describe them. Two propert
 | `blocks` | `left`, `right`, `top`, `bottom`, `all` | `tile.BlocksLeft`, ..., `tile.BlocksAll` |
 | `kills` | `true` | `tile.Kills` |
 
-```zig
-if (ground.tile(tx, ty)) |t| {
-    if (t.core & pixzig.tile.Kills != 0) self.die();
-}
-```
+=== "Zig"
+
+    ```zig
+    if (ground.tile(tx, ty)) |t| {
+        if (t.core & pixzig.tile.Kills != 0) self.die();
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    if self.map.tile_flags(ground, tx, ty) & TileFlags.KILLS:
+        self.die()
+    ```
 
 Every other property is kept as a string in `tile.properties`. The blocking flags are what [Collision and Pathfinding](page:collision) uses to stop movement and plan paths.
 
@@ -83,18 +134,35 @@ Every other property is kept as a string in `tile.properties`. The blocking flag
 
 Object layers come in as `ObjectGroup`s, which is the usual place for spawn points, doors and triggers:
 
-```zig
-const spawns = map.objectGroupByName("spawns").?;
+=== "Zig"
 
-if (spawns.firstByClass("player")) |p| {
-    self.player.setPos(p.pos.x, p.pos.y);
-}
+    ```zig
+    const spawns = map.objectGroupByName("spawns").?;
 
-var it = spawns.iterator("enemy"); // pass null for every object
-while (it.next()) |obj| {
-    try self.spawnEnemy(obj.pos, obj.intPropWithDefault("hp", 3));
-}
-```
+    if (spawns.firstByClass("player")) |p| {
+        self.player.setPos(p.pos.x, p.pos.y);
+    }
+
+    var it = spawns.iterator("enemy"); // pass null for every object
+    while (it.next()) |obj| {
+        try self.spawnEnemy(obj.pos, obj.intPropWithDefault("hp", 3));
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    spawns = self.map.object_group_index("spawns")
+
+    player = self.map.object_by_name(spawns, "player")
+    if player:
+        self.player.set_pos(player.x, player.y)
+
+    for obj in self.map.objects(spawns):
+        if obj.class_ == "enemy":
+            hp = int(self.map.object_property(spawns, obj.index, "hp") or 3)
+            self.spawn_enemy(obj.x, obj.y, hp)
+    ```
 
 An object has an `id`, `name`, `class`, `pos`, `size` and custom properties, read with `intProp`, `intPropWithDefault` and `stringProp`. Tiled's older `type` attribute is read as the class too.
 
@@ -102,10 +170,19 @@ An object has an `id`, `name`, `class`, `pos`, `size` and custom properties, rea
 
 For a map the game edits as it runs, like digging or placing blocks, change the tile data and tell the renderer which tile changed:
 
-```zig
-layer.setTileData(x, y, newIndex);
-self.mapRenderer.tileChanged(layerIndex, x, y);
-```
+=== "Zig"
+
+    ```zig
+    layer.setTileData(x, y, newIndex);
+    self.mapRenderer.tileChanged(layerIndex, x, y);
+    ```
+
+=== "Python"
+
+    ```python
+    self.map.set_tile(layer, x, y, new_index)
+    self.map.refresh()  # once, after a batch of edits
+    ```
 
 Only the chunk holding that tile is rebuilt, on its next draw. After changing lots of tiles at once, `rebuildAll()` rebuilds everything right away.
 
@@ -117,11 +194,21 @@ Edit and save the map in Tiled while a debug build is running and it reloads. Ev
 
 If you derived something from the map, like camera bounds or spawn points, call `sync()` in `update`. It returns true when a reload just happened:
 
-```zig
-if (self.mapRenderer.sync()) {
-    self.camera.bounds = self.mapBounds();
-}
-```
+=== "Zig"
+
+    ```zig
+    if (self.mapRenderer.sync()) {
+        self.camera.bounds = self.mapBounds();
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    if self.map.check_reload():
+        w, h = self.map.pixel_size(walls)
+        self.camera.set_bounds(0, 0, w, h)
+    ```
 
 A reload replaces the map's contents in place, so don't keep pointers into it across frames. Look layers up again instead.
 
