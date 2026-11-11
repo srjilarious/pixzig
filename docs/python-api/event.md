@@ -4,9 +4,7 @@ Module `pixzig.event`. Generated from its docstrings by `tools/gen_py_docs.py`.
 
 Engine events: window, drag-and-drop, gamepad hot-plug and app lifecycle.
 
-Override [`App.on_event`](page:python-api/app#h3-app-on-event) to receive them. Keyboard, mouse and text input
-aren't events here; read those each tick through `app.keyboard`,
-`app.mouse` and action maps, so `pressed` stays a one-tick edge.
+Override [`App.on_event`](page:python-api/app#h3-app-on-event) to receive them. Keyboard, mouse and text input aren't events here; read those each tick through `app.keyboard`, `app.mouse` and action maps, so `pressed` stays a one-tick edge.
 
 ## `Event`
 

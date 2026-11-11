@@ -4,15 +4,9 @@ Module `pixzig.sequence`. Generated from its docstrings by `tools/gen_py_docs.py
 
 Sequences: scripted moments written as generators.
 
-This is the Python take on the engine's sequencer. A sequence is a generator
-that yields steps. Code between yields runs right away, in the tick the
-sequence reaches it, so setting values, playing a sound or spawning
-something costs no time. A yielded step takes as long as it needs, and time
-it doesn't use carries into what comes next, so two 30 ms waits end after
-60 ms, not after whole ticks.
+This is the Python take on the engine's sequencer. A sequence is a generator that yields steps. Code between yields runs right away, in the tick the sequence reaches it, so setting values, playing a sound or spawning something costs no time. A yielded step takes as long as it needs, and time it doesn't use carries into what comes next, so two 30 ms waits end after 60 ms, not after whole ticks.
 
-A bare `yield` waits until the next tick. A generator can `yield` another
-generator to run it as a sub-sequence, or `yield from` it.
+A bare `yield` waits until the next tick. A generator can `yield` another generator to run it as a sub-sequence, or `yield from` it.
 
 **Example:**
 
@@ -69,16 +63,13 @@ Advances the step. Override it.
 |---|---|---|
 | `dt_ms` | `float` | The time to advance, in milliseconds. The first call can get 0, when the step before ended exactly at the end of a tick. |
 
-**Returns:** None while the step needs more time, or the part of `dt_ms` it didn't
-use (0 or more) once it has finished.
+**Returns:** None while the step needs more time, or the part of `dt_ms` it didn't use (0 or more) once it has finished.
 
 ## `SequencePlayer`
 
 Runs any number of sequences at once and drops them when they finish.
 
-Keep one for the game and call [`update`](page:python-api/sequence#h3-sequenceplayer-update) every tick. Code in a sequence may
-play, cancel or clear sequences, including its own. One played that way
-starts on the next [`update`](page:python-api/sequence#h3-sequenceplayer-update); a cancel takes effect at once.
+Keep one for the game and call [`update`](page:python-api/sequence#h3-sequenceplayer-update) every tick. Code in a sequence may play, cancel or clear sequences, including its own. One played that way starts on the next [`update`](page:python-api/sequence#h3-sequenceplayer-update); a cancel takes effect at once.
 
 ### `SequencePlayer.play`
 
@@ -195,8 +186,7 @@ tween_attr(obj, name: str, to: float, ms: float, curve: int = 0) -> Step
 
 A step that eases an attribute from wherever it is when the step starts.
 
-Starting from the current value lets a tween pick up where an earlier or
-cancelled one left off.
+Starting from the current value lets a tween pick up where an earlier or cancelled one left off.
 
 | Argument | Type | Default | Description |
 |---|---|---|---|
@@ -234,8 +224,7 @@ parallel(*gens) -> Step
 
 A step that runs several generators side by side.
 
-It finishes when the last one does. One that finishes early isn't run again
-while the others catch up.
+It finishes when the last one does. One that finishes early isn't run again while the others catch up.
 
 | Argument | Description |
 |---|---|

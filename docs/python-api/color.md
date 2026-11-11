@@ -4,10 +4,7 @@ Module `pixzig.color`. Generated from its docstrings by `tools/gen_py_docs.py`.
 
 Color helpers, like `Color` on the Zig side.
 
-Colors everywhere in pixzig's Python API are `(r, g, b)` or `(r, g, b, a)`
-tuples of 0-255 values; these build and blend them. The module also has
-opaque constants `WHITE`, `BLACK`, `RED`, `GREEN`, `BLUE`, `YELLOW`,
-`CYAN`, `MAGENTA` and `GRAY`, plus `TRANSPARENT`.
+Colors everywhere in pixzig's Python API are `(r, g, b)` or `(r, g, b, a)` tuples of 0-255 values; these build and blend them. The module also has opaque constants `WHITE`, `BLACK`, `RED`, `GREEN`, `BLUE`, `YELLOW`, `CYAN`, `MAGENTA` and `GRAY`, plus `TRANSPARENT`.
 
 **Example:**
 

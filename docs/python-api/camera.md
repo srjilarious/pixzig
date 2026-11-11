@@ -4,8 +4,7 @@ Module `pixzig.camera`. Generated from its docstrings by `tools/gen_py_docs.py`.
 
 A 2D camera for drawing a world larger than the screen.
 
-Create one with [`App.create_camera`](page:python-api/app#h3-app-create-camera) and draw through it with
-`App.render_begin(camera)`.
+Create one with [`App.create_camera`](page:python-api/app#h3-app-create-camera) and draw through it with `App.render_begin(camera)`.
 
 ## `Camera`
 
@@ -62,9 +61,7 @@ set_bounds(l: float, t: float, r: float, b: float) -> None
 
 Keeps the camera from showing anything outside a world rect.
 
-Usually the map's size. The camera stops at the edges instead of showing
-empty space, and centers on the bounds on an axis where the view is bigger
-than they are.
+Usually the map's size. The camera stops at the edges instead of showing empty space, and centers on the bounds on an axis where the view is bigger than they are.
 
 | Argument | Type | Description |
 |---|---|---|
@@ -95,8 +92,7 @@ follow(
 
 Moves the camera toward a target, such as the player, for one tick.
 
-Call it from `update` with that tick's `dt_ms`. Bounds set with
-[`set_bounds`](page:python-api/camera#h3-camera-set-bounds) still apply when drawing.
+Call it from `update` with that tick's `dt_ms`. Bounds set with [`set_bounds`](page:python-api/camera#h3-camera-set-bounds) still apply when drawing.
 
 | Argument | Type | Default | Description |
 |---|---|---|---|

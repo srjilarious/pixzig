@@ -2,10 +2,7 @@
 
 Pixzig for Python: write 2D games against the pixzig engine.
 
-The package talks to a shared-library build of the engine through `ctypes`,
-so it needs no compiler. Subclass [`App`](page:python-api/app#h2-app), override `update` and `render`, and
-call `run()`; the app's members (`keyboard`, `text`, `audio` and so on) and
-its `create_*` methods reach the rest of the engine.
+The package talks to a shared-library build of the engine through `ctypes`, so it needs no compiler. Subclass [`App`](page:python-api/app#h2-app), override `update` and `render`, and call `run()`; the app's members (`keyboard`, `text`, `audio` and so on) and its `create_*` methods reach the rest of the engine.
 
 **Example:**
 
@@ -65,6 +62,4 @@ Subclass of `Exception`.
 
 Raised when a pixzig engine call fails.
 
-The message is the engine's own error, e.g. `"FileNotFound"` or a
-shader's compile log. Using a sprite, actor or other object after it or
-its app was destroyed raises it too.
+The message is the engine's own error, e.g. `"FileNotFound"` or a shader's compile log. Using a sprite, actor or other object after it or its app was destroyed raises it too.

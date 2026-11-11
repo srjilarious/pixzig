@@ -4,9 +4,7 @@ Module `pixzig.render_target`. Generated from its docstrings by `tools/gen_py_do
 
 Offscreen images to draw into, then draw like a texture.
 
-Create one with [`App.create_render_target`](page:python-api/app#h3-app-create-render-target) and send passes into it with
-[`App.set_target`](page:python-api/app#h3-app-set-target). Use one to render a low-resolution game and scale it up,
-to run a shader over the whole frame, or to draw something once and reuse it.
+Create one with [`App.create_render_target`](page:python-api/app#h3-app-create-render-target) and send passes into it with [`App.set_target`](page:python-api/app#h3-app-set-target). Use one to render a low-resolution game and scale it up, to run a shader over the whole frame, or to draw something once and reuse it.
 
 **Example:**
 
@@ -47,8 +45,7 @@ resize(w: int, h: int) -> None
 
 Reallocates the image at a new size, e.g. to follow the window.
 
-What was drawn is discarded and it starts transparent. Call it outside any
-pass that draws into it.
+What was drawn is discarded and it starts transparent. Call it outside any pass that draws into it.
 
 | Argument | Type | Description |
 |---|---|---|
@@ -67,8 +64,7 @@ draw(x: float, y: float, w: float, h: float, tint=(255, 255, 255, 255)) -> None
 
 Draws the image upright into a rect of the current pass.
 
-To draw a target cleared to a transparent color without dark edges, call
-`set_blend(BlendMode.PREMULTIPLIED)` first.
+To draw a target cleared to a transparent color without dark edges, call `set_blend(BlendMode.PREMULTIPLIED)` first.
 
 | Argument | Type | Default | Description |
 |---|---|---|---|

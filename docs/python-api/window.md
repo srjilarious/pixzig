@@ -7,18 +7,14 @@ Window and viewport state, reached as `App.window`.
 There are three coordinate spaces:
 
 * **Window**: OS window coordinates, what `mouse.raw_pos` reports.
-* **Framebuffer**: real pixels drawn, the window size times the display's
-  scale on HiDPI screens.
-* **Logical**: the game resolution passes draw in. It equals the
-  framebuffer size unless `App(..., logical_size=...)` set one.
+* **Framebuffer**: real pixels drawn, the window size times the display's scale on HiDPI screens.
+* **Logical**: the game resolution passes draw in. It equals the framebuffer size unless `App(..., logical_size=...)` set one.
 
 ## `ScalePolicy`
 
 How the logical game resolution maps onto the window.
 
-Pass one to `App(..., scale_policy=...)` alongside a `logical_size`; without
-one it has no effect, since logical space then is the framebuffer. Mirrors
-[`ScalePolicy`](page:python-api/window#h2-scalepolicy) in src/pixzig/window.zig.
+Pass one to `App(..., scale_policy=...)` alongside a `logical_size`; without one it has no effect, since logical space then is the framebuffer. Mirrors [`ScalePolicy`](page:python-api/window#h2-scalepolicy) in src/pixzig/window.zig.
 
 | Name | Value | Description |
 |---|---|---|
@@ -57,8 +53,7 @@ logical_size  # property
 
 The logical game resolution's `(width, height)`.
 
-When [`App`](page:python-api/app#h2-app) wasn't given a [`logical_size`](page:python-api/window#h3-window-logical-size), it follows the window, so read it
-rather than caching it.
+When [`App`](page:python-api/app#h2-app) wasn't given a [`logical_size`](page:python-api/window#h3-window-logical-size), it follows the window, so read it rather than caching it.
 
 ### `Window.scale_factor`
 
@@ -113,8 +108,7 @@ set_vsync(enabled: bool) -> None
 
 Turns vsync on or off, e.g. from a settings menu.
 
-The starting value comes from `App(..., vsync=...)`. There's no getter: the
-driver may refuse, so what was asked for isn't necessarily what's in effect.
+The starting value comes from `App(..., vsync=...)`. There's no getter: the driver may refuse, so what was asked for isn't necessarily what's in effect.
 
 | Argument | Type | Description |
 |---|---|---|

@@ -359,7 +359,43 @@ class Linker:
 
 def prose(text: str) -> str:
     """Docstring prose as Markdown: indented blocks after a blank line become
-    fenced code, and the rest passes through."""
+    fenced code, and wrapped lines are joined back into paragraphs."""
+    return _unwrap(_fence_code(text))
+
+
+# A line that starts its own Markdown block rather than continuing the
+# paragraph above it.
+_BLOCK_START = re.compile(r"^(\s*([*+-]|\d+[.)])\s|\||#|```|!!!|\?\?\?)")
+
+
+def _unwrap(text: str) -> str:
+    """Joins the hard-wrapped lines of each paragraph and list item into one
+    line. The docstrings wrap at ~76 columns, and zkdocs keeps a source line
+    break as a break in the page, so without this the text reflows wrongly.
+    Fenced code, tables, headings and the start of each list item stay put."""
+    out, in_fence = [], False
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            out.append(line)
+            continue
+        joinable = (
+            not in_fence
+            and stripped
+            and out
+            and out[-1].strip()
+            and not out[-1].lstrip().startswith(("```", "|", "#"))
+            and not _BLOCK_START.match(line)
+        )
+        if joinable:
+            out[-1] = out[-1].rstrip() + " " + stripped
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
+def _fence_code(text: str) -> str:
     lines = text.split("\n")
     out, i = [], 0
     while i < len(lines):

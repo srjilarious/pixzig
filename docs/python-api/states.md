@@ -4,13 +4,10 @@ Module `pixzig.states`. Generated from its docstrings by `tools/gen_py_docs.py`.
 
 A stack of game states, like `GameStateMgr` on the Zig side.
 
-A title screen, the game, and a pause menu over the game are each a state.
-States are any objects with `update(dt_ms)` and `render(alpha)`; [`State`](page:python-api/states#h2-state)
-gives empty defaults for those and for the optional hooks:
+A title screen, the game, and a pause menu over the game are each a state. States are any objects with `update(dt_ms)` and `render(alpha)`; [`State`](page:python-api/states#h2-state) gives empty defaults for those and for the optional hooks:
 
 * `activate` and `deactivate`: the state entered or left the stack.
-* `pause` and `resume`: a push covered it, or a pop uncovered it. It stays
-  on the stack in between.
+* `pause` and `resume`: a push covered it, or a pop uncovered it. It stays on the stack in between.
 
 **Example:**
 
@@ -192,8 +189,7 @@ update(dt_ms: float) -> None
 
 Updates the top state, and the states below it it lets update.
 
-Each state below updates for as long as the state above it was pushed with
-`update_below`. Lower states update first.
+Each state below updates for as long as the state above it was pushed with `update_below`. Lower states update first.
 
 | Argument | Type | Description |
 |---|---|---|
@@ -207,8 +203,7 @@ render(alpha: float = 1.0) -> None
 
 Renders the top state, and the states below it it lets render.
 
-Each state below renders for as long as the state above it was pushed with
-`render_below`. Lower states render first, so the top one draws over them.
+Each state below renders for as long as the state above it was pushed with `render_below`. Lower states render first, so the top one draws over them.
 
 | Argument | Type | Default | Description |
 |---|---|---|---|

@@ -4,9 +4,7 @@ Module `pixzig.easing`. Generated from its docstrings by `tools/gen_py_docs.py`.
 
 Easing curves, the engine's own [`Ease`](page:python-api/constants#h2-ease).
 
-`ease(Ease.QUAD_OUT, t)` maps progress `t` from 0 to 1 along a curve, and
-`tween` interpolates between two values with one. [`pixzig.sequence`](page:python-api/sequence) uses
-them to animate over time.
+`ease(Ease.QUAD_OUT, t)` maps progress `t` from 0 to 1 along a curve, and `tween` interpolates between two values with one. [`pixzig.sequence`](page:python-api/sequence) uses them to animate over time.
 
 **Example:**
 
@@ -28,8 +26,7 @@ Maps progress along a curve.
 | `curve` | `int` | An [`Ease`](page:python-api/constants#h2-ease). |
 | `t` | `float` | The progress, clamped to 0-1 first. |
 
-**Returns:** The eased value, 0 at the start and 1 at the end. `BACK_*` and
-`ELASTIC_OUT` overshoot past 0 or 1 on the way.
+**Returns:** The eased value, 0 at the start and 1 at the end. `BACK_*` and `ELASTIC_OUT` overshoot past 0 or 1 on the way.
 
 ## `tween`
 

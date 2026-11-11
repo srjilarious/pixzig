@@ -4,16 +4,9 @@ Module `pixzig.tilemap`. Generated from its docstrings by `tools/gen_py_docs.py`
 
 Tiled maps: drawing them and reading or editing their data.
 
-Load a map with `App.load_tilemap(name, path)`, then create a renderer with
-`App.create_tilemap_renderer(map_name)`; it finds the tileset image named
-in the `.tmx` itself. Besides drawing, [`TileMapRenderer`](page:python-api/tilemap#h2-tilemaprenderer) reads and writes
-tiles, reports per-tile collision flags and properties, converts between
-tile and world coordinates, and walks Tiled object layers.
+Load a map with `App.load_tilemap(name, path)`, then create a renderer with `App.create_tilemap_renderer(map_name)`; it finds the tileset image named in the `.tmx` itself. Besides drawing, [`TileMapRenderer`](page:python-api/tilemap#h2-tilemaprenderer) reads and writes tiles, reports per-tile collision flags and properties, converts between tile and world coordinates, and walks Tiled object layers.
 
-`layer_index` and `group_index` arguments are indices into the map's layer
-and object group lists; look one up by name with `layer_index("name")` or
-`object_group_index("name")`. Tile values are 0-based tileset indices, with
--1 for no tile.
+`layer_index` and `group_index` arguments are indices into the map's layer and object group lists; look one up by name with `layer_index("name")` or `object_group_index("name")`. Tile values are 0-based tileset indices, with -1 for no tile.
 
 **Example:**
 
@@ -35,8 +28,7 @@ Subclass of `IntFlag`.
 
 Collision and behavior flags on a tile, from [`TileMapRenderer.tile_flags`](page:python-api/tilemap#h3-tilemaprenderer-tile-flags).
 
-They come from the `blocks` and `kills` custom properties on tileset tiles
-in Tiled, and match the engine's core tile flags.
+They come from the `blocks` and `kills` custom properties on tileset tiles in Tiled, and match the engine's core tile flags.
 
 | Name | Value | Description |
 |---|---|---|
@@ -68,10 +60,7 @@ One object from a Tiled object layer.
 
 Draws a Tiled map and gives access to its data.
 
-Create one with [`App.create_tilemap_renderer`](page:python-api/app#h3-app-create-tilemap-renderer). It only draws the parts of
-the map the camera can see. Give layers a `z` float property in Tiled to
-draw some behind your sprites and some in front with [`render_below`](page:python-api/tilemap#h3-tilemaprenderer-render-below) and
-[`render_above`](page:python-api/tilemap#h3-tilemaprenderer-render-above).
+Create one with [`App.create_tilemap_renderer`](page:python-api/app#h3-app-create-tilemap-renderer). It only draws the parts of the map the camera can see. Give layers a `z` float property in Tiled to draw some behind your sprites and some in front with [`render_below`](page:python-api/tilemap#h3-tilemaprenderer-render-below) and [`render_above`](page:python-api/tilemap#h3-tilemaprenderer-render-above).
 
 ### `TileMapRenderer.pixel_size`
 
@@ -118,8 +107,7 @@ Draws the layers whose `z` property is below a threshold: the background.
 render_above(camera: Camera, z: float) -> None
 ```
 
-Draws the layers whose `z` property is at or above a threshold: the
-foreground.
+Draws the layers whose `z` property is at or above a threshold: the foreground.
 
 | Argument | Type | Description |
 |---|---|---|
@@ -136,8 +124,7 @@ Reloads the map if its file changed on disk. Call it once per frame.
 
 Only debug engine builds watch files.
 
-**Returns:** True when it reloaded, so the game can re-read [`pixel_size`](page:python-api/tilemap#h3-tilemaprenderer-pixel-size) for camera
-bounds or anything else it took from the map.
+**Returns:** True when it reloaded, so the game can re-read [`pixel_size`](page:python-api/tilemap#h3-tilemaprenderer-pixel-size) for camera bounds or anything else it took from the map.
 
 ### `TileMapRenderer.layer_count`
 

@@ -4,12 +4,7 @@ Module `pixzig.anim`. Generated from its docstrings by `tools/gen_py_docs.py`.
 
 Sprite-sheet animation.
 
-An [`Actor`](page:python-api/anim#h2-actor) owns a [`Sprite`](page:python-api/sprite#h2-sprite) (`actor.sprite`) and plays named states on it,
-like `"walk_left"` or `"idle"`, each state playing a frame sequence. The
-sequences and states live in one library shared by the whole app. Build it
-from a JSON file with [`App.load_anim_file`](page:python-api/app#h3-app-load-anim-file), or in code with
-[`App.create_sequence`](page:python-api/app#h3-app-create-sequence), [`App.add_frame`](page:python-api/app#h3-app-add-frame) and [`App.add_anim_state`](page:python-api/app#h3-app-add-anim-state), then add
-states to each actor.
+An [`Actor`](page:python-api/anim#h2-actor) owns a [`Sprite`](page:python-api/sprite#h2-sprite) (`actor.sprite`) and plays named states on it, like `"walk_left"` or `"idle"`, each state playing a frame sequence. The sequences and states live in one library shared by the whole app. Build it from a JSON file with [`App.load_anim_file`](page:python-api/app#h3-app-load-anim-file), or in code with [`App.create_sequence`](page:python-api/app#h3-app-create-sequence), [`App.add_frame`](page:python-api/app#h3-app-add-frame) and [`App.add_anim_state`](page:python-api/app#h3-app-add-anim-state), then add states to each actor.
 
 **Example:**
 
@@ -69,8 +64,7 @@ set_state(name: str) -> None
 
 Switches to a state and shows its first frame right away.
 
-Switching to the state the actor is already in does nothing, so it's safe
-to call every tick.
+Switching to the state the actor is already in does nothing, so it's safe to call every tick.
 
 | Argument | Type | Description |
 |---|---|---|
@@ -98,8 +92,7 @@ update(dt_ms: float) -> None
 
 Advances the animation, updating the sprite's frame.
 
-A delta longer than the current frame steps through as many frames as it
-covers, so animations keep their pace however time arrives.
+A delta longer than the current frame steps through as many frames as it covers, so animations keep their pace however time arrives.
 
 | Argument | Type | Description |
 |---|---|---|

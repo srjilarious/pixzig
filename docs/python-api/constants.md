@@ -4,27 +4,15 @@ Module `pixzig.constants`. Generated from its docstrings by `tools/gen_py_docs.p
 
 Key, mouse, gamepad, event, easing, blend and text codes.
 
-GENERATED FILE -- do not edit by hand. Regenerate with `zig build
-py-constants`, which reads the enums in `src/pixzig/input/keys.zig`,
-the [`Event`](page:python-api/event#h2-event) kinds in `src/pixzig/platform/event.zig`, and the
-renderer and easing enums listed in
-`tools/gen_py_constants/gen_py_constants.zig`.
+GENERATED FILE -- do not edit by hand. Regenerate with `zig build py-constants`, which reads the enums in `src/pixzig/input/keys.zig`, the [`Event`](page:python-api/event#h2-event) kinds in `src/pixzig/platform/event.zig`, and the renderer and easing enums listed in `tools/gen_py_constants/gen_py_constants.zig`.
 
-The values are pixzig's own dense indices into the engine's enums.
-They are plain ints under the hood, but code should always use these
-names rather than the numbers.
+The values are pixzig's own dense indices into the engine's enums. They are plain ints under the hood, but code should always use these names rather than the numbers.
 
 ## `Key`
 
 A keyboard key, by physical position rather than the printed letter.
 
-`Key.W` is where W sits on a US QWERTY keyboard, whatever layout is
-active, so WASD controls stay under the same fingers on AZERTY or
-Dvorak. Read typed text with [`Keyboard.text`](page:python-api/input#h3-keyboard-text) instead. Letters are
-`A` to `Z`, digits `ZERO` to `NINE`, and the rest follow the engine's
-[`Key`](page:python-api/constants#h2-key) names uppercased: `SPACE`, `ESCAPE`, `ENTER`, `LEFT`,
-`LEFT_SHIFT`, `F1`, `KP_ENTER` and so on. `BACK` is Android's back
-button.
+`Key.W` is where W sits on a US QWERTY keyboard, whatever layout is active, so WASD controls stay under the same fingers on AZERTY or Dvorak. Read typed text with [`Keyboard.text`](page:python-api/input#h3-keyboard-text) instead. Letters are `A` to `Z`, digits `ZERO` to `NINE`, and the rest follow the engine's [`Key`](page:python-api/constants#h2-key) names uppercased: `SPACE`, `ESCAPE`, `ENTER`, `LEFT`, `LEFT_SHIFT`, `F1`, `KP_ENTER` and so on. `BACK` is Android's back button.
 
 Members:
 
@@ -140,8 +128,7 @@ A kind of input device, from [`App.last_device`](page:python-api/app#h3-app-last
 
 An easing curve, for [`pixzig.easing`](page:python-api/easing) and [`pixzig.sequence`](page:python-api/sequence).
 
-`_IN` curves start slow, `_OUT` curves end slow and `_IN_OUT` curves do
-both. `BACK_*` and `ELASTIC_OUT` overshoot before settling.
+`_IN` curves start slow, `_OUT` curves end slow and `_IN_OUT` curves do both. `BACK_*` and `ELASTIC_OUT` overshoot before settling.
 
 | Name | Value | Description |
 |---|---|---|
@@ -183,8 +170,7 @@ Which point of the text a draw's x names, for [`Text.draw`](page:python-api/text
 
 ## `TargetFilter`
 
-How a render target is sampled when drawn scaled, for
-[`App.create_render_target`](page:python-api/app#h3-app-create-render-target).
+How a render target is sampled when drawn scaled, for [`App.create_render_target`](page:python-api/app#h3-app-create-render-target).
 
 | Name | Value | Description |
 |---|---|---|

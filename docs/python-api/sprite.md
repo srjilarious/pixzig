@@ -2,11 +2,9 @@
 
 Module `pixzig.sprite`. Generated from its docstrings by `tools/gen_py_docs.py`.
 
-Sprites: a texture region drawn at a position, with an origin, scale and
-color options.
+Sprites: a texture region drawn at a position, with an origin, scale and color options.
 
-Create one with `App.load_sprite(texture_name)`. An actor's sprite is
-`actor.sprite`.
+Create one with `App.load_sprite(texture_name)`. An actor's sprite is `actor.sprite`.
 
 ## `Rotate`
 
@@ -14,8 +12,7 @@ Subclass of `IntEnum`.
 
 A quarter-turn rotation or flip applied when a sprite is drawn.
 
-The sprite's rect stays the same, so quarter turns are meant for square
-sprites. Matches the engine's [`Rotate`](page:python-api/sprite#h2-rotate) enum.
+The sprite's rect stays the same, so quarter turns are meant for square sprites. Matches the engine's [`Rotate`](page:python-api/sprite#h2-rotate) enum.
 
 | Name | Value | Description |
 |---|---|---|
@@ -32,8 +29,7 @@ Subclass of `IntEnum`.
 
 A flip for an animation frame or state. Matches the engine's [`Flip`](page:python-api/sprite#h2-flip) enum.
 
-A frame's flip and its state's flip combine, and two flips on the same axis
-cancel out.
+A frame's flip and its state's flip combine, and two flips on the same axis cancel out.
 
 | Name | Value | Description |
 |---|---|---|
@@ -46,8 +42,7 @@ cancel out.
 
 A texture region drawn at a position. Create one with [`App.load_sprite`](page:python-api/app#h3-app-load-sprite).
 
-Positions are floats, so slow movement accumulates smoothly, but the sprite
-snaps to a whole pixel when drawn, so it never comes out blurry.
+Positions are floats, so slow movement accumulates smoothly, but the sprite snaps to a whole pixel when drawn, so it never comes out blurry.
 
 ### `Sprite.set_pos`
 
@@ -160,8 +155,7 @@ set_fill(color) -> None
 
 Draws the sprite as a solid-color silhouette, keeping its shape.
 
-Use it for a hit flash, a shadow or a selection highlight. It takes
-precedence over the tint.
+Use it for a hit flash, a shadow or a selection highlight. It takes precedence over the tint.
 
 | Argument | Description |
 |---|---|
@@ -223,5 +217,4 @@ destroy() -> None
 
 Frees the sprite now instead of when the app shuts down.
 
-An actor's sprite is freed with its actor, so this does nothing for one.
-Calling it twice does nothing. Using the sprite afterwards raises.
+An actor's sprite is freed with its actor, so this does nothing for one. Calling it twice does nothing. Using the sprite afterwards raises.

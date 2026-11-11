@@ -4,8 +4,7 @@ Module `pixzig.shapes`. Generated from its docstrings by `tools/gen_py_docs.py`.
 
 Rectangle drawing, reached as `App.shapes`.
 
-Colors are `(r, g, b)` or `(r, g, b, a)` tuples of 0-255 values. Draw
-inside a pass ([`App.render_begin`](page:python-api/app#h3-app-render-begin) ... [`App.render_end`](page:python-api/app#h3-app-render-end)).
+Colors are `(r, g, b)` or `(r, g, b, a)` tuples of 0-255 values. Draw inside a pass ([`App.render_begin`](page:python-api/app#h3-app-render-begin) ... [`App.render_end`](page:python-api/app#h3-app-render-end)).
 
 ## `Shapes`
 
@@ -52,8 +51,7 @@ enclosing_rect(x, y, w, h, color, line_width: int = 1) -> None
 
 Outlines a rect, the line drawn outside its bounds.
 
-The rect itself stays fully visible, so use it to frame something without
-covering its edges.
+The rect itself stays fully visible, so use it to frame something without covering its edges.
 
 | Argument | Type | Default | Description |
 |---|---|---|---|

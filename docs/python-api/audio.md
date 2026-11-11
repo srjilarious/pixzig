@@ -4,14 +4,9 @@ Module `pixzig.audio`. Generated from its docstrings by `tools/gen_py_docs.py`.
 
 Sound effects, music and generated audio, reached as `App.audio`.
 
-Load a sound or music track once under a name, then play it by that name.
-Playing a sound whose voices are all busy restarts the one that has played
-longest, so `play` always returns a voice. A voice handle goes stale once
-its voice is reused or a stream ends; calls with a stale one do nothing.
+Load a sound or music track once under a name, then play it by that name. Playing a sound whose voices are all busy restarts the one that has played longest, so `play` always returns a voice. A voice handle goes stale once its voice is reused or a stream ends; calls with a stale one do nothing.
 
-Relative paths resolve against the app's asset root, the main script's
-directory unless `App(..., asset_root=...)` says otherwise. See
-[`pixzig.paths`](page:python-api/paths).
+Relative paths resolve against the app's asset root, the main script's directory unless `App(..., asset_root=...)` says otherwise. See [`pixzig.paths`](page:python-api/paths).
 
 **Example:**
 
@@ -41,8 +36,7 @@ Mirrors `audio.Bus` in src/pixzig/audio.zig.
 
 Plays sounds, music and generated audio. Reached as `App.audio`.
 
-Pixzig reads WAV, FLAC, MP3 and Ogg Vorbis. Use Ogg or FLAC for looping
-music: MP3 leaves a short gap each time it wraps.
+Pixzig reads WAV, FLAC, MP3 and Ogg Vorbis. Use Ogg or FLAC for looping music: MP3 leaves a short gap each time it wraps.
 
 ### `Audio.load`
 
@@ -76,8 +70,7 @@ play(
 
 Plays a loaded sound.
 
-Playing a sound that's already playing starts another voice, so rapid fire
-overlaps instead of cutting itself off.
+Playing a sound that's already playing starts another voice, so rapid fire overlaps instead of cutting itself off.
 
 | Argument | Type | Default | Description |
 |---|---|---|---|
@@ -101,8 +94,7 @@ stop(voice: _n.PzVoice, fade_ms: int = 0) -> None
 
 Stops one voice or stream.
 
-A voice fading out still counts as playing until the fade ends, and asking
-it to fade again meanwhile is ignored.
+A voice fading out still counts as playing until the fade ends, and asking it to fade again meanwhile is ignored.
 
 | Argument | Type | Default | Description |
 |---|---|---|---|
@@ -205,8 +197,7 @@ play_music(name: str, loop: bool = True, volume: float = 1.0, fade_ms: int = 0) 
 
 Makes a track the current music. One track plays at a time.
 
-Asking for the track that's already playing doesn't restart it, so it's
-safe to call every time a level loads.
+Asking for the track that's already playing doesn't restart it, so it's safe to call every time a level loads.
 
 | Argument | Type | Default | Description |
 |---|---|---|---|
@@ -326,8 +317,7 @@ play_stream(
 
 Plays audio that a Python function generates.
 
-`fill` runs on the audio thread and holds the GIL while it does, so keep it
-short: Python is slow enough here that complex synthesis will crackle.
+`fill` runs on the audio thread and holds the GIL while it does, so keep it short: Python is slow enough here that complex synthesis will crackle.
 
 | Argument | Type | Default | Description |
 |---|---|---|---|

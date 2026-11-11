@@ -4,9 +4,7 @@ Module `pixzig.collision`. Generated from its docstrings by `tools/gen_py_docs.p
 
 Collision tests between simple shapes, the engine's own [`pixzig.collision`](page:python-api/collision).
 
-Use these to decide whether two things really touch and how to push them
-apart. Coordinates grow downward like the rest of pixzig, and shapes that
-only touch don't collide. Shapes are plain tuples:
+Use these to decide whether two things really touch and how to push them apart. Coordinates grow downward like the rest of pixzig, and shapes that only touch don't collide. Shapes are plain tuples:
 
 * a circle is `(x, y, radius)`, with `x` and `y` its center,
 * a rect is `(x, y, w, h)`, axis-aligned,
@@ -45,8 +43,7 @@ Moving the first shape by it separates them.
 
 Where a segment first enters a shape.
 
-A segment that starts inside the shape hits at `t = 0` with a `(0, 0)`
-normal. With several targets, the smallest `t` is the one hit first.
+A segment that starts inside the shape hits at `t = 0` with a `(0, 0)` normal. With several targets, the smallest `t` is the one hit first.
 
 | Attribute | Description |
 |---|---|
@@ -97,8 +94,7 @@ Tests two rects.
 | `a` | The first rect, `(x, y, w, h)`. |
 | `b` | The second rect. |
 
-**Returns:** An [`Overlap`](page:python-api/collision#h2-overlap) along the axis they overlap least on, pointing from `b`
-toward `a`, or None.
+**Returns:** An [`Overlap`](page:python-api/collision#h2-overlap) along the axis they overlap least on, pointing from `b` toward `a`, or None.
 
 ## `segment_circle`
 
@@ -108,8 +104,7 @@ segment_circle(segment, circle)
 
 Finds where a segment first enters a circle.
 
-Test a fast object's path over one tick rather than where it ends up, so it
-can't skip over a thin target.
+Test a fast object's path over one tick rather than where it ends up, so it can't skip over a thin target.
 
 | Argument | Description |
 |---|---|

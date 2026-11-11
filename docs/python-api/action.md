@@ -4,14 +4,9 @@ Module `pixzig.action`. Generated from its docstrings by `tools/gen_py_docs.py`.
 
 Action maps: named actions and axes bound to keys, buttons and sticks.
 
-Game code asks "is the player jumping?" instead of "is Space down?". One
-action can have a key and a gamepad button at once, and players can rebind
-them. Create a map with [`App.create_action_map`](page:python-api/app#h3-app-create-action-map).
+Game code asks "is the player jumping?" instead of "is Space down?". One action can have a key and a gamepad button at once, and players can rebind them. Create a map with [`App.create_action_map`](page:python-api/app#h3-app-create-action-map).
 
-Several bindings on one action are OR'ed together; several on one axis add
-up, so a keyboard and a stick can both drive `move_x`. Action and axis names
-are any strings, assigned to the engine's slots the first time a `bind_*`
-call names them. There are 64 action slots and 32 axis slots.
+Several bindings on one action are OR'ed together; several on one axis add up, so a keyboard and a stick can both drive `move_x`. Action and axis names are any strings, assigned to the engine's slots the first time a `bind_*` call names them. There are 64 action slots and 32 axis slots.
 
 **Example:**
 
@@ -32,8 +27,7 @@ dx = actions.axis("move_x")
 
 Named actions and axes bound to physical inputs.
 
-Create one with [`App.create_action_map`](page:python-api/app#h3-app-create-action-map), bind it once, then call [`update`](page:python-api/action#h3-actionmap-update)
-at the top of every [`update`](page:python-api/action#h3-actionmap-update) tick before querying it.
+Create one with [`App.create_action_map`](page:python-api/app#h3-app-create-action-map), bind it once, then call [`update`](page:python-api/action#h3-actionmap-update) at the top of every [`update`](page:python-api/action#h3-actionmap-update) tick before querying it.
 
 ### `ActionMap.bind_key`
 

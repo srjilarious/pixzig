@@ -4,10 +4,7 @@ Module `pixzig.text`. Generated from its docstrings by `tools/gen_py_docs.py`.
 
 TrueType text, reached as `App.text`.
 
-A draw takes the style as keyword arguments, like the engine's
-`drawText(text, pos, TextStyle)`. `y` is the top of the text's line box, and
-`x` is its left edge, middle or right edge by `align`. Coordinates are in
-the current pass's space and may be fractional.
+A draw takes the style as keyword arguments, like the engine's `drawText(text, pos, TextStyle)`. `y` is the top of the text's line box, and `x` is its left edge, middle or right edge by `align`. Coordinates are in the current pass's space and may be fractional.
 
 **Example:**
 
@@ -22,8 +19,7 @@ app.text.draw("PAUSED", 160, 100, scale=2, align=TextAlign.CENTER, shadow=(0, 0,
 
 Loads fonts and draws text. Reached as `App.text`.
 
-The engine's embedded default font (Karla, 20 pixels) is ready without
-loading anything.
+The engine's embedded default font (Karla, 20 pixels) is ready without loading anything.
 
 ### `Text.load_font`
 
@@ -125,9 +121,7 @@ measure(text: str, scale: float = 1.0, font: str = None)
 
 Measures a string without drawing it.
 
-The height is the font's line box (ascent plus descent), so every string in
-one font measures the same height and centering a measured string centers
-it as drawn.
+The height is the font's line box (ascent plus descent), so every string in one font measures the same height and centering a measured string centers it as drawn.
 
 | Argument | Type | Default | Description |
 |---|---|---|---|
@@ -153,5 +147,4 @@ A font's line spacing at scale 1, for stacking rows of text.
 |---|---|---|---|
 | `font` | `str` | `None` | A font name, or None for the default font. |
 
-**Returns:** The spacing in pixels (ascent, descent and line gap), or None when
-there's no such font.
+**Returns:** The spacing in pixels (ascent, descent and line gap), or None when there's no such font.

@@ -2,12 +2,9 @@
 
 Module `pixzig.save`. Generated from its docstrings by `tools/gen_py_docs.py`.
 
-Saves and settings, like [`pixzig.save`](page:python-api/save) on the Zig side, with JSON in place
-of ZON.
+Saves and settings, like [`pixzig.save`](page:python-api/save) on the Zig side, with JSON in place of ZON.
 
-The game's own folder may be read-only once installed, so saves belong in
-the per-user directory `pref_path` finds. Writes go through a temporary
-file and a rename, so a crash mid-save leaves the previous save intact.
+The game's own folder may be read-only once installed, so saves belong in the per-user directory `pref_path` finds. Writes go through a temporary file and a rename, so a crash mid-save leaves the previous save intact.
 
 **Example:**
 
@@ -28,17 +25,14 @@ pref_path(org: str, app: str) -> str
 
 The per-user directory for the game's saves and settings.
 
-It's created if needed. Pick the names once and keep them, or players lose
-their saves.
+It's created if needed. Pick the names once and keep them, or players lose their saves.
 
 | Argument | Type | Description |
 |---|---|---|
 | `org` | `str` | Your studio or name. |
 | `app` | `str` | The game's name. |
 
-**Returns:** The directory, ending in a path separator:
-`~/.local/share/<org>/<app>/` on Linux, `%APPDATA%\<org>\<app>\` on
-Windows, `~/Library/Application Support/<org>/<app>/` on macOS.
+**Returns:** The directory, ending in a path separator: `~/.local/share/<org>/<app>/` on Linux, `%APPDATA%\<org>\<app>\` on Windows, `~/Library/Application Support/<org>/<app>/` on macOS.
 
 **Raises:**
 
@@ -52,8 +46,7 @@ write_file_atomic(path: str, data) -> None
 
 Writes a file safely, creating parent directories.
 
-The data goes to `<path>.tmp` first and is then renamed over `path`, so a
-crash partway through leaves the old file instead of half a new one.
+The data goes to `<path>.tmp` first and is then renamed over `path`, so a crash partway through leaves the old file instead of half a new one.
 
 | Argument | Type | Description |
 |---|---|---|

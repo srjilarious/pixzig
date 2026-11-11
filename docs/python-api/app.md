@@ -4,9 +4,7 @@ Module `pixzig.app`. Generated from its docstrings by `tools/gen_py_docs.py`.
 
 The base class for a pixzig game written in Python.
 
-Subclass [`App`](page:python-api/app#h2-app), override `update` and `render`, and call `run()`. The
-fixed-timestep loop mirrors pixzig's own `AppRunner.gameLoopCore`
-(src/pixzig/pixzig.zig), just owned by Python instead of Zig.
+Subclass [`App`](page:python-api/app#h2-app), override `update` and `render`, and call `run()`. The fixed-timestep loop mirrors pixzig's own `AppRunner.gameLoopCore` (src/pixzig/pixzig.zig), just owned by Python instead of Zig.
 
 ## `App`
 
@@ -29,9 +27,7 @@ App(
 
 A pixzig game. Subclass it, override [`update`](page:python-api/app#h3-app-update) and [`render`](page:python-api/app#h3-app-render), and call [`run`](page:python-api/app#h3-app-run).
 
-Creating an [`App`](page:python-api/app#h2-app) opens the window and starts the engine, so a subclass can
-load assets in its own `__init__` right after calling `super().__init__`.
-The window options mirror `EngineInitOptions` on the Zig side.
+Creating an [`App`](page:python-api/app#h2-app) opens the window and starts the engine, so a subclass can load assets in its own `__init__` right after calling `super().__init__`. The window options mirror `EngineInitOptions` on the Zig side.
 
 | Argument | Type | Default | Description |
 |---|---|---|---|
@@ -88,9 +84,7 @@ asset_root: str  # property
 
 The directory relative asset paths resolve against.
 
-Defaults to the main script's directory. Assign it to point somewhere else,
-such as a packaged install or a mod directory. It applies to every later
-load, including through `app.audio` and `app.text`.
+Defaults to the main script's directory. Assign it to point somewhere else, such as a packaged install or a mod directory. It applies to every later load, including through `app.audio` and `app.text`.
 
 ### `App.gamepad`
 
@@ -114,8 +108,7 @@ last_device: int  # property
 
 The input device the player used last, an [`InputDevice`](page:python-api/constants#h2-inputdevice).
 
-Use it to word prompts to match ("Press A" or "Press Space") or to hide
-touch hints.
+Use it to word prompts to match ("Press A" or "Press Space") or to hide touch hints.
 
 ### `App.load_texture`
 
@@ -200,9 +193,7 @@ create_tilemap_renderer(map_name: str) -> TileMapRenderer
 
 Builds a renderer for a map loaded with [`load_tilemap`](page:python-api/app#h3-app-load-tilemap).
 
-The tileset texture comes from the `<image source>` in the `.tmx`, so there
-is nothing else to pass in. A texture already loaded under that image's base
-name (`tiles` for `art/tiles.png`) is reused.
+The tileset texture comes from the `<image source>` in the `.tmx`, so there is nothing else to pass in. A texture already loaded under that image's base name (`tiles` for `art/tiles.png`) is reused.
 
 | Argument | Type | Description |
 |---|---|---|
@@ -222,9 +213,7 @@ load_manifest(path: str) -> AssetManifest
 
 Opens an asset manifest JSON file.
 
-Its `boot` group loads right away. The manifest file is resolved against
-[`asset_root`](page:python-api/app#h3-app-asset-root); the asset paths inside it are resolved by the engine, against
-the manifest's own `root`.
+Its `boot` group loads right away. The manifest file is resolved against [`asset_root`](page:python-api/app#h3-app-asset-root); the asset paths inside it are resolved by the engine, against the manifest's own `root`.
 
 | Argument | Type | Description |
 |---|---|---|
@@ -245,8 +234,7 @@ load_anim_file(path: str) -> None
 
 Loads a JSON file of frame sequences and actor states.
 
-They go into the app's shared animation library, for [`Actor.add_state`](page:python-api/anim#h3-actor-add-state). The
-textures the frames name must already be loaded.
+They go into the app's shared animation library, for [`Actor.add_state`](page:python-api/anim#h3-actor-add-state). The textures the frames name must already be loaded.
 
 | Argument | Type | Description |
 |---|---|---|
@@ -414,8 +402,7 @@ Converts a point from window coordinates to world coordinates.
 | `x` | `float` | The point's x, in window coordinates. |
 | `y` | `float` | The point's y. |
 
-**Returns:** The world `(x, y)`, accounting for the camera's position, zoom and
-rotation, or None for a point in a letterbox bar.
+**Returns:** The world `(x, y)`, accounting for the camera's position, zoom and rotation, or None for a point in a letterbox bar.
 
 ### `App.world_to_screen`
 
@@ -441,8 +428,7 @@ render_begin(camera: Camera = None) -> None
 
 Begins a render pass. Every draw goes between this and [`render_end`](page:python-api/app#h3-app-render-end).
 
-There is no pass around [`render`](page:python-api/app#h3-app-render) by default, so it must open its own. Run as
-many passes as you like in one frame, e.g. a world pass then a HUD pass.
+There is no pass around [`render`](page:python-api/app#h3-app-render) by default, so it must open its own. Run as many passes as you like in one frame, e.g. a world pass then a HUD pass.
 
 | Argument | Type | Default | Description |
 |---|---|---|---|
@@ -471,9 +457,7 @@ render_begin_screen() -> None
 
 Begins a pass in framebuffer pixels, ignoring the logical size.
 
-Inside a render target it uses the target's own pixels. Useful for debug
-overlays and for drawing a render target over the whole window. See
-`window.framebuffer_size`.
+Inside a render target it uses the target's own pixels. Useful for debug overlays and for drawing a render target over the whole window. See `window.framebuffer_size`.
 
 ### `App.render_end`
 
@@ -509,8 +493,7 @@ fade(color, amount: float) -> None
 
 Covers the logical screen with a color.
 
-It's a pass of its own, so call it between passes, usually last in
-[`render`](page:python-api/app#h3-app-render): a fade to black, a hit flash, a dimmed pause screen.
+It's a pass of its own, so call it between passes, usually last in [`render`](page:python-api/app#h3-app-render): a fade to black, a hit flash, a dimmed pause screen.
 
 | Argument | Type | Description |
 |---|---|---|
@@ -545,8 +528,7 @@ set_target(target) -> None
 
 Sends later passes into a render target, or back to the screen.
 
-Call it between passes. Inside a target, [`render_begin`](page:python-api/app#h3-app-render-begin) and
-`render_begin(camera)` stretch the logical screen over the whole target.
+Call it between passes. Inside a target, [`render_begin`](page:python-api/app#h3-app-render-begin) and `render_begin(camera)` stretch the logical screen over the whole target.
 
 | Argument | Description |
 |---|---|
@@ -560,10 +542,7 @@ create_shader(name: str, fragment_source: str) -> None
 
 Compiles a custom fragment shader for [`set_shader`](page:python-api/app#h3-app-set-shader).
 
-The shader is GLSL ES 3.00. It gets `in vec2 Texcoord`, `in vec4 Col` (the
-draw's color), `flat in float Mode` and `uniform sampler2D tex`, and writes
-`out vec4 fragColor`. `texture(tex, Texcoord) * Col` is the plain sprite
-result to build on. Compiling a name again replaces it.
+The shader is GLSL ES 3.00. It gets `in vec2 Texcoord`, `in vec4 Col` (the draw's color), `flat in float Mode` and `uniform sampler2D tex`, and writes `out vec4 fragColor`. `texture(tex, Texcoord) * Col` is the plain sprite result to build on. Compiling a name again replaces it.
 
 | Argument | Type | Description |
 |---|---|---|
@@ -619,8 +598,7 @@ cancel_close() -> None
 
 Keeps the window open after a close request.
 
-Call it from [`on_event`](page:python-api/app#h3-app-on-event) while handling `EventKind.CLOSE_REQUESTED`, e.g. to
-ask about unsaved changes first.
+Call it from [`on_event`](page:python-api/app#h3-app-on-event) while handling `EventKind.CLOSE_REQUESTED`, e.g. to ask about unsaved changes first.
 
 ### `App.update`
 
@@ -644,8 +622,7 @@ render(alpha: float) -> None
 
 Called once per displayed frame to draw it. Override it.
 
-The screen is already cleared to `clear_color`. A `render(self)` without
-`alpha` still works.
+The screen is already cleared to `clear_color`. A `render(self)` without `alpha` still works.
 
 | Argument | Type | Description |
 |---|---|---|
@@ -659,8 +636,7 @@ on_event(event: Event) -> None
 
 Called for window, drag-and-drop, gamepad and lifecycle events. Override it.
 
-Events arrive once per frame, before the frame's updates. A close request
-closes the window afterwards unless this calls [`cancel_close`](page:python-api/app#h3-app-cancel-close).
+Events arrive once per frame, before the frame's updates. A close request closes the window afterwards unless this calls [`cancel_close`](page:python-api/app#h3-app-cancel-close).
 
 | Argument | Type | Description |
 |---|---|---|
@@ -684,9 +660,7 @@ close() -> None
 
 Shuts the engine down and frees every native object this app handed out.
 
-Calling it again, or after [`run`](page:python-api/app#h3-app-run) has returned, does nothing. [`run`](page:python-api/app#h3-app-run),
-`with App(...) as app:`, garbage collection and interpreter exit all call it
-for you. Sprites, actors and other wrappers raise if used afterwards.
+Calling it again, or after [`run`](page:python-api/app#h3-app-run) has returned, does nothing. [`run`](page:python-api/app#h3-app-run), `with App(...) as app:`, garbage collection and interpreter exit all call it for you. Sprites, actors and other wrappers raise if used afterwards.
 
 ### `App.run`
 
@@ -696,9 +670,7 @@ run() -> None
 
 Runs the game loop until [`quit`](page:python-api/app#h3-app-quit) is called or the window closes.
 
-Each frame pumps events to [`on_event`](page:python-api/app#h3-app-on-event), runs [`update`](page:python-api/app#h3-app-update) in fixed steps to catch
-up with real time, clears the screen and calls [`render`](page:python-api/app#h3-app-render). The engine is shut
-down when it returns.
+Each frame pumps events to [`on_event`](page:python-api/app#h3-app-on-event), runs [`update`](page:python-api/app#h3-app-update) in fixed steps to catch up with real time, clears the screen and calls [`render`](page:python-api/app#h3-app-render). The engine is shut down when it returns.
 
 **Raises:**
 
