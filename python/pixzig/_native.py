@@ -10,7 +10,12 @@ import sys
 
 
 class Error(Exception):
-    """Raised when a pixzig engine call fails."""
+    """Raised when a pixzig engine call fails.
+
+    The message is the engine's own error, e.g. `"FileNotFound"` or a
+    shader's compile log. Using a sprite, actor or other object after it or
+    its app was destroyed raises it too.
+    """
 
 
 def _library_filename() -> str:

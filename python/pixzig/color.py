@@ -1,12 +1,16 @@
-"""Color helpers. Colors everywhere in pixzig's Python API are (r, g, b) or
-(r, g, b, a) tuples of 0-255 components; these build and blend them, like
-`Color` on the Zig side.
+"""Color helpers, like `Color` on the Zig side.
 
-    from pixzig import color
+Colors everywhere in pixzig's Python API are `(r, g, b)` or `(r, g, b, a)`
+tuples of 0-255 values; these build and blend them. The module also has
+opaque constants `WHITE`, `BLACK`, `RED`, `GREEN`, `BLUE`, `YELLOW`,
+`CYAN`, `MAGENTA` and `GRAY`, plus `TRANSPARENT`.
 
-    sky = color.hex("#3a6ea5")
-    dim = color.with_alpha(color.BLACK, 128)
-    mid = color.lerp(color.RED, color.YELLOW, 0.5)
+Example:
+        from pixzig import color
+
+        sky = color.hex("#3a6ea5")
+        dim = color.with_alpha(color.BLACK, 128)
+        mid = color.lerp(color.RED, color.YELLOW, 0.5)
 """
 
 WHITE = (255, 255, 255, 255)
@@ -29,13 +33,33 @@ def _rgba(c):
 
 
 def rgb(r: int, g: int, b: int, a: int = 255):
-    """An (r, g, b, a) color from 0-255 components."""
+    """Builds a color from 0-255 values.
+
+    Args:
+        r: Red.
+        g: Green.
+        b: Blue.
+        a: Alpha; opaque by default.
+
+    Returns:
+        The `(r, g, b, a)` tuple.
+    """
     return (int(r), int(g), int(b), int(a))
 
 
 def hex(code):  # noqa: A001 - mirrors Color.hex on the Zig side
-    """A color from a hex string ("#ff8800", "ff8800", "#ff880080" with
-    alpha, or the short "#f80") or an int (0xff8800, opaque)."""
+    """Builds a color from a hex code.
+
+    Args:
+        code: A string (`"#ff8800"`, `"ff8800"`, `"#ff880080"` with alpha, or
+            the short `"#f80"`) or an int (`0xff8800`, opaque).
+
+    Returns:
+        The `(r, g, b, a)` tuple.
+
+    Raises:
+        ValueError: The string isn't a hex color.
+    """
     if isinstance(code, int):
         return ((code >> 16) & 0xFF, (code >> 8) & 0xFF, code & 0xFF, 255)
     digits = code[1:] if code.startswith("#") else code
@@ -49,14 +73,30 @@ def hex(code):  # noqa: A001 - mirrors Color.hex on the Zig side
 
 
 def with_alpha(c, a: int):
-    """`c` with its alpha replaced by `a` (0-255)."""
+    """A color with its alpha replaced.
+
+    Args:
+        c: The color.
+        a: The new alpha, 0-255.
+
+    Returns:
+        The `(r, g, b, a)` tuple.
+    """
     r, g, b, _ = _rgba(c)
     return (r, g, b, int(a))
 
 
 def lerp(a, b, t: float):
-    """The color `t` of the way from `a` to `b` (0 is `a`, 1 is `b`),
-    alpha included. `t` is clamped to [0, 1]."""
+    """Blends between two colors, alpha included.
+
+    Args:
+        a: The color at `t = 0`.
+        b: The color at `t = 1`.
+        t: How far from `a` to `b`, clamped to 0-1.
+
+    Returns:
+        The `(r, g, b, a)` tuple.
+    """
     t = min(max(float(t), 0.0), 1.0)
     ca, cb = _rgba(a), _rgba(b)
     return tuple(int(round(x + (y - x) * t)) for x, y in zip(ca, cb))

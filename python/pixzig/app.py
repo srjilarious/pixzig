@@ -1,7 +1,7 @@
-"""App: the base class for a pixzig game written in Python.
+"""The base class for a pixzig game written in Python.
 
-Subclass it, override `update` and `render`, and call `run()`. The fixed-
-timestep loop below mirrors pixzig's own `AppRunner.gameLoopCore`
+Subclass `App`, override `update` and `render`, and call `run()`. The
+fixed-timestep loop mirrors pixzig's own `AppRunner.gameLoopCore`
 (src/pixzig/pixzig.zig), just owned by Python instead of Zig.
 """
 import atexit
@@ -57,31 +57,60 @@ def _clear_rgba(color):
 
 
 class App:
-    """A pixzig game. Subclass, override `update`/`render`, call `run()`.
+    """A pixzig game. Subclass it, override `update` and `render`, and call `run()`.
 
-    The window arguments mirror `EngineInitOptions` on the Zig side:
+    Creating an `App` opens the window and starts the engine, so a subclass can
+    load assets in its own `__init__` right after calling `super().__init__`.
+    The window options mirror `EngineInitOptions` on the Zig side.
 
-    * `width`/`height` -- the OS window, in window coordinates.
-    * `logical_size` -- a fixed (width, height) game resolution that draw
-      calls address, scaled to the window by `scale_policy`. Leave it None
-      and logical space tracks the framebuffer, so one unit is one pixel.
-    * `scale_policy` -- one of `ScalePolicy`; only meaningful together with
-      `logical_size`. Pixel art usually wants `ScalePolicy.INTEGER_FIT`,
-      which scales by whole multiples so pixels stay square and crisp.
-    * `scale_factor` -- the constant scale for `ScalePolicy.FIXED`.
-    * `asset_root` -- the directory relative asset paths resolve against.
-      Defaults to the main script's directory; see `pixzig.paths`.
+    Args:
+        title: The window title.
+        width: The window width, in window coordinates.
+        height: The window height, in window coordinates.
+        update_hz: How many times a second `update` runs.
+        max_lag_ms: The most time one frame catches up on. Any backlog past it
+            (a hitch, a debugger pause) is dropped, so the game slows down
+            briefly instead of running hundreds of updates at once.
+        logical_size: A fixed `(width, height)` game resolution that draw calls
+            address, scaled to the window by `scale_policy`. None makes logical
+            space track the framebuffer, one unit per pixel.
+        scale_policy: How `logical_size` scales to the window, a `ScalePolicy`.
+            Pixel art usually wants `ScalePolicy.INTEGER_FIT`, which scales by
+            whole multiples so pixels stay square and crisp.
+        scale_factor: The constant scale for `ScalePolicy.FIXED`.
+        fullscreen: Start fullscreen.
+        resizable: Let the user resize the window.
+        vsync: Wait for the display's refresh before showing each frame.
+        asset_root: The directory relative asset paths resolve against. None
+            uses the main script's directory; see `pixzig.paths`.
 
-    A 320x240 game upscaled to a 960x720 window, with sound:
+    Attributes:
+        clear_color: What `run()` clears the screen to before each `render`, an
+            `(r, g, b)` or `(r, g, b, a)` tuple of 0-255 values.
+        keyboard: The `Keyboard`.
+        mouse: The `Mouse`.
+        touch: The `Touch` screen.
+        shapes: `Shapes`, for rectangles.
+        text: `Text`, for fonts and drawing text.
+        audio: `Audio`, for sounds and music.
+        window: The `Window`.
 
-        class MyGame(App):
-            def __init__(self):
-                super().__init__(
-                    "My Game", 960, 720,
-                    logical_size=(320, 240),
-                    scale_policy=ScalePolicy.INTEGER_FIT,
-                )
-                self.clear_color = (24, 24, 32)
+    Raises:
+        pixzig.Error: The engine couldn't start, e.g. no OpenGL context.
+
+    Example:
+        A 320x240 game upscaled to a 960x720 window:
+
+            class MyGame(App):
+                def __init__(self):
+                    super().__init__(
+                        "My Game", 960, 720,
+                        logical_size=(320, 240),
+                        scale_policy=ScalePolicy.INTEGER_FIT,
+                    )
+                    self.clear_color = (24, 24, 32)
+
+            MyGame().run()
     """
 
     def __init__(
@@ -174,10 +203,12 @@ class App:
 
     @property
     def asset_root(self) -> str:
-        """The directory relative asset paths resolve against. Defaults to
-        the main script's directory; assign to point somewhere else (a
-        packaged install, a mod directory). Applies to every later load,
-        including through `app.audio` and `app.text`."""
+        """The directory relative asset paths resolve against.
+
+        Defaults to the main script's directory. Assign it to point somewhere else,
+        such as a packaged install or a mod directory. It applies to every later
+        load, including through `app.audio` and `app.text`.
+        """
         return self._paths.root
 
     @asset_root.setter
@@ -185,12 +216,23 @@ class App:
         self._paths.root = root
 
     def gamepad(self, index: int) -> Gamepad:
+        """Returns the gamepad in a slot.
+
+        Args:
+            index: The slot, from 0.
+
+        Returns:
+            The `Gamepad` in that slot. Check `connected` before reading it.
+        """
         return Gamepad(self._eng, index)
 
     @property
     def last_device(self) -> int:
-        """The input device the player used last, an `InputDevice`: show
-        "Press A" or "Press Space" to match, or hide touch hints."""
+        """The input device the player used last, an `InputDevice`.
+
+        Use it to word prompts to match ("Press A" or "Press Space") or to hide
+        touch hints.
+        """
         return _n.pz_input_last_device(self._eng)
 
     # --- Resources -----------------------------------------------------
@@ -202,9 +244,33 @@ class App:
     # is installed. Absolute paths pass through untouched. See `pixzig.paths`.
 
     def load_texture(self, name: str, path: str) -> None:
+        """Loads an image file as a texture.
+
+        Args:
+            name: The name to register it under, for `load_sprite` and friends.
+            path: The image file, relative to `asset_root`.
+
+        Raises:
+            FileNotFoundError: The file doesn't exist; the message names the
+                resolved path and the asset root.
+            pixzig.Error: The file couldn't be read or decoded.
+        """
         _n.check(_n.pz_load_texture(self._eng, name.encode("utf-8"), self._paths.encode(path)) == 0)
 
     def create_subtexture(self, base_name: str, new_name: str, x: int, y: int, w: int, h: int) -> None:
+        """Registers part of a loaded texture as its own texture.
+
+        Args:
+            base_name: The texture to take the region from.
+            new_name: The name for the new texture.
+            x: The region's left edge, in pixels.
+            y: The region's top edge, in pixels.
+            w: The region's width, in pixels.
+            h: The region's height, in pixels.
+
+        Raises:
+            pixzig.Error: `base_name` isn't loaded.
+        """
         _n.check(
             _n.pz_texture_sub(
                 self._eng, base_name.encode("utf-8"), new_name.encode("utf-8"), int(x), int(y), int(w), int(h)
@@ -213,20 +279,51 @@ class App:
         )
 
     def load_sprite(self, texture_name: str) -> Sprite:
+        """Creates a sprite showing a loaded texture.
+
+        Args:
+            texture_name: The texture, atlas frame or subtexture to show.
+
+        Returns:
+            A new `Sprite`, freed with the app.
+
+        Raises:
+            pixzig.Error: No texture has that name.
+        """
         handle = _n.pz_sprite_create(self._eng, texture_name.encode("utf-8"))
         if not handle:
             raise _n.Error(_n.last_error())
         return self._track(Sprite(handle))
 
     def load_tilemap(self, name: str, path: str) -> None:
+        """Loads a Tiled `.tmx` map.
+
+        Args:
+            name: The name to register it under, for `create_tilemap_renderer`.
+            path: The `.tmx` file, relative to `asset_root`.
+
+        Raises:
+            FileNotFoundError: The file doesn't exist; the message names the
+                resolved path and the asset root.
+            pixzig.Error: The map couldn't be read, or uses an unsupported feature.
+        """
         _n.check(_n.pz_load_tilemap(self._eng, name.encode("utf-8"), self._paths.encode(path)) == 0)
 
     def create_tilemap_renderer(self, map_name: str) -> TileMapRenderer:
-        """Build a renderer for a map loaded with `load_tilemap`.
+        """Builds a renderer for a map loaded with `load_tilemap`.
 
-        The tileset texture comes from the `<image source>` in the .tmx, so
-        there is nothing else to pass in. A texture already loaded under that
-        image's base name (`tiles` for `art/tiles.png`) is reused.
+        The tileset texture comes from the `<image source>` in the `.tmx`, so there
+        is nothing else to pass in. A texture already loaded under that image's base
+        name (`tiles` for `art/tiles.png`) is reused.
+
+        Args:
+            map_name: The map's name from `load_tilemap`.
+
+        Returns:
+            A new `TileMapRenderer`, freed with the app.
+
+        Raises:
+            pixzig.Error: No map has that name, or its tileset image can't be loaded.
         """
         handle = _n.pz_tilemap_renderer_create(self._eng, map_name.encode("utf-8"))
         if not handle:
@@ -234,6 +331,23 @@ class App:
         return self._track(TileMapRenderer(handle))
 
     def load_manifest(self, path: str) -> AssetManifest:
+        """Opens an asset manifest JSON file.
+
+        Its `boot` group loads right away. The manifest file is resolved against
+        `asset_root`; the asset paths inside it are resolved by the engine, against
+        the manifest's own `root`.
+
+        Args:
+            path: The manifest file.
+
+        Returns:
+            An `AssetManifest`, freed with the app.
+
+        Raises:
+            FileNotFoundError: The file doesn't exist; the message names the
+                resolved path and the asset root.
+            pixzig.Error: The manifest couldn't be read or a boot asset failed to load.
+        """
         # Note this resolves the manifest file itself. The asset paths
         # *inside* it are resolved by the engine, against the manifest's own
         # `root` plus the build's asset base.
@@ -248,17 +362,49 @@ class App:
     # states to actors created with `create_actor()`. See `pixzig.anim`.
 
     def load_anim_file(self, path: str) -> None:
-        """Loads a JSON frame-sequence + actor-state file into the shared
-        animation library. Frame textures must already be loaded."""
+        """Loads a JSON file of frame sequences and actor states.
+
+        They go into the app's shared animation library, for `Actor.add_state`. The
+        textures the frames name must already be loaded.
+
+        Args:
+            path: The JSON file, relative to `asset_root`.
+
+        Raises:
+            FileNotFoundError: The file doesn't exist; the message names the
+                resolved path and the asset root.
+            pixzig.Error: The file couldn't be read, or names an unknown texture or
+                sequence.
+        """
         _n.check(_n.pz_anim_load_file(self._eng, self._paths.encode(path)) == 0)
 
     def create_sequence(self, name: str, loop: bool = True) -> None:
-        """Registers an empty frame sequence; add frames with `add_frame`."""
+        """Registers an empty frame sequence in the animation library.
+
+        Add frames to it with `add_frame`.
+
+        Args:
+            name: The sequence's name.
+            loop: Whether it loops. A play-once sequence switches its actor to the
+                state's `next_state` when it ends.
+
+        Raises:
+            pixzig.Error: The sequence couldn't be created.
+        """
         _n.check(_n.pz_anim_new_sequence(self._eng, name.encode("utf-8"), bool(loop)) == 0)
 
     def add_frame(self, sequence: str, texture_name: str, frame_ms: float, flip: Flip = Flip.NONE) -> None:
-        """Appends a frame (a loaded texture shown for `frame_ms`) to a
-        sequence made with `create_sequence`."""
+        """Appends a frame to a sequence made with `create_sequence`.
+
+        Args:
+            sequence: The sequence's name.
+            texture_name: The loaded texture the frame shows.
+            frame_ms: How long the frame shows, in milliseconds.
+            flip: How to flip the frame, a `Flip`.
+
+        Raises:
+            pixzig.Error: The sequence or texture doesn't exist.
+        """
         _n.check(
             _n.pz_anim_seq_add_frame(
                 self._eng, sequence.encode("utf-8"), texture_name.encode("utf-8"), float(frame_ms), int(flip)
@@ -267,19 +413,36 @@ class App:
         )
 
     def add_anim_state(self, name: str, sequence: str, next_state: str = None, flip: Flip = Flip.NONE) -> None:
-        """Registers a named actor state that plays `sequence`. `flip` is
-        applied on top of each frame's own flip. When a play-once sequence
-        (`create_sequence(..., loop=False)`) ends, the actor switches to
-        `next_state`, or holds the last frame if it's None. Looping
-        sequences ignore `next_state`."""
+        """Registers a named actor state that plays a sequence.
+
+        Args:
+            name: The state's name, e.g. `"walk_left"`.
+            sequence: The sequence it plays.
+            next_state: The state to switch to when a play-once sequence ends. None
+                holds the last frame instead. Looping sequences ignore it.
+            flip: A flip applied on top of each frame's own, so one sequence can
+                drive both directions.
+
+        Raises:
+            pixzig.Error: The sequence doesn't exist.
+        """
         ns = next_state.encode("utf-8") if next_state is not None else None
         _n.check(
             _n.pz_anim_add_state(self._eng, name.encode("utf-8"), sequence.encode("utf-8"), ns, int(flip)) == 0
         )
 
     def create_actor(self, texture_name: str) -> Actor:
-        """Creates an actor whose sprite (`actor.sprite`) starts on the
-        texture `texture_name`."""
+        """Creates an actor, a sprite that plays animation states.
+
+        Args:
+            texture_name: The texture its sprite (`actor.sprite`) starts on.
+
+        Returns:
+            A new `Actor`, freed with the app.
+
+        Raises:
+            pixzig.Error: No texture has that name.
+        """
         handle = _n.pz_actor_create(self._eng, texture_name.encode("utf-8"))
         if not handle:
             raise _n.Error(_n.last_error())
@@ -288,6 +451,14 @@ class App:
     # --- Action mapping ---------------------------------------------------
 
     def create_action_map(self) -> ActionMap:
+        """Creates an action map, for named actions and axes bound to any device.
+
+        Returns:
+            A new `ActionMap`, freed with the app.
+
+        Raises:
+            pixzig.Error: The map couldn't be created.
+        """
         handle = _n.pz_action_map_create(self._eng)
         if not handle:
             raise _n.Error(_n.last_error())
@@ -296,6 +467,14 @@ class App:
     # --- Camera ----------------------------------------------------------
 
     def create_camera(self) -> Camera:
+        """Creates a 2D camera, for drawing a world larger than the screen.
+
+        Returns:
+            A new `Camera` looking at (0, 0), freed with the app.
+
+        Raises:
+            pixzig.Error: The camera couldn't be created.
+        """
         handle = _n.pz_camera_create(self._eng)
         if not handle:
             raise _n.Error(_n.last_error())
@@ -308,16 +487,45 @@ class App:
     # a letterbox / pillarbox band.
 
     def screen_to_logical(self, x: float, y: float):
+        """Converts a point from window coordinates to logical coordinates.
+
+        Args:
+            x: The point's x, in window coordinates (as `mouse.raw_pos` reports).
+            y: The point's y.
+
+        Returns:
+            The logical `(x, y)`, or None for a point in a letterbox bar.
+        """
         lx, ly = ctypes.c_float(), ctypes.c_float()
         ok = _n.pz_screen_to_logical(self._eng, float(x), float(y), ctypes.byref(lx), ctypes.byref(ly))
         return (lx.value, ly.value) if ok else None
 
     def logical_to_screen(self, x: float, y: float):
+        """Converts a point from logical coordinates to window coordinates.
+
+        Args:
+            x: The point's logical x.
+            y: The point's logical y.
+
+        Returns:
+            The `(x, y)` in window coordinates.
+        """
         sx, sy = ctypes.c_float(), ctypes.c_float()
         _n.pz_logical_to_screen(self._eng, float(x), float(y), ctypes.byref(sx), ctypes.byref(sy))
         return (sx.value, sy.value)
 
     def screen_to_world(self, camera: Camera, x: float, y: float):
+        """Converts a point from window coordinates to world coordinates.
+
+        Args:
+            camera: The `Camera` the world is seen through.
+            x: The point's x, in window coordinates.
+            y: The point's y.
+
+        Returns:
+            The world `(x, y)`, accounting for the camera's position, zoom and
+            rotation, or None for a point in a letterbox bar.
+        """
         wx, wy = ctypes.c_float(), ctypes.c_float()
         ok = _n.pz_screen_to_world(
             self._eng, camera._handle, float(x), float(y), ctypes.byref(wx), ctypes.byref(wy)
@@ -325,6 +533,16 @@ class App:
         return (wx.value, wy.value) if ok else None
 
     def world_to_screen(self, camera: Camera, x: float, y: float):
+        """Converts a point from world coordinates to window coordinates.
+
+        Args:
+            camera: The `Camera` the world is seen through.
+            x: The point's world x.
+            y: The point's world y.
+
+        Returns:
+            The `(x, y)` in window coordinates.
+        """
         sx, sy = ctypes.c_float(), ctypes.c_float()
         _n.pz_world_to_screen(
             self._eng, camera._handle, float(x), float(y), ctypes.byref(sx), ctypes.byref(sy)
@@ -349,71 +567,149 @@ class App:
     #       self.render_end()
 
     def render_begin(self, camera: Camera = None) -> None:
+        """Begins a render pass. Every draw goes between this and `render_end`.
+
+        There is no pass around `render` by default, so it must open its own. Run as
+        many passes as you like in one frame, e.g. a world pass then a HUD pass.
+
+        Args:
+            camera: Draw in world space through this `Camera`. None draws in
+                logical coordinates, for UI and HUDs.
+
+        Example:
+                def render(self, alpha):
+                    self.render_begin(self.camera)
+                    self.map.render_below(self.camera, 1.0)
+                    self.player.draw()
+                    self.map.render_above(self.camera, 1.0)
+                    self.render_end()
+
+                    self.render_begin()
+                    self.text.draw("HUD text", 10, 10)
+                    self.render_end()
+        """
         if camera is None:
             _n.pz_render_begin(self._eng)
         else:
             _n.pz_render_begin_world(self._eng, camera._handle)
 
     def render_begin_screen(self) -> None:
-        """Begins a pass in framebuffer pixels, ignoring the logical size
-        (in a render target, the target's own pixels). See
-        `window.framebuffer_size`."""
+        """Begins a pass in framebuffer pixels, ignoring the logical size.
+
+        Inside a render target it uses the target's own pixels. Useful for debug
+        overlays and for drawing a render target over the whole window. See
+        `window.framebuffer_size`.
+        """
         _n.pz_render_begin_screen(self._eng)
 
     def render_end(self) -> None:
+        """Ends the current render pass, sending its queued draws to the GPU."""
         _n.pz_render_end(self._eng)
 
     def set_blend(self, mode: int) -> None:
-        """Sets how later draws in this pass blend with what's behind them,
-        a `BlendMode`: `ADDITIVE` for glows and lasers, `MULTIPLY` for
-        shadows, `PREMULTIPLIED` for drawing a render target cleared
-        transparent. Every pass starts at `BlendMode.ALPHA`."""
+        """Sets how later draws in this pass blend with what's behind them.
+
+        Every pass starts at `BlendMode.ALPHA`, and the mode ends with the pass.
+
+        Args:
+            mode: A `BlendMode`: `ADDITIVE` for glows and lasers, `MULTIPLY` for
+                shadows, `PREMULTIPLIED` for drawing a render target cleared
+                transparent.
+
+        Raises:
+            pixzig.Error: Called outside a pass, or with an unknown mode.
+        """
         _n.check(_n.pz_render_set_blend(self._eng, int(mode)) == 0)
 
     def fade(self, color, amount: float) -> None:
-        """Covers the logical screen with `color` (0-255 tuple), its alpha
-        scaled by `amount` from 0 (nothing) to 1: a fade to black, a hit
-        flash, a dimmed pause screen. A pass of its own, so call it between
-        passes, usually last in `render`."""
+        """Covers the logical screen with a color.
+
+        It's a pass of its own, so call it between passes, usually last in
+        `render`: a fade to black, a hit flash, a dimmed pause screen.
+
+        Args:
+            color: An `(r, g, b)` or `(r, g, b, a)` tuple of 0-255 values.
+            amount: Scales the color's alpha, from 0 (draws nothing) to 1.
+        """
         r, g, b, a = _normalize_color(color)
         _n.pz_render_fade(self._eng, r, g, b, a, float(amount))
 
     # --- Render targets and shaders ------------------------------------
 
     def create_render_target(self, width: int, height: int, filter: int = 0) -> RenderTarget:
-        """Creates an offscreen image to draw into with `set_target`. `filter`
-        is a `TargetFilter`: `NEAREST` keeps a low-resolution target blocky
-        when drawn scaled up, `LINEAR` smooths it. See `pixzig.render_target`."""
+        """Creates an offscreen image to draw into with `set_target`.
+
+        Args:
+            width: The target's width, in pixels.
+            height: The target's height, in pixels.
+            filter: A `TargetFilter`. `NEAREST` keeps a low-resolution target
+                blocky when drawn scaled up; `LINEAR` smooths it.
+
+        Returns:
+            A new `RenderTarget`, freed with the app.
+
+        Raises:
+            pixzig.Error: The target couldn't be created.
+        """
         handle = _n.pz_render_target_create(self._eng, int(width), int(height), int(filter))
         if not handle:
             raise _n.Error(_n.last_error())
         return self._track(RenderTarget(handle))
 
     def set_target(self, target) -> None:
-        """Sends later passes into `target` (a `RenderTarget`), or back to
-        the screen for None. Call it between passes. Inside a target,
-        `render_begin()` and `render_begin(camera)` stretch the logical
-        screen over the whole target."""
+        """Sends later passes into a render target, or back to the screen.
+
+        Call it between passes. Inside a target, `render_begin()` and
+        `render_begin(camera)` stretch the logical screen over the whole target.
+
+        Args:
+            target: The `RenderTarget` to draw into, or None for the screen.
+        """
         _n.pz_render_set_target(self._eng, target._handle if target is not None else None)
 
     def create_shader(self, name: str, fragment_source: str) -> None:
-        """Compiles a GLSL ES 3.00 fragment shader under `name`, for
-        `set_shader`. It gets `in vec2 Texcoord`, `in vec4 Col` (the draw's
-        color), `flat in float Mode`, `uniform sampler2D tex`, and writes
-        `out vec4 fragColor`; `texture(tex, Texcoord) * Col` is the plain
-        sprite result to build on. Compiling a name again replaces it."""
+        """Compiles a custom fragment shader for `set_shader`.
+
+        The shader is GLSL ES 3.00. It gets `in vec2 Texcoord`, `in vec4 Col` (the
+        draw's color), `flat in float Mode` and `uniform sampler2D tex`, and writes
+        `out vec4 fragColor`. `texture(tex, Texcoord) * Col` is the plain sprite
+        result to build on. Compiling a name again replaces it.
+
+        Args:
+            name: The shader's name.
+            fragment_source: The GLSL source.
+
+        Raises:
+            pixzig.Error: The shader failed to compile; the message has the log.
+        """
         _n.check(_n.pz_shader_create(self._eng, name.encode("utf-8"), fragment_source.encode("utf-8")) == 0)
 
     def set_shader(self, name) -> None:
-        """Draws the rest of this pass with the shader `name`, or the default
-        shader for None. Every pass starts with the default."""
+        """Draws the rest of this pass with a custom shader.
+
+        Every pass starts with the default shader.
+
+        Args:
+            name: A shader from `create_shader`, or None for the default.
+
+        Raises:
+            pixzig.Error: No shader has that name.
+        """
         _n.check(_n.pz_render_set_shader(self._eng, name.encode("utf-8") if name is not None else None) == 0)
 
     def set_uniform(self, name: str, value) -> None:
-        """Sets a uniform on the active shader: an int sets an `int`, a
-        float a `float`, a 2-tuple a `vec2` and a 4-tuple a `vec4` (pass
-        colors as 0-1 floats here). A name the shader doesn't use is
-        ignored."""
+        """Sets a uniform on the active shader.
+
+        A name the shader doesn't use is ignored.
+
+        Args:
+            name: The uniform's name.
+            value: An int sets an `int`, a float a `float`, a 2-tuple a `vec2` and
+                a 4-tuple a `vec4`. Pass colors as 0-1 floats here.
+
+        Raises:
+            TypeError: The value isn't one of those types.
+        """
         key = name.encode("utf-8")
         if isinstance(value, bool) or not isinstance(value, (int, float, tuple, list)):
             raise TypeError(f"set_uniform: unsupported value {value!r}")
@@ -438,47 +734,65 @@ class App:
             self.on_event(event)
 
     def cancel_close(self) -> None:
-        """Keeps the window open after a close request. Call it from
-        `on_event` while handling `EventKind.CLOSE_REQUESTED`, e.g. to ask
-        about unsaved changes first."""
+        """Keeps the window open after a close request.
+
+        Call it from `on_event` while handling `EventKind.CLOSE_REQUESTED`, e.g. to
+        ask about unsaved changes first.
+        """
         _n.pz_cancel_close(self._eng)
 
     # --- Overridable hooks -----------------------------------------------
 
     def update(self, dt_ms: float) -> None:
-        """Called at a fixed timestep (`update_hz`). Call `self.quit()` to
-        end the game; the return value is ignored."""
+        """Called at a fixed rate with the game's logic. Override it.
+
+        Call `self.quit()` to end the game; the return value is ignored.
+
+        Args:
+            dt_ms: The step length in milliseconds, always `1000 / update_hz`.
+        """
         pass
 
     def render(self, alpha: float) -> None:
-        """Called once per displayed frame, after the screen is cleared.
-        `alpha` is how far the frame sits between the last two updates, 0 to
-        1: draw moving things at `prev + (curr - prev) * alpha` for smooth
-        motion at any frame rate. A `render(self)` without it still works."""
+        """Called once per displayed frame to draw it. Override it.
+
+        The screen is already cleared to `clear_color`. A `render(self)` without
+        `alpha` still works.
+
+        Args:
+            alpha: How far the frame sits between the last two updates, from 0 to
+                1. Draw moving things at `prev + (curr - prev) * alpha` for smooth
+                motion at any frame rate.
+        """
         pass
 
     def on_event(self, event: Event) -> None:
-        """Called for each window, drag-and-drop, gamepad hot-plug and
-        lifecycle event (see `pixzig.Event`), once per frame before the
-        frame's updates. A close request closes the window afterwards unless
-        this calls `cancel_close()`."""
+        """Called for window, drag-and-drop, gamepad and lifecycle events. Override it.
+
+        Events arrive once per frame, before the frame's updates. A close request
+        closes the window afterwards unless this calls `cancel_close()`.
+
+        Args:
+            event: The `Event`.
+        """
         pass
 
     # --- Loop --------------------------------------------------------------
 
     def quit(self) -> None:
-        """Ends the game after the current tick. The only way to quit from
-        `update` -- the return value isn't looked at."""
+        """Ends the game after the current tick.
+
+        This is the only way to quit from `update`; its return value isn't looked at.
+        """
         self._running = False
 
     def close(self) -> None:
-        """Shuts the engine down and frees every native handle this app
-        handed out. Idempotent: calling it again, or after `run()` has
-        returned, does nothing.
+        """Shuts the engine down and frees every native object this app handed out.
 
-        Called for you by `run()`, by `with App(...) as app:`, and --
-        as a backstop -- when the app is garbage collected or the
-        interpreter exits."""
+        Calling it again, or after `run()` has returned, does nothing. `run()`,
+        `with App(...) as app:`, garbage collection and interpreter exit all call it
+        for you. Sprites, actors and other wrappers raise if used afterwards.
+        """
         # getattr guards the case where pz_init itself failed, so __del__
         # runs against an object whose attributes were never assigned.
         hook = getattr(self, "_atexit_hook", None)
@@ -511,6 +825,15 @@ class App:
             pass
 
     def run(self) -> None:
+        """Runs the game loop until `quit()` is called or the window closes.
+
+        Each frame pumps events to `on_event`, runs `update` in fixed steps to catch
+        up with real time, clears the screen and calls `render`. The engine is shut
+        down when it returns.
+
+        Raises:
+            pixzig.Error: The app has already shut down.
+        """
         if self._eng is None:
             raise _n.Error("run() called after the app has already shut down")
         # Time spent before run() (a subclass __init__ loading assets) is not

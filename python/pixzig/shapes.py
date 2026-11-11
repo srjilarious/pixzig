@@ -1,4 +1,8 @@
-"""Rectangle drawing. Colors are (r, g, b) or (r, g, b, a) tuples, 0-255."""
+"""Rectangle drawing, reached as `App.shapes`.
+
+Colors are `(r, g, b)` or `(r, g, b, a)` tuples of 0-255 values. Draw
+inside a pass (`App.render_begin` ... `App.render_end`).
+"""
 from . import _native as _n
 
 
@@ -12,22 +16,50 @@ def _normalize_color(color):
 
 
 class Shapes:
+    """Draws filled and outlined rectangles. Reached as `App.shapes`."""
     def __init__(self, eng):
         self._eng = eng
 
     def filled_rect(self, x, y, w, h, color) -> None:
+        """Fills a rect.
+
+        Args:
+            x: The left edge.
+            y: The top edge.
+            w: The width.
+            h: The height.
+            color: An `(r, g, b)` or `(r, g, b, a)` tuple of 0-255 values.
+        """
         r, g, b, a = _normalize_color(color)
         _n.pz_draw_filled_rect(self._eng, x, y, w, h, r, g, b, a)
 
     def rect(self, x, y, w, h, color, line_width: int = 1) -> None:
-        """Outlines the rect, the line drawn `line_width` pixels *inside*
-        the given bounds."""
+        """Outlines a rect, the line drawn inside its bounds.
+
+        Args:
+            x: The left edge.
+            y: The top edge.
+            w: The width.
+            h: The height.
+            color: An `(r, g, b)` or `(r, g, b, a)` tuple of 0-255 values.
+            line_width: The line's thickness, in pixels.
+        """
         r, g, b, a = _normalize_color(color)
         _n.pz_draw_rect(self._eng, x, y, w, h, r, g, b, a, line_width)
 
     def enclosing_rect(self, x, y, w, h, color, line_width: int = 1) -> None:
-        """Like `rect`, but the line sits `line_width` pixels *outside* the
-        given bounds, so the rect itself stays fully visible. Use it to
-        frame something without covering its edges."""
+        """Outlines a rect, the line drawn outside its bounds.
+
+        The rect itself stays fully visible, so use it to frame something without
+        covering its edges.
+
+        Args:
+            x: The left edge.
+            y: The top edge.
+            w: The width.
+            h: The height.
+            color: An `(r, g, b)` or `(r, g, b, a)` tuple of 0-255 values.
+            line_width: The line's thickness, in pixels.
+        """
         r, g, b, a = _normalize_color(color)
         _n.pz_draw_enclosing_rect(self._eng, x, y, w, h, r, g, b, a, line_width)

@@ -1,3 +1,30 @@
+"""Pixzig for Python: write 2D games against the pixzig engine.
+
+The package talks to a shared-library build of the engine through `ctypes`,
+so it needs no compiler. Subclass `App`, override `update` and `render`, and
+call `run()`; the app's members (`keyboard`, `text`, `audio` and so on) and
+its `create_*` methods reach the rest of the engine.
+
+Example:
+        from pixzig import App, Key
+
+        class MyGame(App):
+            def __init__(self):
+                super().__init__("My Game", width=800, height=480)
+                self.load_texture("pac", "assets/pac-tiles.png")
+                self.player = self.load_sprite("pac")
+
+            def update(self, dt_ms):
+                if self.keyboard.pressed(Key.ESCAPE):
+                    self.quit()
+
+            def render(self, alpha):
+                self.render_begin()
+                self.player.draw()
+                self.render_end()
+
+        MyGame().run()
+"""
 from ._native import Error
 from .action import ActionMap
 from .anim import Actor

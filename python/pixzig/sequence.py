@@ -1,43 +1,66 @@
-"""Sequences: scripted moments written as generators, the Python take on
-the engine's sequencer.
+"""Sequences: scripted moments written as generators.
 
-A sequence is a generator that yields steps. Code between yields runs right
-away, in the tick the sequence reaches it, so setting values, playing a
-sound or spawning something costs no time. A yielded step takes as long as
-it takes, and time it doesn't need carries into what comes next, so two
-30 ms waits end after 60 ms, not after whole ticks.
-
-    from pixzig import Ease
-    from pixzig.sequence import SequencePlayer, move_to, parallel, tween_attr, wait
-
-    def open_door(self):
-        self.audio.play("creak")
-        yield tween_attr(self, "door_open", 1.0, 400, Ease.QUAD_OUT)
-        yield wait(1000)
-        yield parallel(move_to(self.hero, 80, 16, 300), self.fade_music())
-        self.door_done = True
-
-    # In __init__:
-    self.seq = SequencePlayer()
-    # When the switch is hit:
-    self.seq.play(self.open_door(), tag="door")
-    # In update:
-    self.seq.update(dt_ms)
+This is the Python take on the engine's sequencer. A sequence is a generator
+that yields steps. Code between yields runs right away, in the tick the
+sequence reaches it, so setting values, playing a sound or spawning
+something costs no time. A yielded step takes as long as it needs, and time
+it doesn't use carries into what comes next, so two 30 ms waits end after
+60 ms, not after whole ticks.
 
 A bare `yield` waits until the next tick. A generator can `yield` another
-generator (a sub-sequence) or `yield from` it.
+generator to run it as a sub-sequence, or `yield from` it.
+
+Example:
+        from pixzig import Ease
+        from pixzig.sequence import SequencePlayer, move_to, parallel, tween_attr, wait
+
+        def open_door(self):
+            self.audio.play("creak")
+            yield tween_attr(self, "door_open", 1.0, 400, Ease.QUAD_OUT)
+            yield wait(1000)
+            yield parallel(move_to(self.hero, 80, 16, 300), self.fade_music())
+            self.door_done = True
+
+        # In __init__:
+        self.seq = SequencePlayer()
+        # When the switch is hit:
+        self.seq.play(self.open_door(), tag="door")
+        # In update:
+        self.seq.update(dt_ms)
 """
 from .easing import ease as _ease
 
 
 class Step:
-    """One step a sequence yields. Subclass it for your own: `update`
-    advances by `dt_ms` and returns None while the step needs more time, or
-    the part of `dt_ms` it didn't use (0 or more) once it's finished. The
-    first `update` can get a `dt_ms` of 0, when the step before it ended
-    exactly at the end of a tick."""
+    """One step a sequence yields. Subclass it for steps of your own.
+
+    Example:
+        A step that flashes a sprite white until a timer runs out:
+
+            class Flash(Step):
+                def __init__(self, sprite, ms):
+                    self.sprite, self.ms, self.elapsed = sprite, ms, 0.0
+
+                def update(self, dt_ms):
+                    self.elapsed += dt_ms
+                    if self.elapsed < self.ms:
+                        self.sprite.set_fill((255, 255, 255, 255))
+                        return None
+                    self.sprite.set_fill(None)
+                    return self.elapsed - self.ms
+    """
 
     def update(self, dt_ms: float):
+        """Advances the step. Override it.
+
+        Args:
+            dt_ms: The time to advance, in milliseconds. The first call can get 0,
+                when the step before ended exactly at the end of a tick.
+
+        Returns:
+            None while the step needs more time, or the part of `dt_ms` it didn't
+            use (0 or more) once it has finished.
+        """
         raise NotImplementedError
 
 
@@ -177,31 +200,80 @@ class _SubSequence(Step):
 
 
 def wait(ms: float) -> Step:
-    """Waits `ms` milliseconds."""
+    """A step that waits.
+
+    Args:
+        ms: How long, in milliseconds.
+
+    Returns:
+        The `Step`.
+    """
     return _Wait(ms)
 
 
 def tween(apply, start: float, to: float, ms: float, curve: int = 0) -> Step:
-    """Calls `apply(value)` every tick with a value easing from `start` to
-    `to` over `ms` along `curve` (an `Ease`, linear by default)."""
+    """A step that eases a value and hands it to a function every tick.
+
+    Args:
+        apply: Called with each tick's value.
+        start: The value at the start.
+        to: The value at the end.
+        ms: How long it takes, in milliseconds.
+        curve: An `Ease`; linear by default.
+
+    Returns:
+        The `Step`.
+    """
     return _Tween(apply, float(start), to, ms, curve)
 
 
 def tween_attr(obj, name: str, to: float, ms: float, curve: int = 0) -> Step:
-    """Eases `obj.<name>` from whatever it holds when the step starts to
-    `to`, so it picks up where an earlier or cancelled tween left off."""
+    """A step that eases an attribute from wherever it is when the step starts.
+
+    Starting from the current value lets a tween pick up where an earlier or
+    cancelled one left off.
+
+    Args:
+        obj: The object holding the attribute.
+        name: The attribute's name.
+        to: The value at the end.
+        ms: How long it takes, in milliseconds.
+        curve: An `Ease`; linear by default.
+
+    Returns:
+        The `Step`.
+    """
     return _Tween(lambda v: setattr(obj, name, v), lambda: getattr(obj, name), to, ms, curve)
 
 
 def move_to(sprite, x: float, y: float, ms: float, curve: int = 0) -> Step:
-    """Moves a `Sprite` (or `actor.sprite`) from where it is when the step
-    starts to (x, y) over `ms`, along `curve`."""
+    """A step that moves a sprite from where it is when the step starts.
+
+    Args:
+        sprite: A `Sprite`, or an actor's `actor.sprite`.
+        x: The target x for its origin.
+        y: The target y.
+        ms: How long it takes, in milliseconds.
+        curve: An `Ease`; linear by default.
+
+    Returns:
+        The `Step`.
+    """
     return _MoveTo(sprite, x, y, ms, curve)
 
 
 def parallel(*gens) -> Step:
-    """Runs several generators side by side, finishing when the last one
-    does."""
+    """A step that runs several generators side by side.
+
+    It finishes when the last one does. One that finishes early isn't run again
+    while the others catch up.
+
+    Args:
+        *gens: The generators.
+
+    Returns:
+        The `Step`.
+    """
     return _Parallel(gens)
 
 
@@ -215,12 +287,12 @@ class _Playing:
 
 
 class SequencePlayer:
-    """Runs any number of sequences at once and drops them when they
-    finish. Keep one for the game and call `update` every tick.
+    """Runs any number of sequences at once and drops them when they finish.
 
-    Code in a sequence may play, cancel or clear sequences, including its
-    own. One played that way starts on the next `update`; a cancel takes
-    effect at once."""
+    Keep one for the game and call `update` every tick. Code in a sequence may
+    play, cancel or clear sequences, including its own. One played that way
+    starts on the next `update`; a cancel takes effect at once.
+    """
 
     def __init__(self):
         self._playing = []
@@ -228,8 +300,17 @@ class SequencePlayer:
         self._updating = False
 
     def play(self, gen, tag: str = None) -> None:
-        """Starts running the generator `gen`. A `tag` lets `is_running`
-        and `cancel` find it later."""
+        """Starts running a sequence.
+
+        Args:
+            gen: The generator, i.e. the sequence function already called:
+                `play(self.intro())`, not `play(self.intro)`.
+            tag: A name for `is_running` and `cancel` to find it by. Several
+                sequences can share one.
+
+        Raises:
+            TypeError: `gen` isn't a generator.
+        """
         if not hasattr(gen, "__next__"):
             raise TypeError("play() takes a generator: call the sequence function, e.g. play(self.intro())")
         entry = _Playing(gen, tag)
@@ -239,8 +320,11 @@ class SequencePlayer:
             self._playing.append(entry)
 
     def update(self, dt_ms: float) -> None:
-        """Advances every sequence by `dt_ms` and drops the ones that
-        finished."""
+        """Advances every sequence and drops the ones that finished.
+
+        Args:
+            dt_ms: The tick's length, in milliseconds.
+        """
         self._updating = True
         try:
             for entry in self._playing:
@@ -255,13 +339,27 @@ class SequencePlayer:
             self._incoming = []
 
     def is_running(self, tag: str) -> bool:
-        """Whether an unfinished sequence tagged `tag` is playing."""
+        """Whether an unfinished sequence with a tag is playing.
+
+        Args:
+            tag: The tag passed to `play`.
+
+        Returns:
+            True while one is playing.
+        """
         return any(not e.done and e.tag == tag for e in self._playing + self._incoming)
 
     def cancel(self, tag: str) -> int:
-        """Stops every sequence tagged `tag` where it is, and returns how
-        many were stopped. Their generators are closed, so `finally` blocks
-        in them run."""
+        """Stops every sequence with a tag where it is.
+
+        Their generators are closed, so `finally` blocks in them run.
+
+        Args:
+            tag: The tag passed to `play`.
+
+        Returns:
+            How many were stopped.
+        """
         count = 0
         for entry in self._playing + self._incoming:
             if not entry.done and entry.tag == tag:
@@ -271,7 +369,7 @@ class SequencePlayer:
         return count
 
     def clear(self) -> None:
-        """Stops every sequence."""
+        """Stops every sequence, e.g. when the level changes."""
         for entry in self._playing + self._incoming:
             if not entry.done:
                 self._stop(entry)
@@ -279,8 +377,7 @@ class SequencePlayer:
 
     @property
     def count(self) -> int:
-        """How many sequences are playing, e.g. to ignore input during a
-        cutscene."""
+        """How many sequences are playing, e.g. to ignore input during a cutscene."""
         return sum(1 for e in self._playing + self._incoming if not e.done)
 
     def _stop(self, entry: _Playing) -> None:

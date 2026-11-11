@@ -1,24 +1,33 @@
-"""Engine-level events: window, drag-and-drop, gamepad hot-plug and app
-lifecycle. Override `App.on_event` to receive them.
+"""Engine events: window, drag-and-drop, gamepad hot-plug and app lifecycle.
 
-Keyboard, mouse and text input aren't events here; read those per tick
-through `app.keyboard`, `app.mouse` and action maps.
+Override `App.on_event` to receive them. Keyboard, mouse and text input
+aren't events here; read those each tick through `app.keyboard`,
+`app.mouse` and action maps, so `pressed` stays a one-tick edge.
 """
 from .constants import EventKind
 
 
 class Event:
-    """One engine event. `kind` is an `EventKind`; the other attributes are
-    only meaningful for some kinds:
+    """One engine event, handed to `App.on_event`.
 
-    * `size` -- `WINDOW_RESIZED`: the new (width, height) in window
-      coordinates. `app.window` already reflects it.
-    * `pos` -- `DROP_FILE` / `DROP_TEXT`: where it was dropped, in window
-      coordinates. Pass it to `app.screen_to_logical` for game coordinates.
-    * `path` -- `DROP_FILE`: the dropped file's path.
-    * `text` -- `DROP_TEXT`: the dropped text.
-    * `gamepad_id` -- `GAMEPAD_ADDED` / `GAMEPAD_REMOVED`: the pad's id.
-      Only reported when the app asked for gamepads.
+    Attributes:
+        kind: An `EventKind`.
+        size: For `WINDOW_RESIZED`, the new `(width, height)` in window
+            coordinates. `app.window` already reflects it.
+        pos: For `DROP_FILE` and `DROP_TEXT`, where it was dropped in window
+            coordinates. Pass it to `App.screen_to_logical` for game
+            coordinates.
+        path: For `DROP_FILE`, the dropped file's path.
+        text: For `DROP_TEXT`, the dropped text.
+        gamepad_id: For `GAMEPAD_ADDED` and `GAMEPAD_REMOVED`, the pad's id.
+
+    Example:
+            def on_event(self, event):
+                if event.kind == EventKind.CLOSE_REQUESTED and self.unsaved:
+                    self.cancel_close()
+                    self.show_save_prompt = True
+                elif event.kind == EventKind.DROP_FILE:
+                    self.load_level(event.path)
     """
 
     __slots__ = ("kind", "size", "pos", "path", "text", "gamepad_id")
