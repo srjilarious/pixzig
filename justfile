@@ -109,3 +109,12 @@ py_test:
 # Run a Python example against the installed wheel, e.g. `just py hello_pixzig`
 py EX VENV=".venv":
 	"{{VENV}}/bin/python" python/examples/{{EX}}.py
+
+# Build and run games/hopper, the platformer starter (copy it with
+# `zig build new -Dfrom=games/hopper -Dname=my_game`)
+hopper *OPTS:
+	cd games/hopper && zig build hopper {{OPTS}}
+
+# Run hopper's Python version against the installed wheel
+py_hopper VENV=".venv":
+	"{{VENV}}/bin/python" games/hopper/python/hopper.py

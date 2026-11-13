@@ -1,0 +1,26 @@
+{
+  "_comment": "Hopper's gameplay numbers, read by both the Zig and the Python version. Distances are in pixels (a tile is 16), speeds in pixels per second, times in milliseconds. Any field left out keeps its default from src/config.zig.",
+
+  "run_speed": 95,
+  "ground_accel": 900,
+  "air_accel": 600,
+  "ground_friction": 1100,
+
+  "gravity": 1000,
+  "max_fall_speed": 320,
+  "jump_speed": 380,
+  "jump_release_cut": 0.45,
+  "coyote_ms": 90,
+  "jump_buffer_ms": 110,
+
+  "walker_speed": 28,
+  "walkers_turn_at_ledges": true,
+  "stomp_bounce": 260,
+  "squash_ms": 450,
+
+  "lives": 3,
+  "death_pause_ms": 900,
+
+  "camera_deadzone_x": 12,
+  "camera_smoothing": 9
+}

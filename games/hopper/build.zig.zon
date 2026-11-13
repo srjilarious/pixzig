@@ -1,0 +1,20 @@
+.{
+    .name = .hopper,
+    .version = "0.1.0",
+    .fingerprint = 0xd7488b3693d75141,
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .pixzig = .{
+            // `zig build new -Dfrom=games/hopper` rewrites this to point at
+            // your pixzig checkout. Use a URL + hash instead for a fetched
+            // dependency.
+            .path = "../..",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "assets",
+    },
+}
