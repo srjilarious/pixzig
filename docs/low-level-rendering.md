@@ -62,6 +62,8 @@ self.dynamic.end();
 
 A `Quad3DBatch` uses one texture. Keep one batch per texture if you need several. Depth testing is turned on for the 3D draws and back off afterwards, so 2D drawing that follows, like a HUD, isn't affected.
 
+The 3D quad shader discards texels with alpha below 0.5 instead of blending them, so a sprite's transparent pixels don't write depth and hide what's drawn behind them later. Billboarded sprites can go in any order; partly transparent texels come out fully on or fully off.
+
 `examples/quad3d_ex.zig` spins a quad and a torus.
 
 ![quad3d_ex: a textured quad and torus in 3D](assets/screenshots/quad3d.png)

@@ -87,7 +87,7 @@ A script with an error is logged and not reported, and stays watched, so saving 
 
 ```lua
 -- config.lua
-config = { fullscreen = true, scale = 4, volume = 0.8, title = "My Game" }
+config = { fullscreen = true, scale = 4, volume = 0.8, difficulty = "hard", title = "My Game" }
 ```
 
 ```zig
@@ -95,6 +95,7 @@ const Config = struct {
     fullscreen: bool = false,
     scale: i32 = 1,
     volume: f32 = 1.0,
+    difficulty: enum { easy, normal, hard } = .normal,
     title: ?[]u8 = null,
 };
 
@@ -103,7 +104,7 @@ const cfg = try scripts.loadStruct(Config, "config");
 defer if (cfg.title) |t| alloc.free(t);
 ```
 
-Fields can be `bool`, integers, floats and `?[]u8` strings. A field the table leaves out keeps its Zig default, so a config file only needs the settings it changes. A field with the wrong type returns `error.InvalidFieldType`. Strings are copied with the allocator the script engine was created with, and you free them. A missing global returns `error.InvalidConfigTable`.
+Fields can be `bool`, integers, floats, enums and `?[]u8` strings. An enum is read from a string naming one of its fields, and any other string returns `error.InvalidEnumValue`. A field the table leaves out keeps its Zig default, so a config file only needs the settings it changes. A field with the wrong type returns `error.InvalidFieldType`. Strings are copied with the allocator the script engine was created with, and you free them. A missing global returns `error.InvalidConfigTable`.
 
 Key bindings have their own loader, `ActionMap.loadFromLua`. See [Input](page:input).
 

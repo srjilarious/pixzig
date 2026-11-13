@@ -175,16 +175,19 @@ Each frame, the runner measures how much time passed and runs `update` in fixed 
 // AppRunner.gameLoopCore, simplified:
 lag = @min(lag + elapsed, maxLagMs);
 eng.pollEventsWith(app);             // app.onEvent, when it has one
+eng.resources.checkHotReload();      // debug builds: pick up changed files
+eng.scripts.checkHotReload();        // and changed Lua files, when scripting is on
 while (lag > UpdateStepMs) {
     lag -= UpdateStepMs;
     eng.inputs.update(...);          // latch this tick's input
     eng.updateActions(UpdateStepMs); // when actionOpts is set
-    eng.resources.checkHotReload();  // debug builds: pick up changed files
     app.update(eng, UpdateStepMs);   // an error here calls eng.quit()
     eng.inputs.finishTick();         // so pressed/released are one-tick edges
     if (eng.quitRequested) return false;
 }
+eng.updateAudio();                   // finish fades, free ended streams
 app.render(eng, lag / UpdateStepMs); // alpha, see Smooth Motion
+eng.drawTouchOverlay();              // the virtual pad, unless the app drew it
 window.swapBuffers();
 ```
 

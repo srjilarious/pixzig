@@ -19,7 +19,10 @@ const States = enum {
 // The engine owns the action map, so every state reads the same
 // `eng.actions` through the engine it's handed.
 const Action = enum { show_a, show_b, pause, quit };
-const AppRunner = pixzig.AppRunner(App, .{ .actionOpts = .{ .Action = Action } });
+const AppRunner = pixzig.AppRunner(App, .{
+    .actionOpts = .{ .Action = Action },
+    .screenshotHook = true,
+});
 
 /// A scene with a box sliding across it, so it's visible when updates stop.
 const StateA = struct {

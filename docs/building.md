@@ -1,10 +1,10 @@
 # Building and Shipping
 
-Pixzig builds with the Zig build system, for Linux, Windows and the browser. [Getting Started](../index.html) covers `buildGame`; this page covers what happens after that.
+Pixzig builds with the Zig build system, for Linux, Windows, the browser and Android. [Getting Started](../index.html) covers `buildGame`; this page covers what happens after that.
 
 ## Zig Version
 
-Pixzig tracks a pinned Zig version, recorded as `minimum_zig_version` in pixzig's `build.zig.zon`. Use exactly that version; Zig changes enough between builds that a newer or older one usually won't compile it. On Linux, `./scripts/bootstrap-linux.sh` checks the version and the system prerequisites, then builds:
+Pixzig builds with Zig 0.17.0, recorded as `minimum_zig_version` in pixzig's `build.zig.zon`. Use exactly that release; Zig changes enough between versions that a newer or older one usually won't compile it. On Linux, `./scripts/bootstrap-linux.sh` checks the version and the system prerequisites, then builds:
 
 ```sh
 ./scripts/bootstrap-linux.sh          # zig build

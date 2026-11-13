@@ -13,9 +13,10 @@ defer alloc.free(dir);
 
 | Platform | Directory |
 |---|---|
-| Linux | `~/.local/share/mygame/` |
+| Linux | `~/.local/share/myname/mygame/` (or under `$XDG_DATA_HOME`) |
 | Windows | `%APPDATA%\myname\mygame\` |
-| macOS | `~/Library/Application Support/mygame/` |
+| macOS | `~/Library/Application Support/myname/mygame/` |
+| Android | The app's private internal storage. `org` and `app` are ignored. |
 
 Pick the names once and don't change them, or players lose their saves.
 

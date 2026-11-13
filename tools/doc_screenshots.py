@@ -104,7 +104,7 @@ SHOTS = [
     Shot("render", "render_ex", "rendering.md", ms=1000),
     Shot("actor", "actor_ex", "animation.md", ms=600, input=taps(["right"]),
          crop=(200, 120, 400, 240)),
-    Shot("text", "text_rendering_ex", "text.md", ms=500, crop=(0, 0, 560, 400)),
+    Shot("text", "text_rendering_ex", "text.md", ms=500, crop=(0, 30, 700, 360)),
     Shot("bitmap_text", "bitmap_text_rendering_ex", "text.md", ms=500,
          crop=(0, 150, 800, 110)),
     Shot("tiles", "tile_load_ex", "tile-rendering.md", ms=1500,
@@ -121,6 +121,11 @@ SHOTS = [
     Shot("console", "console_ex", "scripting.md", ms=1500,
          input="100 text x = 6 * 7; 400 tap enter; 500 text con:log(\"x is \" .. x); 900 tap enter"),
     Shot("quad3d", "quad3d_ex", "low-level-rendering.md", ms=300),
+    # Blur and additive blending are on from the start.
+    Shot("render_target", "render_target_ex", "rendering.md", ms=1500),
+    # Scene A's box slides for a while, then P pushes the dimmed pause
+    # overlay that freezes it.
+    Shot("game_state", "game_state_ex", "game-states.md", ms=1500, input="1200 tap p"),
     Shot("create_texture", "create_texture_ex", "assets.md", ms=200,
          crop=(32, 32, 256, 192), scale=2),
 ]

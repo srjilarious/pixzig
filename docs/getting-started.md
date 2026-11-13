@@ -2,7 +2,7 @@
 
 ![Pixzig Logo](assets/pixzig.png)
 
-Pixzig is a 2D game engine written in Zig. It gives you a fixed-timestep game loop, a batched OpenGL renderer, input with action maps, Tiled map loading, audio, Lua scripting, a sequencer for timed events and a small immediate-mode UI. Games build for Linux, Windows and the browser from the same code.
+Pixzig is a 2D game engine written in Zig. It gives you a fixed-timestep game loop, a batched OpenGL renderer, input with action maps, Tiled map loading, audio, Lua scripting, a sequencer for timed events and a small immediate-mode UI. Games build for Linux, Windows, the browser and Android from the same code.
 
 These pages walk through each system in roughly the order you'll need them. Start here, then read [The Game Loop](page:app-runner) and [Rendering](page:rendering).
 
@@ -129,7 +129,7 @@ pub const App = struct {
         if (eng.inputs.keyboard.pressed(.escape)) eng.quit();
     }
 
-    pub fn render(_: *App, eng: *AppRunner.Engine) void {
+    pub fn render(_: *App, eng: *AppRunner.Engine, _: f32) void {
         eng.renderer.clear(26, 26, 51, 255);
 
         eng.renderer.begin(.logical);

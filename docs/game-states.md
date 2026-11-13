@@ -116,3 +116,5 @@ The stack has its own pair of optional hooks, so a state can tell being covered 
 A few rules keep the stack simple: a state can be on it only once (`push` of one already there returns `error.StateAlreadyOnStack`), the bottom state can't be popped (`error.LastState`; replace it with `setCurrState`), and `setCurrState` clears the whole stack, deactivating top first, before activating the new state. `depth()` and `isOnStack(state)` report what's on it.
 
 `examples/game_state_ex.zig` switches between two scenes with the number keys, and P pushes a dimmed pause overlay that freezes the scene beneath it.
+
+![game_state_ex: the pause state pushed over scene A, which still renders underneath, dimmed and frozen](assets/screenshots/game_state.png)

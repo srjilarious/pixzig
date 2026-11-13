@@ -233,6 +233,8 @@ eng.renderer.end();
 
 The shader receives `Texcoord`, the draw's color `Col`, its draw `Mode` (0 for textures and shapes, 1 for TTF text, 2 for silhouettes) and the texture `tex`, and writes `fragColor`. `texture(tex, Texcoord) * Col` is the ordinary result for sprites and render targets. Like the blend mode, the shader ends with the pass. `examples/render_target_ex.zig` puts a target, additive blending, a two-pass blur through a second target and a fade together.
 
+![render_target_ex: tinted sprites drawn additively into a small target, then blurred onto the screen](assets/screenshots/render_target.png)
+
 ## Mixing in Other Renderers
 
 A few renderers draw on their own rather than through the batch: `TileMapRenderer`, `PixelBuffer`, `GridRenderer` and the 3D quad batches. Call them outside a `begin`/`end` pair, between your own passes:

@@ -95,6 +95,8 @@ self.hero.deinit();
 
 The first state you add becomes current and its first frame is applied right away. `setState` switches to another state and shows its first frame immediately. Setting the state the actor is already in does nothing, so it's safe to call every tick. Asking for a name you never added returns `error.UnknownActorState`.
 
+`update` steps through as many frames as `deltaMs` covers and keeps the leftover time for the next frame, so an animation keeps its pace however the time arrives. When a play-once state ends partway through a tick, the rest of that tick goes to its `nextState`.
+
 Move, scale and draw the actor through `actor.sprite`. A frame can come from a different texture than the last one; the actor switches the sprite's texture for you. Flips on the frame and on the state combine, and two flips on the same axis cancel out.
 
 ### Shared States
