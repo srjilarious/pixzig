@@ -2,28 +2,34 @@
 //! coins and reach the flag.
 //!
 //! Files:
-//!   main.zig     the App: engine setup, controls, and switching screens
-//!   play.zig     the level, the player, walkers, coins and the HUD
-//!   screens.zig  title, pause and level clear / game over
-//!   body.zig     falling and bumping into tiles, shared by everything
-//!   config.zig   gameplay numbers, loaded from assets/tuning.json
-//!   sheet.zig    where each sprite is in assets/hopper.png
+//!   main.zig      the App: engine setup, drawing sprites, switching screens
+//!   controls.zig  the named actions and the keys bound to them
+//!   play.zig      the rules: stomping, coins, the goal, lives, the camera
+//!   player.zig    the frog: running and jumping
+//!   walker.zig    the beetles: walking back and forth
+//!   coin.zig      the coins
+//!   level.zig     the tile map, solid tiles and spawn points
+//!   body.zig      falling and bumping into tiles, shared by everything
+//!   hud.zig       the coins and lives counter
+//!   screens.zig   title, pause and level clear / game over
+//!   config.zig    gameplay numbers, loaded from assets/tuning.json
+//!   sheet.zig     where each sprite is in assets/hopper.png
 
 const std = @import("std");
 const pixzig = @import("pixzig");
 const manifest_options = @import("manifest_options");
 
 const config = @import("config.zig");
+const controls = @import("controls.zig");
+const Body = @import("body.zig").Body;
 const PlayState = @import("play.zig").PlayState;
 const screens = @import("screens.zig");
 const sheet = @import("sheet.zig");
 const Flip = pixzig.sprites.Flip;
 
-/// Named controls. Bound to keys and gamepad buttons in `bindControls`.
-pub const Action = enum { left, right, jump, confirm, pause, back };
-
 const engine_options: pixzig.EngineOptions = .{
-    .actionOpts = .{ .Action = Action },
+    // `eng.actions` reports these named controls (see controls.zig).
+    .actionOpts = .{ .Action = controls.Action },
     // Loads manifest.json's "boot" asset group before App.init.
     .manifestOpts = manifest_options,
 };
@@ -52,7 +58,7 @@ pub const App = struct {
     states: StateMgr,
 
     pub fn init(alloc: std.mem.Allocator, eng: *Engine) !*App {
-        try bindControls(eng);
+        try controls.bind(eng);
 
         const app = try alloc.create(App);
         errdefer alloc.destroy(app);
@@ -97,6 +103,16 @@ pub const App = struct {
         self.eng.renderer.drawSprite(&self.cell_sprite);
     }
 
+    /// Draws a sheet cell over `body`, `alpha` of the way between its last
+    /// two ticks: centred across it, with the bottoms lined up. Hitboxes are
+    /// smaller than the 16x16 cells, so feet touch the ground this way.
+    pub fn drawOnBody(self: *App, cell: usize, body: *const Body, alpha: f32, flip: Flip) void {
+        const pos = body.drawPos(alpha);
+        const x = pos.x + body.rect.width() / 2 - sheet.CellSize / 2;
+        const y = pos.y + body.rect.height() - sheet.CellSize;
+        self.drawCell(cell, x, y, flip);
+    }
+
     pub fn startGame(self: *App) void {
         self.play.newGame() catch |err| {
             std.log.err("Couldn't start the game: {s}", .{@errorName(err)});
@@ -126,28 +142,6 @@ pub const App = struct {
         self.states.setCurrState(.title);
     }
 };
-
-/// Keyboard and gamepad controls for every action.
-fn bindControls(eng: *Engine) !void {
-    const a = eng.actions;
-    try a.bind(.left, .{ .key = .left });
-    try a.bind(.left, .{ .key = .a });
-    try a.bind(.left, .{ .gamepad_button = .dpad_left });
-    try a.bind(.right, .{ .key = .right });
-    try a.bind(.right, .{ .key = .d });
-    try a.bind(.right, .{ .gamepad_button = .dpad_right });
-    try a.bind(.jump, .{ .key = .space });
-    try a.bind(.jump, .{ .key = .up });
-    try a.bind(.jump, .{ .key = .w });
-    try a.bind(.jump, .{ .key = .z });
-    try a.bind(.jump, .{ .gamepad_button = .a });
-    try a.bind(.confirm, .{ .key = .enter });
-    try a.bind(.confirm, .{ .gamepad_button = .start });
-    try a.bind(.pause, .{ .key = .p });
-    try a.bind(.pause, .{ .gamepad_button = .start });
-    try a.bind(.back, .{ .key = .escape });
-    try a.bind(.back, .{ .gamepad_button = .back });
-}
 
 pub fn main(init: std.process.Init) !void {
     const appRunner = try AppRunner.init("Hopper", init.gpa, .{

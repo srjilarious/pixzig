@@ -8,10 +8,9 @@ const Color = pixzig.Color;
 
 const App = @import("main.zig").App;
 const Engine = @import("main.zig").Engine;
-const play = @import("play.zig");
 const sheet = @import("sheet.zig");
 
-const Shadow = Color.from(0, 0, 0, 255);
+const Shadow = sheet.Shadow;
 
 pub const TitleState = struct {
     app: *App,
@@ -30,7 +29,7 @@ pub const TitleState = struct {
     pub fn render(self: *TitleState, eng: *Engine, alpha: f32) void {
         _ = alpha;
         const size = logicalSize(eng);
-        eng.renderer.clear(play.Sky[0], play.Sky[1], play.Sky[2], 255);
+        eng.renderer.clear(sheet.Sky[0], sheet.Sky[1], sheet.Sky[2], 255);
         eng.renderer.begin(.logical);
 
         // Ground along the bottom, two tiles deep.

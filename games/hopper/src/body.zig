@@ -69,11 +69,3 @@ pub const Body = struct {
         return self.prev.lerp(.{ .x = self.rect.l, .y = self.rect.t }, alpha);
     }
 };
-
-/// Whether the tile under world pixel (x, y) is solid.
-pub fn solidAt(layer: *const tile.TileLayer, x: f32, y: f32) bool {
-    const tx: i32 = @intFromFloat(@floor(x / @as(f32, @floatFromInt(layer.tileSize.x))));
-    const ty: i32 = @intFromFloat(@floor(y / @as(f32, @floatFromInt(layer.tileSize.y))));
-    const t = layer.tile(tx, ty) orelse return false;
-    return (t.core & tile.BlocksAll) != 0;
-}

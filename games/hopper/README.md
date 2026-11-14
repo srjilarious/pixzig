@@ -37,9 +37,10 @@ order:
 | Which files the game loads | `manifest.json` (both versions read it) |
 | The level | `assets/level1.tmx` in [Tiled](https://www.mapeditor.org/) |
 | The art | the ASCII sprites and tile painters in `tools/gen_art.py`, then `python3 tools/gen_art.py` (or draw over the PNG) |
-| What happens: enemies, pickups, rules | `src/play.zig` / the `Play` class in `python/hopper.py` |
-| Screens and text | `src/screens.zig` / `Title`, `Paused`, `Message` |
-| Controls | `bindControls` in `src/main.zig` / `bind_controls` |
+| How the frog or the beetles move | `src/player.zig`, `src/walker.zig` (`python/player.py`, `python/walker.py`) |
+| What happens when things meet: stomping, coins, the goal, lives | `src/play.zig` / `python/play.py` |
+| Screens and text | `src/screens.zig` / `python/screens.py` |
+| Controls | `src/controls.zig` / `python/controls.py` |
 
 ### The level
 
@@ -55,25 +56,35 @@ order:
 
 To add a second level, save it as `assets/level2.tmx`, add it to
 `manifest.json` (an asset with the id `level2`, in the `boot` group), and
-add `"level2"` to `levels` in `src/play.zig` and `LEVELS` in the Python
-version. Finishing the last level shows "LEVEL CLEAR!".
+add `"level2"` to `order` in `src/level.zig` and `ORDER` in
+`python/level.py`. Finishing the last level shows "LEVEL CLEAR!".
 
 ### The sprite sheet
 
-`assets/hopper.png` is 8 columns of 16x16 cells; `src/sheet.zig` (and the
-constants near the top of `hopper.py`) name them. Sprites are drawn facing
+`assets/hopper.png` is 8 columns of 16x16 cells; `src/sheet.zig` (and
+`python/sheet.py`) name them. Sprites are drawn facing
 right, and the frog is flipped (`Sprite.flip` / `set_flip`) to face left.
 
 ## How it fits together
 
-| Zig | Python | What |
-|---|---|---|
-| `main.zig` | `Hopper`, `bind_controls` | engine setup, controls, switching screens with a state stack |
-| `play.zig` | `Play` | the level, player, walkers, coins, camera and HUD |
-| `screens.zig` | `Title`, `Paused`, `Message` | the other screens; pause and messages are pushed over the frozen game |
-| `body.zig` | `Body`, `Level` | gravity and tile collision (the engine's tile mover) for everything that moves |
-| `config.zig` | `Tuning` | reading `tuning.json` through the manifest |
-| `sheet.zig` | constants | where each sprite is |
+The two versions match file for file: `src/player.zig` is
+`python/player.py`, and so on. The docs' "Tutorial: Building Hopper" page
+walks through them in order.
+
+| File | What |
+|---|---|
+| `main.zig` / `hopper.py` | the App: engine setup, drawing sprites, switching screens with a state stack |
+| `controls.zig` | the named actions and the keys and buttons bound to them |
+| `play.zig` | the rules: stomping, coins, the goal, lives, the camera |
+| `player.zig` | the frog: running and jumping |
+| `walker.zig` | the beetles: walking back and forth |
+| `coin.zig` | the coins |
+| `level.zig` | the tile map, solid tiles, spawn points and the level order |
+| `body.zig` | gravity and tile collision (the engine's tile mover) for everything that moves |
+| `hud.zig` | the coins and lives counter |
+| `screens.zig` | title, pause and messages; pause and messages are pushed over the frozen game |
+| `config.zig` | reading `tuning.json` through the manifest |
+| `sheet.zig` | where each sprite is, and the sky and shadow colours |
 
 Movement runs at a fixed 120 ticks a second; drawing interpolates between
 the last two ticks with `alpha`, so it stays smooth at any frame rate. Both

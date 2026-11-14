@@ -3,6 +3,7 @@
 
 const pixzig = @import("pixzig");
 const RectI = pixzig.RectI;
+const Color = pixzig.Color;
 
 /// Cells are this many pixels square.
 const Size = 16;
@@ -23,6 +24,14 @@ pub const BeetleWalk2 = 13;
 pub const BeetleSquashed = 14;
 pub const Coin1 = 15;
 pub const CoinFrames = 3;
+
+// Colours the art is drawn with.
+
+/// The sky behind everything. `renderer.clear` takes bytes rather than a
+/// Color.
+pub const Sky = [3]u8{ 120, 180, 240 };
+/// The drop shadow under text.
+pub const Shadow = Color.from(0, 0, 0, 255);
 
 /// Where cell `index` is in the sheet, in pixels, for `Sprite.setSrcRect`.
 pub fn rect(index: usize) RectI {

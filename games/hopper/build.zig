@@ -11,7 +11,7 @@ pub fn build(b: *std.Build) void {
     // the Python version reads too. Its "boot" group is loaded before
     // App.init runs (see `.manifestOpts` in src/main.zig), and its paths are
     // relative to assets/. Add a level by adding its .tmx there and to
-    // `levels` in src/play.zig.
+    // `order` in src/level.zig.
     const manifest = pixzig_build.manifestFromFile(b, "manifest.json");
 
     // Builds and installs zig-out/bin/hopper/hopper, and adds a
